@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+source bin/functions.sh
+
+kubectx kind-kind || {
+  kind_create_cluster
+}
+
+k8s_apply_kustomize kind-kind
+k8s_wait_for_deployment kind-kind kube-system metrics-server
+k8s_wait_for_deployment kind-kind buildkite buildscaler-apiserver
+
+echo "Ready!"

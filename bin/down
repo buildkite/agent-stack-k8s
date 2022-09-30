@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+source bin/functions.sh
+
+# Destroy resources gracefully, so that agents disconnect gracefully, but accept failures
+k8s_destroy_kustomize kind-kind || true
+
+kind_delete_cluster

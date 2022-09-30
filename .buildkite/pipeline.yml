@@ -1,0 +1,33 @@
+failure-spec: &failure-spec
+  restartPolicy: OnFailure
+  containers:
+    - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-failure
+      image: deftinc/failwhale
+      resources:
+        requests:
+          cpu: "0.25"
+          memory: "250Mi"
+        limits:
+          cpu: "0.25"
+          memory: "250Mi"
+
+success-spec: &success-spec
+  restartPolicy: OnFailure
+  containers:
+    - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-success
+      image: deftinc/winpenguin
+      resources:
+        requests:
+          cpu: "0.25"
+          memory: "250Mi"
+        limits:
+          cpu: "0.25"
+          memory: "250Mi"
+
+steps:
+  - label: "Consulting my :crystal_ball: thats inside my :k8s: pod"
+    env:
+      BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH: "true"
+    plugins:
+      - k8s-job#phw-scaffold:
+          pod-spec: *success-spec

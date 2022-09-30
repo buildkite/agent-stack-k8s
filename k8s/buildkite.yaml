@@ -1,0 +1,462 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    service: buildkite
+  name: buildkite
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    service: buildkite
+  name: agent-k8s-job
+  namespace: buildkite
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    service: buildkite
+  name: buildscaler-apiserver
+  namespace: buildkite
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    service: buildkite
+  name: agent-k8s-job
+  namespace: buildkite
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - pods/log
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    service: buildkite
+  name: buildscaler-resource-reader
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+      - pods
+      - services
+      - configmaps
+    verbs:
+      - get
+      - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    service: buildkite
+  name: buildscaler-server-resources
+rules:
+  - apiGroups:
+      - external.metrics.k8s.io
+    resources:
+      - "*"
+    verbs:
+      - "*"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    service: buildkite
+  name: agent-k8s-job
+  namespace: buildkite
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: agent-k8s-job
+subjects:
+  - kind: ServiceAccount
+    name: agent-k8s-job
+    namespace: buildkite
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    service: buildkite
+  name: buildscaler-auth-reader
+  namespace: buildkite
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - kind: ServiceAccount
+    name: buildscaler-apiserver
+    namespace: buildkite
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    service: buildkite
+  name: buildkite:system:auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: buildscaler-apiserver
+    namespace: buildkite
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    service: buildkite
+  name: buildscaler-hpa-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: buildscaler-server-resources
+subjects:
+  - kind: ServiceAccount
+    name: horizontal-pod-autoscaler
+    namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    service: buildkite
+  name: buildscaler-resource-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: buildscaler-resource-reader
+subjects:
+  - kind: ServiceAccount
+    name: buildscaler-apiserver
+    namespace: buildkite
+---
+apiVersion: v1
+data:
+  buildkite-agent.cfg: |
+    build-path="/buildkite/builds"
+    hooks-path="/buildkite/hooks"
+    name="%hostname-%spawn"
+    plugins-path="/buildkite/plugins"
+    tags="queue=default"
+    token="use-environment-variable"
+kind: ConfigMap
+metadata:
+  labels:
+    service: buildkite
+  name: agent-config-tmf8k6k8bb
+  namespace: buildkite
+---
+apiVersion: v1
+data:
+  environment: |
+    #!/bin/bash
+    set -euo pipefail
+
+    echo "--- Setting up git authentication"
+
+    GIT_CREDENTIALS_PATH="/buildkite/secrets/git-credentials"
+    echo "Checking for git credentials in $GIT_CREDENTIALS_PATH..."
+    if [[ -f "$GIT_CREDENTIALS_PATH" ]]; then
+      echo "Git credentials found"
+      git config --global credential.helper "store --file=$GIT_CREDENTIALS_PATH"
+    else
+      echo "Git credentials not found"
+    fi
+
+    PRIVATE_SSH_KEY_PATH="/buildkite/secrets/private_ssh_key"
+    echo "Checking for private key in $PRIVATE_SSH_KEY_PATH..."
+    if [[ -f "$PRIVATE_SSH_KEY_PATH" ]]; then
+      echo "Private key found"
+      eval "$(ssh-agent -s)"
+      ssh-add -k "$PRIVATE_SSH_KEY_PATH"
+    else
+      echo "Private key not found"
+    fi
+kind: ConfigMap
+metadata:
+  labels:
+    service: buildkite
+  name: agent-hooks-k5k9dhg986
+  namespace: buildkite
+---
+apiVersion: v1
+data:
+  token: PASTE_AGENT_SECRET_HERE
+kind: Secret
+metadata:
+  labels:
+    service: buildkite
+  name: buildkite-agent-token
+  namespace: buildkite
+type: Opaque
+---
+apiVersion: v1
+data:
+  git-credentials: PASTE_GIT_CREDENTIALS_HERE
+  private-ssh-key: PASTE_SSH_KEY_HERE
+kind: Secret
+metadata:
+  labels:
+    service: buildkite
+  name: buildkite-secrets-57gtdfk5tm
+  namespace: buildkite
+type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: buildkite
+  name: buildscaler-apiserver
+  namespace: buildkite
+spec:
+  ports:
+    - name: https
+      port: 443
+      targetPort: 6443
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: buildscaler-apiserver
+    service: buildkite
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: agent
+    service: buildkite
+  name: agent
+  namespace: buildkite
+spec:
+  selector:
+    matchLabels:
+      app: agent
+      service: buildkite
+  template:
+    metadata:
+      labels:
+        app: agent
+        service: buildkite
+    spec:
+      containers:
+        - env:
+            - name: BUILDKITE_AGENT_CONFIG
+              value: /buildkite/config/buildkite-agent.cfg
+            - name: BUILDKITE_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: token
+                  name: buildkite-agent-token
+                  optional: false
+          image: buildkite/agent:edge-alpine-k8s
+          name: agent
+          resources:
+            limits:
+              cpu: "1"
+              memory: 750Mi
+            requests:
+              cpu: "1"
+              memory: 750Mi
+          volumeMounts:
+            - mountPath: /buildkite/config
+              name: config
+              readOnly: true
+            - mountPath: /buildkite/hooks
+              name: hooks
+              readOnly: true
+            - mountPath: /buildkite/secrets
+              name: secrets
+              readOnly: true
+      serviceAccountName: agent-k8s-job
+      terminationGracePeriodSeconds: 900
+      volumes:
+        - configMap:
+            items:
+              - key: buildkite-agent.cfg
+                path: buildkite-agent.cfg
+            name: agent-config-tmf8k6k8bb
+          name: config
+        - configMap:
+            items:
+              - key: environment
+                path: environment
+            name: agent-hooks-k5k9dhg986
+          name: hooks
+        - name: secrets
+          secret:
+            defaultMode: 384
+            optional: true
+            secretName: buildkite-secrets-57gtdfk5tm
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: buildscaler-apiserver
+    service: buildkite
+  name: buildscaler-apiserver
+  namespace: buildkite
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: buildscaler-apiserver
+      service: buildkite
+  template:
+    metadata:
+      labels:
+        app: buildscaler-apiserver
+        service: buildkite
+      name: buildscaler-apiserver
+    spec:
+      containers:
+        - args:
+            - /buildscaler
+            - --secure-port=6443
+            - --logtostderr=true
+            - --v=6
+            - --ci-platform=buildkite
+          env:
+            - name: BUILDKITE_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: token
+                  name: buildkite-agent-token
+          image: elotl/buildscaler:v2.2.0
+          imagePullPolicy: IfNotPresent
+          name: buildscaler-apiserver
+          ports:
+            - containerPort: 6443
+              name: https
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - mountPath: /tmp
+              name: temp-vol
+      serviceAccountName: buildscaler-apiserver
+      volumes:
+        - emptyDir: {}
+          name: temp-vol
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    service: buildkite
+  name: v1beta1.external.metrics.k8s.io
+spec:
+  group: external.metrics.k8s.io
+  groupPriorityMinimum: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: buildscaler-apiserver
+    namespace: buildkite
+  version: v1beta1
+  versionPriority: 100
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  labels:
+    service: buildkite
+  name: agent-scale-down
+  namespace: buildkite
+spec:
+  behavior:
+    scaleDown:
+      policies:
+        - periodSeconds: 10
+          type: Pods
+          value: 1
+      selectPolicy: Max
+      stabilizationWindowSeconds: 20
+    scaleUp:
+      selectPolicy: Disabled
+  maxReplicas: 30
+  metrics:
+    - external:
+        metric:
+          name: buildkite_busy_agent_percentage
+          selector:
+            matchLabels:
+              queue: default
+        target:
+          type: Value
+          value: 99
+      type: External
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: agent
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  labels:
+    service: buildkite
+  name: agent-scale-up
+  namespace: buildkite
+spec:
+  behavior:
+    scaleDown:
+      selectPolicy: Disabled
+    scaleUp:
+      policies:
+        - periodSeconds: 30
+          type: Pods
+          value: 7
+        - periodSeconds: 30
+          type: Percent
+          value: 100
+      selectPolicy: Max
+      stabilizationWindowSeconds: 30
+  maxReplicas: 30
+  metrics:
+    - external:
+        metric:
+          name: buildkite_scheduled_jobs_count
+          selector:
+            matchLabels:
+              queue: default
+        target:
+          type: Value
+          value: 1
+      type: External
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: agent
