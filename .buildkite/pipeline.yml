@@ -3,6 +3,7 @@ failure-spec: &failure-spec
   containers:
     - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-failure
       image: deftinc/failwhale
+      command: ["/app/entrypoint.sh"]
       resources:
         requests:
           cpu: "0.25"
@@ -16,6 +17,7 @@ success-spec: &success-spec
   containers:
     - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-success
       image: deftinc/winpenguin
+      command: ["/app/entrypoint.sh"]
       resources:
         requests:
           cpu: "0.25"
