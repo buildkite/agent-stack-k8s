@@ -193,7 +193,7 @@ data:
       echo "Git credentials not found"
     fi
 
-    PRIVATE_SSH_KEY_PATH="/buildkite/secrets/private_ssh_key"
+    PRIVATE_SSH_KEY_PATH="/buildkite/secrets/private-ssh-key"
     echo "Checking for private key in $PRIVATE_SSH_KEY_PATH..."
     if [[ -f "$PRIVATE_SSH_KEY_PATH" ]]; then
       echo "Private key found"
