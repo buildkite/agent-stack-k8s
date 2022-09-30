@@ -16,10 +16,12 @@ The rest of the local development environment dependencies are managed with home
 
 You'll find several parts inside the buildkite.yaml manifest that need real values. You will need to configure:
 1. Buildkite agent token
-2. Buildkite agent git credentials
-3. Buildkite agent ssh key
+2a. Buildkite agent git credentials
+2b. Buildkite agent ssh key
 
-### Agent token
+### Agent token (option A)
+
+If you would prefer to authenticate to private repositories using git credentials delete the line  containing `private-ssh-key: PASTE_SSH_KEY_HERE`
 
 The buildkite agent token can be found here for your GitHub organization.
 https://buildkite.com/organizations/MY_ORGANIZATION_SLUG/agents
@@ -30,7 +32,9 @@ To encode and copy the buildkite agent token run the below and paste that value 
 printf "<PASTE_BUILDKITE_AGENT_TOKEN>" | base64 | pbcopy
 ```
 
-### Agent git credentials
+### Agent git credentials (option B)
+
+If you would prefer to authenticate to private repositories using an ssh key delete the line  containing `git-credentials: PASTE_GIT_CREDENTIALS_HERE`
 
 You can create a set of git credentials for testing on GitHub [here](https://github.com/settings/tokens). You only need to select repository access.
 
