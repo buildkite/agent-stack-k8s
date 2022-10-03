@@ -28,7 +28,7 @@ https://buildkite.com/organizations/~/agents
 To encode and copy the token, run the below and paste the result into `buildkite.yaml` where it reads `PASTE_AGENT_SECRET_HERE`
 
 ```
-printf "<PASTE_BUILDKITE_AGENT_TOKEN>" | base64 | pbcopy
+printf "<PASTE_BUILDKITE_AGENT_TOKEN>" | base64
 ```
 
 ### Private repository access
@@ -42,19 +42,17 @@ You can create a set of git credentials for testing on GitHub [here](https://git
 To encode and copy the git credentials run the below and paste the result into `buildkite.yaml` where it reads `PASTE_GIT_CREDENTIALS_HERE`
 
 ```
-printf "https://<MY_GITHUB_USERNAME>:<MY_ACCESS_TOKEN>@github.com" | base64 | pbcopy
+printf "https://<MY_GITHUB_USERNAME>:<MY_ACCESS_TOKEN>@github.com" | base64
 ```
 
 If you don't want to use git credentials then delete the line like `git-credentials: PASTE_GIT_CREDENTIALS_HERE`
 
 #### SSH key
 
-If you would prefer to authenticate to private repositories using an ssh key delete the line containing `private-ssh-key: PASTE_SSH_KEY_HERE`
-
-To encode and copy the git credentials run the below and paste the result into `buildkite.yaml` where it reads `PASTE_SSH_KEY_HERE`
+We would recommend using [a machine user with a dedicated private key, or using deploy keys](https://buildkite.com/docs/agent/v3/github-ssh-keys). But for a proof of concept you can encode and copy your own private ssh key like this and paste the result into `buildkite.yaml` where it reads `PASTE_SSH_KEY_HERE`
 
 ```
-cat ~/.ssh/id_rsa | base64 | pbcopy
+cat ~/.ssh/id_rsa | base64
 ```
 
 If you don't want to use an ssh key then delete the line like `private-ssh-key: PASTE_SSH_KEY_HERE`
