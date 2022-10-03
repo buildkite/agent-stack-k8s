@@ -1,6 +1,6 @@
 # Buildkite Agent Stack for Kubernetes
 
-This is an early prototype for running the [Buildkite Agent](https://github.com/buildkite/agent) on [Kubernetes](https://kubernetes.io).
+This is an early prototype for running an autoscaling [Buildkite Agent](https://github.com/buildkite/agent) stack on [Kubernetes](https://kubernetes.io).
 
 We've seen many customers running the Agent on their own Kubernetes clusters. This is an extraction of some of the patterns we've seen. Expect to see some iterations on this stack as we learn how to create a flexible solution for running pipelines on Kubernetes.
 
