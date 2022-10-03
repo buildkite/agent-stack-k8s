@@ -57,6 +57,16 @@ cat ~/.ssh/id_rsa | base64
 
 If you don't want to use an ssh key then delete the line like `private-ssh-key: PASTE_SSH_KEY_HERE`
 
+## Autoscaling
+
+The example scales Buildkite agent pods using a [horizontal pod autoscaler](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) and [buildkite metrics](https://github.com/elotl/buildscaler) from the default job queue. Whenever there are scheduled jobs waiting for execution the number of agent boxes scale up by either double or add 7 agents whichever is greater every 30 seconds. Whenever there are idle agent boxes they will begin to scale down 1 box every 20 seconds, but there may appear to be a delay if that box is currently running a job. These rules can be seen and modified in the supplied manifests.
+
+## Running steps in a pod
+
+The example uses the [Buildkite k8s job plugin](https://github.com/buildkite-plugins/k8s-job-buildkite-plugin) to allow running Buildkite pipeline jobs as a Kubenetes [Job](https://kubernetes.io/docs/concepts/workloads/controllers/job/) using a [Pod spec](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec). Some example pipelines are included in this repository, as well as the source Dockerfiles for the associated containers. If you need to network between containers in a pod step you can use [kubedns](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) to talk between containers.
+
+There are a couple of really simple test services -- [win penguin](https://github.com/buildkite/agent-stack-k8s) and [fail whale](https://github.com/buildkite/agent-stack-k8s). We also pushed the images for [win penguin](https://hub.docker.com/repository/docker/deftinc/winpenguin) and [fail whale](https://hub.docker.com/repository/docker/deftinc/failwhale) up to Docker Hub for testing.
+
 ## Running the stack locally
 
 The easiest way to get started is to run a kind (kubernetes-in-docker) cluster on your local machine. We have a few scripts that make cluster provisioning and bootstrap easier.
@@ -80,16 +90,6 @@ When you are finished tear it down with the command below. This deletes all the 
 ```
 ./bin/down
 ```
-
-## Running steps in a pod
-
-The example uses the [buildkite k8s job plugin](https://github.com/buildkite-plugins/k8s-job-buildkite-plugin) to allow running Buildkite Jobs in a Kubenetes Job using a Kubernetes Pod Spec. An couple example pipelines are included in this example as well as the source Dockerfiles for those make believe containers. If you need to network between containers in a pod step you can use [kubedns](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) to talk between containers.
-
-There are a couple of really simple test services -- [win penguin](https://github.com/buildkite/k8s-agent-stack) and [fail whale](https://github.com/buildkite/k8s-agent-stack). We also pushed the images for [win penguin](https://hub.docker.com/repository/docker/deftinc/winpenguin) and [fail whale](https://hub.docker.com/repository/docker/deftinc/failwhale) up to Docker Hub for testing.
-
-## Agent Scaling
-
-The example scales buildkite agent pods using a [horizontal pod autoscaler](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) and [buildkite metrics](https://github.com/elotl/buildscaler) from the default job queue. Whenever there are scheduled jobs waiting for execution the number of agent boxes scale up by either double or add 7 agents whichever is greater every 30 seconds. Whenever there are idle agent boxes they will begin to scale down 1 box every 20 seconds, but there may appear to be a delay if that box is currently running a job. These rules can be seen and modified in the supplied manifests.
 
 ## Known limitations
 
