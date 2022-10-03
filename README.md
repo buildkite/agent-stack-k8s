@@ -33,8 +33,6 @@ printf "<PASTE_BUILDKITE_AGENT_TOKEN>" | base64
 
 ### Private repository access
 
-You can either [make the agent its own ssh key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent) and [add it as a deploy key to the repositories you want to test](https://docs.github.com/en/developers/overview/managing-deploy-keys) or for simplicity with local testing use your own ssh key.
-
 #### Git credentials
 
 You can create a set of git credentials for testing on GitHub [here](https://github.com/settings/tokens). You only need to select repository access.
@@ -49,7 +47,9 @@ If you don't want to use git credentials then delete the line like `git-credenti
 
 #### SSH key
 
-We would recommend using [a machine user with a dedicated private key, or using deploy keys](https://buildkite.com/docs/agent/v3/github-ssh-keys). But for a proof of concept you can encode and copy your own private ssh key like this and paste the result into `buildkite.yaml` where it reads `PASTE_SSH_KEY_HERE`
+We would recommend [making the agent its own ssh key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent) and [adding it as a deploy key to the repository you want to test](https://docs.github.com/en/developers/overview/managing-deploy-keys), or using [a machine user with a dedicated ssh key](https://docs.github.com/en/developers/overview/managing-deploy-keys#machine-users). But for simplicity during local testing you can also use your own ssh key.
+
+You can encode and copy your own ssh key like this and paste the result into `buildkite.yaml` where it reads `PASTE_SSH_KEY_HERE`
 
 ```
 cat ~/.ssh/id_rsa | base64
