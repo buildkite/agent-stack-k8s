@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -uo pipefail
+cd "$(dirname "$0")/.."
+source bin/functions.sh
+
+describe "Recreating buildkite namespace"
+kustomize build ./k8s/buildkite | kubectl delete -f -
+kubectl delete namespace buildkite
+kustomize build ./k8s/buildkite | kubectl apply -f -

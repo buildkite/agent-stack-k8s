@@ -3,6 +3,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source bin/functions.sh
 
+./bin/update
+
 kubectx kind-kind || {
   kind_create_cluster
 }

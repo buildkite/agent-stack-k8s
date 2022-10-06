@@ -1,0 +1,23 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "--- Setting up git authentication"
+
+GIT_CREDENTIALS_PATH="/buildkite/secrets/git-credentials"
+echo "Checking for git credentials in $GIT_CREDENTIALS_PATH..."
+if [[ -f "$GIT_CREDENTIALS_PATH" ]]; then
+  echo "Git credentials found"
+  git config --global credential.helper "store --file=$GIT_CREDENTIALS_PATH"
+else
+  echo "Git credentials not found"
+fi
+
+PRIVATE_SSH_KEY_PATH="/buildkite/secrets/private-ssh-key"
+echo "Checking for private key in $PRIVATE_SSH_KEY_PATH..."
+if [[ -f "$PRIVATE_SSH_KEY_PATH" ]]; then
+  echo "Private key found"
+  eval "$(ssh-agent -s)"
+  ssh-add -k "$PRIVATE_SSH_KEY_PATH"
+else
+  echo "Private key not found"
+fi

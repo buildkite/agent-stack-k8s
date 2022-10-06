@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: buildkite
+
+commonLabels:
+  service: buildkite
+
+resources:
+  - ./namespace.yaml
+  - ./metrics-rbac.yaml
+  - ./metrics-service.yaml
+  - ./metrics-deployment.yaml
+  - ./metrics-apiservice.yaml
+  - ./agent-rbac.yaml
+  - ./agent-deployment.yaml
+  - ./agent-scale-up-policy.yaml
+  - ./agent-scale-down-policy.yaml
+
+configMapGenerator:
+  - name: agent-hooks
+    files:
+      - ./hooks/environment
+  - name: agent-config
+    files:
+      - ./buildkite-agent.cfg
+
+secretGenerator:
+  - name: buildkite-agent-token
+    literals:
+      - token=PASTEAGENTTOKENHERE
+  - name: buildkite-secrets
+    files:
+      - ./secrets/git-credentials
+      - ./secrets/private-ssh-key

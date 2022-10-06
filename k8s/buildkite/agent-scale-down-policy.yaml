@@ -1,0 +1,33 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: agent-scale-down
+  namespace: buildkite
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: agent
+  minReplicas: 1
+  maxReplicas: 30
+  metrics:
+    - type: External
+      external:
+        metric:
+          name: buildkite_busy_agent_percentage
+          selector:
+            matchLabels:
+              queue: default
+        target:
+          type: Value
+          value: 99
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 20
+      selectPolicy: Max
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 10
+    scaleUp:
+      selectPolicy: Disabled
