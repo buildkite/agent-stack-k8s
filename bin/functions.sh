@@ -56,7 +56,8 @@ date_utc_now() {
 
 k8s_apply_kustomize() {
   local kubecontext=$1
-  describe ":kubernetes: Applying kustomize template"
+  local overlay=$2
+  describe ":kubernetes: Applying kustomize template $overlay"
   kustomize build k8s/metrics | kubectl --context ${kubecontext} apply -f -
   kustomize build k8s/buildkite | kubectl --context ${kubecontext} apply -f -
 }
