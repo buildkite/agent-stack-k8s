@@ -24,12 +24,3 @@ configMapGenerator:
   - name: agent-config
     files:
       - ./buildkite-agent.cfg
-
-secretGenerator:
-  - name: buildkite-agent-token
-    literals:
-      - token=PASTEAGENTTOKENHERE
-  - name: buildkite-secrets
-    files:
-      - ./secrets/git-credentials
-      - ./secrets/private-ssh-key

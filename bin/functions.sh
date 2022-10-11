@@ -57,15 +57,16 @@ date_utc_now() {
 k8s_apply_kustomize() {
   local kubecontext=$1
   local overlay=$2
-  describe ":kubernetes: Applying kustomize template $overlay"
+  describe ":kubernetes: Applying kustomize template ${overlay}"
   kustomize build k8s/metrics | kubectl --context ${kubecontext} apply -f -
-  kustomize build k8s/buildkite | kubectl --context ${kubecontext} apply -f -
+  kustomize build ${overlay} | kubectl --context ${kubecontext} apply -f -
 }
 
 k8s_destroy_kustomize() {
   local kubecontext=$1
+  local overlay=$2
   describe ":kubernetes: Destroying kustomize resources"
-  kustomize build k8s/buildkite | kubectl --context ${kubecontext} delete -f -
+  kustomize build ${overlay} | kubectl --context ${kubecontext} delete -f -
   kustomize build k8s/metrics | kubectl --context ${kubecontext} delete -f -
 }
 

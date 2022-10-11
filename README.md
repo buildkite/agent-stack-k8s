@@ -6,30 +6,55 @@ We've seen many customers running the Agent on their own Kubernetes clusters. Th
 
 ## Configuring the stack
 
-You'll find several parts inside the `k8s/buildkite.yaml` manifest that need real values. You will need to configure:
-
+You'll need to create your own overlay to add:
 1. Buildkite agent token
 2. Private repository access using either
    1. Git credentials
    2. SSH key
 
-Then apply the manifest to your cluster. For example:
+```
+mkdir k8s/overlays/my-stackname
+touch k8s/overlays/my-stackname/git-credentials
+touch k8s/overlays/my-stackname/private-ssh-key
+touch k8s/overlays/my-stackname/kustomization.yaml
+```
+
+Then create a file `k8s/overlays/my-stackname/kustomization.yaml` with contents similar to:
+
+```yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: buildkite
+
+commonLabels:
+  service: buildkite
+
+bases:
+  - ../../buildkite
+
+secretGenerator:
+  - name: buildkite-agent-token
+    literals:
+      - token=PASTE_AGENT_TOKEN_HERE
+  - name: buildkite-secrets
+    files:
+      - ./git-credentials
+      - ./private-ssh-key
+```
+
+Then you should either make your repository clone private OR add your overlay to your `.gitignore` file. These secrets should not be checked into a public repository.
 
 ```
-kubectl apply -f k8s/buildkite.yaml
+k8s/overlays/my-stackname
 ```
 
-### Buildkite agent token
+### Agent token
 
-Your Buildkite agent token can be found here:
+The buildkite agent token can be found here for your GitHub organization.
+https://buildkite.com/organizations/MY_ORGANIZATION_SLUG/agents
 
-https://buildkite.com/organizations/~/agents
-
-To encode and copy the token, run the below and paste the result into `buildkite.yaml` where it reads `PASTE_AGENT_SECRET_HERE`
-
-```
-printf "<PASTE_BUILDKITE_AGENT_TOKEN>" | base64
-```
+Paste that value into the space labeled "PASTE_AGENT_TOKEN_HERE" in `/k8s/overlays/my-stackname`
 
 ### Private repository access
 
@@ -37,25 +62,34 @@ printf "<PASTE_BUILDKITE_AGENT_TOKEN>" | base64
 
 You can create a set of git credentials for testing on GitHub [here](https://github.com/settings/tokens). You only need to select repository access.
 
-To encode and copy the git credentials run the below and paste the result into `buildkite.yaml` where it reads `PASTE_GIT_CREDENTIALS_HERE`
+Create the git credentials file by running the command below with the template values filled in:
 
 ```
-printf "https://<MY_GITHUB_USERNAME>:<MY_ACCESS_TOKEN>@github.com" | base64
+echo "https://<MY_GITHUB_USERNAME>:<MY_ACCESS_TOKEN>@github.com" > ./k8s/overlays/my-stackname/git-credentials
 ```
 
-If you don't want to use git credentials then delete the line like `git-credentials: PASTE_GIT_CREDENTIALS_HERE`
 
 #### SSH key
 
 We would recommend [making the agent its own ssh key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent) and [adding it as a deploy key to the repository you want to test](https://docs.github.com/en/developers/overview/managing-deploy-keys), or using [a machine user with a dedicated ssh key](https://docs.github.com/en/developers/overview/managing-deploy-keys#machine-users). But for simplicity during local testing you can also use your own ssh key.
 
-You can encode and copy your own ssh key like this and paste the result into `buildkite.yaml` where it reads `PASTE_SSH_KEY_HERE`
-
 ```
-cat ~/.ssh/id_rsa | base64
+cp ~/.ssh/id_rsa ./k8s/overlays/my-stackname/private-ssh-key
 ```
 
-If you don't want to use an ssh key then delete the line like `private-ssh-key: PASTE_SSH_KEY_HERE`
+## Viewing the generated manifests
+
+You can view the generated manifests before apply them to the cluster with:
+
+```
+kustomize build k8s/overlays/my-stackname
+```
+
+You can pipe this input directly into kubectl to apply it:
+
+```
+kustomize build k8s/overlays/my-stackname | kubectl apply -f -
+```
 
 ## Autoscaling
 
@@ -79,16 +113,20 @@ The rest of the local development environment dependencies are managed with [hom
 ./bin/bootstrap
 ```
 
-To run the stack, run the command below. This will setup a single node kubernetes cluster in docker, add the kubernetes metric server, and then add manifests for the buildkite kubernetes stack.
+## Running the stack locally
+
+The easiest way to get started is to run a kind(kubernetes-in-docker) cluster on your local machine. We have a few scripts that make cluster provisioning and bootstrap easier.
+
+To get started run the command below. This will setup a single node kubernetes cluster in docker, add the kubernetes metric server, and then add manifests for the buildkite kubernetes stack.
 
 ```
-./bin/up
+./bin/up k8s/overlay/my-stackname
 ```
 
-When you are finished tear it down with the command below. This deletes all the resources out of the cluster.
+When you are finished tear it down with the command below. This deletes all the resources out of the cluster and
 
 ```
-./bin/down
+./bin/down k8s/overlay/my-stackname
 ```
 
 ## Known limitations

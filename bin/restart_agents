@@ -4,7 +4,9 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 source bin/functions.sh
 
+overlay=${1:-./k8s/buildkite}
+
 describe "Recreating buildkite namespace"
-kustomize build ./k8s/buildkite | kubectl delete -f -
+kustomize build $overlay | kubectl delete -f -
 kubectl delete namespace buildkite
-kustomize build ./k8s/buildkite | kubectl apply -f -
+kustomize build $overlay | kubectl apply -f -
