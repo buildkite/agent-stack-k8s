@@ -26,11 +26,25 @@ success-spec: &success-spec
           cpu: "0.25"
           memory: "250Mi"
 
-echo-spec: &source-spec
+source-spec: &source-spec
   restartPolicy: OnFailure
   containers:
     - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-source
       image: deftinc/lawyer_lion
+      command: ["/app/entrypoint.sh"]
+      resources:
+        requests:
+          cpu: "0.25"
+          memory: "250Mi"
+        limits:
+          cpu: "0.25"
+          memory: "250Mi"
+
+busy-spec: &busy-spec
+  restartPolicy: OnFailure
+  containers:
+    - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-busy
+      image: deftinc/busy_beaver
       command: ["/app/entrypoint.sh"]
       resources:
         requests:
@@ -46,4 +60,6 @@ steps:
       BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH: "true"
     plugins:
       - k8s-job#phw-add-code-mount:
-          pod-spec: *source-spec
+          pod-spec: *busy-spec
+          mount-source: true
+          cleanup: false
