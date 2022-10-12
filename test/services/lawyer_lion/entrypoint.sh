@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 set -euo pipefail
 
-if [ -f /app/src/LICENSE ]; then
+if [ -f /buildkite/src/LICENSE ]; then
   echo "LICENSE found!"
-  echo "$(cat /app/src/LICENSE)"
+  echo "$(cat /buildkite/src/LICENSE)"
   exit 0
 else
   echo "No LICENSE found!"
