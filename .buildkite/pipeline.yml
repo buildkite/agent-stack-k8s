@@ -60,6 +60,6 @@ steps:
       BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH: "true"
     plugins:
       - k8s-job#phw-add-code-mount:
-          pod-spec: *busy-spec
+          pod-spec: *source-spec
           mount-source: true
           cleanup: false
