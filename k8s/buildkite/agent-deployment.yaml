@@ -39,6 +39,8 @@ spec:
               cpu: "1"
               memory: "750Mi"
           volumeMounts:
+            - name: builds
+              mountPath: "/buildkite/builds"
             - name: config
               mountPath: "/buildkite/config"
               readOnly: true
@@ -50,6 +52,10 @@ spec:
               readOnly: true
       terminationGracePeriodSeconds: 900
       volumes:
+        - name: builds
+          hostPath:
+            path: /data/buildkite/builds
+            type: DirectoryOrCreate
         - name: config
           configMap:
             name: agent-config
