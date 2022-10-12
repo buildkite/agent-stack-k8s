@@ -46,4 +46,4 @@ steps:
       BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH: "true"
     plugins:
       - k8s-job#phw-add-code-mount:
-          pod-spec: *lawyer-lion
+          pod-spec: *source-spec
