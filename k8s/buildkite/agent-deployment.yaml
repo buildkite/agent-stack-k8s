@@ -19,6 +19,10 @@ spec:
         - name: agent
           image: buildkite/agent:edge-alpine-k8s
           env:
+            - name: BUILDKITE_AGENT_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             - name: BUILDKITE_AGENT_CONFIG
               value: "/buildkite/config/buildkite-agent.cfg"
             - name: BUILDKITE_AGENT_TOKEN
