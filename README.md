@@ -54,7 +54,7 @@ k8s/overlays/my-stackname
 Your Buildkite agent token can be found here:
 https://buildkite.com/organizations/~/agents
 
-Paste that value into the space labeled "PASTE_AGENT_TOKEN_HERE" in `/k8s/overlays/my-stackname`
+Paste that value into the space labeled "PASTE_AGENT_TOKEN_HERE" in `k8s/overlays/my-stackname/kustomization.yaml`
 
 ### Private repository access
 
