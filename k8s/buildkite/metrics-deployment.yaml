@@ -1,0 +1,46 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: buildscaler-apiserver
+  name: buildscaler-apiserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: buildscaler-apiserver
+  template:
+    metadata:
+      labels:
+        app: buildscaler-apiserver
+      name: buildscaler-apiserver
+    spec:
+      serviceAccountName: buildscaler-apiserver
+      containers:
+        - name: buildscaler-apiserver
+          image: elotl/buildscaler:v2.2.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - /buildscaler
+            - --secure-port=6443
+            - --logtostderr=true
+            - --v=6
+            - --ci-platform=buildkite
+          env:
+            - name: BUILDKITE_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: buildkite-agent-token
+                  key: token
+          ports:
+            - containerPort: 6443
+              name: https
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - mountPath: /tmp
+              name: temp-vol
+      volumes:
+        - name: temp-vol
+          emptyDir: {}

@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+  namespace: buildkite
+  labels:
+    app: agent
+spec:
+  selector:
+    matchLabels:
+      app: agent
+  template:
+    metadata:
+      labels:
+        app: agent
+    spec:
+      serviceAccountName: agent-k8s-job
+      containers:
+        - name: agent
+          image: buildkite/agent:edge-alpine-k8s
+          env:
+            - name: BUILDKITE_AGENT_CONFIG
+              value: "/buildkite/config/buildkite-agent.cfg"
+            - name: BUILDKITE_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: buildkite-agent-token
+                  key: token
+                  optional: false
+          resources:
+            requests:
+              cpu: "1"
+              memory: "750Mi"
+            limits:
+              cpu: "1"
+              memory: "750Mi"
+          volumeMounts:
+            - name: config
+              mountPath: "/buildkite/config"
+              readOnly: true
+            - name: hooks
+              mountPath: "/buildkite/hooks"
+              readOnly: true
+            - name: secrets
+              mountPath: "/buildkite/secrets"
+              readOnly: true
+      terminationGracePeriodSeconds: 900
+      volumes:
+        - name: config
+          configMap:
+            name: agent-config
+            items:
+              - key: "buildkite-agent.cfg"
+                path: "buildkite-agent.cfg"
+        - name: hooks
+          configMap:
+            name: agent-hooks
+            items:
+              - key: "environment"
+                path: "environment"
+        - name: secrets
+          secret:
+            secretName: buildkite-secrets
+            defaultMode: 0600
+            optional: true

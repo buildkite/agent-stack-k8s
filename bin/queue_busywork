@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+source bin/functions.sh
+
+buildkite_queue_busywork 16 $BUILDKITE_REST_API_TOKEN
+k8s_watch_hpa kind-kind buildkite agent
