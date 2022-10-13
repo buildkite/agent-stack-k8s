@@ -52,7 +52,7 @@ k8s/overlays/my-stackname
 ### Agent token
 
 The buildkite agent token can be found here for your GitHub organization.
-https://buildkite.com/organizations/MY_ORGANIZATION_SLUG/agents
+https://buildkite.com/organizations/~/agents
 
 Paste that value into the space labeled "PASTE_AGENT_TOKEN_HERE" in `/k8s/overlays/my-stackname`
 
