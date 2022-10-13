@@ -13,69 +13,27 @@ You'll need to create your own overlay to add:
    2. SSH key
 
 ```
-mkdir k8s/overlays/my-stackname
-touch k8s/overlays/my-stackname/git-credentials
-touch k8s/overlays/my-stackname/private-ssh-key
-touch k8s/overlays/my-stackname/kustomization.yaml
-```
-
-Then create a file `k8s/overlays/my-stackname/kustomization.yaml` with contents similar to:
-
-```yaml
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-namespace: buildkite
-
-commonLabels:
-  service: buildkite
-
-bases:
-  - ../../buildkite
-
-secretGenerator:
-  - name: buildkite-agent-token
-    literals:
-      - token=PASTE_AGENT_TOKEN_HERE
-  - name: buildkite-secrets
-    files:
-      - ./git-credentials
-      - ./private-ssh-key
-```
-
-Then you should either make your repository clone private OR add your overlay to your `.gitignore` file. These secrets should not be checked into a public repository.
-
-```
-k8s/overlays/my-stackname
+cp -R k8s/overlays/example k8s/overlays/my-stackname
 ```
 
 ### Agent token
 
-The buildkite agent token can be found here for your GitHub organization.
-https://buildkite.com/organizations/MY_ORGANIZATION_SLUG/agents
+Your Buildkite agent token can be found here:
+https://buildkite.com/organizations/~/agents
 
-Paste that value into the space labeled "PASTE_AGENT_TOKEN_HERE" in `/k8s/overlays/my-stackname`
+Paste that value into the space labeled "BUILDKITE_AGENT_TOKEN" in `k8s/overlays/my-stackname/kustomization.yaml`
 
 ### Private repository access
 
 #### Git credentials
 
-You can create a set of git credentials for testing on GitHub [here](https://github.com/settings/tokens). You only need to select repository access.
-
-Create the git credentials file by running the command below with the template values filled in:
-
-```
-echo "https://<MY_GITHUB_USERNAME>:<MY_ACCESS_TOKEN>@github.com" > ./k8s/overlays/my-stackname/git-credentials
-```
-
+You can create a set of git credentials for testing on GitHub [here](https://github.com/settings/tokens). You only need to select repository access. Fill in the values in `k8s/overlays/my-stackname/git-credentials`.
 
 #### SSH key
 
 We would recommend [making the agent its own ssh key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent) and [adding it as a deploy key to the repository you want to test](https://docs.github.com/en/developers/overview/managing-deploy-keys), or using [a machine user with a dedicated ssh key](https://docs.github.com/en/developers/overview/managing-deploy-keys#machine-users). But for simplicity during local testing you can also use your own ssh key.
 
-```
-cp ~/.ssh/id_rsa ./k8s/overlays/my-stackname/private-ssh-key
-```
+Paste the private into `./k8s/overlays/my-stackname/private-ssh-key`
 
 ## Viewing the generated manifests
 
