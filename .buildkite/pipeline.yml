@@ -31,5 +31,10 @@ steps:
     env:
       BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH: "true"
     plugins:
-      - k8s-job:
+      - k8s-job#phw-add-annotations:
+          cleanup: false
           pod-spec: *success-spec
+          metadata:
+            annotations:
+              foo: bar
+              bar: baz
