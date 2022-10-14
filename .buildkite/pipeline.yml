@@ -62,6 +62,7 @@ steps:
       - k8s-job:
           pod-spec: *source-spec
           mount-source: true
+          cleanup: false
           annotations:
             foo: bar
             bar: baz
