@@ -54,13 +54,37 @@ busy-spec: &busy-spec
           cpu: "0.25"
           memory: "250Mi"
 
+mixed-results-spec: &mixed-results-spec
+  restartPolicy: OnFailure
+  containers:
+    - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-failure
+      image: deftinc/failwhale
+      command: ["/app/entrypoint.sh"]
+      resources:
+        requests:
+          cpu: "0.25"
+          memory: "250Mi"
+        limits:
+          cpu: "0.25"
+          memory: "250Mi"
+    - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-success
+      image: deftinc/winpenguin
+      command: ["/app/entrypoint.sh"]
+      resources:
+        requests:
+          cpu: "0.25"
+          memory: "250Mi"
+        limits:
+          cpu: "0.25"
+          memory: "250Mi"
+
 steps:
   - label: "Consulting my :crystal_ball: thats inside my :k8s: pod"
     env:
       BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH: "true"
     plugins:
       - k8s-job:
-          pod-spec: *source-spec
+          pod-spec: *mixed-results-spec
           mount-source: true
           annotations:
             foo: bar
