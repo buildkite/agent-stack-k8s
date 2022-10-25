@@ -83,7 +83,7 @@ steps:
     env:
       BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH: "true"
     plugins:
-      - k8s-job#build-status-fix:
+      - k8s-job#phw-build-status-fix:
           pod-spec: *mixed-results-spec
           mount-source: true
           cleanup: false
