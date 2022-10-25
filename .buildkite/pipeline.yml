@@ -1,5 +1,5 @@
 failure-spec: &failure-spec
-  restartPolicy: OnFailure
+  restartPolicy: Never
   containers:
     - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-failure
       image: deftinc/failwhale
@@ -13,7 +13,7 @@ failure-spec: &failure-spec
           memory: "250Mi"
 
 success-spec: &success-spec
-  restartPolicy: OnFailure
+  restartPolicy: Never
   containers:
     - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-success
       image: deftinc/winpenguin
@@ -27,7 +27,7 @@ success-spec: &success-spec
           memory: "250Mi"
 
 source-spec: &source-spec
-  restartPolicy: OnFailure
+  restartPolicy: Never
   containers:
     - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-source
       image: deftinc/lawyer_lion
@@ -41,7 +41,7 @@ source-spec: &source-spec
           memory: "250Mi"
 
 busy-spec: &busy-spec
-  restartPolicy: OnFailure
+  restartPolicy: Never
   containers:
     - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-busy
       image: deftinc/busy_beaver
@@ -55,7 +55,7 @@ busy-spec: &busy-spec
           memory: "250Mi"
 
 mixed-results-spec: &mixed-results-spec
-  restartPolicy: OnFailure
+  restartPolicy: Never
   containers:
     - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-failure
       image: deftinc/failwhale
