@@ -8,10 +8,15 @@ A Kubernetes controller that runs Buildkite jobs as workloads on Kubernetes.
 
 The controller uses the [Buildkite GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled work that uses the `kubernetes` plugin.
 
-When a job is available, the controller will create a pod to acquire and run the job. It converts the [PodSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#podspec-v1-core) in the `kubernetes` plugin into a pod by:
+When a job is available, the controller will create a pod to acquire and run the job. It converts the [PodTemplate](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#podtemplate-v1-core) in the `kubernetes` plugin into a pod by:
 
-- adding an init container that bootstraps the agent, copying the agent binary onto the workspace volume for use by other containers
-- modifying the user-specified container so that it will run with the entrypoint overwritten to the agent
+- adding an init container to:
+  - acquire the job
+  - copy the agent binary onto the workspace volume
+  - clone the source repository onto the workspace
+- modifying the user-specified container to:
+  - overwrite the entrypoint to the agent binary
+  - run with the working directory set to the workspace
 
 The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
 
