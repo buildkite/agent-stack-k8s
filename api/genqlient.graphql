@@ -1,0 +1,39 @@
+mutation PipelineCreate($input: PipelineCreateInput!) {
+  pipelineCreate(input: $input) {
+    pipeline {
+      id
+    }
+  }
+}
+
+mutation PipelineDelete($input: PipelineDeleteInput!) {
+  pipelineDelete(input: $input) {
+    clientMutationId
+  }
+}
+
+mutation BuildCreate($input: BuildCreateInput!) {
+  buildCreate(input: $input) {
+    build {
+      uuid
+    }
+  }
+}
+
+mutation BuildCancel($input: BuildCancelInput!) {
+  buildCancel(input: $input) {
+    clientMutationId
+  }
+}
+
+query GetOrganization($slug: ID!) {
+  organization(slug: $slug) {
+    id
+  }
+}
+
+query GetBuild($uuid: ID) {
+  build(uuid: $uuid) {
+    state
+  }
+}

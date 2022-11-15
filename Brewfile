@@ -1,0 +1,2 @@
+brew "just"
+brew "go"

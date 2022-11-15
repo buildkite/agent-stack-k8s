@@ -118,6 +118,21 @@ spec:
 - Orders execution of containers in pod by using a mutex
 - Wraps execution in order to redirect stdout/stderr and upload artifacts
 
+
+## Development
+
+Install dependencies with Homebrew via:
+
+```bash
+brew bundle
+```
+
+Run tasks via [just](https://github.com/casey/just):
+
+```bash
+just --list
+```
+
 ## Open questions
 
 - How to deal with stuck jobs? Timeouts?
