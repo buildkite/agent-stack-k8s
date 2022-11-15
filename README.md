@@ -121,10 +121,10 @@ spec:
 ## Open questions
 
 - How to deal with stuck jobs? Timeouts?
-- How to deal with pod failures (not job failures)? 
+- How to deal with pod failures (not job failures)?
   - Report failure to buildkite from controller?
   - Emit pod logs to buildkite? If agent isn't starting correctly
   - Retry?
-- How to deal with secrets? SSH, image pull, etc. 
+- How to deal with secrets? SSH, image pull, etc.
   - [Tekton's solution](https://tekton.dev/vault/pipelines-v0.14.3/auth/#guiding-credential-selection) seems decent enough. [This is the code](https://github.com/tektoncd/pipeline/blob/2b54123eaafe5d6b86577402830e0957928374d2/pkg/pod/creds_init.go#L53) grabs secrets and turns them into volume mounts
   - the buildkite agent image comes with [this ssh config wrapper](https://github.com/buildkite/docker-ssh-env-config)
