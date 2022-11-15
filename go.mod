@@ -2,8 +2,9 @@ module github.com/buildkite/agent-stack-k8s
 
 go 1.19
 
+require github.com/Khan/genqlient v0.5.0
+
 require (
-	github.com/Khan/genqlient v0.5.0 // indirect
 	github.com/agnivade/levenshtein v1.1.1 // indirect
 	github.com/alexflint/go-arg v1.4.2 // indirect
 	github.com/alexflint/go-scalar v1.0.0 // indirect

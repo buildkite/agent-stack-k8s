@@ -1,4 +1,8 @@
-mutation PipelineCreate($input: PipelineCreateInput!) {
+# @genqlient(omitempty: true)
+mutation PipelineCreate(
+  # wtf
+  $input: PipelineCreateInput!
+) {
   pipelineCreate(input: $input) {
     pipeline {
       id
