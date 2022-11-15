@@ -33,21 +33,6 @@ Options:
 - `--token`: a Buildkite [API Token](https://buildkite.com/user/api-access-tokens/new) with the GraphQL API scope
 - `--agent-image`: The image to use for the Buildkite agent,(default: `buildkite/agent:latest`)
 
-## Sample buildkite pipeline
-
-```yaml!
-steps:
-- label: build image
-  plugins:
-  - kubernetes:
-      containers:
-      - image: gradle:latest
-        command: [gradle]
-        args:
-        - jib
-        - --image=ttl.sh/example:1h
-```
-
 ## Architecture
 
 ```mermaid
@@ -71,7 +56,22 @@ sequenceDiagram
     bc->>kubernetes: cleanup finished pods
 ```
 
-## Example execution pod
+## Sample buildkite pipeline
+
+```yaml!
+steps:
+- label: build image
+  plugins:
+  - kubernetes:
+      containers:
+      - image: gradle:latest
+        command: [gradle]
+        args:
+        - jib
+        - --image=ttl.sh/example:1h
+```
+
+## Resulting execution pod
 
 ```yaml!
 apiVersion: v1
