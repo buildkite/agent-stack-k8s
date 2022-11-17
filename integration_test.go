@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/api"
-	"github.com/buildkite/agent-stack-k8s/pkg/scheduler"
+	"github.com/buildkite/agent-stack-k8s/scheduler"
 )
 
 func init() {
