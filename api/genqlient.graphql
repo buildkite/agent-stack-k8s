@@ -1,0 +1,74 @@
+# @genqlient(omitempty: true)
+mutation PipelineCreate(
+  # need line break here due to https://github.com/Khan/genqlient/issues/151
+  $input: PipelineCreateInput!
+) {
+  pipelineCreate(input: $input) {
+    pipeline {
+      id
+      name
+    }
+  }
+}
+
+mutation PipelineDelete($input: PipelineDeleteInput!) {
+  pipelineDelete(input: $input) {
+    clientMutationId
+  }
+}
+
+mutation BuildCreate($input: BuildCreateInput!) {
+  buildCreate(input: $input) {
+    build {
+      uuid
+    }
+  }
+}
+
+mutation BuildCancel($input: BuildCancelInput!) {
+  buildCancel(input: $input) {
+    clientMutationId
+  }
+}
+
+query GetOrganization($slug: ID!) {
+  organization(slug: $slug) {
+    id
+  }
+}
+
+query GetBuild($uuid: ID!) {
+  build(uuid: $uuid) {
+    state
+  }
+}
+
+query GetBuildsForPipelineBySlug($slug: ID!) {
+  pipeline(slug: $slug) {
+    id
+    builds(first: 100, state: [SCHEDULED]) {
+      count
+      edges {
+        node {
+          jobs(first: 100) {
+            count
+            edges {
+              node {
+                ... on JobTypeCommand {
+                  uuid
+                  label
+                  state
+                  agentQueryRules
+                  exitStatus
+                  agent {
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
