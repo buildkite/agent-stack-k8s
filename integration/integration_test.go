@@ -1,9 +1,11 @@
-package main
+package integration
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"log"
+	"syscall"
 	"testing"
 	"time"
 
@@ -15,11 +17,10 @@ func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
 
-const (
-	defaultSteps = `steps:
-  - label: ":wave:"
-    command: "echo hello world"`
+//go:embed fixtures/*
+var fixtures embed.FS
 
+const (
 	repo = "https://github.com/buildkite/agent-stack-k8s"
 )
 
@@ -41,6 +42,11 @@ func TestWalkingSkeleton(t *testing.T) {
 		t.Fatalf("failed to fetch org: %v", err)
 	}
 
+	steps, err := fixtures.ReadFile("fixtures/helloworld.yaml")
+	if err != nil {
+		t.Fatalf("failed to read fixture: %v", err)
+	}
+
 	createPipeline, err := api.PipelineCreate(ctx, graphqlClient, api.PipelineCreateInput{
 		OrganizationId: getOrg.Organization.Id,
 		Name:           fmt.Sprintf("agent-k8s-%d", time.Now().UnixNano()),
@@ -48,7 +54,7 @@ func TestWalkingSkeleton(t *testing.T) {
 			Url: repo,
 		},
 		Steps: api.PipelineStepsInput{
-			Yaml: defaultSteps,
+			Yaml: string(steps),
 		},
 	})
 	if err != nil {
@@ -94,4 +100,13 @@ Out:
 			time.Sleep(time.Second)
 		}
 	}
+}
+
+func MustEnv(key string) string {
+	if v, ok := syscall.Getenv(key); ok {
+		return v
+	}
+
+	log.Fatalf("variable '%s' cannot be found in the environment", key)
+	return ""
 }
