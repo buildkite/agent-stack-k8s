@@ -82,10 +82,277 @@ func (v *BuildCreateBuildCreateBuildCreatePayload) GetBuild() BuildCreateBuildCr
 type BuildCreateBuildCreateBuildCreatePayloadBuild struct {
 	// The UUID for the build
 	Uuid string `json:"uuid"`
+	Id   string `json:"id"`
+	// The number of the build
+	Number int                                                            `json:"number"`
+	Jobs   BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection `json:"jobs"`
 }
 
 // GetUuid returns BuildCreateBuildCreateBuildCreatePayloadBuild.Uuid, and is useful for accessing the field via an interface.
 func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetUuid() string { return v.Uuid }
+
+// GetId returns BuildCreateBuildCreateBuildCreatePayloadBuild.Id, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetId() string { return v.Id }
+
+// GetNumber returns BuildCreateBuildCreateBuildCreatePayloadBuild.Number, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetNumber() int { return v.Number }
+
+// GetJobs returns BuildCreateBuildCreateBuildCreatePayloadBuild.Jobs, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetJobs() BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection {
+	return v.Jobs
+}
+
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
+type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection struct {
+	Edges []BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge `json:"edges"`
+}
+
+// GetEdges returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection.Edges, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection) GetEdges() []BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge {
+	return v.Edges
+}
+
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
+type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge struct {
+	Node BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob `json:"-"`
+}
+
+// GetNode returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge.Node, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge) GetNode() BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob {
+	return v.Node
+}
+
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge
+		Node json.RawMessage `json:"node"`
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	{
+		dst := &v.Node
+		src := firstPass.Node
+		if len(src) != 0 && string(src) != "null" {
+			err = __unmarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob(
+				src, dst)
+			if err != nil {
+				return fmt.Errorf(
+					"Unable to unmarshal BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge.Node: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+type __premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge struct {
+	Node json.RawMessage `json:"node"`
+}
+
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge) __premarshalJSON() (*__premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge, error) {
+	var retval __premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge
+
+	{
+
+		dst := &retval.Node
+		src := v.Node
+		var err error
+		*dst, err = __marshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob(
+			&src)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"Unable to marshal BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge.Node: %w", err)
+		}
+	}
+	return &retval, nil
+}
+
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob includes the requested fields of the GraphQL interface Job.
+//
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob is implemented by the following types:
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait
+// The GraphQL type's documentation follows.
+//
+// Kinds of jobs that can exist on a build
+type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob interface {
+	implementsGraphQLInterfaceBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob()
+	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
+	GetTypename() string
+}
+
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock) implementsGraphQLInterfaceBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob() {
+}
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) implementsGraphQLInterfaceBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob() {
+}
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger) implementsGraphQLInterfaceBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob() {
+}
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait) implementsGraphQLInterfaceBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob() {
+}
+
+func __unmarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob(b []byte, v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob) error {
+	if string(b) == "null" {
+		return nil
+	}
+
+	var tn struct {
+		TypeName string `json:"__typename"`
+	}
+	err := json.Unmarshal(b, &tn)
+	if err != nil {
+		return err
+	}
+
+	switch tn.TypeName {
+	case "JobTypeBlock":
+		*v = new(BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock)
+		return json.Unmarshal(b, *v)
+	case "JobTypeCommand":
+		*v = new(BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
+		return json.Unmarshal(b, *v)
+	case "JobTypeTrigger":
+		*v = new(BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger)
+		return json.Unmarshal(b, *v)
+	case "JobTypeWait":
+		*v = new(BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait)
+		return json.Unmarshal(b, *v)
+	case "":
+		return fmt.Errorf(
+			"response was missing Job.__typename")
+	default:
+		return fmt.Errorf(
+			`unexpected concrete type for BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob: "%v"`, tn.TypeName)
+	}
+}
+
+func __marshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob(v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob) ([]byte, error) {
+
+	var typename string
+	switch v := (*v).(type) {
+	case *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock:
+		typename = "JobTypeBlock"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock
+		}{typename, v}
+		return json.Marshal(result)
+	case *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand:
+		typename = "JobTypeCommand"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
+		}{typename, v}
+		return json.Marshal(result)
+	case *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger:
+		typename = "JobTypeTrigger"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger
+		}{typename, v}
+		return json.Marshal(result)
+	case *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait:
+		typename = "JobTypeWait"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait
+		}{typename, v}
+		return json.Marshal(result)
+	case nil:
+		return []byte("null"), nil
+	default:
+		return nil, fmt.Errorf(
+			`unexpected concrete type for BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob: "%T"`, v)
+	}
+}
+
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock includes the requested fields of the GraphQL type JobTypeBlock.
+// The GraphQL type's documentation follows.
+//
+// A type of job that requires a user to unblock it before proceeding in a build pipeline
+type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock struct {
+	Typename string `json:"__typename"`
+}
+
+// GetTypename returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock.Typename, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock) GetTypename() string {
+	return v.Typename
+}
+
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand includes the requested fields of the GraphQL type JobTypeCommand.
+// The GraphQL type's documentation follows.
+//
+// A type of job that runs a command on an agent
+type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The UUID for this job
+	Uuid string `json:"uuid"`
+}
+
+// GetTypename returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Typename, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Id, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetId() string {
+	return v.Id
+}
+
+// GetUuid returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Uuid, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetUuid() string {
+	return v.Uuid
+}
+
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger includes the requested fields of the GraphQL type JobTypeTrigger.
+// The GraphQL type's documentation follows.
+//
+// A type of job that triggers another build on a pipeline
+type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger struct {
+	Typename string `json:"__typename"`
+}
+
+// GetTypename returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger.Typename, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger) GetTypename() string {
+	return v.Typename
+}
+
+// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait includes the requested fields of the GraphQL type JobTypeWait.
+// The GraphQL type's documentation follows.
+//
+// A type of job that waits for all previous jobs to pass before proceeding the build pipeline
+type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait struct {
+	Typename string `json:"__typename"`
+}
+
+// GetTypename returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait.Typename, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait) GetTypename() string {
+	return v.Typename
+}
 
 // Autogenerated input type of BuildCreate
 type BuildCreateInput struct {
@@ -978,6 +1245,19 @@ mutation BuildCreate ($input: BuildCreateInput!) {
 	buildCreate(input: $input) {
 		build {
 			uuid
+			id
+			number
+			jobs(first: 100) {
+				edges {
+					node {
+						__typename
+						... on JobTypeCommand {
+							id
+							uuid
+						}
+					}
+				}
+			}
 		}
 	}
 }

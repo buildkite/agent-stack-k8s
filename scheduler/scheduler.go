@@ -12,13 +12,13 @@ import (
 	"github.com/sanity-io/litter"
 )
 
-func Run(ctx context.Context, token, org, pipeline, agentToken string) {
+func Run(ctx context.Context, token, org, pipeline, agentToken string) error {
 	graphqlClient := api.NewClient(token)
 
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return nil
 		default:
 			buildsResponse, err := api.GetBuildsForPipelineBySlug(ctx, graphqlClient, fmt.Sprintf("%s/%s", org, pipeline))
 			if err != nil {
@@ -39,10 +39,10 @@ func Run(ctx context.Context, token, org, pipeline, agentToken string) {
 						cmd.Stdout = os.Stdout
 						cmd.Stderr = os.Stderr
 						if err := cmd.Run(); err != nil {
-							log.Fatalf("failed to run agent: %v", err)
+							return fmt.Errorf("failed to run agent: %w", err)
 						}
 					default:
-						log.Fatalf("received unknown job type: %v", litter.Sdump(job))
+						return fmt.Errorf("received unknown job type: %v", litter.Sdump(job))
 					}
 				}
 			}

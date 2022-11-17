@@ -21,6 +21,18 @@ mutation BuildCreate($input: BuildCreateInput!) {
   buildCreate(input: $input) {
     build {
       uuid
+      id
+      number
+      jobs(first: 100) {
+        edges {
+          node {
+            ... on JobTypeCommand {
+              id
+              uuid
+            }
+          }
+        }
+      }
     }
   }
 }

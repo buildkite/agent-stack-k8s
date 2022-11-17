@@ -2,7 +2,16 @@ module github.com/buildkite/agent-stack-k8s
 
 go 1.19
 
-require github.com/Khan/genqlient v0.5.0
+require (
+	github.com/Khan/genqlient v0.5.0
+	github.com/buildkite/go-buildkite/v3 v3.0.1
+)
+
+require (
+	github.com/cenkalti/backoff v1.1.1-0.20171020064038-309aa717adbf // indirect
+	github.com/google/go-querystring v1.0.0 // indirect
+	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f // indirect
+)
 
 require (
 	github.com/agnivade/levenshtein v1.1.1 // indirect
