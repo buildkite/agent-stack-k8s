@@ -5,7 +5,7 @@ import (
 	"log"
 	"syscall"
 
-	"github.com/buildkite/agent-stack-k8s/pkg/scheduler"
+	"github.com/buildkite/agent-stack-k8s/scheduler"
 	flag "github.com/spf13/pflag"
 )
 
