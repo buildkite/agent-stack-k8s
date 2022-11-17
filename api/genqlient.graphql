@@ -1,11 +1,12 @@
 # @genqlient(omitempty: true)
 mutation PipelineCreate(
-  # wtf
+  # need line break here due to https://github.com/Khan/genqlient/issues/151
   $input: PipelineCreateInput!
 ) {
   pipelineCreate(input: $input) {
     pipeline {
       id
+      name
     }
   }
 }
@@ -36,8 +37,38 @@ query GetOrganization($slug: ID!) {
   }
 }
 
-query GetBuild($uuid: ID) {
+query GetBuild($uuid: ID!) {
   build(uuid: $uuid) {
     state
+  }
+}
+
+query GetBuildsForPipelineBySlug($slug: ID!) {
+  pipeline(slug: $slug) {
+    id
+    builds(first: 100, state: [SCHEDULED]) {
+      count
+      edges {
+        node {
+          jobs(first: 100) {
+            count
+            edges {
+              node {
+                ... on JobTypeCommand {
+                  uuid
+                  label
+                  state
+                  agentQueryRules
+                  exitStatus
+                  agent {
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
