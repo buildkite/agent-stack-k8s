@@ -1,5 +1,6 @@
 fragment CommandJob on JobTypeCommand {
   uuid
+  env
   label
   state
   agentQueryRules
@@ -68,21 +69,22 @@ query GetBuild($uuid: ID!) {
 query GetBuildsForPipelineBySlug($slug: ID!) {
   pipeline(slug: $slug) {
     id
-    builds(first: 100, state: [SCHEDULED]) {
+    jobs(
+      state: [SCHEDULED, RUNNING, ACCEPTED, ASSIGNED]
+      type: [COMMAND]
+      first: 500
+    ) {
       count
       edges {
         node {
-          jobs(first: 100) {
-            count
-            edges {
-              node {
-                ... on JobTypeCommand {
-                  ...CommandJob
-                }
-              }
-            }
+          __typename
+          ... on JobTypeCommand {
+            ...CommandJob
           }
         }
+      }
+      pageInfo {
+        hasNextPage
       }
     }
   }

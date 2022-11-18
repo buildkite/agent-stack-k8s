@@ -21,7 +21,9 @@ func main() {
 	agentToken := MustEnv("BUILDKITE_AGENT_TOKEN")
 	org := MustEnv("BUILDKITE_ORG")
 
-	scheduler.Run(ctx, token, org, *pipeline, agentToken)
+	if err := scheduler.Run(ctx, token, org, *pipeline, agentToken); err != nil {
+		log.Fatalf("failed to run scheduler: %v", err)
+	}
 }
 
 func MustEnv(key string) string {
