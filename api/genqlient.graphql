@@ -1,3 +1,14 @@
+fragment CommandJob on JobTypeCommand {
+  uuid
+  label
+  state
+  agentQueryRules
+  exitStatus
+  agent {
+    name
+  }
+}
+
 # @genqlient(omitempty: true)
 mutation PipelineCreate(
   # need line break here due to https://github.com/Khan/genqlient/issues/151
@@ -27,8 +38,7 @@ mutation BuildCreate($input: BuildCreateInput!) {
         edges {
           node {
             ... on JobTypeCommand {
-              id
-              uuid
+              ...CommandJob
             }
           }
         }
@@ -67,14 +77,7 @@ query GetBuildsForPipelineBySlug($slug: ID!) {
             edges {
               node {
                 ... on JobTypeCommand {
-                  uuid
-                  label
-                  state
-                  agentQueryRules
-                  exitStatus
-                  agent {
-                    name
-                  }
+                  ...CommandJob
                 }
               }
             }

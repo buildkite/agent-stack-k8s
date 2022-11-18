@@ -260,10 +260,14 @@ func __marshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdge
 	case *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand:
 		typename = "JobTypeCommand"
 
+		premarshaled, err := v.__premarshalJSON()
+		if err != nil {
+			return nil, err
+		}
 		result := struct {
 			TypeName string `json:"__typename"`
-			*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
-		}{typename, v}
+			*__premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
+		}{typename, premarshaled}
 		return json.Marshal(result)
 	case *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger:
 		typename = "JobTypeTrigger"
@@ -307,10 +311,8 @@ func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobE
 //
 // A type of job that runs a command on an agent
 type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand struct {
-	Typename string `json:"__typename"`
-	Id       string `json:"id"`
-	// The UUID for this job
-	Uuid string `json:"uuid"`
+	Typename   string `json:"__typename"`
+	CommandJob `json:"-"`
 }
 
 // GetTypename returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Typename, and is useful for accessing the field via an interface.
@@ -318,14 +320,96 @@ func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobE
 	return v.Typename
 }
 
-// GetId returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Id, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetId() string {
-	return v.Id
-}
-
 // GetUuid returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Uuid, and is useful for accessing the field via an interface.
 func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetUuid() string {
-	return v.Uuid
+	return v.CommandJob.Uuid
+}
+
+// GetLabel returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Label, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetLabel() string {
+	return v.CommandJob.Label
+}
+
+// GetState returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.State, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetState() JobStates {
+	return v.CommandJob.State
+}
+
+// GetAgentQueryRules returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.AgentQueryRules, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetAgentQueryRules() []string {
+	return v.CommandJob.AgentQueryRules
+}
+
+// GetExitStatus returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.ExitStatus, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetExitStatus() string {
+	return v.CommandJob.ExitStatus
+}
+
+// GetAgent returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Agent, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetAgent() CommandJobAgent {
+	return v.CommandJob.Agent
+}
+
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(
+		b, &v.CommandJob)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type __premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand struct {
+	Typename string `json:"__typename"`
+
+	Uuid string `json:"uuid"`
+
+	Label string `json:"label"`
+
+	State JobStates `json:"state"`
+
+	AgentQueryRules []string `json:"agentQueryRules"`
+
+	ExitStatus string `json:"exitStatus"`
+
+	Agent CommandJobAgent `json:"agent"`
+}
+
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) __premarshalJSON() (*__premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand, error) {
+	var retval __premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
+
+	retval.Typename = v.Typename
+	retval.Uuid = v.CommandJob.Uuid
+	retval.Label = v.CommandJob.Label
+	retval.State = v.CommandJob.State
+	retval.AgentQueryRules = v.CommandJob.AgentQueryRules
+	retval.ExitStatus = v.CommandJob.ExitStatus
+	retval.Agent = v.CommandJob.Agent
+	return &retval, nil
 }
 
 // BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger includes the requested fields of the GraphQL type JobTypeTrigger.
@@ -448,6 +532,55 @@ const (
 	// The build wasn't run
 	BuildStatesNotRun BuildStates = "NOT_RUN"
 )
+
+// CommandJob includes the GraphQL fields of JobTypeCommand requested by the fragment CommandJob.
+// The GraphQL type's documentation follows.
+//
+// A type of job that runs a command on an agent
+type CommandJob struct {
+	// The UUID for this job
+	Uuid string `json:"uuid"`
+	// The label of the job
+	Label string `json:"label"`
+	// The state of the job
+	State JobStates `json:"state"`
+	// The ruleset used to find an agent to run this job
+	AgentQueryRules []string `json:"agentQueryRules"`
+	// The exit status returned by the command on the agent
+	ExitStatus string `json:"exitStatus"`
+	// The agent that is running the job
+	Agent CommandJobAgent `json:"agent"`
+}
+
+// GetUuid returns CommandJob.Uuid, and is useful for accessing the field via an interface.
+func (v *CommandJob) GetUuid() string { return v.Uuid }
+
+// GetLabel returns CommandJob.Label, and is useful for accessing the field via an interface.
+func (v *CommandJob) GetLabel() string { return v.Label }
+
+// GetState returns CommandJob.State, and is useful for accessing the field via an interface.
+func (v *CommandJob) GetState() JobStates { return v.State }
+
+// GetAgentQueryRules returns CommandJob.AgentQueryRules, and is useful for accessing the field via an interface.
+func (v *CommandJob) GetAgentQueryRules() []string { return v.AgentQueryRules }
+
+// GetExitStatus returns CommandJob.ExitStatus, and is useful for accessing the field via an interface.
+func (v *CommandJob) GetExitStatus() string { return v.ExitStatus }
+
+// GetAgent returns CommandJob.Agent, and is useful for accessing the field via an interface.
+func (v *CommandJob) GetAgent() CommandJobAgent { return v.Agent }
+
+// CommandJobAgent includes the requested fields of the GraphQL type Agent.
+// The GraphQL type's documentation follows.
+//
+// An agent
+type CommandJobAgent struct {
+	// The name of the agent
+	Name string `json:"name"`
+}
+
+// GetName returns CommandJobAgent.Name, and is useful for accessing the field via an interface.
+func (v *CommandJobAgent) GetName() string { return v.Name }
 
 // GetBuildBuild includes the requested fields of the GraphQL type Build.
 // The GraphQL type's documentation follows.
@@ -689,10 +822,14 @@ func __marshalGetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildE
 	case *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand:
 		typename = "JobTypeCommand"
 
+		premarshaled, err := v.__premarshalJSON()
+		if err != nil {
+			return nil, err
+		}
 		result := struct {
 			TypeName string `json:"__typename"`
-			*GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
-		}{typename, v}
+			*__premarshalGetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
+		}{typename, premarshaled}
 		return json.Marshal(result)
 	case *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger:
 		typename = "JobTypeTrigger"
@@ -736,19 +873,8 @@ func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNo
 //
 // A type of job that runs a command on an agent
 type GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand struct {
-	Typename string `json:"__typename"`
-	// The UUID for this job
-	Uuid string `json:"uuid"`
-	// The label of the job
-	Label string `json:"label"`
-	// The state of the job
-	State JobStates `json:"state"`
-	// The ruleset used to find an agent to run this job
-	AgentQueryRules []string `json:"agentQueryRules"`
-	// The exit status returned by the command on the agent
-	ExitStatus string `json:"exitStatus"`
-	// The agent that is running the job
-	Agent GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommandAgent `json:"agent"`
+	Typename   string `json:"__typename"`
+	CommandJob `json:"-"`
 }
 
 // GetTypename returns GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Typename, and is useful for accessing the field via an interface.
@@ -758,46 +884,94 @@ func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNo
 
 // GetUuid returns GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Uuid, and is useful for accessing the field via an interface.
 func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetUuid() string {
-	return v.Uuid
+	return v.CommandJob.Uuid
 }
 
 // GetLabel returns GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Label, and is useful for accessing the field via an interface.
 func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetLabel() string {
-	return v.Label
+	return v.CommandJob.Label
 }
 
 // GetState returns GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.State, and is useful for accessing the field via an interface.
 func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetState() JobStates {
-	return v.State
+	return v.CommandJob.State
 }
 
 // GetAgentQueryRules returns GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.AgentQueryRules, and is useful for accessing the field via an interface.
 func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetAgentQueryRules() []string {
-	return v.AgentQueryRules
+	return v.CommandJob.AgentQueryRules
 }
 
 // GetExitStatus returns GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.ExitStatus, and is useful for accessing the field via an interface.
 func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetExitStatus() string {
-	return v.ExitStatus
+	return v.CommandJob.ExitStatus
 }
 
 // GetAgent returns GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Agent, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetAgent() GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommandAgent {
-	return v.Agent
+func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetAgent() CommandJobAgent {
+	return v.CommandJob.Agent
 }
 
-// GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommandAgent includes the requested fields of the GraphQL type Agent.
-// The GraphQL type's documentation follows.
-//
-// An agent
-type GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommandAgent struct {
-	// The name of the agent
-	Name string `json:"name"`
+func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(
+		b, &v.CommandJob)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-// GetName returns GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommandAgent.Name, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommandAgent) GetName() string {
-	return v.Name
+type __premarshalGetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand struct {
+	Typename string `json:"__typename"`
+
+	Uuid string `json:"uuid"`
+
+	Label string `json:"label"`
+
+	State JobStates `json:"state"`
+
+	AgentQueryRules []string `json:"agentQueryRules"`
+
+	ExitStatus string `json:"exitStatus"`
+
+	Agent CommandJobAgent `json:"agent"`
+}
+
+func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) __premarshalJSON() (*__premarshalGetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand, error) {
+	var retval __premarshalGetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
+
+	retval.Typename = v.Typename
+	retval.Uuid = v.CommandJob.Uuid
+	retval.Label = v.CommandJob.Label
+	retval.State = v.CommandJob.State
+	retval.AgentQueryRules = v.CommandJob.AgentQueryRules
+	retval.ExitStatus = v.CommandJob.ExitStatus
+	retval.Agent = v.CommandJob.Agent
+	return &retval, nil
 }
 
 // GetBuildsForPipelineBySlugPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger includes the requested fields of the GraphQL type JobTypeTrigger.
@@ -1252,13 +1426,22 @@ mutation BuildCreate ($input: BuildCreateInput!) {
 					node {
 						__typename
 						... on JobTypeCommand {
-							id
-							uuid
+							... CommandJob
 						}
 					}
 				}
 			}
 		}
+	}
+}
+fragment CommandJob on JobTypeCommand {
+	uuid
+	label
+	state
+	agentQueryRules
+	exitStatus
+	agent {
+		name
 	}
 }
 `,
@@ -1333,14 +1516,7 @@ query GetBuildsForPipelineBySlug ($slug: ID!) {
 							node {
 								__typename
 								... on JobTypeCommand {
-									uuid
-									label
-									state
-									agentQueryRules
-									exitStatus
-									agent {
-										name
-									}
+									... CommandJob
 								}
 							}
 						}
@@ -1348,6 +1524,16 @@ query GetBuildsForPipelineBySlug ($slug: ID!) {
 				}
 			}
 		}
+	}
+}
+fragment CommandJob on JobTypeCommand {
+	uuid
+	label
+	state
+	agentQueryRules
+	exitStatus
+	agent {
+		name
 	}
 }
 `,
