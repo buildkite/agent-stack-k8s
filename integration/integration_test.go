@@ -1,25 +1,30 @@
-package main
+package integration
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/scheduler"
+	"github.com/buildkite/go-buildkite/v3/buildkite"
+	"github.com/sanity-io/litter"
 )
 
 func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
 
-const (
-	defaultSteps = `steps:
-  - label: ":wave:"
-    command: "echo hello world"`
+//go:embed fixtures/*
+var fixtures embed.FS
 
+const (
 	repo = "https://github.com/buildkite/agent-stack-k8s"
 )
 
@@ -41,6 +46,11 @@ func TestWalkingSkeleton(t *testing.T) {
 		t.Fatalf("failed to fetch org: %v", err)
 	}
 
+	steps, err := fixtures.ReadFile("fixtures/helloworld.yaml")
+	if err != nil {
+		t.Fatalf("failed to read fixture: %v", err)
+	}
+
 	createPipeline, err := api.PipelineCreate(ctx, graphqlClient, api.PipelineCreateInput{
 		OrganizationId: getOrg.Organization.Id,
 		Name:           fmt.Sprintf("agent-k8s-%d", time.Now().UnixNano()),
@@ -48,39 +58,53 @@ func TestWalkingSkeleton(t *testing.T) {
 			Url: repo,
 		},
 		Steps: api.PipelineStepsInput{
-			Yaml: defaultSteps,
+			Yaml: string(steps),
 		},
 	})
 	if err != nil {
 		t.Fatalf("failed to create pipeline: %v", err)
 	}
+	pipeline := createPipeline.PipelineCreate.Pipeline
 	t.Cleanup(func() {
 		_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
-			Id: createPipeline.PipelineCreate.Pipeline.Id,
+			Id: pipeline.Id,
 		})
 		if err != nil {
 			t.Fatalf("failed to delete pipeline: %v", err)
 		}
-		t.Logf("deleted pipeline! %v", createPipeline.PipelineCreate.Pipeline.Name)
+		t.Logf("deleted pipeline! %v", pipeline.Name)
 	})
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	go scheduler.Run(runCtx, token, org, createPipeline.PipelineCreate.Pipeline.Name, agentToken)
+	go func() {
+		if err := scheduler.Run(runCtx, token, org, pipeline.Name, agentToken); err != nil {
+			t.Logf("failed to run scheduler: %v", err)
+		}
+	}()
 	t.Cleanup(func() {
 		cancel()
 	})
 
 	createBuild, err := api.BuildCreate(ctx, graphqlClient, api.BuildCreateInput{
-		PipelineID: createPipeline.PipelineCreate.Pipeline.Id,
+		PipelineID: pipeline.Id,
 		Commit:     "HEAD",
 		Branch:     "main",
 	})
 	if err != nil {
 		t.Fatalf("failed to create build: %v", err)
 	}
+	build := createBuild.BuildCreate.Build
+	if len(build.Jobs.Edges) != 1 {
+		t.Fatalf("expected one job, got %s", litter.Sdump(build.Jobs.Edges))
+	}
+	node := build.Jobs.Edges[0].Node
+	job, ok := node.(*api.BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
+	if !ok {
+		t.Fatalf("expected job to be command type, got: %s", node.GetTypename())
+	}
 Out:
 	for {
-		getBuild, err := api.GetBuild(ctx, graphqlClient, createBuild.BuildCreate.Build.Uuid)
+		getBuild, err := api.GetBuild(ctx, graphqlClient, build.Uuid)
 		if err != nil {
 			t.Fatalf("failed to get build: %v", err)
 		}
@@ -94,4 +118,31 @@ Out:
 			time.Sleep(time.Second)
 		}
 	}
+
+	config, err := buildkite.NewTokenConfig(token, false)
+
+	if err != nil {
+		t.Fatalf("client config failed: %s", err)
+	}
+
+	client := buildkite.NewClient(config.Client())
+	logs, _, err := client.Jobs.GetJobLog(org, pipeline.Name, strconv.Itoa(build.Number), job.Uuid)
+	if err != nil {
+		t.Fatalf("failed to fetch logs for job: %v", err)
+	}
+	if logs.Content == nil {
+		t.Fatal("expected logs to not be nil")
+	}
+	if !strings.Contains(*logs.Content, "hello world") {
+		t.Fatalf(`failed to find "hello world" in job logs: %v`, *logs.Content)
+	}
+}
+
+func MustEnv(key string) string {
+	if v, ok := syscall.Getenv(key); ok {
+		return v
+	}
+
+	log.Fatalf("variable '%s' cannot be found in the environment", key)
+	return ""
 }
