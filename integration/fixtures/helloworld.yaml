@@ -1,3 +1,10 @@
 steps:
   - label: ":wave:"
-    command: "echo hello world"
+    env:
+      BUILDKITE_SHELL: /bin/sh -e -c
+    plugins:
+      - kubernetes:
+          containers:
+            - image: alpine:latest
+              command: [echo]
+              args: [hello, world]
