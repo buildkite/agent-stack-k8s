@@ -190,7 +190,6 @@ func podFromJob(
 	for k, v := range envMap {
 		switch k {
 		case "BUILDKITE_PLUGINS": //noop
-			env = append(env, corev1.EnvVar{Name: k, Value: "[]"})
 		case "BUILDKITE_COMMAND": //noop
 		default:
 			env = append(env, corev1.EnvVar{Name: k, Value: v})
