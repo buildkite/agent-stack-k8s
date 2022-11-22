@@ -18,6 +18,7 @@ func main() {
 		log.Fatalf("pipeline is required")
 	}
 	token := MustEnv("BUILDKITE_TOKEN")
+	// TODO(bmo): generate agent tokens with the API
 	agentToken := MustEnv("BUILDKITE_AGENT_TOKEN")
 	org := MustEnv("BUILDKITE_ORG")
 
