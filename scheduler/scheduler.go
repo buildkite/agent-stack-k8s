@@ -197,9 +197,6 @@ func podFromJob(
 		}
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
-	if len(pod.Spec.Containers) != 1 {
-		return nil, fmt.Errorf("only one container is supported right now")
-	}
 	const systemContainers = 1
 
 	for i, c := range pod.Spec.Containers {
