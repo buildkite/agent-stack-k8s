@@ -261,19 +261,19 @@ func podFromJob(
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
 		ImagePullPolicy: corev1.PullAlways,
-		Env: append(env, corev1.EnvVar{
+		Env: []corev1.EnvVar{{
 			Name:  "BUILDKITE_AGENT_EXPERIMENT",
 			Value: "kubernetes-exec",
-		}, corev1.EnvVar{
+		}, {
 			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
 			Value: "checkout",
-		}, corev1.EnvVar{
+		}, {
 			Name:  "BUILDKITE_AGENT_NAME",
 			Value: "buildkite",
-		}, corev1.EnvVar{
+		}, {
 			Name:  "BUILDKITE_CONTAINER_ID",
 			Value: "0",
-		}),
+		}},
 	}
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
 	pod.Spec.Containers = append(pod.Spec.Containers, agentContainer, checkoutContainer)
