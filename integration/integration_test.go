@@ -110,6 +110,7 @@ Out:
 		}
 		switch getBuild.Build.State {
 		case api.BuildStatesPassed:
+			t.Log("build passed!")
 			break Out
 		case api.BuildStatesFailed:
 			t.Fatalf("build failed")
