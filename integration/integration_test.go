@@ -25,7 +25,8 @@ func init() {
 var fixtures embed.FS
 
 const (
-	repo = "https://github.com/buildkite/agent-stack-k8s"
+	repo   = "https://github.com/buildkite/agent-stack-k8s"
+	branch = "v2"
 )
 
 func TestWalkingSkeleton(t *testing.T) {
@@ -88,7 +89,7 @@ func TestWalkingSkeleton(t *testing.T) {
 	createBuild, err := api.BuildCreate(ctx, graphqlClient, api.BuildCreateInput{
 		PipelineID: pipeline.Id,
 		Commit:     "HEAD",
-		Branch:     "main",
+		Branch:     branch,
 	})
 	if err != nil {
 		t.Fatalf("failed to create build: %v", err)
@@ -134,8 +135,8 @@ Out:
 	if logs.Content == nil {
 		t.Fatal("expected logs to not be nil")
 	}
-	if !strings.Contains(*logs.Content, "hello world") {
-		t.Fatalf(`failed to find "hello world" in job logs: %v`, *logs.Content)
+	if !strings.Contains(*logs.Content, "Buildkite Agent Stack for Kubernetes") {
+		t.Fatalf(`failed to find README content in job logs: %v`, *logs.Content)
 	}
 }
 

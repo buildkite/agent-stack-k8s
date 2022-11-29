@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -138,7 +139,7 @@ func Run(ctx context.Context, token, org, pipeline, agentToken string) error {
 							return fmt.Errorf("failed to watch pod: %w", err)
 						}
 					}
-					if err := clientset.CoreV1().Pods(ns).Delete(ctx, pod.Name, metav1.DeleteOptions{}); err != nil {
+					if err := clientset.CoreV1().Pods(ns).Delete(context.Background(), pod.Name, metav1.DeleteOptions{}); err != nil {
 						return fmt.Errorf("failed to delete pod: %w", err)
 					}
 				default:
@@ -199,6 +200,8 @@ func podFromJob(
 	if len(pod.Spec.Containers) != 1 {
 		return nil, fmt.Errorf("only one container is supported right now")
 	}
+	const systemContainers = 1
+
 	for i, c := range pod.Spec.Containers {
 		command := strings.Join(append(c.Command, c.Args...), " ")
 		c.Command = []string{"/workspace/buildkite-agent"}
@@ -216,7 +219,10 @@ func podFromJob(
 			Value: "command",
 		}, corev1.EnvVar{
 			Name:  "BUILDKITE_AGENT_NAME",
-			Value: "whocares",
+			Value: "buildkite",
+		}, corev1.EnvVar{
+			Name:  "BUILDKITE_CONTAINER_ID",
+			Value: strconv.Itoa(i + systemContainers),
 		})
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
@@ -227,17 +233,52 @@ func podFromJob(
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 		pod.Spec.Containers[i] = c
 	}
-	pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{
-		Name:            "agent",
+
+	containerCount := len(pod.Spec.Containers) + systemContainers
+	// agent server container
+	agentContainer := corev1.Container{
+		Name:            "wtf",
+		Command:         []string{"/workspace/buildkite-agent"},
+		Args:            []string{"start"},
 		Image:           agentImage,
+		WorkingDir:      "/workspace",
+		VolumeMounts:    volumeMounts,
+		ImagePullPolicy: corev1.PullAlways,
+		Env: []corev1.EnvVar{
+			{
+				Name:  "BUILDKITE_AGENT_EXPERIMENT",
+				Value: "kubernetes-exec",
+			}, {
+				Name:  "BUILDKITE_CONTAINER_COUNT",
+				Value: strconv.Itoa(containerCount),
+			},
+		},
+	}
+	agentContainer.Env = append(agentContainer.Env, env...)
+	// system client container(s)
+	checkoutContainer := corev1.Container{
+		Name:            "checkout",
+		Image:           agentImage,
+		Command:         []string{"/workspace/buildkite-agent"},
+		Args:            []string{"bootstrap"},
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
 		ImagePullPolicy: corev1.PullAlways,
 		Env: append(env, corev1.EnvVar{
 			Name:  "BUILDKITE_AGENT_EXPERIMENT",
 			Value: "kubernetes-exec",
+		}, corev1.EnvVar{
+			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+			Value: "checkout",
+		}, corev1.EnvVar{
+			Name:  "BUILDKITE_AGENT_NAME",
+			Value: "buildkite",
+		}, corev1.EnvVar{
+			Name:  "BUILDKITE_CONTAINER_ID",
+			Value: "0",
 		}),
-	})
-	log.Printf("pod: %v", litter.Sdump(pod))
+	}
+	checkoutContainer.Env = append(checkoutContainer.Env, env...)
+	pod.Spec.Containers = append(pod.Spec.Containers, agentContainer, checkoutContainer)
 	return pod, nil
 }
