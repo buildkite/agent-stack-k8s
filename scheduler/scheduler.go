@@ -62,7 +62,7 @@ const (
 	agentImage = "benmoss/buildkite-agent:latest"
 )
 
-func Run(ctx context.Context, token, org, pipeline, agentToken string) error {
+func Run(ctx context.Context, token, org, pipeline, agentToken string, deletePods bool) error {
 	graphqlClient := api.NewClient(token)
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, nil)
@@ -139,8 +139,10 @@ func Run(ctx context.Context, token, org, pipeline, agentToken string) error {
 							return fmt.Errorf("failed to watch pod: %w", err)
 						}
 					}
-					if err := clientset.CoreV1().Pods(ns).Delete(context.Background(), pod.Name, metav1.DeleteOptions{}); err != nil {
-						return fmt.Errorf("failed to delete pod: %w", err)
+					if deletePods {
+						if err := clientset.CoreV1().Pods(ns).Delete(context.Background(), pod.Name, metav1.DeleteOptions{}); err != nil {
+							return fmt.Errorf("failed to delete pod: %w", err)
+						}
 					}
 				default:
 					return fmt.Errorf("received unknown job type: %v", litter.Sdump(job))

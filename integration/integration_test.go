@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"embed"
+	"flag"
 	"fmt"
 	"log"
 	"strconv"
@@ -21,6 +22,11 @@ import (
 func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 }
+
+var (
+	preservePipelines *bool = flag.Bool("preserve-pipelines", false, "preserve pipelines created by tests")
+	preservePods      *bool = flag.Bool("preserve-pods", false, "preserve pods created by tests")
+)
 
 //go:embed fixtures/*
 var fixtures embed.FS
@@ -67,19 +73,21 @@ func TestWalkingSkeleton(t *testing.T) {
 		t.Fatalf("failed to create pipeline: %v", err)
 	}
 	pipeline := createPipeline.PipelineCreate.Pipeline
-	t.Cleanup(func() {
-		_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
-			Id: pipeline.Id,
+	if !*preservePipelines {
+		t.Cleanup(func() {
+			_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
+				Id: pipeline.Id,
+			})
+			if err != nil {
+				t.Fatalf("failed to delete pipeline: %v", err)
+			}
+			t.Logf("deleted pipeline! %v", pipeline.Name)
 		})
-		if err != nil {
-			t.Fatalf("failed to delete pipeline: %v", err)
-		}
-		t.Logf("deleted pipeline! %v", pipeline.Name)
-	})
+	}
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	go func() {
-		if err := scheduler.Run(runCtx, token, org, pipeline.Name, agentToken); err != nil {
+		if err := scheduler.Run(runCtx, token, org, pipeline.Name, agentToken, !*preservePods); err != nil {
 			t.Logf("failed to run scheduler: %v", err)
 		}
 	}()
