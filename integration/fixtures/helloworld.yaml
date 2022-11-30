@@ -6,5 +6,5 @@ steps:
       - kubernetes:
           containers:
             - image: alpine:latest
-              command: [echo]
-              args: [hello, world]
+              command: [cat]
+              args: [README.md]
