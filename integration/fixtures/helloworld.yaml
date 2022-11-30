@@ -8,3 +8,6 @@ steps:
             - image: alpine:latest
               command: [cat]
               args: [README.md]
+            - image: buildkite/agent:latest
+              command: [buildkite-agent]
+              args: [artifact upload "README.md"]

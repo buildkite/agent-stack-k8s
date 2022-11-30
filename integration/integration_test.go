@@ -138,6 +138,17 @@ Out:
 	if !strings.Contains(*logs.Content, "Buildkite Agent Stack for Kubernetes") {
 		t.Fatalf(`failed to find README content in job logs: %v`, *logs.Content)
 	}
+
+	artifacts, _, err := client.Artifacts.ListByBuild(org, pipeline.Name, strconv.Itoa(build.Number), nil)
+	if err != nil {
+		t.Fatalf("failed to fetch artifacts for job: %v", err)
+	}
+	if len(artifacts) != 1 {
+		t.Fatalf("expected 1 artifacts, got %d", len(artifacts))
+	}
+	if *artifacts[0].Filename != "README.md" {
+		t.Fatalf("unexpected artifact filename: %s", *artifacts[0].Filename)
+	}
 }
 
 func MustEnv(key string) string {
