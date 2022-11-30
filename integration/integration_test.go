@@ -15,6 +15,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/scheduler"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/sanity-io/litter"
+	"github.com/stretchr/testify/assert"
 )
 
 func init() {
@@ -143,12 +144,12 @@ Out:
 	if err != nil {
 		t.Fatalf("failed to fetch artifacts for job: %v", err)
 	}
-	if len(artifacts) != 1 {
-		t.Fatalf("expected 1 artifacts, got %d", len(artifacts))
+	if len(artifacts) != 2 {
+		t.Fatalf("expected 2 artifacts, got %d", len(artifacts))
 	}
-	if *artifacts[0].Filename != "README.md" {
-		t.Fatalf("unexpected artifact filename: %s", *artifacts[0].Filename)
-	}
+	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
+	assert.Contains(t, filenames, "README.md")
+	assert.Contains(t, filenames, "CODE_OF_CONDUCT.md")
 }
 
 func MustEnv(key string) string {

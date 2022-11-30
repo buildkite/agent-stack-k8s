@@ -1,5 +1,6 @@
 steps:
   - label: ":wave:"
+    artifact_paths: "CODE_OF_CONDUCT.md"
     env:
       BUILDKITE_SHELL: /bin/sh -e -c
     plugins:
