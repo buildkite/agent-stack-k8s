@@ -9,7 +9,7 @@ spec:
     kind: Deployment
     name: agent
   minReplicas: 1
-  maxReplicas: 30
+  maxReplicas: 20
   metrics:
     - type: External
       external:
@@ -17,7 +17,7 @@ spec:
           name: buildkite_scheduled_jobs_count
           selector:
             matchLabels:
-              queue: default
+              queue: kubi
         target:
           type: Value
           value: 1
@@ -29,7 +29,7 @@ spec:
       selectPolicy: Max
       policies:
         - type: Pods
-          value: 7
+          value: 100
           periodSeconds: 30
         - type: Percent
           value: 100

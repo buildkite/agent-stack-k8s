@@ -9,7 +9,7 @@ spec:
     kind: Deployment
     name: agent
   minReplicas: 1
-  maxReplicas: 30
+  maxReplicas: 20
   metrics:
     - type: External
       external:
@@ -17,7 +17,7 @@ spec:
           name: buildkite_busy_agent_percentage
           selector:
             matchLabels:
-              queue: default
+              queue: kubi
         target:
           type: Value
           value: 99
@@ -27,7 +27,7 @@ spec:
       selectPolicy: Max
       policies:
         - type: Pods
-          value: 1
+          value: 40
           periodSeconds: 10
     scaleUp:
       selectPolicy: Disabled

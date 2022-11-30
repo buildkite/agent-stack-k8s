@@ -6,8 +6,9 @@ source bin/functions.sh
 ./bin/update
 
 overlay=${1:-./k8s/buildkite}
+context=${2:-kind-kind}
 
 # Destroy resources gracefully, so that agents disconnect gracefully, but accept failures
-k8s_destroy_kustomize kind-kind $overlay || true
+k8s_destroy_kustomize $context $overlay || true
 
-kind_delete_cluster
+if [ $context = "kind-kind" ]; then kind_delete_cluster; fi

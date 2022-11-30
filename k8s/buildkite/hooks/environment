@@ -21,3 +21,12 @@ if [[ -f "$PRIVATE_SSH_KEY_PATH" ]]; then
 else
   echo "Private key not found"
 fi
+
+ENV_VARS_PATH="/buildkite/secrets/env-vars"
+echo "Checking for env vars in $ENV_VARS_PATH..."
+if [[ -f "$ENV_VARS_PATH" ]]; then
+  echo "Env vars found"
+  source $ENV_VARS_PATH
+else
+  echo "Env vars not found"
+fi

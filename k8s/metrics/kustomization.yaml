@@ -9,16 +9,16 @@ bases:
 
 # These patches are required for the metrics server to work with kind.
 # They should not be applied on a real production deployment.
-patchesJson6902:
-  - target:
-      version: v1
-      kind: Deployment
-      name: metrics-server
-      namespace: kube-system
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/args/-
-        value: --kubelet-insecure-tls
-      - op: add
-        path: /spec/template/spec/containers/0/args/-
-        value: --kubelet-preferred-address-types=InternalIP
+# patchesJson6902:
+  # - target:
+      # version: v1
+      # kind: Deployment
+      # name: metrics-server
+      # namespace: kube-system
+    # patch: |-
+      # - op: add
+        # path: /spec/template/spec/containers/0/args/-
+        # value: --kubelet-insecure-tls
+      # - op: add
+        # path: /spec/template/spec/containers/0/args/-
+        # value: --kubelet-preferred-address-types=InternalIP

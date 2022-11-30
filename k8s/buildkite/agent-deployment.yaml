@@ -16,9 +16,12 @@ spec:
     spec:
       serviceAccountName: agent-k8s-job
       containers:
-        - name: agent
+        - name: buildkiteagent
           image: buildkite/agent:edge-alpine-k8s
+          imagePullPolicy: IfNotPresent
           env:
+            - name: DOCKER_HOST
+              value: tcp://localhost:2375
             - name: BUILDKITE_AGENT_NODE_NAME
               valueFrom:
                 fieldRef:
@@ -32,12 +35,9 @@ spec:
                   key: token
                   optional: false
           resources:
-            requests:
-              cpu: "1"
-              memory: "750Mi"
             limits:
-              cpu: "1"
-              memory: "750Mi"
+              cpu: "0.7"
+              memory: "1Gi"
           volumeMounts:
             - name: builds
               mountPath: "/buildkite/builds"
@@ -50,12 +50,21 @@ spec:
             - name: secrets
               mountPath: "/buildkite/secrets"
               readOnly: true
-      terminationGracePeriodSeconds: 900
+        - name: dind-daemon
+          image: docker:dind
+          imagePullPolicy: IfNotPresent
+          command: ["dockerd", "--host=unix:///var/run/docker.sock", "--host=tcp://0.0.0.0:2375", "--tls=false", "--debug", "--oom-score-adjust=-1000"]
+          securityContext:
+            privileged: true
+          resources:
+            limits:
+              cpu: "1"
+              memory: "9Gi"
+          volumeMounts:
+            - name: docker-graph-storage
+              mountPath: /var/lib/docker
+      terminationGracePeriodSeconds: 1900
       volumes:
-        - name: builds
-          hostPath:
-            path: /data/buildkite/builds
-            type: DirectoryOrCreate
         - name: config
           configMap:
             name: agent-config
@@ -73,3 +82,7 @@ spec:
             secretName: buildkite-secrets
             defaultMode: 0600
             optional: true
+        - name: builds
+          emptyDir: {}
+        - name: docker-graph-storage
+          emptyDir: {}
