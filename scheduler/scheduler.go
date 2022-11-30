@@ -234,7 +234,7 @@ func podFromJob(
 	containerCount := len(pod.Spec.Containers) + systemContainers
 	// agent server container
 	agentContainer := corev1.Container{
-		Name:            "wtf",
+		Name:            "agent",
 		Command:         []string{"/workspace/buildkite-agent"},
 		Args:            []string{"start"},
 		Image:           agentImage,
