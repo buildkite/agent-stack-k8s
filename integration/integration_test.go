@@ -64,7 +64,7 @@ func TestWalkingSkeleton(t *testing.T) {
 
 	pipeline := createPipeline.PipelineCreate.Pipeline
 	if !*preservePipelines {
-		t.Cleanup(func() {
+		EnsureCleanup(t, func() {
 			_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
 				Id: pipeline.Id,
 			})
@@ -85,7 +85,7 @@ func TestWalkingSkeleton(t *testing.T) {
 			MaxInFlight: 1,
 		}))
 	}()
-	t.Cleanup(func() {
+	EnsureCleanup(t, func() {
 		cancel()
 	})
 
