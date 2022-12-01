@@ -133,6 +133,26 @@ Out:
 	assert.Contains(t, filenames, "CODE_OF_CONDUCT.md")
 }
 
+func TestCleanupOrphanedPipelines(t *testing.T) {
+	if *preservePipelines {
+		t.Skip("not cleaning orphaned pipelines")
+	}
+	ctx := context.Background()
+	token := MustEnv(t, "BUILDKITE_TOKEN")
+	org := MustEnv(t, "BUILDKITE_ORG")
+	graphqlClient := api.NewClient(token)
+
+	pipelines, err := api.SearchPipelines(ctx, graphqlClient, org, "agent-k8s-", 100)
+	assert.NoError(t, err)
+	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
+		_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
+			Id: pipeline.Node.Id,
+		})
+		assert.NoError(t, err)
+		t.Logf("deleted orphaned pipeline! %v", pipeline.Node.Name)
+	}
+}
+
 func MustEnv(t *testing.T, key string) string {
 	if v, ok := syscall.Getenv(key); ok {
 		return v

@@ -1320,6 +1320,71 @@ const (
 	PipelineVisibilityPrivate PipelineVisibility = "PRIVATE"
 )
 
+// SearchPipelinesOrganization includes the requested fields of the GraphQL type Organization.
+// The GraphQL type's documentation follows.
+//
+// An organization
+type SearchPipelinesOrganization struct {
+	// Return all the pipelines the current user has access to for this organization
+	Pipelines SearchPipelinesOrganizationPipelinesPipelineConnection `json:"pipelines"`
+}
+
+// GetPipelines returns SearchPipelinesOrganization.Pipelines, and is useful for accessing the field via an interface.
+func (v *SearchPipelinesOrganization) GetPipelines() SearchPipelinesOrganizationPipelinesPipelineConnection {
+	return v.Pipelines
+}
+
+// SearchPipelinesOrganizationPipelinesPipelineConnection includes the requested fields of the GraphQL type PipelineConnection.
+type SearchPipelinesOrganizationPipelinesPipelineConnection struct {
+	Edges []SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge `json:"edges"`
+}
+
+// GetEdges returns SearchPipelinesOrganizationPipelinesPipelineConnection.Edges, and is useful for accessing the field via an interface.
+func (v *SearchPipelinesOrganizationPipelinesPipelineConnection) GetEdges() []SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge {
+	return v.Edges
+}
+
+// SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge includes the requested fields of the GraphQL type PipelineEdge.
+type SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge struct {
+	Node SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdgeNodePipeline `json:"node"`
+}
+
+// GetNode returns SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge.Node, and is useful for accessing the field via an interface.
+func (v *SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge) GetNode() SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdgeNodePipeline {
+	return v.Node
+}
+
+// SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdgeNodePipeline includes the requested fields of the GraphQL type Pipeline.
+// The GraphQL type's documentation follows.
+//
+// A pipeline
+type SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdgeNodePipeline struct {
+	Id string `json:"id"`
+	// The name of the pipeline
+	Name string `json:"name"`
+}
+
+// GetId returns SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdgeNodePipeline.Id, and is useful for accessing the field via an interface.
+func (v *SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdgeNodePipeline) GetId() string {
+	return v.Id
+}
+
+// GetName returns SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdgeNodePipeline.Name, and is useful for accessing the field via an interface.
+func (v *SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdgeNodePipeline) GetName() string {
+	return v.Name
+}
+
+// SearchPipelinesResponse is returned by SearchPipelines on success.
+type SearchPipelinesResponse struct {
+	// Find an organization by its slug
+	Organization SearchPipelinesOrganization `json:"organization"`
+}
+
+// GetOrganization returns SearchPipelinesResponse.Organization, and is useful for accessing the field via an interface.
+func (v *SearchPipelinesResponse) GetOrganization() SearchPipelinesOrganization {
+	return v.Organization
+}
+
 // __BuildCancelInput is used internally by genqlient
 type __BuildCancelInput struct {
 	Input BuildCancelInput `json:"input"`
@@ -1375,6 +1440,22 @@ type __PipelineDeleteInput struct {
 
 // GetInput returns __PipelineDeleteInput.Input, and is useful for accessing the field via an interface.
 func (v *__PipelineDeleteInput) GetInput() PipelineDeleteInput { return v.Input }
+
+// __SearchPipelinesInput is used internally by genqlient
+type __SearchPipelinesInput struct {
+	Slug   string `json:"slug"`
+	Search string `json:"search"`
+	First  int    `json:"first"`
+}
+
+// GetSlug returns __SearchPipelinesInput.Slug, and is useful for accessing the field via an interface.
+func (v *__SearchPipelinesInput) GetSlug() string { return v.Slug }
+
+// GetSearch returns __SearchPipelinesInput.Search, and is useful for accessing the field via an interface.
+func (v *__SearchPipelinesInput) GetSearch() string { return v.Search }
+
+// GetFirst returns __SearchPipelinesInput.First, and is useful for accessing the field via an interface.
+func (v *__SearchPipelinesInput) GetFirst() int { return v.First }
 
 func BuildCancel(
 	ctx context.Context,
@@ -1642,6 +1723,49 @@ mutation PipelineDelete ($input: PipelineDeleteInput!) {
 	var err error
 
 	var data PipelineDeleteResponse
+	resp := &graphql.Response{Data: &data}
+
+	err = client.MakeRequest(
+		ctx,
+		req,
+		resp,
+	)
+
+	return &data, err
+}
+
+func SearchPipelines(
+	ctx context.Context,
+	client graphql.Client,
+	slug string,
+	search string,
+	first int,
+) (*SearchPipelinesResponse, error) {
+	req := &graphql.Request{
+		OpName: "SearchPipelines",
+		Query: `
+query SearchPipelines ($slug: ID!, $search: String!, $first: Int!) {
+	organization(slug: $slug) {
+		pipelines(search: $search, first: $first) {
+			edges {
+				node {
+					id
+					name
+				}
+			}
+		}
+	}
+}
+`,
+		Variables: &__SearchPipelinesInput{
+			Slug:   slug,
+			Search: search,
+			First:  first,
+		},
+	}
+	var err error
+
+	var data SearchPipelinesResponse
 	resp := &graphql.Response{Data: &data}
 
 	err = client.MakeRequest(

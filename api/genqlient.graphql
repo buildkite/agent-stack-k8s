@@ -29,6 +29,19 @@ mutation PipelineDelete($input: PipelineDeleteInput!) {
   }
 }
 
+query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
+  organization(slug: $slug) {
+    pipelines(search: $search, first: $first) {
+      edges {
+        node {
+          id
+          name
+        }
+      }
+    }
+  }
+}
+
 mutation BuildCreate($input: BuildCreateInput!) {
   buildCreate(input: $input) {
     build {
