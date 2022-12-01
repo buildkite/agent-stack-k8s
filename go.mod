@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/Code-Hex/dd v1.1.0 // indirect
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/buildkite/yaml v0.0.0-20210326113714-4a3f40911396 // indirect
@@ -31,9 +32,13 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/qri-io/jsonpointer v0.0.0-20180309164927-168dd9e45cf2 // indirect
 	github.com/qri-io/jsonschema v0.0.0-20180607150648-d0d3b10ec792 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.8.0 // indirect
+	go.uber.org/zap v1.22.0 // indirect
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
 	golang.org/x/oauth2 v0.0.0-20220622183110-fd043fe589d2 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
@@ -56,9 +61,11 @@ require (
 	github.com/alexflint/go-arg v1.4.2 // indirect
 	github.com/alexflint/go-scalar v1.0.0 // indirect
 	github.com/buildkite/agent/v3 v3.40.0
+	github.com/buildkite/roko v1.0.2
 	github.com/sanity-io/litter v1.5.5
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.1
+	github.com/thessem/zap-prettyconsole v0.2.0
 	github.com/vektah/gqlparser/v2 v2.4.5 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
 	golang.org/x/sys v0.0.0-20220919091848-fb04ddd9f9c8 // indirect

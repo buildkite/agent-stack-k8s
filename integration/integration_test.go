@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/api"
+	"github.com/buildkite/agent-stack-k8s/monitor"
 	"github.com/buildkite/agent-stack-k8s/scheduler"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -78,7 +80,7 @@ func TestWalkingSkeleton(t *testing.T) {
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	go func() {
-		assert.NoError(t, scheduler.Run(runCtx, token, org, pipeline.Name, agentToken, !*preservePods))
+		assert.NoError(t, scheduler.Run(runCtx, monitor.New(zap.L(), token), org, pipeline.Name, agentToken, !*preservePods))
 	}()
 	t.Cleanup(func() {
 		cancel()

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/api"
+	"github.com/buildkite/agent-stack-k8s/monitor"
 	"github.com/buildkite/agent/v3/agent/plugin"
-	"github.com/sanity-io/litter"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -62,8 +62,8 @@ const (
 	agentImage = "benmoss/buildkite-agent:latest"
 )
 
-func Run(ctx context.Context, token, org, pipeline, agentToken string, deletePods bool) error {
-	graphqlClient := api.NewClient(token)
+func Run(ctx context.Context, monitor *monitor.Monitor, org, pipeline, agentToken string, deletePods bool) error {
+	// graphqlClient := api.NewClient(token)
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, nil)
 	clientConfig, err := kubeConfig.ClientConfig()
@@ -82,70 +82,56 @@ func Run(ctx context.Context, token, org, pipeline, agentToken string, deletePod
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-tick.C:
-			slug := fmt.Sprintf("%s/%s", org, pipeline)
-			log.Println("getting builds for pipeline", slug)
-			buildsResponse, err := api.GetBuildsForPipelineBySlug(ctx, graphqlClient, slug)
+		case job := <-monitor.Watch(ctx, org, pipeline):
+			pod, err := podFromJob(job, agentToken)
 			if err != nil {
-				return fmt.Errorf("failed to fetch builds for pipeline: %w", err)
+				return fmt.Errorf("failed to convert job to pod: %w", err)
 			}
-			log.Println("got jobs", buildsResponse.Pipeline.Jobs)
-			for _, job := range buildsResponse.Pipeline.Jobs.Edges {
-				switch job := job.Node.(type) {
-				case *api.GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand:
-					pod, err := podFromJob(job.CommandJob, agentToken)
-					if err != nil {
-						return fmt.Errorf("failed to convert job to pod: %w", err)
+			pod, err = clientset.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to create pod: %w", err)
+			}
+			log.Printf("created pod %q", pod.Name)
+			fs := fields.OneTermEqualSelector(metav1.ObjectNameField, pod.Name)
+			lw := &cache.ListWatch{
+				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+					options.FieldSelector = fs.String()
+					return clientset.CoreV1().Pods(pod.Namespace).List(context.TODO(), options)
+				},
+				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+					options.FieldSelector = fs.String()
+					return clientset.CoreV1().Pods(ns).Watch(ctx, options)
+				},
+			}
+			_, err = toolswatch.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, func(ev watch.Event) (bool, error) {
+				if pod, ok := ev.Object.(*corev1.Pod); ok {
+					// todo: handle image pull errors
+					switch pod.Status.Phase {
+					case corev1.PodPending, corev1.PodRunning, corev1.PodUnknown:
+						log.Println(pod.Status.Phase)
+						return false, nil
+					case corev1.PodSucceeded:
+						log.Println("pod success!")
+						return true, nil
+					case corev1.PodFailed:
+						log.Println("pod failed!")
+						return true, nil
+					default:
+						return false, fmt.Errorf("unexpected pod status: %s", pod.Status.Phase)
 					}
-					pod, err = clientset.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
-					if err != nil {
-						return fmt.Errorf("failed to create pod: %w", err)
-					}
-					log.Printf("created pod %q", pod.Name)
-					fs := fields.OneTermEqualSelector(metav1.ObjectNameField, pod.Name)
-					lw := &cache.ListWatch{
-						ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-							options.FieldSelector = fs.String()
-							return clientset.CoreV1().Pods(pod.Namespace).List(context.TODO(), options)
-						},
-						WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-							options.FieldSelector = fs.String()
-							return clientset.CoreV1().Pods(ns).Watch(ctx, options)
-						},
-					}
-					_, err = toolswatch.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, func(ev watch.Event) (bool, error) {
-						if pod, ok := ev.Object.(*corev1.Pod); ok {
-							// todo: handle image pull errors
-							switch pod.Status.Phase {
-							case corev1.PodPending, corev1.PodRunning, corev1.PodUnknown:
-								log.Println(pod.Status.Phase)
-								return false, nil
-							case corev1.PodSucceeded:
-								log.Println("pod success!")
-								return true, nil
-							case corev1.PodFailed:
-								log.Println("pod failed!")
-								return true, nil
-							default:
-								return false, fmt.Errorf("unexpected pod status: %s", pod.Status.Phase)
-							}
-						}
-						return false, errors.New("event object not of type v1.Node")
-					})
-					if err != nil {
-						if errors.Is(err, wait.ErrWaitTimeout) {
-							log.Println("context canceled")
-						} else {
-							return fmt.Errorf("failed to watch pod: %w", err)
-						}
-					}
-					if deletePods {
-						if err := clientset.CoreV1().Pods(ns).Delete(context.Background(), pod.Name, metav1.DeleteOptions{}); err != nil {
-							return fmt.Errorf("failed to delete pod: %w", err)
-						}
-					}
-				default:
-					return fmt.Errorf("received unknown job type: %v", litter.Sdump(job))
+				}
+				return false, errors.New("event object not of type v1.Node")
+			})
+			if err != nil {
+				if errors.Is(err, wait.ErrWaitTimeout) {
+					log.Println("context canceled")
+				} else {
+					return fmt.Errorf("failed to watch pod: %w", err)
+				}
+			}
+			if deletePods {
+				if err := clientset.CoreV1().Pods(ns).Delete(context.Background(), pod.Name, metav1.DeleteOptions{}); err != nil {
+					return fmt.Errorf("failed to delete pod: %w", err)
 				}
 			}
 		}
