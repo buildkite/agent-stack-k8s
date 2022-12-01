@@ -8,12 +8,12 @@ import (
 	"github.com/buildkite/agent-stack-k8s/monitor"
 	"github.com/buildkite/agent-stack-k8s/scheduler"
 	flag "github.com/spf13/pflag"
-	prettyconsole "github.com/thessem/zap-prettyconsole"
 	"go.uber.org/zap"
 )
 
 var pipeline *string = flag.String("pipeline", "", "pipeline to watch")
 var debug *bool = flag.Bool("debug", false, "debug logs")
+var maxInFlight *int = flag.Int("max-in-flight", 1, "max jobs in flight")
 
 func main() {
 	ctx := context.Background()
@@ -27,8 +27,14 @@ func main() {
 	org := MustEnv("BUILDKITE_ORG")
 	initLogger(*debug)
 
-	monitor := monitor.New(zap.L(), token)
-	if err := scheduler.Run(ctx, monitor, org, *pipeline, agentToken, true); err != nil {
+	monitor := monitor.New(zap.L().Named("monitor"), token)
+	if err := scheduler.Run(ctx, zap.L().Named("scheduler"), monitor, scheduler.Config{
+		Org:         org,
+		Pipeline:    *pipeline,
+		AgentToken:  agentToken,
+		DeletePods:  true,
+		MaxInFlight: *maxInFlight,
+	}); err != nil {
 		log.Fatalf("failed to run scheduler: %v", err)
 	}
 }
@@ -43,7 +49,7 @@ func MustEnv(key string) string {
 }
 
 func initLogger(debug bool) {
-	config := prettyconsole.NewConfig()
+	config := zap.NewDevelopmentConfig()
 	if debug {
 		config.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	} else {
@@ -52,5 +58,4 @@ func initLogger(debug bool) {
 
 	logger := zap.Must(config.Build())
 	zap.ReplaceGlobals(logger)
-
 }

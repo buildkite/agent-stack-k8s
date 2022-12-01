@@ -5,7 +5,6 @@ import (
 	"embed"
 	"flag"
 	"fmt"
-	"log"
 	"strconv"
 	"syscall"
 	"testing"
@@ -18,10 +17,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 )
-
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-}
 
 var (
 	preservePipelines *bool = flag.Bool("preserve-pipelines", false, "preserve pipelines created by tests")
@@ -77,10 +72,18 @@ func TestWalkingSkeleton(t *testing.T) {
 			t.Logf("deleted pipeline! %v", pipeline.Name)
 		})
 	}
+	logger, err := zap.NewDevelopment()
+	assert.NoError(t, err)
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	go func() {
-		assert.NoError(t, scheduler.Run(runCtx, monitor.New(zap.L(), token), org, pipeline.Name, agentToken, !*preservePods))
+		assert.NoError(t, scheduler.Run(runCtx, logger.Named("scheduler"), monitor.New(logger.Named("monitor"), token), scheduler.Config{
+			Org:         org,
+			Pipeline:    pipeline.Name,
+			AgentToken:  agentToken,
+			DeletePods:  !*preservePods,
+			MaxInFlight: 1,
+		}))
 	}()
 	t.Cleanup(func() {
 		cancel()
@@ -103,12 +106,12 @@ Out:
 		assert.NoError(t, err)
 		switch getBuild.Build.State {
 		case api.BuildStatesPassed:
-			t.Log("build passed!")
+			logger.Debug("build passed!")
 			break Out
 		case api.BuildStatesFailed:
 			t.Fatalf("build failed")
 		default:
-			t.Logf("build state: %s, sleeping", getBuild.Build.State)
+			logger.Debug("sleeping", zap.Any("build state", getBuild.Build.State))
 			time.Sleep(time.Second)
 		}
 	}
