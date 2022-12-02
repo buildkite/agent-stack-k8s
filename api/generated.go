@@ -115,11 +115,11 @@ func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection) GetEdge
 
 // BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
 type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge struct {
-	Node BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob `json:"-"`
+	Node Job `json:"-"`
 }
 
 // GetNode returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge.Node, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge) GetNode() BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob {
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge) GetNode() Job {
 	return v.Node
 }
 
@@ -145,7 +145,7 @@ func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobE
 		dst := &v.Node
 		src := firstPass.Node
 		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob(
+			err = __unmarshalJob(
 				src, dst)
 			if err != nil {
 				return fmt.Errorf(
@@ -176,7 +176,7 @@ func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobE
 		dst := &retval.Node
 		src := v.Node
 		var err error
-		*dst, err = __marshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob(
+		*dst, err = __marshalJob(
 			&src)
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -184,275 +184,6 @@ func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobE
 		}
 	}
 	return &retval, nil
-}
-
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob includes the requested fields of the GraphQL interface Job.
-//
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob is implemented by the following types:
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait
-// The GraphQL type's documentation follows.
-//
-// Kinds of jobs that can exist on a build
-type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob interface {
-	implementsGraphQLInterfaceBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-}
-
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock) implementsGraphQLInterfaceBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob() {
-}
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) implementsGraphQLInterfaceBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob() {
-}
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger) implementsGraphQLInterfaceBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob() {
-}
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait) implementsGraphQLInterfaceBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob() {
-}
-
-func __unmarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob(b []byte, v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "JobTypeBlock":
-		*v = new(BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock)
-		return json.Unmarshal(b, *v)
-	case "JobTypeCommand":
-		*v = new(BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
-		return json.Unmarshal(b, *v)
-	case "JobTypeTrigger":
-		*v = new(BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger)
-		return json.Unmarshal(b, *v)
-	case "JobTypeWait":
-		*v = new(BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing Job.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob(v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock:
-		typename = "JobTypeBlock"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock
-		}{typename, v}
-		return json.Marshal(result)
-	case *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand:
-		typename = "JobTypeCommand"
-
-		premarshaled, err := v.__premarshalJSON()
-		if err != nil {
-			return nil, err
-		}
-		result := struct {
-			TypeName string `json:"__typename"`
-			*__premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
-		}{typename, premarshaled}
-		return json.Marshal(result)
-	case *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger:
-		typename = "JobTypeTrigger"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger
-		}{typename, v}
-		return json.Marshal(result)
-	case *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait:
-		typename = "JobTypeWait"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJob: "%T"`, v)
-	}
-}
-
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock includes the requested fields of the GraphQL type JobTypeBlock.
-// The GraphQL type's documentation follows.
-//
-// A type of job that requires a user to unblock it before proceeding in a build pipeline
-type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock struct {
-	Typename string `json:"__typename"`
-}
-
-// GetTypename returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock.Typename, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock) GetTypename() string {
-	return v.Typename
-}
-
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand includes the requested fields of the GraphQL type JobTypeCommand.
-// The GraphQL type's documentation follows.
-//
-// A type of job that runs a command on an agent
-type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand struct {
-	Typename   string `json:"__typename"`
-	CommandJob `json:"-"`
-}
-
-// GetTypename returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Typename, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetTypename() string {
-	return v.Typename
-}
-
-// GetUuid returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Uuid, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetUuid() string {
-	return v.CommandJob.Uuid
-}
-
-// GetEnv returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Env, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetEnv() []string {
-	return v.CommandJob.Env
-}
-
-// GetLabel returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Label, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetLabel() string {
-	return v.CommandJob.Label
-}
-
-// GetState returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.State, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetState() JobStates {
-	return v.CommandJob.State
-}
-
-// GetAgentQueryRules returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.AgentQueryRules, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetAgentQueryRules() []string {
-	return v.CommandJob.AgentQueryRules
-}
-
-// GetExitStatus returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.ExitStatus, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetExitStatus() string {
-	return v.CommandJob.ExitStatus
-}
-
-// GetScheduledAt returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.ScheduledAt, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetScheduledAt() time.Time {
-	return v.CommandJob.ScheduledAt
-}
-
-// GetAgent returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Agent, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetAgent() CommandJobAgent {
-	return v.CommandJob.Agent
-}
-
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(
-		b, &v.CommandJob)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type __premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand struct {
-	Typename string `json:"__typename"`
-
-	Uuid string `json:"uuid"`
-
-	Env []string `json:"env"`
-
-	Label string `json:"label"`
-
-	State JobStates `json:"state"`
-
-	AgentQueryRules []string `json:"agentQueryRules"`
-
-	ExitStatus string `json:"exitStatus"`
-
-	ScheduledAt time.Time `json:"scheduledAt"`
-
-	Agent CommandJobAgent `json:"agent"`
-}
-
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) __premarshalJSON() (*__premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand, error) {
-	var retval __premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
-
-	retval.Typename = v.Typename
-	retval.Uuid = v.CommandJob.Uuid
-	retval.Env = v.CommandJob.Env
-	retval.Label = v.CommandJob.Label
-	retval.State = v.CommandJob.State
-	retval.AgentQueryRules = v.CommandJob.AgentQueryRules
-	retval.ExitStatus = v.CommandJob.ExitStatus
-	retval.ScheduledAt = v.CommandJob.ScheduledAt
-	retval.Agent = v.CommandJob.Agent
-	return &retval, nil
-}
-
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger includes the requested fields of the GraphQL type JobTypeTrigger.
-// The GraphQL type's documentation follows.
-//
-// A type of job that triggers another build on a pipeline
-type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger struct {
-	Typename string `json:"__typename"`
-}
-
-// GetTypename returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger.Typename, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger) GetTypename() string {
-	return v.Typename
-}
-
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait includes the requested fields of the GraphQL type JobTypeWait.
-// The GraphQL type's documentation follows.
-//
-// A type of job that waits for all previous jobs to pass before proceeding the build pipeline
-type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait struct {
-	Typename string `json:"__typename"`
-}
-
-// GetTypename returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait.Typename, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeWait) GetTypename() string {
-	return v.Typename
 }
 
 // Autogenerated input type of BuildCreate
@@ -630,59 +361,57 @@ type GetBuildResponse struct {
 // GetBuild returns GetBuildResponse.Build, and is useful for accessing the field via an interface.
 func (v *GetBuildResponse) GetBuild() GetBuildBuild { return v.Build }
 
-// GetBuildsForPipelineBySlugPipeline includes the requested fields of the GraphQL type Pipeline.
+// GetFinishedBuildsPipeline includes the requested fields of the GraphQL type Pipeline.
 // The GraphQL type's documentation follows.
 //
 // A pipeline
-type GetBuildsForPipelineBySlugPipeline struct {
-	Id   string                                              `json:"id"`
-	Jobs GetBuildsForPipelineBySlugPipelineJobsJobConnection `json:"jobs"`
+type GetFinishedBuildsPipeline struct {
+	Id   string                                     `json:"id"`
+	Jobs GetFinishedBuildsPipelineJobsJobConnection `json:"jobs"`
 }
 
-// GetId returns GetBuildsForPipelineBySlugPipeline.Id, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipeline) GetId() string { return v.Id }
+// GetId returns GetFinishedBuildsPipeline.Id, and is useful for accessing the field via an interface.
+func (v *GetFinishedBuildsPipeline) GetId() string { return v.Id }
 
-// GetJobs returns GetBuildsForPipelineBySlugPipeline.Jobs, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipeline) GetJobs() GetBuildsForPipelineBySlugPipelineJobsJobConnection {
+// GetJobs returns GetFinishedBuildsPipeline.Jobs, and is useful for accessing the field via an interface.
+func (v *GetFinishedBuildsPipeline) GetJobs() GetFinishedBuildsPipelineJobsJobConnection {
 	return v.Jobs
 }
 
-// GetBuildsForPipelineBySlugPipelineJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
-type GetBuildsForPipelineBySlugPipelineJobsJobConnection struct {
-	Count int                                                               `json:"count"`
-	Edges []GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge `json:"edges"`
+// GetFinishedBuildsPipelineJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
+type GetFinishedBuildsPipelineJobsJobConnection struct {
+	Count int                                                      `json:"count"`
+	Edges []GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge `json:"edges"`
 }
 
-// GetCount returns GetBuildsForPipelineBySlugPipelineJobsJobConnection.Count, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnection) GetCount() int { return v.Count }
+// GetCount returns GetFinishedBuildsPipelineJobsJobConnection.Count, and is useful for accessing the field via an interface.
+func (v *GetFinishedBuildsPipelineJobsJobConnection) GetCount() int { return v.Count }
 
-// GetEdges returns GetBuildsForPipelineBySlugPipelineJobsJobConnection.Edges, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnection) GetEdges() []GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge {
+// GetEdges returns GetFinishedBuildsPipelineJobsJobConnection.Edges, and is useful for accessing the field via an interface.
+func (v *GetFinishedBuildsPipelineJobsJobConnection) GetEdges() []GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge {
 	return v.Edges
 }
 
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
-type GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge struct {
-	Node GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob `json:"-"`
+// GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
+type GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge struct {
+	Node Job `json:"-"`
 }
 
-// GetNode returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge.Node, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge) GetNode() GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob {
-	return v.Node
-}
+// GetNode returns GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge.Node, and is useful for accessing the field via an interface.
+func (v *GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge) GetNode() Job { return v.Node }
 
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge) UnmarshalJSON(b []byte) error {
+func (v *GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge) UnmarshalJSON(b []byte) error {
 
 	if string(b) == "null" {
 		return nil
 	}
 
 	var firstPass struct {
-		*GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge
+		*GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge
 		Node json.RawMessage `json:"node"`
 		graphql.NoUnmarshalJSON
 	}
-	firstPass.GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge = v
+	firstPass.GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge = v
 
 	err := json.Unmarshal(b, &firstPass)
 	if err != nil {
@@ -693,22 +422,22 @@ func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge) Unmars
 		dst := &v.Node
 		src := firstPass.Node
 		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob(
+			err = __unmarshalJob(
 				src, dst)
 			if err != nil {
 				return fmt.Errorf(
-					"Unable to unmarshal GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge.Node: %w", err)
+					"Unable to unmarshal GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge.Node: %w", err)
 			}
 		}
 	}
 	return nil
 }
 
-type __premarshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge struct {
+type __premarshalGetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge struct {
 	Node json.RawMessage `json:"node"`
 }
 
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge) MarshalJSON() ([]byte, error) {
+func (v *GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge) MarshalJSON() ([]byte, error) {
 	premarshaled, err := v.__premarshalJSON()
 	if err != nil {
 		return nil, err
@@ -716,303 +445,32 @@ func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge) Marsha
 	return json.Marshal(premarshaled)
 }
 
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge) __premarshalJSON() (*__premarshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge, error) {
-	var retval __premarshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge
+func (v *GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge) __premarshalJSON() (*__premarshalGetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge, error) {
+	var retval __premarshalGetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge
 
 	{
 
 		dst := &retval.Node
 		src := v.Node
 		var err error
-		*dst, err = __marshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob(
+		*dst, err = __marshalJob(
 			&src)
 		if err != nil {
 			return nil, fmt.Errorf(
-				"Unable to marshal GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge.Node: %w", err)
+				"Unable to marshal GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge.Node: %w", err)
 		}
 	}
 	return &retval, nil
 }
 
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob includes the requested fields of the GraphQL interface Job.
-//
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob is implemented by the following types:
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeWait
-// The GraphQL type's documentation follows.
-//
-// Kinds of jobs that can exist on a build
-type GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob interface {
-	implementsGraphQLInterfaceGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-}
-
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock) implementsGraphQLInterfaceGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob() {
-}
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) implementsGraphQLInterfaceGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob() {
-}
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger) implementsGraphQLInterfaceGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob() {
-}
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeWait) implementsGraphQLInterfaceGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob() {
-}
-
-func __unmarshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob(b []byte, v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "JobTypeBlock":
-		*v = new(GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock)
-		return json.Unmarshal(b, *v)
-	case "JobTypeCommand":
-		*v = new(GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
-		return json.Unmarshal(b, *v)
-	case "JobTypeTrigger":
-		*v = new(GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger)
-		return json.Unmarshal(b, *v)
-	case "JobTypeWait":
-		*v = new(GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeWait)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing Job.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob(v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock:
-		typename = "JobTypeBlock"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock
-		}{typename, v}
-		return json.Marshal(result)
-	case *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand:
-		typename = "JobTypeCommand"
-
-		premarshaled, err := v.__premarshalJSON()
-		if err != nil {
-			return nil, err
-		}
-		result := struct {
-			TypeName string `json:"__typename"`
-			*__premarshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
-		}{typename, premarshaled}
-		return json.Marshal(result)
-	case *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger:
-		typename = "JobTypeTrigger"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger
-		}{typename, v}
-		return json.Marshal(result)
-	case *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeWait:
-		typename = "JobTypeWait"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeWait
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJob: "%T"`, v)
-	}
-}
-
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock includes the requested fields of the GraphQL type JobTypeBlock.
-// The GraphQL type's documentation follows.
-//
-// A type of job that requires a user to unblock it before proceeding in a build pipeline
-type GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock struct {
-	Typename string `json:"__typename"`
-}
-
-// GetTypename returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock.Typename, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeBlock) GetTypename() string {
-	return v.Typename
-}
-
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand includes the requested fields of the GraphQL type JobTypeCommand.
-// The GraphQL type's documentation follows.
-//
-// A type of job that runs a command on an agent
-type GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand struct {
-	Typename   string `json:"__typename"`
-	CommandJob `json:"-"`
-}
-
-// GetTypename returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Typename, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetTypename() string {
-	return v.Typename
-}
-
-// GetUuid returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Uuid, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetUuid() string {
-	return v.CommandJob.Uuid
-}
-
-// GetEnv returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Env, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetEnv() []string {
-	return v.CommandJob.Env
-}
-
-// GetLabel returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Label, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetLabel() string {
-	return v.CommandJob.Label
-}
-
-// GetState returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.State, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetState() JobStates {
-	return v.CommandJob.State
-}
-
-// GetAgentQueryRules returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.AgentQueryRules, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetAgentQueryRules() []string {
-	return v.CommandJob.AgentQueryRules
-}
-
-// GetExitStatus returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.ExitStatus, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetExitStatus() string {
-	return v.CommandJob.ExitStatus
-}
-
-// GetScheduledAt returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.ScheduledAt, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetScheduledAt() time.Time {
-	return v.CommandJob.ScheduledAt
-}
-
-// GetAgent returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Agent, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetAgent() CommandJobAgent {
-	return v.CommandJob.Agent
-}
-
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(
-		b, &v.CommandJob)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type __premarshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand struct {
-	Typename string `json:"__typename"`
-
-	Uuid string `json:"uuid"`
-
-	Env []string `json:"env"`
-
-	Label string `json:"label"`
-
-	State JobStates `json:"state"`
-
-	AgentQueryRules []string `json:"agentQueryRules"`
-
-	ExitStatus string `json:"exitStatus"`
-
-	ScheduledAt time.Time `json:"scheduledAt"`
-
-	Agent CommandJobAgent `json:"agent"`
-}
-
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) __premarshalJSON() (*__premarshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand, error) {
-	var retval __premarshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand
-
-	retval.Typename = v.Typename
-	retval.Uuid = v.CommandJob.Uuid
-	retval.Env = v.CommandJob.Env
-	retval.Label = v.CommandJob.Label
-	retval.State = v.CommandJob.State
-	retval.AgentQueryRules = v.CommandJob.AgentQueryRules
-	retval.ExitStatus = v.CommandJob.ExitStatus
-	retval.ScheduledAt = v.CommandJob.ScheduledAt
-	retval.Agent = v.CommandJob.Agent
-	return &retval, nil
-}
-
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger includes the requested fields of the GraphQL type JobTypeTrigger.
-// The GraphQL type's documentation follows.
-//
-// A type of job that triggers another build on a pipeline
-type GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger struct {
-	Typename string `json:"__typename"`
-}
-
-// GetTypename returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger.Typename, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeTrigger) GetTypename() string {
-	return v.Typename
-}
-
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeWait includes the requested fields of the GraphQL type JobTypeWait.
-// The GraphQL type's documentation follows.
-//
-// A type of job that waits for all previous jobs to pass before proceeding the build pipeline
-type GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeWait struct {
-	Typename string `json:"__typename"`
-}
-
-// GetTypename returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeWait.Typename, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeWait) GetTypename() string {
-	return v.Typename
-}
-
-// GetBuildsForPipelineBySlugResponse is returned by GetBuildsForPipelineBySlug on success.
-type GetBuildsForPipelineBySlugResponse struct {
+// GetFinishedBuildsResponse is returned by GetFinishedBuilds on success.
+type GetFinishedBuildsResponse struct {
 	// Find a pipeline by its slug
-	Pipeline GetBuildsForPipelineBySlugPipeline `json:"pipeline"`
+	Pipeline GetFinishedBuildsPipeline `json:"pipeline"`
 }
 
-// GetPipeline returns GetBuildsForPipelineBySlugResponse.Pipeline, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugResponse) GetPipeline() GetBuildsForPipelineBySlugPipeline {
-	return v.Pipeline
-}
+// GetPipeline returns GetFinishedBuildsResponse.Pipeline, and is useful for accessing the field via an interface.
+func (v *GetFinishedBuildsResponse) GetPipeline() GetFinishedBuildsPipeline { return v.Pipeline }
 
 // GetOrganizationOrganization includes the requested fields of the GraphQL type Organization.
 // The GraphQL type's documentation follows.
@@ -1034,6 +492,337 @@ type GetOrganizationResponse struct {
 // GetOrganization returns GetOrganizationResponse.Organization, and is useful for accessing the field via an interface.
 func (v *GetOrganizationResponse) GetOrganization() GetOrganizationOrganization {
 	return v.Organization
+}
+
+// GetScheduledBuildsPipeline includes the requested fields of the GraphQL type Pipeline.
+// The GraphQL type's documentation follows.
+//
+// A pipeline
+type GetScheduledBuildsPipeline struct {
+	Id   string                                      `json:"id"`
+	Jobs GetScheduledBuildsPipelineJobsJobConnection `json:"jobs"`
+}
+
+// GetId returns GetScheduledBuildsPipeline.Id, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsPipeline) GetId() string { return v.Id }
+
+// GetJobs returns GetScheduledBuildsPipeline.Jobs, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsPipeline) GetJobs() GetScheduledBuildsPipelineJobsJobConnection {
+	return v.Jobs
+}
+
+// GetScheduledBuildsPipelineJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
+type GetScheduledBuildsPipelineJobsJobConnection struct {
+	Count int                                                       `json:"count"`
+	Edges []GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge `json:"edges"`
+}
+
+// GetCount returns GetScheduledBuildsPipelineJobsJobConnection.Count, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsPipelineJobsJobConnection) GetCount() int { return v.Count }
+
+// GetEdges returns GetScheduledBuildsPipelineJobsJobConnection.Edges, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsPipelineJobsJobConnection) GetEdges() []GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge {
+	return v.Edges
+}
+
+// GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
+type GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge struct {
+	Node Job `json:"-"`
+}
+
+// GetNode returns GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge.Node, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) GetNode() Job { return v.Node }
+
+func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge
+		Node json.RawMessage `json:"node"`
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	{
+		dst := &v.Node
+		src := firstPass.Node
+		if len(src) != 0 && string(src) != "null" {
+			err = __unmarshalJob(
+				src, dst)
+			if err != nil {
+				return fmt.Errorf(
+					"Unable to unmarshal GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge.Node: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+type __premarshalGetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge struct {
+	Node json.RawMessage `json:"node"`
+}
+
+func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) __premarshalJSON() (*__premarshalGetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge, error) {
+	var retval __premarshalGetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge
+
+	{
+
+		dst := &retval.Node
+		src := v.Node
+		var err error
+		*dst, err = __marshalJob(
+			&src)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"Unable to marshal GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge.Node: %w", err)
+		}
+	}
+	return &retval, nil
+}
+
+// GetScheduledBuildsResponse is returned by GetScheduledBuilds on success.
+type GetScheduledBuildsResponse struct {
+	// Find a pipeline by its slug
+	Pipeline GetScheduledBuildsPipeline `json:"pipeline"`
+}
+
+// GetPipeline returns GetScheduledBuildsResponse.Pipeline, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsResponse) GetPipeline() GetScheduledBuildsPipeline { return v.Pipeline }
+
+// Job includes the GraphQL fields of Job requested by the fragment Job.
+// The GraphQL type's documentation follows.
+//
+// # Kinds of jobs that can exist on a build
+//
+// Job is implemented by the following types:
+// JobJobTypeBlock
+// JobJobTypeCommand
+// JobJobTypeTrigger
+// JobJobTypeWait
+type Job interface {
+	implementsGraphQLInterfaceJob()
+}
+
+func (v *JobJobTypeBlock) implementsGraphQLInterfaceJob()   {}
+func (v *JobJobTypeCommand) implementsGraphQLInterfaceJob() {}
+func (v *JobJobTypeTrigger) implementsGraphQLInterfaceJob() {}
+func (v *JobJobTypeWait) implementsGraphQLInterfaceJob()    {}
+
+func __unmarshalJob(b []byte, v *Job) error {
+	if string(b) == "null" {
+		return nil
+	}
+
+	var tn struct {
+		TypeName string `json:"__typename"`
+	}
+	err := json.Unmarshal(b, &tn)
+	if err != nil {
+		return err
+	}
+
+	switch tn.TypeName {
+	case "JobTypeBlock":
+		*v = new(JobJobTypeBlock)
+		return json.Unmarshal(b, *v)
+	case "JobTypeCommand":
+		*v = new(JobJobTypeCommand)
+		return json.Unmarshal(b, *v)
+	case "JobTypeTrigger":
+		*v = new(JobJobTypeTrigger)
+		return json.Unmarshal(b, *v)
+	case "JobTypeWait":
+		*v = new(JobJobTypeWait)
+		return json.Unmarshal(b, *v)
+	case "":
+		return fmt.Errorf(
+			"response was missing Job.__typename")
+	default:
+		return fmt.Errorf(
+			`unexpected concrete type for Job: "%v"`, tn.TypeName)
+	}
+}
+
+func __marshalJob(v *Job) ([]byte, error) {
+
+	var typename string
+	switch v := (*v).(type) {
+	case *JobJobTypeBlock:
+		typename = "JobTypeBlock"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*JobJobTypeBlock
+		}{typename, v}
+		return json.Marshal(result)
+	case *JobJobTypeCommand:
+		typename = "JobTypeCommand"
+
+		premarshaled, err := v.__premarshalJSON()
+		if err != nil {
+			return nil, err
+		}
+		result := struct {
+			TypeName string `json:"__typename"`
+			*__premarshalJobJobTypeCommand
+		}{typename, premarshaled}
+		return json.Marshal(result)
+	case *JobJobTypeTrigger:
+		typename = "JobTypeTrigger"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*JobJobTypeTrigger
+		}{typename, v}
+		return json.Marshal(result)
+	case *JobJobTypeWait:
+		typename = "JobTypeWait"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*JobJobTypeWait
+		}{typename, v}
+		return json.Marshal(result)
+	case nil:
+		return []byte("null"), nil
+	default:
+		return nil, fmt.Errorf(
+			`unexpected concrete type for Job: "%T"`, v)
+	}
+}
+
+// Job includes the GraphQL fields of JobTypeBlock requested by the fragment Job.
+// The GraphQL type's documentation follows.
+//
+// Kinds of jobs that can exist on a build
+type JobJobTypeBlock struct {
+}
+
+// Job includes the GraphQL fields of JobTypeCommand requested by the fragment Job.
+// The GraphQL type's documentation follows.
+//
+// Kinds of jobs that can exist on a build
+type JobJobTypeCommand struct {
+	CommandJob `json:"-"`
+}
+
+// GetUuid returns JobJobTypeCommand.Uuid, and is useful for accessing the field via an interface.
+func (v *JobJobTypeCommand) GetUuid() string { return v.CommandJob.Uuid }
+
+// GetEnv returns JobJobTypeCommand.Env, and is useful for accessing the field via an interface.
+func (v *JobJobTypeCommand) GetEnv() []string { return v.CommandJob.Env }
+
+// GetLabel returns JobJobTypeCommand.Label, and is useful for accessing the field via an interface.
+func (v *JobJobTypeCommand) GetLabel() string { return v.CommandJob.Label }
+
+// GetState returns JobJobTypeCommand.State, and is useful for accessing the field via an interface.
+func (v *JobJobTypeCommand) GetState() JobStates { return v.CommandJob.State }
+
+// GetAgentQueryRules returns JobJobTypeCommand.AgentQueryRules, and is useful for accessing the field via an interface.
+func (v *JobJobTypeCommand) GetAgentQueryRules() []string { return v.CommandJob.AgentQueryRules }
+
+// GetExitStatus returns JobJobTypeCommand.ExitStatus, and is useful for accessing the field via an interface.
+func (v *JobJobTypeCommand) GetExitStatus() string { return v.CommandJob.ExitStatus }
+
+// GetScheduledAt returns JobJobTypeCommand.ScheduledAt, and is useful for accessing the field via an interface.
+func (v *JobJobTypeCommand) GetScheduledAt() time.Time { return v.CommandJob.ScheduledAt }
+
+// GetAgent returns JobJobTypeCommand.Agent, and is useful for accessing the field via an interface.
+func (v *JobJobTypeCommand) GetAgent() CommandJobAgent { return v.CommandJob.Agent }
+
+func (v *JobJobTypeCommand) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*JobJobTypeCommand
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.JobJobTypeCommand = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(
+		b, &v.CommandJob)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type __premarshalJobJobTypeCommand struct {
+	Uuid string `json:"uuid"`
+
+	Env []string `json:"env"`
+
+	Label string `json:"label"`
+
+	State JobStates `json:"state"`
+
+	AgentQueryRules []string `json:"agentQueryRules"`
+
+	ExitStatus string `json:"exitStatus"`
+
+	ScheduledAt time.Time `json:"scheduledAt"`
+
+	Agent CommandJobAgent `json:"agent"`
+}
+
+func (v *JobJobTypeCommand) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *JobJobTypeCommand) __premarshalJSON() (*__premarshalJobJobTypeCommand, error) {
+	var retval __premarshalJobJobTypeCommand
+
+	retval.Uuid = v.CommandJob.Uuid
+	retval.Env = v.CommandJob.Env
+	retval.Label = v.CommandJob.Label
+	retval.State = v.CommandJob.State
+	retval.AgentQueryRules = v.CommandJob.AgentQueryRules
+	retval.ExitStatus = v.CommandJob.ExitStatus
+	retval.ScheduledAt = v.CommandJob.ScheduledAt
+	retval.Agent = v.CommandJob.Agent
+	return &retval, nil
+}
+
+// Job includes the GraphQL fields of JobTypeTrigger requested by the fragment Job.
+// The GraphQL type's documentation follows.
+//
+// Kinds of jobs that can exist on a build
+type JobJobTypeTrigger struct {
+}
+
+// Job includes the GraphQL fields of JobTypeWait requested by the fragment Job.
+// The GraphQL type's documentation follows.
+//
+// Kinds of jobs that can exist on a build
+type JobJobTypeWait struct {
 }
 
 // All the possible states a job can be in
@@ -1411,13 +1200,13 @@ type __GetBuildInput struct {
 // GetUuid returns __GetBuildInput.Uuid, and is useful for accessing the field via an interface.
 func (v *__GetBuildInput) GetUuid() string { return v.Uuid }
 
-// __GetBuildsForPipelineBySlugInput is used internally by genqlient
-type __GetBuildsForPipelineBySlugInput struct {
+// __GetFinishedBuildsInput is used internally by genqlient
+type __GetFinishedBuildsInput struct {
 	Slug string `json:"slug"`
 }
 
-// GetSlug returns __GetBuildsForPipelineBySlugInput.Slug, and is useful for accessing the field via an interface.
-func (v *__GetBuildsForPipelineBySlugInput) GetSlug() string { return v.Slug }
+// GetSlug returns __GetFinishedBuildsInput.Slug, and is useful for accessing the field via an interface.
+func (v *__GetFinishedBuildsInput) GetSlug() string { return v.Slug }
 
 // __GetOrganizationInput is used internally by genqlient
 type __GetOrganizationInput struct {
@@ -1426,6 +1215,14 @@ type __GetOrganizationInput struct {
 
 // GetSlug returns __GetOrganizationInput.Slug, and is useful for accessing the field via an interface.
 func (v *__GetOrganizationInput) GetSlug() string { return v.Slug }
+
+// __GetScheduledBuildsInput is used internally by genqlient
+type __GetScheduledBuildsInput struct {
+	Slug string `json:"slug"`
+}
+
+// GetSlug returns __GetScheduledBuildsInput.Slug, and is useful for accessing the field via an interface.
+func (v *__GetScheduledBuildsInput) GetSlug() string { return v.Slug }
 
 // __PipelineCreateInput is used internally by genqlient
 type __PipelineCreateInput struct {
@@ -1509,13 +1306,16 @@ mutation BuildCreate ($input: BuildCreateInput!) {
 				edges {
 					node {
 						__typename
-						... on JobTypeCommand {
-							... CommandJob
-						}
+						... Job
 					}
 				}
 			}
 		}
+	}
+}
+fragment Job on Job {
+	... on JobTypeCommand {
+		... CommandJob
 	}
 }
 fragment CommandJob on JobTypeCommand {
@@ -1581,28 +1381,31 @@ query GetBuild ($uuid: ID!) {
 	return &data, err
 }
 
-func GetBuildsForPipelineBySlug(
+func GetFinishedBuilds(
 	ctx context.Context,
 	client graphql.Client,
 	slug string,
-) (*GetBuildsForPipelineBySlugResponse, error) {
+) (*GetFinishedBuildsResponse, error) {
 	req := &graphql.Request{
-		OpName: "GetBuildsForPipelineBySlug",
+		OpName: "GetFinishedBuilds",
 		Query: `
-query GetBuildsForPipelineBySlug ($slug: ID!) {
+query GetFinishedBuilds ($slug: ID!) {
 	pipeline(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED,RUNNING,ACCEPTED,ASSIGNED], type: [COMMAND], first: 500) {
+		jobs(state: [FINISHED,CANCELED], type: [COMMAND], first: 100, order: RECENTLY_CREATED) {
 			count
 			edges {
 				node {
 					__typename
-					... on JobTypeCommand {
-						... CommandJob
-					}
+					... Job
 				}
 			}
 		}
+	}
+}
+fragment Job on Job {
+	... on JobTypeCommand {
+		... CommandJob
 	}
 }
 fragment CommandJob on JobTypeCommand {
@@ -1618,13 +1421,13 @@ fragment CommandJob on JobTypeCommand {
 	}
 }
 `,
-		Variables: &__GetBuildsForPipelineBySlugInput{
+		Variables: &__GetFinishedBuildsInput{
 			Slug: slug,
 		},
 	}
 	var err error
 
-	var data GetBuildsForPipelineBySlugResponse
+	var data GetFinishedBuildsResponse
 	resp := &graphql.Response{Data: &data}
 
 	err = client.MakeRequest(
@@ -1657,6 +1460,64 @@ query GetOrganization ($slug: ID!) {
 	var err error
 
 	var data GetOrganizationResponse
+	resp := &graphql.Response{Data: &data}
+
+	err = client.MakeRequest(
+		ctx,
+		req,
+		resp,
+	)
+
+	return &data, err
+}
+
+func GetScheduledBuilds(
+	ctx context.Context,
+	client graphql.Client,
+	slug string,
+) (*GetScheduledBuildsResponse, error) {
+	req := &graphql.Request{
+		OpName: "GetScheduledBuilds",
+		Query: `
+query GetScheduledBuilds ($slug: ID!) {
+	pipeline(slug: $slug) {
+		id
+		jobs(state: [SCHEDULED], type: [COMMAND], first: 100, order: RECENTLY_ASSIGNED) {
+			count
+			edges {
+				node {
+					__typename
+					... Job
+				}
+			}
+		}
+	}
+}
+fragment Job on Job {
+	... on JobTypeCommand {
+		... CommandJob
+	}
+}
+fragment CommandJob on JobTypeCommand {
+	uuid
+	env
+	label
+	state
+	agentQueryRules
+	exitStatus
+	scheduledAt
+	agent {
+		name
+	}
+}
+`,
+		Variables: &__GetScheduledBuildsInput{
+			Slug: slug,
+		},
+	}
+	var err error
+
+	var data GetScheduledBuildsResponse
 	resp := &graphql.Response{Data: &data}
 
 	err = client.MakeRequest(

@@ -3,7 +3,11 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
 	"syscall"
+
+	_ "net/http/pprof"
 
 	"github.com/buildkite/agent-stack-k8s/monitor"
 	"github.com/buildkite/agent-stack-k8s/scheduler"
@@ -16,7 +20,6 @@ var debug *bool = flag.Bool("debug", false, "debug logs")
 var maxInFlight *int = flag.Int("max-in-flight", 1, "max jobs in flight")
 
 func main() {
-	ctx := context.Background()
 	flag.Parse()
 	if *pipeline == "" {
 		log.Fatalf("pipeline is required")
@@ -27,15 +30,25 @@ func main() {
 	org := MustEnv("BUILDKITE_ORG")
 	initLogger(*debug)
 
-	monitor := monitor.New(zap.L().Named("monitor"), token)
+	ctx, cancel := context.WithCancel(context.Background())
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		cancel()
+	}()
+
+	monitor, err := monitor.New(zap.L().Named("monitor"), token, *maxInFlight)
+	if err != nil {
+		zap.L().Fatal("failed to create monitor", zap.Error(err))
+	}
 	if err := scheduler.Run(ctx, zap.L().Named("scheduler"), monitor, scheduler.Config{
-		Org:         org,
-		Pipeline:    *pipeline,
-		AgentToken:  agentToken,
-		DeletePods:  true,
-		MaxInFlight: *maxInFlight,
+		Org:        org,
+		Pipeline:   *pipeline,
+		AgentToken: agentToken,
+		DeletePods: true,
 	}); err != nil {
-		log.Fatalf("failed to run scheduler: %v", err)
+		zap.L().Fatal("failed to run scheduler", zap.Error(err))
 	}
 }
 

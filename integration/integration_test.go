@@ -75,14 +75,16 @@ func TestWalkingSkeleton(t *testing.T) {
 	logger, err := zap.NewDevelopment()
 	assert.NoError(t, err)
 
+	monitor, err := monitor.New(logger.Named("monitor"), token, 1)
+	assert.NoError(t, err)
+
 	runCtx, cancel := context.WithCancel(context.Background())
 	go func() {
-		assert.NoError(t, scheduler.Run(runCtx, logger.Named("scheduler"), monitor.New(logger.Named("monitor"), token), scheduler.Config{
-			Org:         org,
-			Pipeline:    pipeline.Name,
-			AgentToken:  agentToken,
-			DeletePods:  !*preservePods,
-			MaxInFlight: 1,
+		assert.NoError(t, scheduler.Run(runCtx, logger.Named("scheduler"), monitor, scheduler.Config{
+			Org:        org,
+			Pipeline:   pipeline.Name,
+			AgentToken: agentToken,
+			DeletePods: !*preservePods,
 		}))
 	}()
 	EnsureCleanup(t, func() {
@@ -98,7 +100,7 @@ func TestWalkingSkeleton(t *testing.T) {
 	build := createBuild.BuildCreate.Build
 	assert.Len(t, build.Jobs.Edges, 1)
 	node := build.Jobs.Edges[0].Node
-	job, ok := node.(*api.BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
+	job, ok := node.(*api.JobJobTypeCommand)
 	assert.True(t, ok)
 Out:
 	for {

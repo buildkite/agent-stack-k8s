@@ -3,7 +3,6 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -14,19 +13,15 @@ import (
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
-	toolswatch "k8s.io/client-go/tools/watch"
 )
 
 var defaultBootstrapPod = &corev1.Pod{
 	ObjectMeta: metav1.ObjectMeta{
-		GenerateName: "agent-",
+		Labels: map[string]string{
+			defaultLabel: "true",
+		},
 	},
 	Spec: corev1.PodSpec{
 		RestartPolicy: corev1.RestartPolicyNever,
@@ -57,16 +52,16 @@ var defaultBootstrapPod = &corev1.Pod{
 }
 
 const (
-	ns         = "default"
-	agentImage = "benmoss/buildkite-agent:latest"
+	ns           = "default"
+	agentImage   = "benmoss/buildkite-agent:latest"
+	defaultLabel = "bk-agent-stack-kubernetes"
 )
 
 type Config struct {
 	Org,
 	Pipeline,
 	AgentToken string
-	DeletePods  bool
-	MaxInFlight int
+	DeletePods bool
 }
 
 func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg Config) error {
@@ -81,18 +76,23 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg 
 	if err != nil {
 		return fmt.Errorf("failed to create clienset: %w", err)
 	}
-	queue := make(chan *api.CommandJob, cfg.MaxInFlight)
 
-	for i := 0; i < cfg.MaxInFlight; i++ {
-		go worker(ctx, logger.Named(fmt.Sprintf("worker-%d", i)), cfg, queue, clientset)
+	worker := worker{
+		cfg:       cfg,
+		clientset: clientset,
+		logger:    logger.Named("worker"),
 	}
 
+	scheduled := monitor.Scheduled(ctx, cfg.Org, cfg.Pipeline)
+	finished := monitor.Finished(ctx, cfg.Org, cfg.Pipeline)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case job := <-monitor.Watch(ctx, cfg.Org, cfg.Pipeline):
-			queue <- &job
+		case job := <-scheduled:
+			worker.Create(ctx, &job)
+		case job := <-finished:
+			worker.Cleanup(ctx, &job)
 		}
 	}
 }
@@ -124,6 +124,7 @@ func podFromJob(
 			return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 		}
 	}
+	pod.Name = podName(job)
 	var env []corev1.EnvVar
 	env = append(env, corev1.EnvVar{
 		Name:  "BUILDKITE_BUILD_PATH",
@@ -261,72 +262,39 @@ func podFromJob(
 	return pod, nil
 }
 
-func worker(ctx context.Context, logger *zap.Logger, cfg Config, queue <-chan *api.CommandJob, clientset *kubernetes.Clientset) {
-	logger.Debug("starting")
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Debug("context canceled")
-			return
-		case job := <-queue:
-			logger := logger.With(zap.String("job", job.Uuid))
-			logger.With(zap.String("job", job.Uuid)).Debug("received job")
-			pod, err := podFromJob(job, cfg.AgentToken)
-			if err != nil {
-				logger.Error("failed to convert job to pod", zap.Error(err))
-				return
-			}
-			pod, err = clientset.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
-			if err != nil {
-				logger.Error("failed to create pod", zap.Error(err))
-				return
-			}
-			logger = logger.With(zap.String("pod", pod.Name))
-			logger.Debug("created pod")
-			fs := fields.OneTermEqualSelector(metav1.ObjectNameField, pod.Name)
-			lw := &cache.ListWatch{
-				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-					options.FieldSelector = fs.String()
-					return clientset.CoreV1().Pods(pod.Namespace).List(context.TODO(), options)
-				},
-				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					options.FieldSelector = fs.String()
-					return clientset.CoreV1().Pods(ns).Watch(ctx, options)
-				},
-			}
-			_, err = toolswatch.UntilWithSync(ctx, lw, &corev1.Pod{}, nil, func(ev watch.Event) (bool, error) {
-				if pod, ok := ev.Object.(*corev1.Pod); ok {
-					// todo: handle image pull errors
-					switch pod.Status.Phase {
-					case corev1.PodPending, corev1.PodRunning, corev1.PodUnknown:
-						logger.Debug("waiting", zap.String("phase", string(pod.Status.Phase)))
-						return false, nil
-					case corev1.PodSucceeded:
-						logger.Debug("pod success!")
-						return true, nil
-					case corev1.PodFailed:
-						logger.Warn("pod failed!")
-						return true, nil
-					default:
-						return false, fmt.Errorf("unexpected pod status: %s", pod.Status.Phase)
-					}
-				}
-				return false, errors.New("event object not of type v1.Node")
-			})
-			if err != nil {
-				if errors.Is(err, wait.ErrWaitTimeout) {
-					logger.Debug("context canceled")
-				} else {
-					logger.Error("failed to watch pod", zap.Error(err))
-					return
-				}
-			}
-			if cfg.DeletePods {
-				if err := clientset.CoreV1().Pods(ns).Delete(context.Background(), pod.Name, metav1.DeleteOptions{}); err != nil {
-					logger.Error("failed to delete pod", zap.Error(err))
-					return
-				}
-			}
-		}
+type worker struct {
+	cfg       Config
+	clientset *kubernetes.Clientset
+	logger    *zap.Logger
+}
+
+func (w *worker) Create(ctx context.Context, job *api.CommandJob) {
+	logger := w.logger.With(zap.String("job", job.Uuid), zap.String("label", job.Label))
+	pod, err := podFromJob(job, w.cfg.AgentToken)
+	if err != nil {
+		logger.Error("failed to convert job to pod", zap.Error(err))
+		return
 	}
+	logger = logger.With(zap.String("pod", pod.Name))
+	_, err = w.clientset.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
+	if err != nil {
+		logger.Error("failed to create pod", zap.Error(err))
+		return
+	}
+	logger.Debug("created pod")
+}
+
+func (w *worker) Cleanup(ctx context.Context, job *api.CommandJob) {
+	name := podName(job)
+	logger := w.logger.With(zap.String("job", job.Uuid), zap.String("label", job.Label), zap.String("pod", name))
+	if w.cfg.DeletePods {
+		if err := w.clientset.CoreV1().Pods(ns).Delete(context.Background(), name, metav1.DeleteOptions{}); err != nil {
+			logger.Error("failed to delete pod", zap.Error(err))
+			return
+		}
+		logger.Debug("deleted pod")
+	}
+}
+func podName(job *api.CommandJob) string {
+	return fmt.Sprintf("buildkite-%s", job.Uuid)
 }

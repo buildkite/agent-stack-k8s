@@ -9,25 +9,32 @@ import (
 
 	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/api"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"go.uber.org/zap"
 )
 
 type Monitor struct {
 	client      graphql.Client
 	logger      *zap.Logger
-	knownBuilds map[string]struct{}
+	knownBuilds *lru.Cache[string, struct{}]
+	maxInFlight int
 }
 
-func New(logger *zap.Logger, token string) *Monitor {
+func New(logger *zap.Logger, token string, maxInFlight int) (*Monitor, error) {
 	graphqlClient := api.NewClient(token)
+	cache, err := lru.New[string, struct{}](100)
+	if err != nil {
+		return nil, err
+	}
 	return &Monitor{
 		client:      graphqlClient,
 		logger:      logger,
-		knownBuilds: map[string]struct{}{},
-	}
+		knownBuilds: cache,
+		maxInFlight: maxInFlight,
+	}, nil
 }
 
-func (m *Monitor) Watch(ctx context.Context, org, pipeline string) <-chan api.CommandJob {
+func (m *Monitor) Scheduled(ctx context.Context, org, pipeline string) <-chan api.CommandJob {
 	jobs := make(chan api.CommandJob)
 	go func() {
 		ticker := time.NewTicker(time.Second)
@@ -35,11 +42,10 @@ func (m *Monitor) Watch(ctx context.Context, org, pipeline string) <-chan api.Co
 		for {
 			select {
 			case <-ctx.Done():
-				m.logger.Info("monitor context canceled")
 				return
 			case <-ticker.C:
 				slug := fmt.Sprintf("%s/%s", org, pipeline)
-				buildsResponse, err := api.GetBuildsForPipelineBySlug(ctx, m.client, slug)
+				buildsResponse, err := api.GetScheduledBuilds(ctx, m.client, slug)
 				if err != nil {
 					if errors.Is(err, context.Canceled) {
 						continue
@@ -49,22 +55,57 @@ func (m *Monitor) Watch(ctx context.Context, org, pipeline string) <-chan api.Co
 				}
 				builds := buildsResponse.Pipeline.Jobs.Edges
 				sort.Slice(builds, func(i, j int) bool {
-					cmdI := builds[i].Node.(*api.GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
-					cmdJ := builds[j].Node.(*api.GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
+					cmdI := builds[i].Node.(*api.JobJobTypeCommand)
+					cmdJ := builds[j].Node.(*api.JobJobTypeCommand)
 
 					return cmdI.ScheduledAt.Before(cmdJ.ScheduledAt)
 
 				})
+
 				for _, job := range builds {
-					cmdJob := job.Node.(*api.GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
-					if _, found := m.knownBuilds[cmdJob.Uuid]; !found {
-						m.logger.Debug("enqueuing job", zap.String("uuid", cmdJob.Uuid))
+					cmdJob := job.Node.(*api.JobJobTypeCommand)
+					if !m.knownBuilds.Contains(cmdJob.Uuid) && m.knownBuilds.Len() < m.maxInFlight {
 						jobs <- cmdJob.CommandJob
-						m.knownBuilds[cmdJob.Uuid] = struct{}{}
+						m.knownBuilds.Add(cmdJob.Uuid, struct{}{})
 					}
 				}
 			}
 		}
 	}()
+	return jobs
+}
+
+func (m *Monitor) Finished(ctx context.Context, org, pipeline string) <-chan api.CommandJob {
+	jobs := make(chan api.CommandJob)
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				slug := fmt.Sprintf("%s/%s", org, pipeline)
+				buildsResponse, err := api.GetFinishedBuilds(ctx, m.client, slug)
+				if err != nil {
+					if errors.Is(err, context.Canceled) {
+						continue
+					}
+					m.logger.Warn("failed to retrieve builds for pipeline", zap.Error(err))
+					continue
+				}
+				builds := buildsResponse.Pipeline.Jobs.Edges
+
+				for _, job := range builds {
+					cmdJob := job.Node.(*api.JobJobTypeCommand)
+					if m.knownBuilds.Contains(cmdJob.Uuid) {
+						jobs <- cmdJob.CommandJob
+					}
+					m.knownBuilds.Remove(cmdJob.Uuid)
+				}
+			}
+		}
+	}()
+
 	return jobs
 }
