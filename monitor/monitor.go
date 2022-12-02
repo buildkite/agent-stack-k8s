@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
@@ -46,19 +47,20 @@ func (m *Monitor) Watch(ctx context.Context, org, pipeline string) <-chan api.Co
 					m.logger.Warn("failed to retrieve builds for pipeline", zap.Error(err))
 					continue
 				}
-				for _, job := range buildsResponse.Pipeline.Jobs.Edges {
-					switch job := job.Node.(type) {
-					case *api.GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand:
-						if _, found := m.knownBuilds[job.Uuid]; found {
-							m.logger.Debug("skipping known job", zap.String("uuid", job.Uuid))
-						} else {
-							m.logger.Debug("enqueuing job", zap.String("uuid", job.Uuid))
-							jobs <- job.CommandJob
-							m.knownBuilds[job.Uuid] = struct{}{}
-						}
-					default:
-						m.logger.Warn("received unknown job type", zap.Any("type", job.GetTypename()))
-						continue
+				builds := buildsResponse.Pipeline.Jobs.Edges
+				sort.Slice(builds, func(i, j int) bool {
+					cmdI := builds[i].Node.(*api.GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
+					cmdJ := builds[j].Node.(*api.GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
+
+					return cmdI.ScheduledAt.Before(cmdJ.ScheduledAt)
+
+				})
+				for _, job := range builds {
+					cmdJob := job.Node.(*api.GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
+					if _, found := m.knownBuilds[cmdJob.Uuid]; !found {
+						m.logger.Debug("enqueuing job", zap.String("uuid", cmdJob.Uuid))
+						jobs <- cmdJob.CommandJob
+						m.knownBuilds[cmdJob.Uuid] = struct{}{}
 					}
 				}
 			}

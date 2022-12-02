@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/Khan/genqlient/graphql"
 )
@@ -350,6 +351,11 @@ func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobE
 	return v.CommandJob.ExitStatus
 }
 
+// GetScheduledAt returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.ScheduledAt, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetScheduledAt() time.Time {
+	return v.CommandJob.ScheduledAt
+}
+
 // GetAgent returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Agent, and is useful for accessing the field via an interface.
 func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetAgent() CommandJobAgent {
 	return v.CommandJob.Agent
@@ -395,6 +401,8 @@ type __premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionE
 
 	ExitStatus string `json:"exitStatus"`
 
+	ScheduledAt time.Time `json:"scheduledAt"`
+
 	Agent CommandJobAgent `json:"agent"`
 }
 
@@ -416,6 +424,7 @@ func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobE
 	retval.State = v.CommandJob.State
 	retval.AgentQueryRules = v.CommandJob.AgentQueryRules
 	retval.ExitStatus = v.CommandJob.ExitStatus
+	retval.ScheduledAt = v.CommandJob.ScheduledAt
 	retval.Agent = v.CommandJob.Agent
 	return &retval, nil
 }
@@ -558,6 +567,8 @@ type CommandJob struct {
 	AgentQueryRules []string `json:"agentQueryRules"`
 	// The exit status returned by the command on the agent
 	ExitStatus string `json:"exitStatus"`
+	// The time when the job became scheduled for running
+	ScheduledAt time.Time `json:"scheduledAt"`
 	// The agent that is running the job
 	Agent CommandJobAgent `json:"agent"`
 }
@@ -579,6 +590,9 @@ func (v *CommandJob) GetAgentQueryRules() []string { return v.AgentQueryRules }
 
 // GetExitStatus returns CommandJob.ExitStatus, and is useful for accessing the field via an interface.
 func (v *CommandJob) GetExitStatus() string { return v.ExitStatus }
+
+// GetScheduledAt returns CommandJob.ScheduledAt, and is useful for accessing the field via an interface.
+func (v *CommandJob) GetScheduledAt() time.Time { return v.ScheduledAt }
 
 // GetAgent returns CommandJob.Agent, and is useful for accessing the field via an interface.
 func (v *CommandJob) GetAgent() CommandJobAgent { return v.Agent }
@@ -635,9 +649,8 @@ func (v *GetBuildsForPipelineBySlugPipeline) GetJobs() GetBuildsForPipelineBySlu
 
 // GetBuildsForPipelineBySlugPipelineJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
 type GetBuildsForPipelineBySlugPipelineJobsJobConnection struct {
-	Count    int                                                               `json:"count"`
-	Edges    []GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge `json:"edges"`
-	PageInfo GetBuildsForPipelineBySlugPipelineJobsJobConnectionPageInfo       `json:"pageInfo"`
+	Count int                                                               `json:"count"`
+	Edges []GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge `json:"edges"`
 }
 
 // GetCount returns GetBuildsForPipelineBySlugPipelineJobsJobConnection.Count, and is useful for accessing the field via an interface.
@@ -646,11 +659,6 @@ func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnection) GetCount() int { r
 // GetEdges returns GetBuildsForPipelineBySlugPipelineJobsJobConnection.Edges, and is useful for accessing the field via an interface.
 func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnection) GetEdges() []GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge {
 	return v.Edges
-}
-
-// GetPageInfo returns GetBuildsForPipelineBySlugPipelineJobsJobConnection.PageInfo, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnection) GetPageInfo() GetBuildsForPipelineBySlugPipelineJobsJobConnectionPageInfo {
-	return v.PageInfo
 }
 
 // GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
@@ -891,6 +899,11 @@ func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobT
 	return v.CommandJob.ExitStatus
 }
 
+// GetScheduledAt returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.ScheduledAt, and is useful for accessing the field via an interface.
+func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetScheduledAt() time.Time {
+	return v.CommandJob.ScheduledAt
+}
+
 // GetAgent returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand.Agent, and is useful for accessing the field via an interface.
 func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand) GetAgent() CommandJobAgent {
 	return v.CommandJob.Agent
@@ -936,6 +949,8 @@ type __premarshalGetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdge
 
 	ExitStatus string `json:"exitStatus"`
 
+	ScheduledAt time.Time `json:"scheduledAt"`
+
 	Agent CommandJobAgent `json:"agent"`
 }
 
@@ -957,6 +972,7 @@ func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobT
 	retval.State = v.CommandJob.State
 	retval.AgentQueryRules = v.CommandJob.AgentQueryRules
 	retval.ExitStatus = v.CommandJob.ExitStatus
+	retval.ScheduledAt = v.CommandJob.ScheduledAt
 	retval.Agent = v.CommandJob.Agent
 	return &retval, nil
 }
@@ -985,20 +1001,6 @@ type GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeW
 // GetTypename returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeWait.Typename, and is useful for accessing the field via an interface.
 func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionEdgesJobEdgeNodeJobTypeWait) GetTypename() string {
 	return v.Typename
-}
-
-// GetBuildsForPipelineBySlugPipelineJobsJobConnectionPageInfo includes the requested fields of the GraphQL type PageInfo.
-// The GraphQL type's documentation follows.
-//
-// Information about pagination in a connection.
-type GetBuildsForPipelineBySlugPipelineJobsJobConnectionPageInfo struct {
-	// When paginating forwards, are there more items?
-	HasNextPage bool `json:"hasNextPage"`
-}
-
-// GetHasNextPage returns GetBuildsForPipelineBySlugPipelineJobsJobConnectionPageInfo.HasNextPage, and is useful for accessing the field via an interface.
-func (v *GetBuildsForPipelineBySlugPipelineJobsJobConnectionPageInfo) GetHasNextPage() bool {
-	return v.HasNextPage
 }
 
 // GetBuildsForPipelineBySlugResponse is returned by GetBuildsForPipelineBySlug on success.
@@ -1523,6 +1525,7 @@ fragment CommandJob on JobTypeCommand {
 	state
 	agentQueryRules
 	exitStatus
+	scheduledAt
 	agent {
 		name
 	}
@@ -1599,9 +1602,6 @@ query GetBuildsForPipelineBySlug ($slug: ID!) {
 					}
 				}
 			}
-			pageInfo {
-				hasNextPage
-			}
 		}
 	}
 }
@@ -1612,6 +1612,7 @@ fragment CommandJob on JobTypeCommand {
 	state
 	agentQueryRules
 	exitStatus
+	scheduledAt
 	agent {
 		name
 	}

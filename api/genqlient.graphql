@@ -5,6 +5,7 @@ fragment CommandJob on JobTypeCommand {
   state
   agentQueryRules
   exitStatus
+  scheduledAt
   agent {
     name
   }
@@ -90,14 +91,10 @@ query GetBuildsForPipelineBySlug($slug: ID!) {
       count
       edges {
         node {
-          __typename
           ... on JobTypeCommand {
             ...CommandJob
           }
         }
-      }
-      pageInfo {
-        hasNextPage
       }
     }
   }
