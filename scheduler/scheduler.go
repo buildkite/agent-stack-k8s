@@ -192,6 +192,7 @@ func podFromJob(
 		switch k {
 		case "BUILDKITE_PLUGINS": //noop
 		case "BUILDKITE_COMMAND": //noop
+		case "BUILDKITE_ARTIFACT_PATHS": //noop
 		default:
 			env = append(env, corev1.EnvVar{Name: k, Value: v})
 		}
@@ -232,6 +233,39 @@ func podFromJob(
 	}
 
 	containerCount := len(pod.Spec.Containers) + systemContainers
+	if artifactPaths, found := envMap["BUILDKITE_ARTIFACT_PATHS"]; found && artifactPaths != "" {
+		artifactsContainer := corev1.Container{
+			Name:            "upload-artifacts",
+			Image:           agentImage,
+			Command:         []string{"/workspace/buildkite-agent"},
+			Args:            []string{"bootstrap"},
+			WorkingDir:      "/workspace",
+			VolumeMounts:    volumeMounts,
+			ImagePullPolicy: corev1.PullAlways,
+			Env: []corev1.EnvVar{{
+				Name:  "BUILDKITE_AGENT_EXPERIMENT",
+				Value: "kubernetes-exec",
+			}, {
+				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+				Value: "command",
+			}, {
+				Name:  "BUILDKITE_COMMAND",
+				Value: "true",
+			}, {
+				Name:  "BUILDKITE_AGENT_NAME",
+				Value: "buildkite",
+			}, {
+				Name:  "BUILDKITE_CONTAINER_ID",
+				Value: strconv.Itoa(containerCount),
+			}, {
+				Name:  "BUILDKITE_ARTIFACT_PATHS",
+				Value: artifactPaths,
+			}},
+		}
+		artifactsContainer.Env = append(artifactsContainer.Env, env...)
+		containerCount++
+		pod.Spec.Containers = append(pod.Spec.Containers, artifactsContainer)
+	}
 	// agent server container
 	agentContainer := corev1.Container{
 		Name:            "agent",
