@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/monitor"
@@ -42,7 +43,7 @@ type Config struct {
 	Org,
 	Pipeline,
 	AgentToken string
-	DeleteJobs bool
+	JobTTL time.Duration
 }
 
 func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg Config) error {
@@ -137,6 +138,8 @@ func (w *worker) k8sify(
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
 	const systemContainers = 1
+	ttl := int32(w.cfg.JobTTL.Seconds())
+	kjob.Spec.TTLSecondsAfterFinished = &ttl
 	podSpec := &kjob.Spec.Template.Spec
 
 	for i, c := range podSpec.Containers {

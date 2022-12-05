@@ -20,7 +20,6 @@ import (
 
 var (
 	preservePipelines *bool = flag.Bool("preserve-pipelines", false, "preserve pipelines created by tests")
-	preservePods      *bool = flag.Bool("preserve-pods", false, "preserve pods created by tests")
 )
 
 //go:embed fixtures/*
@@ -84,7 +83,7 @@ func TestWalkingSkeleton(t *testing.T) {
 			Org:        org,
 			Pipeline:   pipeline.Name,
 			AgentToken: agentToken,
-			DeleteJobs: !*preserveJobs,
+			JobTTL:     time.Minute,
 		}))
 	}()
 	EnsureCleanup(t, func() {

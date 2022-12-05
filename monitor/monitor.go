@@ -66,6 +66,7 @@ func (m *Monitor) Scheduled(ctx context.Context, org, pipeline string) <-chan ap
 					cmdJob := job.Node.(*api.JobJobTypeCommand)
 					if !m.knownBuilds.Contains(cmdJob.Uuid) && m.knownBuilds.Len() < m.maxInFlight {
 						jobs <- cmdJob.CommandJob
+						m.logger.Debug("added job", zap.String("uuid", cmdJob.Uuid))
 						m.knownBuilds.Add(cmdJob.Uuid, struct{}{})
 					}
 				}
