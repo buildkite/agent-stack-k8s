@@ -14,8 +14,14 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/pointer"
 )
 
 var defaultJob = &batchv1.Job{
@@ -53,26 +59,33 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg 
 	}
 
 	worker := worker{
+		ctx:       ctx,
 		cfg:       cfg,
 		clientset: clientset,
 		logger:    logger.Named("worker"),
+		done:      make(chan string),
 	}
+	requirement, err := labels.NewRequirement(defaultLabel, selection.Exists, nil)
+	if err != nil {
+		return fmt.Errorf("invalid requirement: %w", err)
+	}
+	selector := labels.NewSelector().Add(*requirement)
+	go worker.watchCompletions(ctx, selector)
 
 	scheduled := monitor.Scheduled(ctx, cfg.Org, cfg.Pipeline)
-	finished := monitor.Finished(ctx, cfg.Org, cfg.Pipeline)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case job := <-scheduled:
-			worker.Create(ctx, &job)
-		case job := <-finished:
-			worker.Cleanup(ctx, &job)
+			worker.Create(&job)
+		case uuid := <-worker.done:
+			monitor.Done(uuid)
 		}
 	}
 }
 
-func k8sify(
+func (w *worker) k8sify(
 	job *api.CommandJob,
 	token string,
 ) (*batchv1.Job, error) {
@@ -100,6 +113,8 @@ func k8sify(
 		}
 	}
 	kjob.Name = kjobName(job)
+	kjob.Labels[defaultLabel] = job.Uuid
+	kjob.Spec.BackoffLimit = pointer.Int32(0)
 	var env []corev1.EnvVar
 	env = append(env, corev1.EnvVar{
 		Name:  "BUILDKITE_BUILD_PATH",
@@ -259,20 +274,22 @@ func k8sify(
 }
 
 type worker struct {
+	ctx       context.Context
 	cfg       Config
 	clientset *kubernetes.Clientset
 	logger    *zap.Logger
+	done      chan string
 }
 
-func (w *worker) Create(ctx context.Context, job *api.CommandJob) {
+func (w *worker) Create(job *api.CommandJob) {
 	logger := w.logger.With(zap.String("job", job.Uuid), zap.String("label", job.Label))
-	kjob, err := k8sify(job, w.cfg.AgentToken)
+	kjob, err := w.k8sify(job, w.cfg.AgentToken)
 	if err != nil {
 		logger.Error("failed to convert job to pod", zap.Error(err))
 		return
 	}
 	logger = logger.With(zap.String("kjob", kjob.Name))
-	_, err = w.clientset.BatchV1().Jobs(ns).Create(ctx, kjob, metav1.CreateOptions{})
+	_, err = w.clientset.BatchV1().Jobs(ns).Create(w.ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
 		logger.Error("failed to create job", zap.Error(err))
 		return
@@ -280,18 +297,38 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) {
 	logger.Debug("created job")
 }
 
-func (w *worker) Cleanup(ctx context.Context, job *api.CommandJob) {
-	name := kjobName(job)
-	logger := w.logger.With(zap.String("job", job.Uuid), zap.String("label", job.Label), zap.String("kjob", name))
-	if w.cfg.DeleteJobs {
-		policy := metav1.DeletePropagationBackground
-		if err := w.clientset.BatchV1().Jobs(ns).Delete(context.Background(), name, metav1.DeleteOptions{PropagationPolicy: &policy}); err != nil {
-			logger.Error("failed to delete job", zap.Error(err))
-			return
-		}
-		logger.Debug("deleted job")
+func (w *worker) watchCompletions(ctx context.Context, selector labels.Selector) {
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.LabelSelector = selector.String()
+			return w.clientset.BatchV1().Jobs(ns).List(ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.LabelSelector = selector.String()
+			return w.clientset.BatchV1().Jobs(ns).Watch(ctx, options)
+		},
 	}
+
+	_, controller := cache.NewInformer(lw, &batchv1.Job{}, 0, cache.ResourceEventHandlerFuncs{
+		UpdateFunc: func(_, newObj interface{}) {
+			job := newObj.(*batchv1.Job)
+			for _, condition := range job.Status.Conditions {
+				if condition.Status == corev1.ConditionTrue {
+					if condition.Type == batchv1.JobComplete || condition.Type == batchv1.JobFailed {
+						uuid, found := job.Labels[defaultLabel]
+						if !found {
+							w.logger.Error("job found without label", zap.String("name", job.Name))
+						} else {
+							w.done <- uuid
+						}
+					}
+				}
+			}
+		},
+	})
+	controller.Run(ctx.Done())
 }
+
 func kjobName(job *api.CommandJob) string {
 	return fmt.Sprintf("buildkite-%s", job.Uuid)
 }

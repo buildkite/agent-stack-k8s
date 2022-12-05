@@ -104,23 +104,3 @@ query GetScheduledBuilds($slug: ID!) {
     }
   }
 }
-
-query GetFinishedBuilds($slug: ID!) {
-  pipeline(slug: $slug) {
-    id
-    jobs(
-      state: [FINISHED, CANCELED]
-      type: [COMMAND]
-      first: 100
-      order: RECENTLY_CREATED
-    ) {
-      count
-      edges {
-        # @genqlient(flatten: true)
-        node {
-          ...Job
-        }
-      }
-    }
-  }
-}

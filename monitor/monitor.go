@@ -75,37 +75,6 @@ func (m *Monitor) Scheduled(ctx context.Context, org, pipeline string) <-chan ap
 	return jobs
 }
 
-func (m *Monitor) Finished(ctx context.Context, org, pipeline string) <-chan api.CommandJob {
-	jobs := make(chan api.CommandJob)
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				slug := fmt.Sprintf("%s/%s", org, pipeline)
-				buildsResponse, err := api.GetFinishedBuilds(ctx, m.client, slug)
-				if err != nil {
-					if errors.Is(err, context.Canceled) {
-						continue
-					}
-					m.logger.Warn("failed to retrieve builds for pipeline", zap.Error(err))
-					continue
-				}
-				builds := buildsResponse.Pipeline.Jobs.Edges
-
-				for _, job := range builds {
-					cmdJob := job.Node.(*api.JobJobTypeCommand)
-					if m.knownBuilds.Contains(cmdJob.Uuid) {
-						jobs <- cmdJob.CommandJob
-					}
-					m.knownBuilds.Remove(cmdJob.Uuid)
-				}
-			}
-		}
-	}()
-
-	return jobs
+func (m *Monitor) Done(uuid string) {
+	m.knownBuilds.Remove(uuid)
 }

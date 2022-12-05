@@ -361,117 +361,6 @@ type GetBuildResponse struct {
 // GetBuild returns GetBuildResponse.Build, and is useful for accessing the field via an interface.
 func (v *GetBuildResponse) GetBuild() GetBuildBuild { return v.Build }
 
-// GetFinishedBuildsPipeline includes the requested fields of the GraphQL type Pipeline.
-// The GraphQL type's documentation follows.
-//
-// A pipeline
-type GetFinishedBuildsPipeline struct {
-	Id   string                                     `json:"id"`
-	Jobs GetFinishedBuildsPipelineJobsJobConnection `json:"jobs"`
-}
-
-// GetId returns GetFinishedBuildsPipeline.Id, and is useful for accessing the field via an interface.
-func (v *GetFinishedBuildsPipeline) GetId() string { return v.Id }
-
-// GetJobs returns GetFinishedBuildsPipeline.Jobs, and is useful for accessing the field via an interface.
-func (v *GetFinishedBuildsPipeline) GetJobs() GetFinishedBuildsPipelineJobsJobConnection {
-	return v.Jobs
-}
-
-// GetFinishedBuildsPipelineJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
-type GetFinishedBuildsPipelineJobsJobConnection struct {
-	Count int                                                      `json:"count"`
-	Edges []GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge `json:"edges"`
-}
-
-// GetCount returns GetFinishedBuildsPipelineJobsJobConnection.Count, and is useful for accessing the field via an interface.
-func (v *GetFinishedBuildsPipelineJobsJobConnection) GetCount() int { return v.Count }
-
-// GetEdges returns GetFinishedBuildsPipelineJobsJobConnection.Edges, and is useful for accessing the field via an interface.
-func (v *GetFinishedBuildsPipelineJobsJobConnection) GetEdges() []GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge {
-	return v.Edges
-}
-
-// GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
-type GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge struct {
-	Node Job `json:"-"`
-}
-
-// GetNode returns GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge.Node, and is useful for accessing the field via an interface.
-func (v *GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge) GetNode() Job { return v.Node }
-
-func (v *GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalJob(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"Unable to unmarshal GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalGetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge) __premarshalJSON() (*__premarshalGetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge, error) {
-	var retval __premarshalGetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalJob(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"Unable to marshal GetFinishedBuildsPipelineJobsJobConnectionEdgesJobEdge.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// GetFinishedBuildsResponse is returned by GetFinishedBuilds on success.
-type GetFinishedBuildsResponse struct {
-	// Find a pipeline by its slug
-	Pipeline GetFinishedBuildsPipeline `json:"pipeline"`
-}
-
-// GetPipeline returns GetFinishedBuildsResponse.Pipeline, and is useful for accessing the field via an interface.
-func (v *GetFinishedBuildsResponse) GetPipeline() GetFinishedBuildsPipeline { return v.Pipeline }
-
 // GetOrganizationOrganization includes the requested fields of the GraphQL type Organization.
 // The GraphQL type's documentation follows.
 //
@@ -1200,14 +1089,6 @@ type __GetBuildInput struct {
 // GetUuid returns __GetBuildInput.Uuid, and is useful for accessing the field via an interface.
 func (v *__GetBuildInput) GetUuid() string { return v.Uuid }
 
-// __GetFinishedBuildsInput is used internally by genqlient
-type __GetFinishedBuildsInput struct {
-	Slug string `json:"slug"`
-}
-
-// GetSlug returns __GetFinishedBuildsInput.Slug, and is useful for accessing the field via an interface.
-func (v *__GetFinishedBuildsInput) GetSlug() string { return v.Slug }
-
 // __GetOrganizationInput is used internally by genqlient
 type __GetOrganizationInput struct {
 	Slug string `json:"slug"`
@@ -1370,64 +1251,6 @@ query GetBuild ($uuid: ID!) {
 	var err error
 
 	var data GetBuildResponse
-	resp := &graphql.Response{Data: &data}
-
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
-	)
-
-	return &data, err
-}
-
-func GetFinishedBuilds(
-	ctx context.Context,
-	client graphql.Client,
-	slug string,
-) (*GetFinishedBuildsResponse, error) {
-	req := &graphql.Request{
-		OpName: "GetFinishedBuilds",
-		Query: `
-query GetFinishedBuilds ($slug: ID!) {
-	pipeline(slug: $slug) {
-		id
-		jobs(state: [FINISHED,CANCELED], type: [COMMAND], first: 100, order: RECENTLY_CREATED) {
-			count
-			edges {
-				node {
-					__typename
-					... Job
-				}
-			}
-		}
-	}
-}
-fragment Job on Job {
-	... on JobTypeCommand {
-		... CommandJob
-	}
-}
-fragment CommandJob on JobTypeCommand {
-	uuid
-	env
-	label
-	state
-	agentQueryRules
-	exitStatus
-	scheduledAt
-	agent {
-		name
-	}
-}
-`,
-		Variables: &__GetFinishedBuildsInput{
-			Slug: slug,
-		},
-	}
-	var err error
-
-	var data GetFinishedBuildsResponse
 	resp := &graphql.Response{Data: &data}
 
 	err = client.MakeRequest(
