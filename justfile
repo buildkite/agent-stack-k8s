@@ -23,4 +23,4 @@ agent:
   export GOOS=linux GOARCH=amd64
   cd agent/packaging/docker/alpine-linux
   go build -o buildkite-agent github.com/buildkite/agent/v3
-  docker buildx build --tag benmoss/buildkite-agent:latest --push .
+  docker buildx build --tag benmoss/buildkite-agent:latest --platform linux/amd64,linux/arm64 --push .

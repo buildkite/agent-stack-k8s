@@ -5,21 +5,18 @@ import (
 	"embed"
 	"flag"
 	"fmt"
-	"log"
 	"strconv"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/api"
+	"github.com/buildkite/agent-stack-k8s/monitor"
 	"github.com/buildkite/agent-stack-k8s/scheduler"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
-
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-}
 
 var (
 	preservePipelines *bool = flag.Bool("preserve-pipelines", false, "preserve pipelines created by tests")
@@ -67,7 +64,7 @@ func TestWalkingSkeleton(t *testing.T) {
 
 	pipeline := createPipeline.PipelineCreate.Pipeline
 	if !*preservePipelines {
-		t.Cleanup(func() {
+		EnsureCleanup(t, func() {
 			_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
 				Id: pipeline.Id,
 			})
@@ -75,12 +72,22 @@ func TestWalkingSkeleton(t *testing.T) {
 			t.Logf("deleted pipeline! %v", pipeline.Name)
 		})
 	}
+	logger, err := zap.NewDevelopment()
+	assert.NoError(t, err)
+
+	monitor, err := monitor.New(logger.Named("monitor"), token, 1)
+	assert.NoError(t, err)
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	go func() {
-		assert.NoError(t, scheduler.Run(runCtx, token, org, pipeline.Name, agentToken, !*preservePods))
+		assert.NoError(t, scheduler.Run(runCtx, logger.Named("scheduler"), monitor, scheduler.Config{
+			Org:        org,
+			Pipeline:   pipeline.Name,
+			AgentToken: agentToken,
+			DeletePods: !*preservePods,
+		}))
 	}()
-	t.Cleanup(func() {
+	EnsureCleanup(t, func() {
 		cancel()
 	})
 
@@ -93,7 +100,7 @@ func TestWalkingSkeleton(t *testing.T) {
 	build := createBuild.BuildCreate.Build
 	assert.Len(t, build.Jobs.Edges, 1)
 	node := build.Jobs.Edges[0].Node
-	job, ok := node.(*api.BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdgeNodeJobTypeCommand)
+	job, ok := node.(*api.JobJobTypeCommand)
 	assert.True(t, ok)
 Out:
 	for {
@@ -101,12 +108,12 @@ Out:
 		assert.NoError(t, err)
 		switch getBuild.Build.State {
 		case api.BuildStatesPassed:
-			t.Log("build passed!")
+			logger.Debug("build passed!")
 			break Out
 		case api.BuildStatesFailed:
 			t.Fatalf("build failed")
 		default:
-			t.Logf("build state: %s, sleeping", getBuild.Build.State)
+			logger.Debug("sleeping", zap.Any("build state", getBuild.Build.State))
 			time.Sleep(time.Second)
 		}
 	}
@@ -126,6 +133,26 @@ Out:
 	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
 	assert.Contains(t, filenames, "README.md")
 	assert.Contains(t, filenames, "CODE_OF_CONDUCT.md")
+}
+
+func TestCleanupOrphanedPipelines(t *testing.T) {
+	if *preservePipelines {
+		t.Skip("not cleaning orphaned pipelines")
+	}
+	ctx := context.Background()
+	token := MustEnv(t, "BUILDKITE_TOKEN")
+	org := MustEnv(t, "BUILDKITE_ORG")
+	graphqlClient := api.NewClient(token)
+
+	pipelines, err := api.SearchPipelines(ctx, graphqlClient, org, "agent-k8s-", 100)
+	assert.NoError(t, err)
+	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
+		_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
+			Id: pipeline.Node.Id,
+		})
+		assert.NoError(t, err)
+		t.Logf("deleted orphaned pipeline! %v", pipeline.Node.Name)
+	}
 }
 
 func MustEnv(t *testing.T, key string) string {

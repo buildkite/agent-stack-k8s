@@ -1,3 +1,9 @@
+fragment Job on Job {
+  ... on JobTypeCommand {
+    ...CommandJob
+  }
+}
+
 fragment CommandJob on JobTypeCommand {
   uuid
   env
@@ -5,6 +11,7 @@ fragment CommandJob on JobTypeCommand {
   state
   agentQueryRules
   exitStatus
+  scheduledAt
   agent {
     name
   }
@@ -29,6 +36,19 @@ mutation PipelineDelete($input: PipelineDeleteInput!) {
   }
 }
 
+query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
+  organization(slug: $slug) {
+    pipelines(search: $search, first: $first) {
+      edges {
+        node {
+          id
+          name
+        }
+      }
+    }
+  }
+}
+
 mutation BuildCreate($input: BuildCreateInput!) {
   buildCreate(input: $input) {
     build {
@@ -37,10 +57,9 @@ mutation BuildCreate($input: BuildCreateInput!) {
       number
       jobs(first: 100) {
         edges {
+          # @genqlient(flatten: true)
           node {
-            ... on JobTypeCommand {
-              ...CommandJob
-            }
+            ...Job
           }
         }
       }
@@ -66,25 +85,41 @@ query GetBuild($uuid: ID!) {
   }
 }
 
-query GetBuildsForPipelineBySlug($slug: ID!) {
+query GetScheduledBuilds($slug: ID!) {
   pipeline(slug: $slug) {
     id
     jobs(
-      state: [SCHEDULED, RUNNING, ACCEPTED, ASSIGNED]
+      state: [SCHEDULED]
       type: [COMMAND]
-      first: 500
+      first: 100
+      order: RECENTLY_ASSIGNED
     ) {
       count
       edges {
+        # @genqlient(flatten: true)
         node {
-          __typename
-          ... on JobTypeCommand {
-            ...CommandJob
-          }
+          ...Job
         }
       }
-      pageInfo {
-        hasNextPage
+    }
+  }
+}
+
+query GetFinishedBuilds($slug: ID!) {
+  pipeline(slug: $slug) {
+    id
+    jobs(
+      state: [FINISHED, CANCELED]
+      type: [COMMAND]
+      first: 100
+      order: RECENTLY_CREATED
+    ) {
+      count
+      edges {
+        # @genqlient(flatten: true)
+        node {
+          ...Job
+        }
       }
     }
   }
