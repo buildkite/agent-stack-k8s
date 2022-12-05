@@ -84,7 +84,7 @@ func TestWalkingSkeleton(t *testing.T) {
 			Org:        org,
 			Pipeline:   pipeline.Name,
 			AgentToken: agentToken,
-			DeletePods: !*preservePods,
+			DeleteJobs: !*preserveJobs,
 		}))
 	}()
 	EnsureCleanup(t, func() {

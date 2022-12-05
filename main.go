@@ -46,7 +46,7 @@ func main() {
 		Org:        org,
 		Pipeline:   *pipeline,
 		AgentToken: agentToken,
-		DeletePods: true,
+		DeleteJobs: true,
 	}); err != nil {
 		zap.L().Fatal("failed to run scheduler", zap.Error(err))
 	}
