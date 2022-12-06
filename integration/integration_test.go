@@ -145,12 +145,18 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 	graphqlClient := api.NewClient(token)
 
 	pipelines, err := api.SearchPipelines(ctx, graphqlClient, org, "agent-k8s-", 100)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
+		builds, err := api.GetBuilds(ctx, graphqlClient, fmt.Sprintf("%s/%s", org, pipeline.Node.Name), []api.BuildStates{api.BuildStatesRunning}, 100)
+		require.NoError(t, err)
+		for _, build := range builds.Pipeline.Builds.Edges {
+			_, err = api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{Id: build.Node.Id})
+			require.NoError(t, err)
+		}
 		_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
 			Id: pipeline.Node.Id,
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		t.Logf("deleted orphaned pipeline! %v", pipeline.Node.Name)
 	}
 }

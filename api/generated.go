@@ -361,6 +361,58 @@ type GetBuildResponse struct {
 // GetBuild returns GetBuildResponse.Build, and is useful for accessing the field via an interface.
 func (v *GetBuildResponse) GetBuild() GetBuildBuild { return v.Build }
 
+// GetBuildsPipeline includes the requested fields of the GraphQL type Pipeline.
+// The GraphQL type's documentation follows.
+//
+// A pipeline
+type GetBuildsPipeline struct {
+	// Returns the builds for this pipeline
+	Builds GetBuildsPipelineBuildsBuildConnection `json:"builds"`
+}
+
+// GetBuilds returns GetBuildsPipeline.Builds, and is useful for accessing the field via an interface.
+func (v *GetBuildsPipeline) GetBuilds() GetBuildsPipelineBuildsBuildConnection { return v.Builds }
+
+// GetBuildsPipelineBuildsBuildConnection includes the requested fields of the GraphQL type BuildConnection.
+type GetBuildsPipelineBuildsBuildConnection struct {
+	Edges []GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdge `json:"edges"`
+}
+
+// GetEdges returns GetBuildsPipelineBuildsBuildConnection.Edges, and is useful for accessing the field via an interface.
+func (v *GetBuildsPipelineBuildsBuildConnection) GetEdges() []GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdge {
+	return v.Edges
+}
+
+// GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdge includes the requested fields of the GraphQL type BuildEdge.
+type GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdge struct {
+	Node GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild `json:"node"`
+}
+
+// GetNode returns GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdge.Node, and is useful for accessing the field via an interface.
+func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdge) GetNode() GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild {
+	return v.Node
+}
+
+// GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild includes the requested fields of the GraphQL type Build.
+// The GraphQL type's documentation follows.
+//
+// A build from a pipeline
+type GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild struct {
+	Id string `json:"id"`
+}
+
+// GetId returns GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild.Id, and is useful for accessing the field via an interface.
+func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild) GetId() string { return v.Id }
+
+// GetBuildsResponse is returned by GetBuilds on success.
+type GetBuildsResponse struct {
+	// Find a pipeline by its slug
+	Pipeline GetBuildsPipeline `json:"pipeline"`
+}
+
+// GetPipeline returns GetBuildsResponse.Pipeline, and is useful for accessing the field via an interface.
+func (v *GetBuildsResponse) GetPipeline() GetBuildsPipeline { return v.Pipeline }
+
 // GetOrganizationOrganization includes the requested fields of the GraphQL type Organization.
 // The GraphQL type's documentation follows.
 //
@@ -1089,6 +1141,22 @@ type __GetBuildInput struct {
 // GetUuid returns __GetBuildInput.Uuid, and is useful for accessing the field via an interface.
 func (v *__GetBuildInput) GetUuid() string { return v.Uuid }
 
+// __GetBuildsInput is used internally by genqlient
+type __GetBuildsInput struct {
+	Slug  string        `json:"slug"`
+	State []BuildStates `json:"state"`
+	First int           `json:"first"`
+}
+
+// GetSlug returns __GetBuildsInput.Slug, and is useful for accessing the field via an interface.
+func (v *__GetBuildsInput) GetSlug() string { return v.Slug }
+
+// GetState returns __GetBuildsInput.State, and is useful for accessing the field via an interface.
+func (v *__GetBuildsInput) GetState() []BuildStates { return v.State }
+
+// GetFirst returns __GetBuildsInput.First, and is useful for accessing the field via an interface.
+func (v *__GetBuildsInput) GetFirst() int { return v.First }
+
 // __GetOrganizationInput is used internally by genqlient
 type __GetOrganizationInput struct {
 	Slug string `json:"slug"`
@@ -1251,6 +1319,48 @@ query GetBuild ($uuid: ID!) {
 	var err error
 
 	var data GetBuildResponse
+	resp := &graphql.Response{Data: &data}
+
+	err = client.MakeRequest(
+		ctx,
+		req,
+		resp,
+	)
+
+	return &data, err
+}
+
+func GetBuilds(
+	ctx context.Context,
+	client graphql.Client,
+	slug string,
+	state []BuildStates,
+	first int,
+) (*GetBuildsResponse, error) {
+	req := &graphql.Request{
+		OpName: "GetBuilds",
+		Query: `
+query GetBuilds ($slug: ID!, $state: [BuildStates!], $first: Int) {
+	pipeline(slug: $slug) {
+		builds(state: $state, first: $first) {
+			edges {
+				node {
+					id
+				}
+			}
+		}
+	}
+}
+`,
+		Variables: &__GetBuildsInput{
+			Slug:  slug,
+			State: state,
+			First: first,
+		},
+	}
+	var err error
+
+	var data GetBuildsResponse
 	resp := &graphql.Response{Data: &data}
 
 	err = client.MakeRequest(
