@@ -6,47 +6,29 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/monitor"
 	"github.com/buildkite/agent/v3/agent/plugin"
 	"go.uber.org/zap"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/utils/pointer"
 )
 
-var defaultBootstrapPod = &corev1.Pod{
+var defaultJob = &batchv1.Job{
 	ObjectMeta: metav1.ObjectMeta{
 		Labels: map[string]string{
 			defaultLabel: "true",
-		},
-	},
-	Spec: corev1.PodSpec{
-		RestartPolicy: corev1.RestartPolicyNever,
-		InitContainers: []corev1.Container{
-			{
-				Name:            "copy-agent",
-				Image:           agentImage,
-				ImagePullPolicy: corev1.PullAlways,
-				Command:         []string{"cp"},
-				Args:            []string{"/usr/local/bin/buildkite-agent", "/workspace"},
-				VolumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "workspace",
-						MountPath: "/workspace",
-					},
-				},
-			},
-		},
-		Volumes: []corev1.Volume{
-			{
-				Name: "workspace",
-				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
-				},
-			},
 		},
 	},
 }
@@ -61,7 +43,7 @@ type Config struct {
 	Org,
 	Pipeline,
 	AgentToken string
-	DeletePods bool
+	JobTTL time.Duration
 }
 
 func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg Config) error {
@@ -78,36 +60,43 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg 
 	}
 
 	worker := worker{
+		ctx:       ctx,
 		cfg:       cfg,
 		clientset: clientset,
 		logger:    logger.Named("worker"),
+		done:      make(chan string),
 	}
+	requirement, err := labels.NewRequirement(defaultLabel, selection.Exists, nil)
+	if err != nil {
+		return fmt.Errorf("invalid requirement: %w", err)
+	}
+	selector := labels.NewSelector().Add(*requirement)
+	go worker.watchCompletions(ctx, selector)
 
 	scheduled := monitor.Scheduled(ctx, cfg.Org, cfg.Pipeline)
-	finished := monitor.Finished(ctx, cfg.Org, cfg.Pipeline)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case job := <-scheduled:
-			worker.Create(ctx, &job)
-		case job := <-finished:
-			worker.Cleanup(ctx, &job)
+			worker.Create(&job)
+		case uuid := <-worker.done:
+			monitor.Done(uuid)
 		}
 	}
 }
 
-func podFromJob(
+func (w *worker) k8sify(
 	job *api.CommandJob,
 	token string,
-) (*corev1.Pod, error) {
+) (*batchv1.Job, error) {
 	envMap := map[string]string{}
 	for _, val := range job.Env {
 		parts := strings.Split(val, "=")
 		envMap[parts[0]] = parts[1]
 	}
 
-	pod := defaultBootstrapPod.DeepCopy()
+	kjob := defaultJob.DeepCopy()
 	if envMap["BUILDKITE_PLUGINS"] == "" {
 		return nil, fmt.Errorf("no plugins found")
 	}
@@ -120,11 +109,13 @@ func podFromJob(
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal config: %w", err)
 		}
-		if err := json.Unmarshal(asJson, &pod.Spec); err != nil {
+		if err := json.Unmarshal(asJson, &kjob.Spec.Template.Spec); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 		}
 	}
-	pod.Name = podName(job)
+	kjob.Name = kjobName(job)
+	kjob.Labels[defaultLabel] = job.Uuid
+	kjob.Spec.BackoffLimit = pointer.Int32(0)
 	var env []corev1.EnvVar
 	env = append(env, corev1.EnvVar{
 		Name:  "BUILDKITE_BUILD_PATH",
@@ -147,8 +138,11 @@ func podFromJob(
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
 	const systemContainers = 1
+	ttl := int32(w.cfg.JobTTL.Seconds())
+	kjob.Spec.TTLSecondsAfterFinished = &ttl
+	podSpec := &kjob.Spec.Template.Spec
 
-	for i, c := range pod.Spec.Containers {
+	for i, c := range podSpec.Containers {
 		command := strings.Join(append(c.Command, c.Args...), " ")
 		c.Command = []string{"/workspace/buildkite-agent"}
 		c.Args = []string{"bootstrap"}
@@ -177,10 +171,10 @@ func podFromJob(
 			c.WorkingDir = "/workspace"
 		}
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-		pod.Spec.Containers[i] = c
+		podSpec.Containers[i] = c
 	}
 
-	containerCount := len(pod.Spec.Containers) + systemContainers
+	containerCount := len(podSpec.Containers) + systemContainers
 	if artifactPaths, found := envMap["BUILDKITE_ARTIFACT_PATHS"]; found && artifactPaths != "" {
 		artifactsContainer := corev1.Container{
 			Name:            "upload-artifacts",
@@ -212,7 +206,7 @@ func podFromJob(
 		}
 		artifactsContainer.Env = append(artifactsContainer.Env, env...)
 		containerCount++
-		pod.Spec.Containers = append(pod.Spec.Containers, artifactsContainer)
+		podSpec.Containers = append(podSpec.Containers, artifactsContainer)
 	}
 	// agent server container
 	agentContainer := corev1.Container{
@@ -258,43 +252,86 @@ func podFromJob(
 		}},
 	}
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
-	pod.Spec.Containers = append(pod.Spec.Containers, agentContainer, checkoutContainer)
-	return pod, nil
+	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
+	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
+		Name:            "copy-agent",
+		Image:           agentImage,
+		ImagePullPolicy: corev1.PullAlways,
+		Command:         []string{"cp"},
+		Args:            []string{"/usr/local/bin/buildkite-agent", "/workspace"},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "workspace",
+				MountPath: "/workspace",
+			},
+		},
+	})
+	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+		Name: "workspace",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	})
+	podSpec.RestartPolicy = corev1.RestartPolicyNever
+	return kjob, nil
 }
 
 type worker struct {
+	ctx       context.Context
 	cfg       Config
 	clientset *kubernetes.Clientset
 	logger    *zap.Logger
+	done      chan string
 }
 
-func (w *worker) Create(ctx context.Context, job *api.CommandJob) {
+func (w *worker) Create(job *api.CommandJob) {
 	logger := w.logger.With(zap.String("job", job.Uuid), zap.String("label", job.Label))
-	pod, err := podFromJob(job, w.cfg.AgentToken)
+	kjob, err := w.k8sify(job, w.cfg.AgentToken)
 	if err != nil {
 		logger.Error("failed to convert job to pod", zap.Error(err))
 		return
 	}
-	logger = logger.With(zap.String("pod", pod.Name))
-	_, err = w.clientset.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{})
+	logger = logger.With(zap.String("kjob", kjob.Name))
+	_, err = w.clientset.BatchV1().Jobs(ns).Create(w.ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
-		logger.Error("failed to create pod", zap.Error(err))
+		logger.Error("failed to create job", zap.Error(err))
 		return
 	}
-	logger.Debug("created pod")
+	logger.Debug("created job")
 }
 
-func (w *worker) Cleanup(ctx context.Context, job *api.CommandJob) {
-	name := podName(job)
-	logger := w.logger.With(zap.String("job", job.Uuid), zap.String("label", job.Label), zap.String("pod", name))
-	if w.cfg.DeletePods {
-		if err := w.clientset.CoreV1().Pods(ns).Delete(context.Background(), name, metav1.DeleteOptions{}); err != nil {
-			logger.Error("failed to delete pod", zap.Error(err))
-			return
-		}
-		logger.Debug("deleted pod")
+func (w *worker) watchCompletions(ctx context.Context, selector labels.Selector) {
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.LabelSelector = selector.String()
+			return w.clientset.BatchV1().Jobs(ns).List(ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.LabelSelector = selector.String()
+			return w.clientset.BatchV1().Jobs(ns).Watch(ctx, options)
+		},
 	}
+
+	_, controller := cache.NewInformer(lw, &batchv1.Job{}, 0, cache.ResourceEventHandlerFuncs{
+		UpdateFunc: func(_, newObj interface{}) {
+			job := newObj.(*batchv1.Job)
+			for _, condition := range job.Status.Conditions {
+				if condition.Status == corev1.ConditionTrue {
+					if condition.Type == batchv1.JobComplete || condition.Type == batchv1.JobFailed {
+						uuid, found := job.Labels[defaultLabel]
+						if !found {
+							w.logger.Error("job found without label", zap.String("name", job.Name))
+						} else {
+							w.done <- uuid
+						}
+					}
+				}
+			}
+		},
+	})
+	controller.Run(ctx.Done())
 }
-func podName(job *api.CommandJob) string {
+
+func kjobName(job *api.CommandJob) string {
 	return fmt.Sprintf("buildkite-%s", job.Uuid)
 }

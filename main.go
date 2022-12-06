@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	_ "net/http/pprof"
 
@@ -18,6 +19,7 @@ import (
 var pipeline *string = flag.String("pipeline", "", "pipeline to watch")
 var debug *bool = flag.Bool("debug", false, "debug logs")
 var maxInFlight *int = flag.Int("max-in-flight", 1, "max jobs in flight")
+var jobTTL *time.Duration = flag.Duration("job-ttl", 10*time.Minute, "time to retain kubernetes jobs after completion")
 
 func main() {
 	flag.Parse()
@@ -46,7 +48,7 @@ func main() {
 		Org:        org,
 		Pipeline:   *pipeline,
 		AgentToken: agentToken,
-		DeletePods: true,
+		JobTTL:     *jobTTL,
 	}); err != nil {
 		zap.L().Fatal("failed to run scheduler", zap.Error(err))
 	}
