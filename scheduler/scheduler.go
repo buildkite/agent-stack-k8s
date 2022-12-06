@@ -179,7 +179,6 @@ func (w *worker) k8sify(
 		artifactsContainer := corev1.Container{
 			Name:            "upload-artifacts",
 			Image:           agentImage,
-			Command:         []string{"/workspace/buildkite-agent"},
 			Args:            []string{"bootstrap"},
 			WorkingDir:      "/workspace",
 			VolumeMounts:    volumeMounts,
@@ -211,7 +210,6 @@ func (w *worker) k8sify(
 	// agent server container
 	agentContainer := corev1.Container{
 		Name:            "agent",
-		Command:         []string{"/workspace/buildkite-agent"},
 		Args:            []string{"start"},
 		Image:           agentImage,
 		WorkingDir:      "/workspace",
@@ -232,7 +230,6 @@ func (w *worker) k8sify(
 	checkoutContainer := corev1.Container{
 		Name:            "checkout",
 		Image:           agentImage,
-		Command:         []string{"/workspace/buildkite-agent"},
 		Args:            []string{"bootstrap"},
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,

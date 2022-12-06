@@ -15,6 +15,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/scheduler"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -128,7 +129,7 @@ Out:
 
 	artifacts, _, err := client.Artifacts.ListByBuild(org, pipeline.Name, strconv.Itoa(build.Number), nil)
 	assert.NoError(t, err)
-	assert.Len(t, artifacts, 2)
+	require.Len(t, artifacts, 2)
 	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
 	assert.Contains(t, filenames, "README.md")
 	assert.Contains(t, filenames, "CODE_OF_CONDUCT.md")
