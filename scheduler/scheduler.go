@@ -77,7 +77,7 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg 
 			return nil
 		case job := <-monitor.Scheduled():
 			if job.Err != nil {
-				return err
+				return job.Err
 			}
 			worker.Create(&job.CommandJob)
 		case uuid := <-worker.done:
