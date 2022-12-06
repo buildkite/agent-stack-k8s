@@ -104,3 +104,15 @@ query GetScheduledBuilds($slug: ID!) {
     }
   }
 }
+
+query GetBuilds($slug: ID!, $state: [BuildStates!], $first: Int) {
+  pipeline(slug: $slug) {
+    builds(state: $state, first: $first) {
+      edges {
+        node {
+          id
+        }
+      }
+    }
+  }
+}
