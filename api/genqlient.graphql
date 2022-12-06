@@ -87,6 +87,7 @@ query GetBuild($uuid: ID!) {
 
 query GetScheduledBuilds($slug: ID!) {
   pipeline(slug: $slug) {
+    # @genqlient(pointer: true)
     id
     jobs(
       state: [SCHEDULED]

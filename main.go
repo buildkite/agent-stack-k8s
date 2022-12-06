@@ -40,13 +40,16 @@ func main() {
 		cancel()
 	}()
 
-	monitor, err := monitor.New(zap.L().Named("monitor"), token, *maxInFlight)
+	monitor, err := monitor.New(ctx, zap.L().Named("monitor"), monitor.Config{
+		Org:         org,
+		Pipeline:    *pipeline,
+		Token:       token,
+		MaxInFlight: *maxInFlight,
+	})
 	if err != nil {
 		zap.L().Fatal("failed to create monitor", zap.Error(err))
 	}
 	if err := scheduler.Run(ctx, zap.L().Named("scheduler"), monitor, scheduler.Config{
-		Org:        org,
-		Pipeline:   *pipeline,
 		AgentToken: agentToken,
 		JobTTL:     *jobTTL,
 	}); err != nil {

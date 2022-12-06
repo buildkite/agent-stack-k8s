@@ -96,21 +96,20 @@ func basicTest(t *testing.T, fixture, repo string) {
 	logger, err := zap.NewDevelopment()
 	require.NoError(t, err)
 
-	monitor, err := monitor.New(logger.Named("monitor"), token, 1)
+	monitor, err := monitor.New(ctx, logger.Named("monitor"), monitor.Config{
+		Token:       token,
+		MaxInFlight: 1,
+		Org:         org,
+		Pipeline:    pipeline.Name,
+	})
 	require.NoError(t, err)
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	go func() {
-		require.NoError(t, scheduler.Run(runCtx, logger.Named("scheduler"), monitor, scheduler.Config{
-			Org:        org,
-			Pipeline:   pipeline.Name,
-			AgentToken: agentToken,
-			JobTTL:     time.Minute,
-		}))
-	}()
-	EnsureCleanup(t, func() {
-		cancel()
+	go scheduler.Run(runCtx, logger.Named("scheduler"), monitor, scheduler.Config{
+		AgentToken: agentToken,
+		JobTTL:     time.Minute,
 	})
+	EnsureCleanup(t, cancel)
 
 	// trigger build
 	createBuild, err := api.BuildCreate(ctx, graphqlClient, api.BuildCreateInput{

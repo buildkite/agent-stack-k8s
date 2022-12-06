@@ -440,12 +440,12 @@ func (v *GetOrganizationResponse) GetOrganization() GetOrganizationOrganization 
 //
 // A pipeline
 type GetScheduledBuildsPipeline struct {
-	Id   string                                      `json:"id"`
+	Id   *string                                     `json:"id"`
 	Jobs GetScheduledBuildsPipelineJobsJobConnection `json:"jobs"`
 }
 
 // GetId returns GetScheduledBuildsPipeline.Id, and is useful for accessing the field via an interface.
-func (v *GetScheduledBuildsPipeline) GetId() string { return v.Id }
+func (v *GetScheduledBuildsPipeline) GetId() *string { return v.Id }
 
 // GetJobs returns GetScheduledBuildsPipeline.Jobs, and is useful for accessing the field via an interface.
 func (v *GetScheduledBuildsPipeline) GetJobs() GetScheduledBuildsPipelineJobsJobConnection {
