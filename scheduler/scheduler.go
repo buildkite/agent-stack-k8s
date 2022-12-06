@@ -40,10 +40,8 @@ const (
 )
 
 type Config struct {
-	Org,
-	Pipeline,
 	AgentToken string
-	JobTTL time.Duration
+	JobTTL     time.Duration
 }
 
 func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg Config) error {
@@ -73,13 +71,15 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg 
 	selector := labels.NewSelector().Add(*requirement)
 	go worker.watchCompletions(ctx, selector)
 
-	scheduled := monitor.Scheduled(ctx, cfg.Org, cfg.Pipeline)
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case job := <-scheduled:
-			worker.Create(&job)
+		case job := <-monitor.Scheduled():
+			if job.Err != nil {
+				return err
+			}
+			worker.Create(&job.CommandJob)
 		case uuid := <-worker.done:
 			monitor.Done(uuid)
 		}
