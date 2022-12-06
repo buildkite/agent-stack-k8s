@@ -86,6 +86,11 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg 
 	}
 }
 
+type PluginConfig struct {
+	PodSpec    corev1.PodSpec
+	GitEnvFrom []corev1.EnvFromSource
+}
+
 func (w *worker) k8sify(
 	job *api.CommandJob,
 	token string,
@@ -96,7 +101,7 @@ func (w *worker) k8sify(
 		envMap[parts[0]] = parts[1]
 	}
 
-	kjob := defaultJob.DeepCopy()
+	var pluginConfig PluginConfig
 	if envMap["BUILDKITE_PLUGINS"] == "" {
 		return nil, fmt.Errorf("no plugins found")
 	}
@@ -109,12 +114,16 @@ func (w *worker) k8sify(
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal config: %w", err)
 		}
-		if err := json.Unmarshal(asJson, &kjob.Spec.Template.Spec); err != nil {
+		if err := json.Unmarshal(asJson, &pluginConfig); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 		}
 	}
+	kjob := &batchv1.Job{}
+	kjob.Spec.Template.Spec = pluginConfig.PodSpec
 	kjob.Name = kjobName(job)
-	kjob.Labels[defaultLabel] = job.Uuid
+	kjob.Labels = map[string]string{
+		defaultLabel: job.Uuid,
+	}
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
 	var env []corev1.EnvVar
 	env = append(env, corev1.EnvVar{
@@ -247,6 +256,7 @@ func (w *worker) k8sify(
 			Name:  "BUILDKITE_CONTAINER_ID",
 			Value: "0",
 		}},
+		EnvFrom: pluginConfig.GitEnvFrom,
 	}
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
 	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
