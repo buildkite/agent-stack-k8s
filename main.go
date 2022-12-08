@@ -18,13 +18,16 @@ import (
 
 var pipeline *string = flag.String("pipeline", "", "pipeline to watch")
 var debug *bool = flag.Bool("debug", false, "debug logs")
-var maxInFlight *int = flag.Int("max-in-flight", 1, "max jobs in flight, negative value means no max")
+var maxInFlight *int = flag.Int("max-in-flight", 1, "max jobs in flight, 0 means no max")
 var jobTTL *time.Duration = flag.Duration("job-ttl", 10*time.Minute, "time to retain kubernetes jobs after completion")
 
 func main() {
 	flag.Parse()
 	if *pipeline == "" {
 		log.Fatalf("pipeline is required")
+	}
+	if *maxInFlight < 0 {
+		log.Fatalf("max-in-flight must be greater than or equal to zero")
 	}
 	token := MustEnv("BUILDKITE_TOKEN")
 	// TODO(bmo): generate agent tokens with the API
