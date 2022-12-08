@@ -60,7 +60,6 @@ func basicTest(t *testing.T, fixture, repo string) {
 	ctx := context.Background()
 	token := MustEnv(t, "BUILDKITE_TOKEN")
 	org := MustEnv(t, "BUILDKITE_ORG")
-	agentToken := MustEnv(t, "BUILDKITE_AGENT_TOKEN")
 	graphqlClient := api.NewClient(token)
 
 	getOrg, err := api.GetOrganization(ctx, graphqlClient, org)
@@ -97,7 +96,7 @@ func basicTest(t *testing.T, fixture, repo string) {
 	require.NoError(t, err)
 
 	monitor, err := monitor.New(ctx, logger.Named("monitor"), monitor.Config{
-		Token:       token,
+		Client:      graphqlClient,
 		MaxInFlight: 1,
 		Org:         org,
 		Pipeline:    pipeline.Name,
@@ -105,10 +104,15 @@ func basicTest(t *testing.T, fixture, repo string) {
 	require.NoError(t, err)
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	go scheduler.Run(runCtx, logger.Named("scheduler"), monitor, scheduler.Config{
-		AgentToken: agentToken,
-		JobTTL:     time.Minute,
-	})
+	go func() {
+		if err := scheduler.Run(runCtx, logger.Named("scheduler"), monitor, scheduler.Config{
+			Client: graphqlClient,
+			Org:    org,
+			JobTTL: time.Minute,
+		}); err != nil {
+			logger.Error("scheduler.Run", zap.Error(err))
+		}
+	}()
 	EnsureCleanup(t, cancel)
 
 	// trigger build

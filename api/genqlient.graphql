@@ -117,3 +117,21 @@ query GetBuilds($slug: ID!, $state: [BuildStates!], $first: Int) {
     }
   }
 }
+
+mutation AgentTokenCreate($input: AgentTokenCreateInput!) {
+  agentTokenCreate(input: $input) {
+    agentTokenEdge {
+      node {
+        id
+        token
+        uuid
+      }
+    }
+  }
+}
+
+mutation AgentTokenRevoke($input: AgentTokenRevokeInput!) {
+  agentTokenRevoke(input: $input) {
+    clientMutationId
+  }
+}

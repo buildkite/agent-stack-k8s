@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -87,4 +88,16 @@ func (t *logTransport) RoundTrip(in *http.Request) (out *http.Response, err erro
 		}
 	}
 	return
+}
+
+func CreateAgentToken(ctx context.Context, client graphql.Client, org string) (*AgentTokenCreateResponse, error) {
+	orgResp, err := GetOrganization(ctx, client, org)
+	if err != nil {
+		return nil, err
+	}
+	return AgentTokenCreate(ctx, client, AgentTokenCreateInput{
+		OrganizationID: orgResp.Organization.Id,
+		Public:         false,
+		Description:    "agent-stack-k8s",
+	})
 }

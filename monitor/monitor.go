@@ -25,7 +25,7 @@ type Monitor struct {
 }
 
 type Config struct {
-	Token       string
+	Client      graphql.Client
 	MaxInFlight int
 	Org         string
 	Pipeline    string
@@ -37,14 +37,13 @@ type Job struct {
 }
 
 func New(ctx context.Context, logger *zap.Logger, cfg Config) (*Monitor, error) {
-	graphqlClient := api.NewClient(cfg.Token)
 	cache, err := lru.New[string, struct{}](cfg.MaxInFlight * 10)
 	if err != nil {
 		return nil, err
 	}
 	return &Monitor{
 		ctx:         ctx,
-		client:      graphqlClient,
+		client:      cfg.Client,
 		logger:      logger,
 		knownBuilds: cache,
 		cfg:         cfg,

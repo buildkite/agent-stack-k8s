@@ -10,6 +10,7 @@ import (
 
 	_ "net/http/pprof"
 
+	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/monitor"
 	"github.com/buildkite/agent-stack-k8s/scheduler"
 	flag "github.com/spf13/pflag"
@@ -27,8 +28,6 @@ func main() {
 		log.Fatalf("pipeline is required")
 	}
 	token := MustEnv("BUILDKITE_TOKEN")
-	// TODO(bmo): generate agent tokens with the API
-	agentToken := MustEnv("BUILDKITE_AGENT_TOKEN")
 	org := MustEnv("BUILDKITE_ORG")
 	initLogger(*debug)
 
@@ -40,18 +39,20 @@ func main() {
 		cancel()
 	}()
 
+	graphqlClient := api.NewClient(token)
 	monitor, err := monitor.New(ctx, zap.L().Named("monitor"), monitor.Config{
 		Org:         org,
 		Pipeline:    *pipeline,
-		Token:       token,
+		Client:      graphqlClient,
 		MaxInFlight: *maxInFlight,
 	})
 	if err != nil {
 		zap.L().Fatal("failed to create monitor", zap.Error(err))
 	}
 	if err := scheduler.Run(ctx, zap.L().Named("scheduler"), monitor, scheduler.Config{
-		AgentToken: agentToken,
-		JobTTL:     *jobTTL,
+		Org:    org,
+		Client: graphqlClient,
+		JobTTL: *jobTTL,
 	}); err != nil {
 		zap.L().Fatal("failed to run scheduler", zap.Error(err))
 	}

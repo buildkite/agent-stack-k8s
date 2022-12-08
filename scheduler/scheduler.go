@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/monitor"
 	"github.com/buildkite/agent/v3/agent/plugin"
@@ -25,14 +26,6 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-var defaultJob = &batchv1.Job{
-	ObjectMeta: metav1.ObjectMeta{
-		Labels: map[string]string{
-			defaultLabel: "true",
-		},
-	},
-}
-
 const (
 	ns           = "default"
 	agentImage   = "benmoss/buildkite-agent:latest"
@@ -40,8 +33,9 @@ const (
 )
 
 type Config struct {
-	AgentToken string
-	JobTTL     time.Duration
+	JobTTL time.Duration
+	Client graphql.Client
+	Org    string
 }
 
 func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg Config) error {
@@ -56,13 +50,26 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg 
 	if err != nil {
 		return fmt.Errorf("failed to create clienset: %w", err)
 	}
+	tokenResp, err := api.CreateAgentToken(ctx, cfg.Client, cfg.Org)
+	if err != nil {
+		zap.L().Fatal("failed to create agent token", zap.Error(err))
+	}
+	defer func() {
+		if _, err := api.AgentTokenRevoke(context.Background(), cfg.Client, api.AgentTokenRevokeInput{
+			Id:     tokenResp.AgentTokenCreate.AgentTokenEdge.Node.Id,
+			Reason: "agent shutdown",
+		}); err != nil {
+			zap.L().Error("failed to revoke token", zap.Error(err))
+		}
+	}()
 
 	worker := worker{
-		ctx:       ctx,
-		cfg:       cfg,
-		clientset: clientset,
-		logger:    logger.Named("worker"),
-		done:      make(chan string),
+		ctx:        ctx,
+		cfg:        cfg,
+		clientset:  clientset,
+		agentToken: tokenResp.AgentTokenCreate.AgentTokenEdge.Node.Token,
+		logger:     logger.Named("worker"),
+		done:       make(chan string),
 	}
 	requirement, err := labels.NewRequirement(defaultLabel, selection.Exists, nil)
 	if err != nil {
@@ -284,16 +291,17 @@ func (w *worker) k8sify(
 }
 
 type worker struct {
-	ctx       context.Context
-	cfg       Config
-	clientset *kubernetes.Clientset
-	logger    *zap.Logger
-	done      chan string
+	ctx        context.Context
+	cfg        Config
+	clientset  *kubernetes.Clientset
+	logger     *zap.Logger
+	done       chan string
+	agentToken string
 }
 
 func (w *worker) Create(job *api.CommandJob) {
 	logger := w.logger.With(zap.String("job", job.Uuid), zap.String("label", job.Label))
-	kjob, err := w.k8sify(job, w.cfg.AgentToken)
+	kjob, err := w.k8sify(job, w.agentToken)
 	if err != nil {
 		logger.Error("failed to convert job to pod", zap.Error(err))
 		return
