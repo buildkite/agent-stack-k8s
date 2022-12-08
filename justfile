@@ -4,7 +4,7 @@ build:
   echo Building…
 
 run *FLAGS:
-  go run {{FLAGS}} ./...
+  go run ./... {{FLAGS}}
 
 test *FLAGS:
   go test {{FLAGS}} ./...
