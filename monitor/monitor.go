@@ -38,7 +38,15 @@ type Job struct {
 
 func New(ctx context.Context, logger *zap.Logger, cfg Config) (*Monitor, error) {
 	graphqlClient := api.NewClient(cfg.Token)
-	cache, err := lru.New[string, struct{}](cfg.MaxInFlight * 10)
+	length := cfg.MaxInFlight * 10
+	if cfg.MaxInFlight == 0 {
+		// there are other protections for
+		// ensuring no duplicate jobs
+		// this length just is an early-stage protection against duplicate
+		// jobs in flight
+		length = 1000
+	}
+	cache, err := lru.New[string, struct{}](length)
 	if err != nil {
 		return nil, err
 	}
