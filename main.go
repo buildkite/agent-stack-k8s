@@ -18,7 +18,7 @@ import (
 
 var pipeline *string = flag.String("pipeline", "", "pipeline to watch")
 var debug *bool = flag.Bool("debug", false, "debug logs")
-var maxInFlight *int = flag.Int("max-in-flight", 1, "max jobs in flight")
+var maxInFlight *int = flag.Int("max-in-flight", 1, "max jobs in flight, negative value means no max")
 var jobTTL *time.Duration = flag.Duration("job-ttl", 10*time.Minute, "time to retain kubernetes jobs after completion")
 
 func main() {

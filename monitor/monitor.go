@@ -94,8 +94,8 @@ func (m *Monitor) start() {
 				cmdJob := job.Node.(*api.JobJobTypeCommand)
 				if m.knownBuilds.Contains(cmdJob.Uuid) {
 					m.logger.Debug("skipping already queued job", zap.String("uuid", cmdJob.Uuid))
-				} else if inFlight := m.knownBuilds.Len(); inFlight >= m.cfg.MaxInFlight {
-					m.logger.Debug("max in flight reached", zap.Int("in-flight", inFlight), zap.Int("max-in-flight", m.cfg.MaxInFlight))
+				} else if inFlight := m.knownBuilds.Len(); m.cfg.MaxInFlight > -1 && inFlight >= m.cfg.MaxInFlight {
+					m.logger.Warn("max in flight reached", zap.Int("in-flight", inFlight), zap.Int("max-in-flight", m.cfg.MaxInFlight))
 				} else {
 					m.logger.Debug("adding job", zap.String("uuid", cmdJob.Uuid))
 					m.jobs <- Job{CommandJob: cmdJob.CommandJob}
