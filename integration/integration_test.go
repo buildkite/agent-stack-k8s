@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"flag"
@@ -8,6 +9,7 @@ import (
 	"strconv"
 	"syscall"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/api"
@@ -66,17 +68,22 @@ func basicTest(t *testing.T, fixture, repo string) {
 	getOrg, err := api.GetOrganization(ctx, graphqlClient, org)
 	require.NoError(t, err)
 
-	steps, err := fixtures.ReadFile(fmt.Sprintf("fixtures/%s", fixture))
+	tpl, err := template.ParseFS(fixtures, fmt.Sprintf("fixtures/%s", fixture))
 	require.NoError(t, err)
 
+	pipelineName := fmt.Sprintf("agent-k8s-%d", time.Now().UnixNano())
+	var steps bytes.Buffer
+	require.NoError(t, tpl.Execute(&steps, map[string]string{
+		"queue": pipelineName,
+	}))
 	createPipeline, err := api.PipelineCreate(ctx, graphqlClient, api.PipelineCreateInput{
 		OrganizationId: getOrg.Organization.Id,
-		Name:           fmt.Sprintf("agent-k8s-%d", time.Now().UnixNano()),
+		Name:           pipelineName,
 		Repository: api.PipelineRepositoryInput{
 			Url: repo,
 		},
 		Steps: api.PipelineStepsInput{
-			Yaml: string(steps),
+			Yaml: steps.String(),
 		},
 	})
 	require.NoError(t, err)
@@ -100,7 +107,7 @@ func basicTest(t *testing.T, fixture, repo string) {
 		Token:       token,
 		MaxInFlight: 1,
 		Org:         org,
-		Pipeline:    pipeline.Name,
+		Tags:        []string{fmt.Sprintf("queue=%s", pipelineName)},
 	})
 	require.NoError(t, err)
 

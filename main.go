@@ -16,17 +16,14 @@ import (
 	"go.uber.org/zap"
 )
 
-var pipeline *string = flag.String("pipeline", "", "pipeline to watch")
 var debug *bool = flag.Bool("debug", false, "debug logs")
 var maxInFlight *int = flag.Int("max-in-flight", 1, "max jobs in flight, 0 means no max")
 var jobTTL *time.Duration = flag.Duration("job-ttl", 10*time.Minute, "time to retain kubernetes jobs after completion")
 var agentTokenSecret *string = flag.String("agent-token-secret", "buildkite-agent-token", "name of the Buildkite agent token secret")
+var tags *[]string = flag.StringSlice("tags", []string{"queue=kubernetes"}, `A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8")`)
 
 func main() {
 	flag.Parse()
-	if *pipeline == "" {
-		log.Fatalf("pipeline is required")
-	}
 	if *maxInFlight < 0 {
 		log.Fatalf("max-in-flight must be greater than or equal to zero")
 	}
@@ -44,7 +41,7 @@ func main() {
 
 	monitor, err := monitor.New(ctx, zap.L().Named("monitor"), monitor.Config{
 		Org:         org,
-		Pipeline:    *pipeline,
+		Tags:        *tags,
 		Token:       token,
 		MaxInFlight: *maxInFlight,
 	})

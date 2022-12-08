@@ -435,57 +435,57 @@ func (v *GetOrganizationResponse) GetOrganization() GetOrganizationOrganization 
 	return v.Organization
 }
 
-// GetScheduledBuildsPipeline includes the requested fields of the GraphQL type Pipeline.
+// GetScheduledBuildsOrganization includes the requested fields of the GraphQL type Organization.
 // The GraphQL type's documentation follows.
 //
-// A pipeline
-type GetScheduledBuildsPipeline struct {
-	Id   *string                                     `json:"id"`
-	Jobs GetScheduledBuildsPipelineJobsJobConnection `json:"jobs"`
+// An organization
+type GetScheduledBuildsOrganization struct {
+	Id   *string                                         `json:"id"`
+	Jobs GetScheduledBuildsOrganizationJobsJobConnection `json:"jobs"`
 }
 
-// GetId returns GetScheduledBuildsPipeline.Id, and is useful for accessing the field via an interface.
-func (v *GetScheduledBuildsPipeline) GetId() *string { return v.Id }
+// GetId returns GetScheduledBuildsOrganization.Id, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsOrganization) GetId() *string { return v.Id }
 
-// GetJobs returns GetScheduledBuildsPipeline.Jobs, and is useful for accessing the field via an interface.
-func (v *GetScheduledBuildsPipeline) GetJobs() GetScheduledBuildsPipelineJobsJobConnection {
+// GetJobs returns GetScheduledBuildsOrganization.Jobs, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsOrganization) GetJobs() GetScheduledBuildsOrganizationJobsJobConnection {
 	return v.Jobs
 }
 
-// GetScheduledBuildsPipelineJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
-type GetScheduledBuildsPipelineJobsJobConnection struct {
-	Count int                                                       `json:"count"`
-	Edges []GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge `json:"edges"`
+// GetScheduledBuildsOrganizationJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
+type GetScheduledBuildsOrganizationJobsJobConnection struct {
+	Count int                                                           `json:"count"`
+	Edges []GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge `json:"edges"`
 }
 
-// GetCount returns GetScheduledBuildsPipelineJobsJobConnection.Count, and is useful for accessing the field via an interface.
-func (v *GetScheduledBuildsPipelineJobsJobConnection) GetCount() int { return v.Count }
+// GetCount returns GetScheduledBuildsOrganizationJobsJobConnection.Count, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsOrganizationJobsJobConnection) GetCount() int { return v.Count }
 
-// GetEdges returns GetScheduledBuildsPipelineJobsJobConnection.Edges, and is useful for accessing the field via an interface.
-func (v *GetScheduledBuildsPipelineJobsJobConnection) GetEdges() []GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge {
+// GetEdges returns GetScheduledBuildsOrganizationJobsJobConnection.Edges, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsOrganizationJobsJobConnection) GetEdges() []GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge {
 	return v.Edges
 }
 
-// GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
-type GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge struct {
+// GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
+type GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge struct {
 	Node Job `json:"-"`
 }
 
-// GetNode returns GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge.Node, and is useful for accessing the field via an interface.
-func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) GetNode() Job { return v.Node }
+// GetNode returns GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge.Node, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge) GetNode() Job { return v.Node }
 
-func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) UnmarshalJSON(b []byte) error {
+func (v *GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge) UnmarshalJSON(b []byte) error {
 
 	if string(b) == "null" {
 		return nil
 	}
 
 	var firstPass struct {
-		*GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge
+		*GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge
 		Node json.RawMessage `json:"node"`
 		graphql.NoUnmarshalJSON
 	}
-	firstPass.GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge = v
+	firstPass.GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge = v
 
 	err := json.Unmarshal(b, &firstPass)
 	if err != nil {
@@ -500,18 +500,18 @@ func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) UnmarshalJSON(
 				src, dst)
 			if err != nil {
 				return fmt.Errorf(
-					"Unable to unmarshal GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge.Node: %w", err)
+					"Unable to unmarshal GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge.Node: %w", err)
 			}
 		}
 	}
 	return nil
 }
 
-type __premarshalGetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge struct {
+type __premarshalGetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge struct {
 	Node json.RawMessage `json:"node"`
 }
 
-func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) MarshalJSON() ([]byte, error) {
+func (v *GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge) MarshalJSON() ([]byte, error) {
 	premarshaled, err := v.__premarshalJSON()
 	if err != nil {
 		return nil, err
@@ -519,8 +519,8 @@ func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) MarshalJSON() 
 	return json.Marshal(premarshaled)
 }
 
-func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) __premarshalJSON() (*__premarshalGetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge, error) {
-	var retval __premarshalGetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge
+func (v *GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge) __premarshalJSON() (*__premarshalGetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge, error) {
+	var retval __premarshalGetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge
 
 	{
 
@@ -531,7 +531,7 @@ func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) __premarshalJS
 			&src)
 		if err != nil {
 			return nil, fmt.Errorf(
-				"Unable to marshal GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge.Node: %w", err)
+				"Unable to marshal GetScheduledBuildsOrganizationJobsJobConnectionEdgesJobEdge.Node: %w", err)
 		}
 	}
 	return &retval, nil
@@ -539,12 +539,14 @@ func (v *GetScheduledBuildsPipelineJobsJobConnectionEdgesJobEdge) __premarshalJS
 
 // GetScheduledBuildsResponse is returned by GetScheduledBuilds on success.
 type GetScheduledBuildsResponse struct {
-	// Find a pipeline by its slug
-	Pipeline GetScheduledBuildsPipeline `json:"pipeline"`
+	// Find an organization by its slug
+	Organization GetScheduledBuildsOrganization `json:"organization"`
 }
 
-// GetPipeline returns GetScheduledBuildsResponse.Pipeline, and is useful for accessing the field via an interface.
-func (v *GetScheduledBuildsResponse) GetPipeline() GetScheduledBuildsPipeline { return v.Pipeline }
+// GetOrganization returns GetScheduledBuildsResponse.Organization, and is useful for accessing the field via an interface.
+func (v *GetScheduledBuildsResponse) GetOrganization() GetScheduledBuildsOrganization {
+	return v.Organization
+}
 
 // Job includes the GraphQL fields of Job requested by the fragment Job.
 // The GraphQL type's documentation follows.
@@ -1167,11 +1169,15 @@ func (v *__GetOrganizationInput) GetSlug() string { return v.Slug }
 
 // __GetScheduledBuildsInput is used internally by genqlient
 type __GetScheduledBuildsInput struct {
-	Slug string `json:"slug"`
+	Slug            string   `json:"slug"`
+	AgentQueryRules []string `json:"agentQueryRules"`
 }
 
 // GetSlug returns __GetScheduledBuildsInput.Slug, and is useful for accessing the field via an interface.
 func (v *__GetScheduledBuildsInput) GetSlug() string { return v.Slug }
+
+// GetAgentQueryRules returns __GetScheduledBuildsInput.AgentQueryRules, and is useful for accessing the field via an interface.
+func (v *__GetScheduledBuildsInput) GetAgentQueryRules() []string { return v.AgentQueryRules }
 
 // __PipelineCreateInput is used internally by genqlient
 type __PipelineCreateInput struct {
@@ -1408,14 +1414,15 @@ func GetScheduledBuilds(
 	ctx context.Context,
 	client graphql.Client,
 	slug string,
+	agentQueryRules []string,
 ) (*GetScheduledBuildsResponse, error) {
 	req := &graphql.Request{
 		OpName: "GetScheduledBuilds",
 		Query: `
-query GetScheduledBuilds ($slug: ID!) {
-	pipeline(slug: $slug) {
+query GetScheduledBuilds ($slug: ID!, $agentQueryRules: [String!]) {
+	organization(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED], type: [COMMAND], first: 100, order: RECENTLY_ASSIGNED) {
+		jobs(state: [SCHEDULED], type: [COMMAND], first: 100, order: RECENTLY_ASSIGNED, agentQueryRules: $agentQueryRules) {
 			count
 			edges {
 				node {
@@ -1445,7 +1452,8 @@ fragment CommandJob on JobTypeCommand {
 }
 `,
 		Variables: &__GetScheduledBuildsInput{
-			Slug: slug,
+			Slug:            slug,
+			AgentQueryRules: agentQueryRules,
 		},
 	}
 	var err error
