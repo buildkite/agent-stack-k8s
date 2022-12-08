@@ -3,6 +3,9 @@ default: lint generate build test
 build:
   echo Building…
 
+run *FLAGS:
+  go run ./... {{FLAGS}}
+
 test *FLAGS:
   go test {{FLAGS}} ./...
 

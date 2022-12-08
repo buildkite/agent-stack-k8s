@@ -36,7 +36,7 @@ var defaultJob = &batchv1.Job{
 const (
 	ns           = "default"
 	agentImage   = "benmoss/buildkite-agent:latest"
-	defaultLabel = "bk-agent-stack-kubernetes"
+	defaultLabel = "buildkite.com/job-uuid"
 )
 
 type Config struct {
