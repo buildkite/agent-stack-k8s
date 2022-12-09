@@ -60,7 +60,7 @@ func basicTest(t *testing.T, fixture, repo string) {
 	ctx := context.Background()
 	token := MustEnv(t, "BUILDKITE_TOKEN")
 	org := MustEnv(t, "BUILDKITE_ORG")
-	agentToken := MustEnv(t, "BUILDKITE_AGENT_TOKEN")
+	agentTokenSecret := MustEnv(t, "BUILDKITE_AGENT_TOKEN_SECRET")
 	graphqlClient := api.NewClient(token)
 
 	getOrg, err := api.GetOrganization(ctx, graphqlClient, org)
@@ -106,8 +106,8 @@ func basicTest(t *testing.T, fixture, repo string) {
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	go scheduler.Run(runCtx, logger.Named("scheduler"), monitor, scheduler.Config{
-		AgentToken: agentToken,
-		JobTTL:     time.Minute,
+		AgentTokenSecret: agentTokenSecret,
+		JobTTL:           time.Minute,
 	})
 	EnsureCleanup(t, cancel)
 
