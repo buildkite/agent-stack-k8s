@@ -349,6 +349,15 @@ func (w *worker) watchCompletions(ctx context.Context, selector labels.Selector)
 				}
 			}
 		},
+		DeleteFunc: func(obj interface{}) {
+			job := obj.(*batchv1.Job)
+			uuid, found := job.Labels[defaultLabel]
+			if !found {
+				w.logger.Error("job found without label", zap.String("name", job.Name))
+			} else {
+				w.done <- uuid
+			}
+		},
 	})
 	controller.Run(ctx.Done())
 }

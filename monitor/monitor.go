@@ -66,6 +66,7 @@ func (m *Monitor) Scheduled() <-chan Job {
 }
 
 func (m *Monitor) Done(uuid string) {
+	m.logger.Debug("job finished", zap.String("uuid", uuid))
 	m.knownBuilds.Remove(uuid)
 }
 
