@@ -12,11 +12,14 @@ import (
 	"github.com/buildkite/agent-stack-k8s/api"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"go.uber.org/zap"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 type Monitor struct {
 	ctx         context.Context
-	client      graphql.Client
+	gql         graphql.Client
+	k8s         kubernetes.Interface
 	logger      *zap.Logger
 	knownBuilds *lru.Cache[string, struct{}]
 	cfg         Config
@@ -25,6 +28,7 @@ type Monitor struct {
 }
 
 type Config struct {
+	Namespace   string
 	Token       string
 	MaxInFlight int
 	Org         string
@@ -36,7 +40,7 @@ type Job struct {
 	Err error
 }
 
-func New(ctx context.Context, logger *zap.Logger, cfg Config) (*Monitor, error) {
+func New(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface, cfg Config) (*Monitor, error) {
 	graphqlClient := api.NewClient(cfg.Token)
 	length := cfg.MaxInFlight * 10
 	if cfg.MaxInFlight == 0 {
@@ -50,14 +54,16 @@ func New(ctx context.Context, logger *zap.Logger, cfg Config) (*Monitor, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &Monitor{
+	m := &Monitor{
 		ctx:         ctx,
-		client:      graphqlClient,
+		gql:         graphqlClient,
+		k8s:         k8sClient,
 		logger:      logger,
 		knownBuilds: cache,
 		cfg:         cfg,
 		jobs:        make(chan Job),
-	}, nil
+	}
+	return m, m.scanKnownJobs()
 }
 
 func (m *Monitor) Scheduled() <-chan Job {
@@ -80,7 +86,7 @@ func (m *Monitor) start() {
 			return
 		case <-ticker.C:
 			for _, tag := range m.cfg.Tags {
-				buildsResponse, err := api.GetScheduledBuilds(m.ctx, m.client, m.cfg.Org, []string{tag})
+				buildsResponse, err := api.GetScheduledBuilds(m.ctx, m.gql, m.cfg.Org, []string{tag})
 				if err != nil {
 					if errors.Is(err, context.Canceled) {
 						continue
@@ -116,4 +122,25 @@ func (m *Monitor) start() {
 			}
 		}
 	}
+}
+
+func (m *Monitor) scanKnownJobs() error {
+	jobs, err := m.k8s.BatchV1().Jobs(m.cfg.Namespace).List(m.ctx, v1.ListOptions{
+		LabelSelector: api.DefaultLabel,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to load jobs: %w", err)
+	}
+	for _, job := range jobs.Items {
+		uuid, found := job.Labels[api.DefaultLabel]
+		if !found {
+			m.logger.Error("job found without label", zap.String("name", job.Name))
+		} else {
+			if job.Status.CompletionTime == nil {
+				m.logger.Debug("adding previously scheduled job", zap.String("uuid", uuid))
+				m.knownBuilds.Add(uuid, struct{}{})
+			}
+		}
+	}
+	return nil
 }

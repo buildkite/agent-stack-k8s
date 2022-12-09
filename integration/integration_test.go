@@ -103,7 +103,14 @@ func basicTest(t *testing.T, fixture, repo string) {
 	logger, err := zap.NewDevelopment()
 	require.NoError(t, err)
 
-	monitor, err := monitor.New(ctx, logger.Named("monitor"), monitor.Config{
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, nil)
+	clientConfig, err := kubeConfig.ClientConfig()
+	require.NoError(t, err)
+
+	k8sClient, err := kubernetes.NewForConfig(clientConfig)
+	require.NoError(t, err)
+	monitor, err := monitor.New(ctx, logger.Named("monitor"), k8sClient, monitor.Config{
 		Token:       token,
 		MaxInFlight: 1,
 		Org:         org,
@@ -112,7 +119,8 @@ func basicTest(t *testing.T, fixture, repo string) {
 	require.NoError(t, err)
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	go scheduler.Run(runCtx, logger.Named("scheduler"), monitor, scheduler.Config{
+	go scheduler.Run(runCtx, logger.Named("scheduler"), monitor, k8sClient, scheduler.Config{
+		Namespace:        api.DefaultNamespace,
 		AgentTokenSecret: agentTokenSecret,
 		JobTTL:           time.Minute,
 	})
