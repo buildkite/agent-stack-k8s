@@ -8,30 +8,58 @@ A Kubernetes controller that runs Buildkite jobs as workloads on Kubernetes.
 
 The controller uses the [Buildkite GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled work that uses the `kubernetes` plugin.
 
-When a job is available, the controller will create a pod to acquire and run the job. It converts the [PodTemplate](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#podtemplate-v1-core) in the `kubernetes` plugin into a pod by:
+When a job is available, the controller will create a pod to acquire and run the job. It converts the [PodSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#podspec-v1-core) in the `kubernetes` plugin into a pod by:
 
 - adding an init container to:
-  - acquire the job
   - copy the agent binary onto the workspace volume
-  - clone the source repository onto the workspace
-- modifying the user-specified container to:
+- adding a container to run the buildkite agent
+- adding a container to clone the source repository
+- modifying the user-specified containers to:
   - overwrite the entrypoint to the agent binary
   - run with the working directory set to the workspace
 
 The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
 
+## Requirements
+
+- A Kubernetes cluster and kubeconfig file
+- An API token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
+- An [agent token](https://buildkite.com/docs/agent/v3/tokens)
+
+We use the [client-go default loading rules](https://pkg.go.dev/k8s.io/client-go/tools/clientcmd), which means we will check:
+
+- The current context configured in `$HOME/.kube/config`
+- In-cluster access via a service account token
+- The `KUBECONFIG` environment variable
+
 ## Usage
 
+First store the agent token in a Kubernetes secret:
+
 ```bash!
-buildkite-controller --token 123abc
+kubectl create secret generic buildkite-agent-token --from-literal=BUILDKITE_AGENT_TOKEN=my-agent-token
 ```
 
-Options:
+Next export the required environment variables and start the controller:
 
-- `--namespace`: Kubernetes namespace to create resources within (default: `buildkite`)
-- `--kubeconfig`: specify the path to a kubeconfig (default: `~/.kube/config` / in-cluster configuration)
-- `--token`: a Buildkite [API Token](https://buildkite.com/user/api-access-tokens/new) with the GraphQL API scope
-- `--agent-image`: The image to use for the Buildkite agent,(default: `buildkite/agent:latest`)
+```bash!
+export BUILDKITE_ORG=my-org
+export BUILDKITE_TOKEN=my-api-token
+
+agent-stack-k8s
+```
+
+### Options
+
+```text
+$ agent-stack-k8s --help
+Usage of ./agent-stack-k8s:
+      --agent-token-secret string   name of the Buildkite agent token secret (default "buildkite-agent-token")
+      --debug                       debug logs
+      --job-ttl duration            time to retain kubernetes jobs after completion (default 10m0s)
+      --max-in-flight int           max jobs in flight, 0 means no max (default 1)
+      --tags strings                A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8") (default [queue=kubernetes])
+```
 
 ## Architecture
 
@@ -49,7 +77,7 @@ sequenceDiagram
     kubernetes->>pod: create
     pod->>bapi: agent accepts & starts job
     pod->>pod: agent bootstrap
-    pod->>pod: run user pod to completion
+    pod->>pod: run user pods to completion
     pod->>bapi: upload artifacts, exit code
     pod->>pod: exit
     kubernetes->>bc: pod completion event
@@ -63,61 +91,34 @@ steps:
 - label: build image
   plugins:
   - kubernetes:
-      containers:
-      - image: gradle:latest
-        command: [gradle]
-        args:
-        - jib
-        - --image=ttl.sh/example:1h
+      podSpec:
+        containers:
+        - image: gradle:latest
+          command: [gradle]
+          args:
+          - jib
+          - --image=ttl.sh/example:1h
 ```
 
-## Resulting execution pod
+## Cloning repos via SSH
+
+To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
 
 ```yaml!
-apiVersion: v1
-kind: Pod
-metadata:
-  name: agent-abc
-spec:
-  initContainers:
-  - image: buildkite/agent:latest
-    args:
-    - start
-    - --acquire-job=abc
-    volumeMounts:
-    - mountPath: /workspace
-      name: workspace
-  containers:
-  - image: gradle:latest
-    command: "/workspace/agent"
-    args:
-    - exec
-    - --
-    - jib
-    - --image=ttl.sh/example:1h
-    workingDir: /workspace
-    volumeMounts:
-    - mountPath: /workspace
-      name: workspace
-  - image: buildkite/agent:latest
-    args: [upload-artifacts]
-    workingDir: /workspace
-    volumeMounts:
-    - mountPath: /workspace
-      name: workspace
-  volumes:
-  - name: workspace
-    emptyDir: {}
+steps:
+- label: build image
+  plugins:
+  - kubernetes:
+      gitEnvFrom:
+      - secretRef: {name: agent-stack-k8s} # <--
+      podSpec:
+        containers:
+        - image: gradle:latest
+          command: [gradle]
+          args:
+          - jib
+          - --image=ttl.sh/example:1h
 ```
-
-## Sidecar
-
-### Responsibilities
-
-- Copies wrapper to shared EmptyDir volume
-- Orders execution of containers in pod by using a mutex
-- Wraps execution in order to redirect stdout/stderr and upload artifacts
-
 
 ## Development
 
@@ -133,6 +134,17 @@ Run tasks via [just](https://github.com/casey/just):
 just --list
 ```
 
+For running the integration tests you'll need to add some additional scopes to your Buildkite API token:
+
+- `read_artifacts`
+- `read_build_logs`
+
+You'll also need to create an SSH secret in your cluster to run [this test pipeline](integration/fixtures/secretref.yaml). This SSH key needs to be associated with your GitHub account to be able to clone this public repo, and must be in a form acceptable to OpenSSH (aka `BEGIN OPENSSH PRIVATE KEY`, not `BEGIN PRIVATE KEY`).
+
+```bash
+kubectl create secret generic agent-stack-k8s --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
+```
+
 ## Open questions
 
 - How to deal with stuck jobs? Timeouts?
@@ -140,6 +152,3 @@ just --list
   - Report failure to buildkite from controller?
   - Emit pod logs to buildkite? If agent isn't starting correctly
   - Retry?
-- How to deal with secrets? SSH, image pull, etc.
-  - [Tekton's solution](https://tekton.dev/vault/pipelines-v0.14.3/auth/#guiding-credential-selection) seems decent enough. [This is the code](https://github.com/tektoncd/pipeline/blob/2b54123eaafe5d6b86577402830e0957928374d2/pkg/pod/creds_init.go#L53) grabs secrets and turns them into volume mounts
-  - the buildkite agent image comes with [this ssh config wrapper](https://github.com/buildkite/docker-ssh-env-config)
