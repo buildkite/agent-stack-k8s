@@ -28,7 +28,7 @@ type Config struct {
 	Token       string
 	MaxInFlight int
 	Org         string
-	Pipeline    string
+	Tags        []string
 }
 
 type Job struct {
@@ -70,6 +70,7 @@ func (m *Monitor) Done(uuid string) {
 }
 
 func (m *Monitor) start() {
+	m.logger.Debug("started", zap.Strings("tags", m.cfg.Tags))
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -77,38 +78,39 @@ func (m *Monitor) start() {
 		case <-m.ctx.Done():
 			return
 		case <-ticker.C:
-			slug := fmt.Sprintf("%s/%s", m.cfg.Org, m.cfg.Pipeline)
-			buildsResponse, err := api.GetScheduledBuilds(m.ctx, m.client, slug)
-			if err != nil {
-				if errors.Is(err, context.Canceled) {
+			for _, tag := range m.cfg.Tags {
+				buildsResponse, err := api.GetScheduledBuilds(m.ctx, m.client, m.cfg.Org, []string{tag})
+				if err != nil {
+					if errors.Is(err, context.Canceled) {
+						continue
+					}
+					m.logger.Warn("failed to retrieve builds for pipeline", zap.Error(err))
 					continue
 				}
-				m.logger.Warn("failed to retrieve builds for pipeline", zap.Error(err))
-				continue
-			}
-			if buildsResponse.Pipeline.Id == nil {
-				m.jobs <- Job{Err: fmt.Errorf("invalid pipeline: %s", slug)}
-			}
-			builds := buildsResponse.Pipeline.Jobs.Edges
-			sort.Slice(builds, func(i, j int) bool {
-				cmdI := builds[i].Node.(*api.JobJobTypeCommand)
-				cmdJ := builds[j].Node.(*api.JobJobTypeCommand)
+				if buildsResponse.Organization.Id == nil {
+					m.jobs <- Job{Err: fmt.Errorf("invalid organization: %s", m.cfg.Org)}
+				}
+				builds := buildsResponse.Organization.Jobs.Edges
+				sort.Slice(builds, func(i, j int) bool {
+					cmdI := builds[i].Node.(*api.JobJobTypeCommand)
+					cmdJ := builds[j].Node.(*api.JobJobTypeCommand)
 
-				return cmdI.ScheduledAt.Before(cmdJ.ScheduledAt)
+					return cmdI.ScheduledAt.Before(cmdJ.ScheduledAt)
 
-			})
+				})
 
-			for _, job := range builds {
-				cmdJob := job.Node.(*api.JobJobTypeCommand)
-				if m.knownBuilds.Contains(cmdJob.Uuid) {
-					m.logger.Debug("skipping already queued job", zap.String("uuid", cmdJob.Uuid))
-				} else if inFlight := m.knownBuilds.Len(); m.cfg.MaxInFlight != 0 && inFlight >= m.cfg.MaxInFlight {
-					m.logger.Warn("max in flight reached", zap.Int("in-flight", inFlight), zap.Int("max-in-flight", m.cfg.MaxInFlight))
-				} else {
-					m.logger.Debug("adding job", zap.String("uuid", cmdJob.Uuid))
-					m.jobs <- Job{CommandJob: cmdJob.CommandJob}
-					m.logger.Debug("added job", zap.String("uuid", cmdJob.Uuid))
-					m.knownBuilds.Add(cmdJob.Uuid, struct{}{})
+				for _, job := range builds {
+					cmdJob := job.Node.(*api.JobJobTypeCommand)
+					if m.knownBuilds.Contains(cmdJob.Uuid) {
+						m.logger.Debug("skipping already queued job", zap.String("uuid", cmdJob.Uuid))
+					} else if inFlight := m.knownBuilds.Len(); m.cfg.MaxInFlight != 0 && inFlight >= m.cfg.MaxInFlight {
+						m.logger.Debug("max in flight reached", zap.Int("in-flight", inFlight), zap.Int("max-in-flight", m.cfg.MaxInFlight))
+					} else {
+						m.logger.Debug("adding job", zap.String("uuid", cmdJob.Uuid))
+						m.jobs <- Job{CommandJob: cmdJob.CommandJob}
+						m.logger.Debug("added job", zap.String("uuid", cmdJob.Uuid))
+						m.knownBuilds.Add(cmdJob.Uuid, struct{}{})
+					}
 				}
 			}
 		}

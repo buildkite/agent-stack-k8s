@@ -85,8 +85,8 @@ query GetBuild($uuid: ID!) {
   }
 }
 
-query GetScheduledBuilds($slug: ID!) {
-  pipeline(slug: $slug) {
+query GetScheduledBuilds($slug: ID!, $agentQueryRules: [String!]) {
+  organization(slug: $slug) {
     # @genqlient(pointer: true)
     id
     jobs(
@@ -94,6 +94,7 @@ query GetScheduledBuilds($slug: ID!) {
       type: [COMMAND]
       first: 100
       order: RECENTLY_ASSIGNED
+      agentQueryRules: $agentQueryRules
     ) {
       count
       edges {
