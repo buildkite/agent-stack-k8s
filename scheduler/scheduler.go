@@ -34,14 +34,15 @@ var defaultJob = &batchv1.Job{
 }
 
 const (
-	ns           = "default"
-	agentImage   = "benmoss/buildkite-agent:latest"
-	defaultLabel = "buildkite.com/job-uuid"
+	ns            = "default"
+	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
+	agentImage    = "benmoss/buildkite-agent:latest"
+	defaultLabel  = "buildkite.com/job-uuid"
 )
 
 type Config struct {
-	AgentToken string
-	JobTTL     time.Duration
+	AgentTokenSecret string
+	JobTTL           time.Duration
 }
 
 func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg Config) error {
@@ -55,6 +56,14 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg 
 	clientset, err := kubernetes.NewForConfig(clientConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create clienset: %w", err)
+	}
+
+	tokenSecret, err := clientset.CoreV1().Secrets(ns).Get(ctx, cfg.AgentTokenSecret, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get agent token secret: %w", err)
+	}
+	if _, ok := tokenSecret.Data[agentTokenKey]; !ok {
+		return fmt.Errorf("agent token secret does not contain key %s", agentTokenKey)
 	}
 
 	worker := worker{
@@ -93,7 +102,7 @@ type PluginConfig struct {
 
 func (w *worker) k8sify(
 	job *api.CommandJob,
-	token string,
+	tokenSecret string,
 ) (*batchv1.Job, error) {
 	envMap := map[string]string{}
 	for _, val := range job.Env {
@@ -130,8 +139,13 @@ func (w *worker) k8sify(
 		Name:  "BUILDKITE_BUILD_PATH",
 		Value: "/workspace/build",
 	}, corev1.EnvVar{
-		Name:  "BUILDKITE_AGENT_TOKEN",
-		Value: token,
+		Name: "BUILDKITE_AGENT_TOKEN",
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: tokenSecret},
+				Key:                  agentTokenKey,
+			},
+		},
 	}, corev1.EnvVar{
 		Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
 		Value: job.Uuid,
@@ -293,7 +307,7 @@ type worker struct {
 
 func (w *worker) Create(job *api.CommandJob) {
 	logger := w.logger.With(zap.String("job", job.Uuid), zap.String("label", job.Label))
-	kjob, err := w.k8sify(job, w.cfg.AgentToken)
+	kjob, err := w.k8sify(job, w.cfg.AgentTokenSecret)
 	if err != nil {
 		logger.Error("failed to convert job to pod", zap.Error(err))
 		return
