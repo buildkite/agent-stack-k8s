@@ -20,10 +20,13 @@ gomod:
   go mod tidy
   git diff --no-ext-diff --quiet --exit-code --name-only go.mod go.sum
 
-agent:
+agent repo=("benmoss/buildkite-agent") tag=("latest"):
   #!/usr/bin/env bash
-  set -euo pipefail
-  export GOOS=linux GOARCH=amd64
-  cd agent/packaging/docker/alpine-linux
-  go build -o buildkite-agent github.com/buildkite/agent/v3
-  docker buildx build --tag benmoss/buildkite-agent:latest --platform linux/amd64,linux/arm64 --push .
+  set -euxo pipefail
+  pushd agent/packaging/docker/alpine-linux
+  for arch in arm64 amd64; do
+    export GOOS=linux GOARCH=$arch
+    go build -o buildkite-agent-linux-$arch github.com/buildkite/agent/v3
+  done
+  docker buildx build --tag {{repo}}:{{tag}} --platform linux/arm64,linux/amd64 --push .
+  rm buildkite-agent-linux*
