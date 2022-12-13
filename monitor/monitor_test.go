@@ -7,10 +7,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestInvalidOrg(t *testing.T) {
-	m, err := New(context.Background(), zap.Must(zap.NewDevelopment()), Config{
+	m, err := New(context.Background(), zap.Must(zap.NewDevelopment()), fake.NewSimpleClientset(), Config{
 		Token:       os.Getenv("BUILDKITE_TOKEN"),
 		MaxInFlight: 1,
 		Org:         "foo",

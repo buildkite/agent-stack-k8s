@@ -15,70 +15,41 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/pointer"
 )
 
 var defaultJob = &batchv1.Job{
 	ObjectMeta: metav1.ObjectMeta{
 		Labels: map[string]string{
-			defaultLabel: "true",
+			api.DefaultLabel: "true",
 		},
 	},
 }
 
 const (
-	ns            = "default"
-	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 	agentImage    = "benmoss/buildkite-agent:latest"
-	defaultLabel  = "buildkite.com/job-uuid"
+	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 )
 
 type Config struct {
+	Namespace        string
 	AgentTokenSecret string
 	JobTTL           time.Duration
 }
 
-func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, cfg Config) error {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, nil)
-	clientConfig, err := kubeConfig.ClientConfig()
-	if err != nil {
-		return fmt.Errorf("failed to create client config: %w", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(clientConfig)
-	if err != nil {
-		return fmt.Errorf("failed to create clienset: %w", err)
-	}
-
-	tokenSecret, err := clientset.CoreV1().Secrets(ns).Get(ctx, cfg.AgentTokenSecret, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to get agent token secret: %w", err)
-	}
-	if _, ok := tokenSecret.Data[agentTokenKey]; !ok {
-		return fmt.Errorf("agent token secret does not contain key %s", agentTokenKey)
-	}
-
+func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, client kubernetes.Interface, cfg Config) error {
 	worker := worker{
-		ctx:       ctx,
-		cfg:       cfg,
-		clientset: clientset,
-		logger:    logger.Named("worker"),
-		done:      make(chan string),
+		ctx:    ctx,
+		cfg:    cfg,
+		client: client,
+		logger: logger.Named("worker"),
+		done:   make(chan string),
 	}
-	requirement, err := labels.NewRequirement(defaultLabel, selection.Exists, nil)
-	if err != nil {
-		return fmt.Errorf("invalid requirement: %w", err)
-	}
-	selector := labels.NewSelector().Add(*requirement)
-	go worker.watchCompletions(ctx, selector)
+	go worker.watchCompletions(ctx)
 
 	for {
 		select {
@@ -131,7 +102,7 @@ func (w *worker) k8sify(
 	kjob.Spec.Template.Spec = pluginConfig.PodSpec
 	kjob.Name = kjobName(job)
 	kjob.Labels = map[string]string{
-		defaultLabel: job.Uuid,
+		api.DefaultLabel: job.Uuid,
 	}
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
 	var env []corev1.EnvVar
@@ -298,11 +269,11 @@ func (w *worker) k8sify(
 }
 
 type worker struct {
-	ctx       context.Context
-	cfg       Config
-	clientset *kubernetes.Clientset
-	logger    *zap.Logger
-	done      chan string
+	ctx    context.Context
+	cfg    Config
+	client kubernetes.Interface
+	logger *zap.Logger
+	done   chan string
 }
 
 func (w *worker) Create(job *api.CommandJob) {
@@ -313,7 +284,7 @@ func (w *worker) Create(job *api.CommandJob) {
 		return
 	}
 	logger = logger.With(zap.String("kjob", kjob.Name))
-	_, err = w.clientset.BatchV1().Jobs(ns).Create(w.ctx, kjob, metav1.CreateOptions{})
+	_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(w.ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
 		logger.Error("failed to create job", zap.Error(err))
 		return
@@ -321,15 +292,15 @@ func (w *worker) Create(job *api.CommandJob) {
 	logger.Debug("created job")
 }
 
-func (w *worker) watchCompletions(ctx context.Context, selector labels.Selector) {
+func (w *worker) watchCompletions(ctx context.Context) {
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			options.LabelSelector = selector.String()
-			return w.clientset.BatchV1().Jobs(ns).List(ctx, options)
+			options.LabelSelector = api.DefaultLabel
+			return w.client.BatchV1().Jobs(w.cfg.Namespace).List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			options.LabelSelector = selector.String()
-			return w.clientset.BatchV1().Jobs(ns).Watch(ctx, options)
+			options.LabelSelector = api.DefaultLabel
+			return w.client.BatchV1().Jobs(w.cfg.Namespace).Watch(ctx, options)
 		},
 	}
 
@@ -339,7 +310,7 @@ func (w *worker) watchCompletions(ctx context.Context, selector labels.Selector)
 			for _, condition := range job.Status.Conditions {
 				if condition.Status == corev1.ConditionTrue {
 					if condition.Type == batchv1.JobComplete || condition.Type == batchv1.JobFailed {
-						uuid, found := job.Labels[defaultLabel]
+						uuid, found := job.Labels[api.DefaultLabel]
 						if !found {
 							w.logger.Error("job found without label", zap.String("name", job.Name))
 						} else {
@@ -347,6 +318,15 @@ func (w *worker) watchCompletions(ctx context.Context, selector labels.Selector)
 						}
 					}
 				}
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			job := obj.(*batchv1.Job)
+			uuid, found := job.Labels[api.DefaultLabel]
+			if !found {
+				w.logger.Error("job found without label", zap.String("name", job.Name))
+			} else {
+				w.done <- uuid
 			}
 		},
 	})
