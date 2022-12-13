@@ -186,6 +186,9 @@ func (w *worker) k8sify(
 		}, corev1.EnvVar{
 			Name:  "BUILDKITE_CONTAINER_ID",
 			Value: strconv.Itoa(i + systemContainers),
+		}, corev1.EnvVar{
+			Name:  "BUILDKITE_IMAGE_NAME",
+			Value: c.Image,
 		})
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
