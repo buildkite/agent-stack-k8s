@@ -120,10 +120,9 @@ func basicTest(t *testing.T, fixture, repo string) {
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	go scheduler.Run(runCtx, logger.Named("scheduler"), monitor, k8sClient, scheduler.Config{
-		Namespace:        api.DefaultNamespace,
 		AgentTokenSecret: agentTokenSecret,
 		JobTTL:           time.Minute,
-	})
+	}.WithDefaults())
 	EnsureCleanup(t, cancel)
 
 	// trigger build

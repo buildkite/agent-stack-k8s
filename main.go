@@ -25,6 +25,7 @@ var jobTTL *time.Duration = flag.Duration("job-ttl", 10*time.Minute, "time to re
 var agentTokenSecret *string = flag.String("agent-token-secret", "buildkite-agent-token", "name of the Buildkite agent token secret")
 var ns *string = flag.String("namespace", api.DefaultNamespace, "kubernetes namespace to create resources in")
 var tags *[]string = flag.StringSlice("tags", []string{"queue=kubernetes"}, `A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8")`)
+var agentImage *string = flag.String("image", api.DefaultAgentImage, "The image to use for the Buildkite agent")
 
 func main() {
 	flag.Parse()
@@ -70,6 +71,7 @@ func main() {
 		Namespace:        *ns,
 		AgentTokenSecret: *agentTokenSecret,
 		JobTTL:           *jobTTL,
+		AgentImage:       *agentImage,
 	}); err != nil {
 		zap.L().Fatal("failed to run scheduler", zap.Error(err))
 	}

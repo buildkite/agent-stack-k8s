@@ -23,7 +23,6 @@ import (
 )
 
 const (
-	agentImage    = "benmoss/buildkite-agent:latest"
 	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 )
 
@@ -31,6 +30,17 @@ type Config struct {
 	Namespace        string
 	AgentTokenSecret string
 	JobTTL           time.Duration
+	AgentImage       string
+}
+
+func (c Config) WithDefaults() Config {
+	if c.AgentImage == "" {
+		c.AgentImage = api.DefaultAgentImage
+	}
+	if c.Namespace == "" {
+		c.Namespace = api.DefaultNamespace
+	}
+	return c
 }
 
 func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, client kubernetes.Interface, cfg Config) error {
@@ -164,7 +174,7 @@ func (w *worker) k8sify(
 	if artifactPaths, found := envMap["BUILDKITE_ARTIFACT_PATHS"]; found && artifactPaths != "" {
 		artifactsContainer := corev1.Container{
 			Name:            "upload-artifacts",
-			Image:           agentImage,
+			Image:           w.cfg.AgentImage,
 			Args:            []string{"bootstrap"},
 			WorkingDir:      "/workspace",
 			VolumeMounts:    volumeMounts,
@@ -197,7 +207,7 @@ func (w *worker) k8sify(
 	agentContainer := corev1.Container{
 		Name:            "agent",
 		Args:            []string{"start"},
-		Image:           agentImage,
+		Image:           w.cfg.AgentImage,
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
 		ImagePullPolicy: corev1.PullAlways,
@@ -215,7 +225,7 @@ func (w *worker) k8sify(
 	// system client container(s)
 	checkoutContainer := corev1.Container{
 		Name:            "checkout",
-		Image:           agentImage,
+		Image:           w.cfg.AgentImage,
 		Args:            []string{"bootstrap"},
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
@@ -239,7 +249,7 @@ func (w *worker) k8sify(
 	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
 	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
 		Name:            "copy-agent",
-		Image:           agentImage,
+		Image:           w.cfg.AgentImage,
 		ImagePullPolicy: corev1.PullAlways,
 		Command:         []string{"cp"},
 		Args:            []string{"/usr/local/bin/buildkite-agent", "/workspace"},
