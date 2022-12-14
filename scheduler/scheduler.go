@@ -22,14 +22,6 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-var defaultJob = &batchv1.Job{
-	ObjectMeta: metav1.ObjectMeta{
-		Labels: map[string]string{
-			api.DefaultLabel: "true",
-		},
-	},
-}
-
 const (
 	agentImage    = "benmoss/buildkite-agent:latest"
 	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
