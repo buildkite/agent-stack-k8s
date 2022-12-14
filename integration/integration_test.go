@@ -168,14 +168,15 @@ Out:
 	logs, _, err := client.Jobs.GetJobLog(org, pipeline.Name, strconv.Itoa(build.Number), job.Uuid)
 	require.NoError(t, err)
 	require.NotNil(t, logs.Content)
-	require.Contains(t, *logs.Content, "Buildkite Agent Stack for Kubernetes")
+	require.Contains(t, *logs.Content, "Welcome to nginx!")
 
 	artifacts, _, err := client.Artifacts.ListByBuild(org, pipeline.Name, strconv.Itoa(build.Number), nil)
 	require.NoError(t, err)
-	require.Len(t, artifacts, 2)
-	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
+	require.Len(t, artifacts, 3)
+	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename, *artifacts[2].Filename}
 	require.Contains(t, filenames, "README.md")
 	require.Contains(t, filenames, "CODE_OF_CONDUCT.md")
+	require.Contains(t, filenames, "tmp/nginx-latest.log")
 }
 
 func newk8sClient(t *testing.T) kubernetes.Interface {
