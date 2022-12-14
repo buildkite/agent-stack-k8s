@@ -20,10 +20,6 @@ When a job is available, the controller will create a pod to acquire and run the
 
 The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
 
-The first container specified in the `containers:` array will be the command run
-in the foreground of your job, while any other containers will be run in the
-background and can be used for running sidecar services.
-
 ## Requirements
 
 - A Kubernetes cluster and kubeconfig file
@@ -88,15 +84,11 @@ sequenceDiagram
     bc->>kubernetes: cleanup finished pods
 ```
 
-## Sample pipelines
-
-Run [jib](https://github.com/GoogleContainerTools/jib) to produce a container image:
+## Sample buildkite pipeline
 
 ```yaml!
 steps:
 - label: build image
-  agents:
-    queue: kubernetes
   plugins:
   - kubernetes:
       podSpec:
@@ -106,23 +98,6 @@ steps:
           args:
           - jib
           - --image=ttl.sh/example:1h
-```
-
-Run nginx in a sidecar and curl it from the main container:
-
-```yaml!
-steps:
-- label: "curl nginx"
-  agents:
-    queue: kubernetes
-  plugins:
-    - kubernetes:
-        podSpec:
-          containers:
-            - image: nginx:latest
-              command: [curl --retry 5 --retry-connrefused localhost]
-            - image: nginx:latest
-              command: [/docker-entrypoint.sh nginx -g "daemon off;"]
 ```
 
 ## Cloning repos via SSH

@@ -3,14 +3,15 @@ steps:
     agents:
       queue: {{.queue}}
     artifact_paths: "CODE_OF_CONDUCT.md"
+    env:
+      BUILDKITE_SHELL: /bin/sh -e -c
     plugins:
       - kubernetes:
           podSpec:
             containers:
-              - image: nginx:latest
-                command: [curl --retry 5 --retry-connrefused localhost]
-              - image: nginx:latest
-                command: [/docker-entrypoint.sh nginx -g "daemon off;"]
+              - image: alpine:latest
+                command: [cat]
+                args: [README.md]
               - image: buildkite/agent:latest
                 command: [buildkite-agent]
                 args: [artifact upload "README.md"]
