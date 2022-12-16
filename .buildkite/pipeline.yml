@@ -1,0 +1,16 @@
+steps:
+  - label: ":buildkite: integration tests"
+    agents:
+      queue: kubernetes
+    env:
+      BUILDKITE_SHELL: /bin/sh -e -c
+    plugins:
+      - kubernetes:
+          podSpec:
+            serviceAccountName: integration-tests
+            containers:
+              - image: golang:latest
+                command: [go test -v ./...]
+                envFrom:
+                  - secretRef:
+                      name: buildkite
