@@ -3,5 +3,5 @@ package api
 const (
 	DefaultLabel      = "buildkite.com/job-uuid"
 	DefaultNamespace  = "default"
-	DefaultAgentImage = "benmoss/buildkite-agent:latest"
+	DefaultAgentImage = "ghcr.io/buildkite/agent-k8s:latest"
 )
