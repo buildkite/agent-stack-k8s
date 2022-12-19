@@ -15,10 +15,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/pointer"
 )
 
@@ -49,9 +46,7 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, clie
 		cfg:    cfg,
 		client: client,
 		logger: logger.Named("worker"),
-		done:   make(chan string),
 	}
-	go worker.watchCompletions(ctx)
 
 	for {
 		select {
@@ -61,9 +56,7 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, clie
 			if job.Err != nil {
 				return job.Err
 			}
-			worker.Create(&job.CommandJob)
-		case uuid := <-worker.done:
-			monitor.Done(uuid)
+			worker.Create(&job)
 		}
 	}
 }
@@ -74,7 +67,7 @@ type PluginConfig struct {
 }
 
 func (w *worker) k8sify(
-	job *api.CommandJob,
+	job *monitor.Job,
 	tokenSecret string,
 ) (*batchv1.Job, error) {
 	envMap := map[string]string{}
@@ -104,7 +97,8 @@ func (w *worker) k8sify(
 	kjob.Spec.Template.Spec = pluginConfig.PodSpec
 	kjob.Name = kjobName(job)
 	kjob.Labels = map[string]string{
-		api.DefaultLabel: job.Uuid,
+		api.UUIDLabel: job.Uuid,
+		api.TagLabel:  monitor.TagToLabel(job.Tag),
 	}
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
 	var env []corev1.EnvVar
@@ -275,10 +269,9 @@ type worker struct {
 	cfg    Config
 	client kubernetes.Interface
 	logger *zap.Logger
-	done   chan string
 }
 
-func (w *worker) Create(job *api.CommandJob) {
+func (w *worker) Create(job *monitor.Job) {
 	logger := w.logger.With(zap.String("job", job.Uuid), zap.String("label", job.Label))
 	kjob, err := w.k8sify(job, w.cfg.AgentTokenSecret)
 	if err != nil {
@@ -294,47 +287,6 @@ func (w *worker) Create(job *api.CommandJob) {
 	logger.Debug("created job")
 }
 
-func (w *worker) watchCompletions(ctx context.Context) {
-	lw := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			options.LabelSelector = api.DefaultLabel
-			return w.client.BatchV1().Jobs(w.cfg.Namespace).List(ctx, options)
-		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			options.LabelSelector = api.DefaultLabel
-			return w.client.BatchV1().Jobs(w.cfg.Namespace).Watch(ctx, options)
-		},
-	}
-
-	_, controller := cache.NewInformer(lw, &batchv1.Job{}, 0, cache.ResourceEventHandlerFuncs{
-		UpdateFunc: func(_, newObj interface{}) {
-			job := newObj.(*batchv1.Job)
-			for _, condition := range job.Status.Conditions {
-				if condition.Status == corev1.ConditionTrue {
-					if condition.Type == batchv1.JobComplete || condition.Type == batchv1.JobFailed {
-						uuid, found := job.Labels[api.DefaultLabel]
-						if !found {
-							w.logger.Error("job found without label", zap.String("name", job.Name))
-						} else {
-							w.done <- uuid
-						}
-					}
-				}
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			job := obj.(*batchv1.Job)
-			uuid, found := job.Labels[api.DefaultLabel]
-			if !found {
-				w.logger.Error("job found without label", zap.String("name", job.Name))
-			} else {
-				w.done <- uuid
-			}
-		},
-	})
-	controller.Run(ctx.Done())
-}
-
-func kjobName(job *api.CommandJob) string {
+func kjobName(job *monitor.Job) string {
 	return fmt.Sprintf("buildkite-%s", job.Uuid)
 }

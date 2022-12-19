@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,8 +13,15 @@ import (
 	"github.com/buildkite/agent-stack-k8s/api"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"go.uber.org/zap"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 )
 
 type Monitor struct {
@@ -38,6 +46,7 @@ type Config struct {
 type Job struct {
 	api.CommandJob
 	Err error
+	Tag string
 }
 
 func New(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface, cfg Config) (*Monitor, error) {
@@ -63,7 +72,10 @@ func New(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface
 		cfg:         cfg,
 		jobs:        make(chan Job),
 	}
-	return m, m.scanKnownJobs()
+	if err := m.synchronize(ctx); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (m *Monitor) Scheduled() <-chan Job {
@@ -71,13 +83,8 @@ func (m *Monitor) Scheduled() <-chan Job {
 	return m.jobs
 }
 
-func (m *Monitor) Done(uuid string) {
-	m.logger.Debug("job finished", zap.String("uuid", uuid))
-	m.knownBuilds.Remove(uuid)
-}
-
 func (m *Monitor) start() {
-	m.logger.Debug("started", zap.Strings("tags", m.cfg.Tags))
+	m.logger.Info("started", zap.Strings("tags", m.cfg.Tags), zap.String("org", m.cfg.Org), zap.String("namespace", m.cfg.Namespace), zap.Int("max-in-flight", m.cfg.MaxInFlight))
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -85,6 +92,11 @@ func (m *Monitor) start() {
 		case <-m.ctx.Done():
 			return
 		case <-ticker.C:
+			if m.reachedMaxInFlight() {
+				m.logger.Info("max in flight reached", zap.Int("in-flight", m.cfg.MaxInFlight))
+				continue
+			}
+		Out:
 			for _, tag := range m.cfg.Tags {
 				buildsResponse, err := api.GetScheduledBuilds(m.ctx, m.gql, m.cfg.Org, []string{tag})
 				if err != nil {
@@ -110,12 +122,15 @@ func (m *Monitor) start() {
 					cmdJob := job.Node.(*api.JobJobTypeCommand)
 					if m.knownBuilds.Contains(cmdJob.Uuid) {
 						m.logger.Debug("skipping already queued job", zap.String("uuid", cmdJob.Uuid))
-					} else if inFlight := m.knownBuilds.Len(); m.cfg.MaxInFlight != 0 && inFlight >= m.cfg.MaxInFlight {
-						m.logger.Debug("max in flight reached", zap.Int("in-flight", inFlight), zap.Int("max-in-flight", m.cfg.MaxInFlight))
+					} else if m.reachedMaxInFlight() {
+						m.logger.Debug("max in flight reached", zap.Int("in-flight", m.cfg.MaxInFlight))
+						break Out
 					} else {
-						m.logger.Debug("adding job", zap.String("uuid", cmdJob.Uuid))
-						m.jobs <- Job{CommandJob: cmdJob.CommandJob}
-						m.logger.Debug("added job", zap.String("uuid", cmdJob.Uuid))
+						m.jobs <- Job{
+							CommandJob: cmdJob.CommandJob,
+							Tag:        tag,
+						}
+						m.logger.Info("added job", zap.String("uuid", cmdJob.Uuid))
 						m.knownBuilds.Add(cmdJob.Uuid, struct{}{})
 					}
 				}
@@ -124,23 +139,100 @@ func (m *Monitor) start() {
 	}
 }
 
-func (m *Monitor) scanKnownJobs() error {
-	jobs, err := m.k8s.BatchV1().Jobs(m.cfg.Namespace).List(m.ctx, v1.ListOptions{
-		LabelSelector: api.DefaultLabel,
-	})
+func (m *Monitor) synchronize(ctx context.Context) error {
+	hasTag, err := labels.NewRequirement(api.TagLabel, selection.In, tagsToLabels(m.cfg.Tags))
 	if err != nil {
-		return fmt.Errorf("failed to load jobs: %w", err)
+		return fmt.Errorf("failed to create tag label requirement: %w", err)
 	}
-	for _, job := range jobs.Items {
-		uuid, found := job.Labels[api.DefaultLabel]
-		if !found {
-			m.logger.Error("job found without label", zap.String("name", job.Name))
-		} else {
-			if job.Status.CompletionTime == nil {
-				m.logger.Debug("adding previously scheduled job", zap.String("uuid", uuid))
-				m.knownBuilds.Add(uuid, struct{}{})
+	hasUuid, err := labels.NewRequirement(api.UUIDLabel, selection.Exists, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create uuid label requirement: %w", err)
+	}
+	selector := labels.NewSelector().Add(*hasTag, *hasUuid).String()
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.LabelSelector = selector
+			return m.k8s.BatchV1().Jobs(m.cfg.Namespace).List(ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.LabelSelector = selector
+			return m.k8s.BatchV1().Jobs(m.cfg.Namespace).Watch(ctx, options)
+		},
+	}
+	removeIfCompleted := func(obj interface{}) {
+		job := obj.(*batchv1.Job)
+		if isComplete(job) {
+			uuid := job.Labels[api.UUIDLabel]
+			m.logger.Info("job finished", zap.String("uuid", uuid))
+			m.knownBuilds.Remove(job.Labels[api.UUIDLabel])
+		}
+	}
+
+	_, controller := cache.NewInformer(lw, &batchv1.Job{}, 0, cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			job := obj.(*batchv1.Job)
+			if !isComplete(job) {
+				uuid := job.Labels[api.UUIDLabel]
+				found, _ := m.knownBuilds.ContainsOrAdd(job.Labels[api.UUIDLabel], struct{}{})
+				if !found {
+					m.logger.Debug("adding previously scheduled job", zap.String("uuid", uuid))
+				}
+			}
+		},
+		UpdateFunc: func(_, newObj interface{}) {
+			removeIfCompleted(newObj)
+		},
+		DeleteFunc: removeIfCompleted,
+	})
+
+	go controller.Run(ctx.Done())
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-tick.C:
+			if controller.HasSynced() {
+				m.logger.Info("controller synchronized")
+				return nil
+			}
+			m.logger.Info("controller synchronizing")
+		}
+	}
+}
+
+func isComplete(job *batchv1.Job) bool {
+	for _, condition := range job.Status.Conditions {
+		if condition.Status == corev1.ConditionTrue {
+			if condition.Type == batchv1.JobComplete || condition.Type == batchv1.JobFailed {
+				return true
 			}
 		}
 	}
-	return nil
+	return false
+}
+
+func (m *Monitor) reachedMaxInFlight() bool {
+	if m.cfg.MaxInFlight == 0 {
+		return false
+	}
+	inFlight := m.knownBuilds.Len()
+	return inFlight >= m.cfg.MaxInFlight
+}
+
+// a valid label must be an empty string or consist of alphanumeric characters,
+// '-', '_' or '.', and must start and end with an alphanumeric character (e.g.
+// 'MyValue',  or 'my_value',  or '12345', regex used for validation is
+// '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')
+func TagToLabel(tag string) string {
+	return strings.ReplaceAll(tag, "=", "_")
+}
+
+func tagsToLabels(tags []string) []string {
+	labels := make([]string, len(tags))
+	for i, tag := range tags {
+		labels[i] = TagToLabel(tag)
+	}
+	return labels
 }
