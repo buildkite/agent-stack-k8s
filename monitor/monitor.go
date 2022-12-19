@@ -84,7 +84,7 @@ func (m *Monitor) Scheduled() <-chan Job {
 }
 
 func (m *Monitor) start() {
-	m.logger.Debug("started", zap.Strings("tags", m.cfg.Tags))
+	m.logger.Info("started", zap.Strings("tags", m.cfg.Tags), zap.String("org", m.cfg.Org), zap.String("namespace", m.cfg.Namespace), zap.Int("max-in-flight", m.cfg.MaxInFlight))
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -93,7 +93,7 @@ func (m *Monitor) start() {
 			return
 		case <-ticker.C:
 			if m.reachedMaxInFlight() {
-				m.logger.Debug("max in flight reached", zap.Int("in-flight", m.cfg.MaxInFlight))
+				m.logger.Info("max in flight reached", zap.Int("in-flight", m.cfg.MaxInFlight))
 				continue
 			}
 		Out:
@@ -126,12 +126,11 @@ func (m *Monitor) start() {
 						m.logger.Debug("max in flight reached", zap.Int("in-flight", m.cfg.MaxInFlight))
 						break Out
 					} else {
-						m.logger.Debug("adding job", zap.String("uuid", cmdJob.Uuid))
 						m.jobs <- Job{
 							CommandJob: cmdJob.CommandJob,
 							Tag:        tag,
 						}
-						m.logger.Debug("added job", zap.String("uuid", cmdJob.Uuid))
+						m.logger.Info("added job", zap.String("uuid", cmdJob.Uuid))
 						m.knownBuilds.Add(cmdJob.Uuid, struct{}{})
 					}
 				}
@@ -164,7 +163,7 @@ func (m *Monitor) synchronize(ctx context.Context) error {
 		job := obj.(*batchv1.Job)
 		if isComplete(job) {
 			uuid := job.Labels[api.UUIDLabel]
-			m.logger.Debug("job finished", zap.String("uuid", uuid))
+			m.logger.Info("job finished", zap.String("uuid", uuid))
 			m.knownBuilds.Remove(job.Labels[api.UUIDLabel])
 		}
 	}
@@ -195,10 +194,10 @@ func (m *Monitor) synchronize(ctx context.Context) error {
 			return nil
 		case <-tick.C:
 			if controller.HasSynced() {
-				m.logger.Debug("controller synchronized")
+				m.logger.Info("controller synchronized")
 				return nil
 			}
-			m.logger.Debug("controller synchronizing")
+			m.logger.Info("controller synchronizing")
 		}
 	}
 }
