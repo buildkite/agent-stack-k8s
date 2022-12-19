@@ -2,15 +2,14 @@ steps:
   - label: ":buildkite: integration tests"
     agents:
       queue: kubernetes
-    env:
-      BUILDKITE_SHELL: /bin/sh -e -c
+    artifact_paths: junit-*.xml
     plugins:
       - kubernetes:
           podSpec:
             serviceAccountName: integration-tests
             containers:
               - image: golang:latest
-                command: [go test -v ./...]
+                command: [.buildkite/steps/tests.sh]
                 envFrom:
                   - secretRef:
                       name: buildkite
