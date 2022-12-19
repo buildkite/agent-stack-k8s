@@ -115,6 +115,7 @@ func basicTest(t *testing.T, fixture, repo string) {
 		MaxInFlight: 1,
 		Org:         org,
 		Tags:        []string{fmt.Sprintf("queue=%s", pipelineName)},
+		Namespace:   api.DefaultNamespace,
 	})
 	require.NoError(t, err)
 
