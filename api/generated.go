@@ -290,18 +290,12 @@ type CommandJob struct {
 	Uuid string `json:"uuid"`
 	// Environment variables for this job
 	Env []string `json:"env"`
-	// The label of the job
-	Label string `json:"label"`
-	// The state of the job
-	State JobStates `json:"state"`
-	// The ruleset used to find an agent to run this job
-	AgentQueryRules []string `json:"agentQueryRules"`
-	// The exit status returned by the command on the agent
-	ExitStatus string `json:"exitStatus"`
 	// The time when the job became scheduled for running
 	ScheduledAt time.Time `json:"scheduledAt"`
-	// The agent that is running the job
-	Agent CommandJobAgent `json:"agent"`
+	// The ruleset used to find an agent to run this job
+	AgentQueryRules []string `json:"agentQueryRules"`
+	// The command the job will run
+	Command string `json:"command"`
 }
 
 // GetUuid returns CommandJob.Uuid, and is useful for accessing the field via an interface.
@@ -310,35 +304,14 @@ func (v *CommandJob) GetUuid() string { return v.Uuid }
 // GetEnv returns CommandJob.Env, and is useful for accessing the field via an interface.
 func (v *CommandJob) GetEnv() []string { return v.Env }
 
-// GetLabel returns CommandJob.Label, and is useful for accessing the field via an interface.
-func (v *CommandJob) GetLabel() string { return v.Label }
-
-// GetState returns CommandJob.State, and is useful for accessing the field via an interface.
-func (v *CommandJob) GetState() JobStates { return v.State }
+// GetScheduledAt returns CommandJob.ScheduledAt, and is useful for accessing the field via an interface.
+func (v *CommandJob) GetScheduledAt() time.Time { return v.ScheduledAt }
 
 // GetAgentQueryRules returns CommandJob.AgentQueryRules, and is useful for accessing the field via an interface.
 func (v *CommandJob) GetAgentQueryRules() []string { return v.AgentQueryRules }
 
-// GetExitStatus returns CommandJob.ExitStatus, and is useful for accessing the field via an interface.
-func (v *CommandJob) GetExitStatus() string { return v.ExitStatus }
-
-// GetScheduledAt returns CommandJob.ScheduledAt, and is useful for accessing the field via an interface.
-func (v *CommandJob) GetScheduledAt() time.Time { return v.ScheduledAt }
-
-// GetAgent returns CommandJob.Agent, and is useful for accessing the field via an interface.
-func (v *CommandJob) GetAgent() CommandJobAgent { return v.Agent }
-
-// CommandJobAgent includes the requested fields of the GraphQL type Agent.
-// The GraphQL type's documentation follows.
-//
-// An agent
-type CommandJobAgent struct {
-	// The name of the agent
-	Name string `json:"name"`
-}
-
-// GetName returns CommandJobAgent.Name, and is useful for accessing the field via an interface.
-func (v *CommandJobAgent) GetName() string { return v.Name }
+// GetCommand returns CommandJob.Command, and is useful for accessing the field via an interface.
+func (v *CommandJob) GetCommand() string { return v.Command }
 
 // GetBuildBuild includes the requested fields of the GraphQL type Build.
 // The GraphQL type's documentation follows.
@@ -671,23 +644,14 @@ func (v *JobJobTypeCommand) GetUuid() string { return v.CommandJob.Uuid }
 // GetEnv returns JobJobTypeCommand.Env, and is useful for accessing the field via an interface.
 func (v *JobJobTypeCommand) GetEnv() []string { return v.CommandJob.Env }
 
-// GetLabel returns JobJobTypeCommand.Label, and is useful for accessing the field via an interface.
-func (v *JobJobTypeCommand) GetLabel() string { return v.CommandJob.Label }
-
-// GetState returns JobJobTypeCommand.State, and is useful for accessing the field via an interface.
-func (v *JobJobTypeCommand) GetState() JobStates { return v.CommandJob.State }
+// GetScheduledAt returns JobJobTypeCommand.ScheduledAt, and is useful for accessing the field via an interface.
+func (v *JobJobTypeCommand) GetScheduledAt() time.Time { return v.CommandJob.ScheduledAt }
 
 // GetAgentQueryRules returns JobJobTypeCommand.AgentQueryRules, and is useful for accessing the field via an interface.
 func (v *JobJobTypeCommand) GetAgentQueryRules() []string { return v.CommandJob.AgentQueryRules }
 
-// GetExitStatus returns JobJobTypeCommand.ExitStatus, and is useful for accessing the field via an interface.
-func (v *JobJobTypeCommand) GetExitStatus() string { return v.CommandJob.ExitStatus }
-
-// GetScheduledAt returns JobJobTypeCommand.ScheduledAt, and is useful for accessing the field via an interface.
-func (v *JobJobTypeCommand) GetScheduledAt() time.Time { return v.CommandJob.ScheduledAt }
-
-// GetAgent returns JobJobTypeCommand.Agent, and is useful for accessing the field via an interface.
-func (v *JobJobTypeCommand) GetAgent() CommandJobAgent { return v.CommandJob.Agent }
+// GetCommand returns JobJobTypeCommand.Command, and is useful for accessing the field via an interface.
+func (v *JobJobTypeCommand) GetCommand() string { return v.CommandJob.Command }
 
 func (v *JobJobTypeCommand) UnmarshalJSON(b []byte) error {
 
@@ -719,17 +683,11 @@ type __premarshalJobJobTypeCommand struct {
 
 	Env []string `json:"env"`
 
-	Label string `json:"label"`
-
-	State JobStates `json:"state"`
+	ScheduledAt time.Time `json:"scheduledAt"`
 
 	AgentQueryRules []string `json:"agentQueryRules"`
 
-	ExitStatus string `json:"exitStatus"`
-
-	ScheduledAt time.Time `json:"scheduledAt"`
-
-	Agent CommandJobAgent `json:"agent"`
+	Command string `json:"command"`
 }
 
 func (v *JobJobTypeCommand) MarshalJSON() ([]byte, error) {
@@ -745,12 +703,9 @@ func (v *JobJobTypeCommand) __premarshalJSON() (*__premarshalJobJobTypeCommand, 
 
 	retval.Uuid = v.CommandJob.Uuid
 	retval.Env = v.CommandJob.Env
-	retval.Label = v.CommandJob.Label
-	retval.State = v.CommandJob.State
-	retval.AgentQueryRules = v.CommandJob.AgentQueryRules
-	retval.ExitStatus = v.CommandJob.ExitStatus
 	retval.ScheduledAt = v.CommandJob.ScheduledAt
-	retval.Agent = v.CommandJob.Agent
+	retval.AgentQueryRules = v.CommandJob.AgentQueryRules
+	retval.Command = v.CommandJob.Command
 	return &retval, nil
 }
 
@@ -767,54 +722,6 @@ type JobJobTypeTrigger struct {
 // Kinds of jobs that can exist on a build
 type JobJobTypeWait struct {
 }
-
-// All the possible states a job can be in
-type JobStates string
-
-const (
-	// The job has just been created and doesn't have a state yet
-	JobStatesPending JobStates = "PENDING"
-	// The job is waiting on a `wait` step to finish
-	JobStatesWaiting JobStates = "WAITING"
-	// The job was in a `WAITING` state when the build failed
-	JobStatesWaitingFailed JobStates = "WAITING_FAILED"
-	// The job is waiting on a `block` step to finish
-	JobStatesBlocked JobStates = "BLOCKED"
-	// The job was in a `BLOCKED` state when the build failed
-	JobStatesBlockedFailed JobStates = "BLOCKED_FAILED"
-	// This `block` job has been manually unblocked
-	JobStatesUnblocked JobStates = "UNBLOCKED"
-	// This `block` job was in an `UNBLOCKED` state when the build failed
-	JobStatesUnblockedFailed JobStates = "UNBLOCKED_FAILED"
-	// The job is waiting on a concurrency group check before becoming either `LIMITED` or `SCHEDULED`
-	JobStatesLimiting JobStates = "LIMITING"
-	// The job is waiting for jobs with the same concurrency group to finish
-	JobStatesLimited JobStates = "LIMITED"
-	// The job is scheduled and waiting for an agent
-	JobStatesScheduled JobStates = "SCHEDULED"
-	// The job has been assigned to an agent, and it's waiting for it to accept
-	JobStatesAssigned JobStates = "ASSIGNED"
-	// The job was accepted by the agent, and now it's waiting to start running
-	JobStatesAccepted JobStates = "ACCEPTED"
-	// The job is running
-	JobStatesRunning JobStates = "RUNNING"
-	// The job has finished
-	JobStatesFinished JobStates = "FINISHED"
-	// The job is currently canceling
-	JobStatesCanceling JobStates = "CANCELING"
-	// The job was canceled
-	JobStatesCanceled JobStates = "CANCELED"
-	// The job is timing out for taking too long
-	JobStatesTimingOut JobStates = "TIMING_OUT"
-	// The job timed out
-	JobStatesTimedOut JobStates = "TIMED_OUT"
-	// The job was skipped
-	JobStatesSkipped JobStates = "SKIPPED"
-	// The jobs configuration means that it can't be run
-	JobStatesBroken JobStates = "BROKEN"
-	// The job expired before it was started on an agent
-	JobStatesExpired JobStates = "EXPIRED"
-)
 
 // The access levels that can be assigned to a pipeline
 type PipelineAccessLevels string
@@ -1276,14 +1183,9 @@ fragment Job on Job {
 fragment CommandJob on JobTypeCommand {
 	uuid
 	env
-	label
-	state
-	agentQueryRules
-	exitStatus
 	scheduledAt
-	agent {
-		name
-	}
+	agentQueryRules
+	command
 }
 `,
 		Variables: &__BuildCreateInput{
@@ -1441,14 +1343,9 @@ fragment Job on Job {
 fragment CommandJob on JobTypeCommand {
 	uuid
 	env
-	label
-	state
-	agentQueryRules
-	exitStatus
 	scheduledAt
-	agent {
-		name
-	}
+	agentQueryRules
+	command
 }
 `,
 		Variables: &__GetScheduledBuildsInput{

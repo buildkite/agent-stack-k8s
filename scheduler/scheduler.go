@@ -76,25 +76,31 @@ func (w *worker) k8sify(
 		envMap[parts[0]] = parts[1]
 	}
 
-	var pluginConfig PluginConfig
-	if envMap["BUILDKITE_PLUGINS"] == "" {
-		return nil, fmt.Errorf("no plugins found")
-	}
-	plugins, err := plugin.CreateFromJSON(envMap["BUILDKITE_PLUGINS"])
-	if err != nil {
-		return nil, fmt.Errorf("err parsing plugins: %w", err)
-	}
-	for _, plugin := range plugins {
-		asJson, err := json.Marshal(plugin.Configuration)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal config: %w", err)
-		}
-		if err := json.Unmarshal(asJson, &pluginConfig); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal config: %w", err)
-		}
-	}
 	kjob := &batchv1.Job{}
-	kjob.Spec.Template.Spec = pluginConfig.PodSpec
+	var pluginConfig PluginConfig
+	if envMap["BUILDKITE_PLUGINS"] != "" {
+		plugins, err := plugin.CreateFromJSON(envMap["BUILDKITE_PLUGINS"])
+		if err != nil {
+			return nil, fmt.Errorf("err parsing plugins: %w", err)
+		}
+		for _, plugin := range plugins {
+			asJson, err := json.Marshal(plugin.Configuration)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal config: %w", err)
+			}
+			if err := json.Unmarshal(asJson, &pluginConfig); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+			}
+		}
+		kjob.Spec.Template.Spec = pluginConfig.PodSpec
+	} else {
+		kjob.Spec.Template.Spec.Containers = []corev1.Container{
+			{
+				Image:   w.cfg.AgentImage,
+				Command: []string{job.Command},
+			},
+		}
+	}
 	kjob.Name = kjobName(job)
 	kjob.Labels = map[string]string{
 		api.UUIDLabel: job.Uuid,
@@ -272,7 +278,7 @@ type worker struct {
 }
 
 func (w *worker) Create(job *monitor.Job) {
-	logger := w.logger.With(zap.String("job", job.Uuid), zap.String("label", job.Label))
+	logger := w.logger.With(zap.String("job", job.Uuid))
 	kjob, err := w.k8sify(job, w.cfg.AgentTokenSecret)
 	if err != nil {
 		logger.Error("failed to convert job to pod", zap.Error(err))

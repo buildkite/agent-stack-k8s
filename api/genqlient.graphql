@@ -7,14 +7,10 @@ fragment Job on Job {
 fragment CommandJob on JobTypeCommand {
   uuid
   env
-  label
-  state
-  agentQueryRules
-  exitStatus
   scheduledAt
-  agent {
-    name
-  }
+  agentQueryRules
+  command
+  label
 }
 
 # @genqlient(omitempty: true)
