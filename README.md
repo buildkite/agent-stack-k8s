@@ -53,13 +53,20 @@ agent-stack-k8s
 
 ```text
 $ agent-stack-k8s --help
-Usage of ./agent-stack-k8s:
+Usage of agent-stack-k8s:
       --agent-token-secret string   name of the Buildkite agent token secret (default "buildkite-agent-token")
+      --buildkite-token string      Buildkite API token with GraphQL scopes
+  -f, --config string               config file path
       --debug                       debug logs
+      --image string                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent-k8s:latest")
       --job-ttl duration            time to retain kubernetes jobs after completion (default 10m0s)
       --max-in-flight int           max jobs in flight, 0 means no max (default 1)
+      --namespace string            kubernetes namespace to create resources in (default "default")
+      --org string                  Buildkite organization name to watch
       --tags strings                A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8") (default [queue=kubernetes])
 ```
+
+An example config file is available [here](examples/config.yaml).
 
 ## Architecture
 

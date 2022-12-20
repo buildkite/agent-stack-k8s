@@ -1,0 +1,12 @@
+agent-token-secret: my-kubernetes-secret
+buildkite-token: abcdef
+debug: true
+image: my.registry.dev/buildkite-agent:latest
+job-ttl: 5m
+max-in-flight: 100
+namespace: my-buildkite-ns
+org: my-buildkite-org
+tags:
+- queue=my-queue
+- priority=high
+
