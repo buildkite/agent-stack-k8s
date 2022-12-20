@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: buildkite-controller
+  namespace: buildkite
+spec:
+  selector:
+    matchLabels:
+      app: buildkite-controller
+  template:
+    metadata:
+      labels:
+        app: buildkite-controller
+    spec:
+      serviceAccountName: buildkite-controller
+      containers:
+      - name: controller
+        terminationMessagePolicy: FallbackToLogsOnError
+        image: ko://github.com/buildkite/agent-stack-k8s
+        env:
+        - name: CONFIG
+          value: /etc/config.yaml
+        envFrom:
+          - secretRef:
+              name: buildkite-secrets
+        volumeMounts:
+          - name: config
+            mountPath: /etc/config.yaml
+            subPath: config.yaml
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+      volumes:
+        - name: config
+          configMap:
+            name: buildkite-config

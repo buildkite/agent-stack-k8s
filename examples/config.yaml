@@ -9,4 +9,3 @@ org: my-buildkite-org
 tags:
 - queue=my-queue
 - priority=high
-

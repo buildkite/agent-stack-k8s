@@ -30,3 +30,6 @@ agent repo=("ghcr.io/buildkite/agent-k8s") tag=("latest"):
   done
   docker buildx build --tag {{repo}}:{{tag}} --platform linux/arm64,linux/amd64 --push .
   rm buildkite-agent-linux*
+
+deploy:
+  go run github.com/google/ko@latest apply -P -f config
