@@ -10,18 +10,17 @@ import (
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestInvalidOrg(t *testing.T) {
-	m, err := New(context.Background(), zap.Must(zap.NewDevelopment()), fake.NewSimpleClientset(), Config{
+	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManager(context.Background(), fake.NewSimpleClientset()), Config{
 		Token:       os.Getenv("BUILDKITE_TOKEN"),
 		MaxInFlight: 1,
 		Org:         "foo",
-		Tags:        []string{"foo"},
 	})
-	require.NoError(t, err)
 	job := <-m.Scheduled()
 	require.ErrorContains(t, job.Err, "invalid organization")
 }
@@ -48,18 +47,17 @@ func TestSynchronize(t *testing.T) {
 			ObjectMeta: v1.ObjectMeta{
 				Name: "matching-tag",
 				Labels: map[string]string{
-					api.TagLabel:  TagToLabel(tag),
+					api.TagLabel:  api.TagToLabel(tag),
 					api.UUIDLabel: "2",
 				},
 			},
 		},
 	}
 	client := fake.NewSimpleClientset(jobs...)
-	m, err := New(ctx, zap.Must(zap.NewDevelopment()), client, Config{
-		Org:  "foo",
-		Tags: []string{tag},
+	m := New(ctx, zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManager(context.Background(), client, tag), Config{
+		Org: "foo",
 	})
+	jobList, err := m.k8s.JobLister.List(labels.Everything())
 	require.NoError(t, err)
-	require.Equal(t, 1, m.knownBuilds.Len())
-
+	require.Equal(t, 1, len(jobList))
 }

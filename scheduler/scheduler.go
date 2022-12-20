@@ -15,7 +15,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
 )
 
@@ -40,7 +39,7 @@ func (c Config) WithDefaults() Config {
 	return c
 }
 
-func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, client kubernetes.Interface, cfg Config) error {
+func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, client *api.BuildkiteJobManager, cfg Config) error {
 	worker := worker{
 		ctx:    ctx,
 		cfg:    cfg,
@@ -104,7 +103,7 @@ func (w *worker) k8sify(
 	kjob.Name = kjobName(job)
 	kjob.Labels = map[string]string{
 		api.UUIDLabel: job.Uuid,
-		api.TagLabel:  monitor.TagToLabel(job.Tag),
+		api.TagLabel:  api.TagToLabel(job.Tag),
 	}
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
 	var env []corev1.EnvVar
@@ -273,7 +272,7 @@ func (w *worker) k8sify(
 type worker struct {
 	ctx    context.Context
 	cfg    Config
-	client kubernetes.Interface
+	client *api.BuildkiteJobManager
 	logger *zap.Logger
 }
 

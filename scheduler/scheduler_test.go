@@ -57,7 +57,7 @@ func TestJobPluginConversion(t *testing.T) {
 	require.Equal(t, "some-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
 
 	tagLabel := result.Labels[api.TagLabel]
-	require.Equal(t, monitor.TagToLabel(input.Tag), tagLabel)
+	require.Equal(t, api.TagToLabel(input.Tag), tagLabel)
 }
 
 func TestJobWithNoKubernetesPlugin(t *testing.T) {
