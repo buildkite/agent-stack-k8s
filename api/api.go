@@ -3,6 +3,8 @@ package api
 import (
 	"strings"
 	"time"
+
+	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -29,13 +31,25 @@ func TagsToLabels(tags []string) []string {
 }
 
 type Config struct {
-	AgentTokenSecret string `mapstructure:"agent-token-secret"`
-	BuildkiteToken   string `mapstructure:"buildkite-token"`
+	AgentTokenSecret string `mapstructure:"agent-token-secret" validate:"required"`
+	BuildkiteToken   string `mapstructure:"buildkite-token" validate:"required"`
 	Debug            bool
-	Image            string
+	Image            string        `validate:"required"`
 	JobTTL           time.Duration `mapstructure:"job-ttl"`
-	MaxInFlight      int           `mapstructure:"max-in-flight"`
-	Namespace        string
-	Org              string
-	Tags             []string
+	MaxInFlight      int           `mapstructure:"max-in-flight" validate:"min=0"`
+	Namespace        string        `validate:"required"`
+	Org              string        `validate:"required"`
+	Tags             []string      `validate:"min=1"`
+}
+
+func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("agent-token-secret", c.AgentTokenSecret)
+	enc.AddBool("debug", c.Debug)
+	enc.AddString("image", c.Image)
+	enc.AddDuration("job-ttl", c.JobTTL)
+	enc.AddInt("max-in-flight", c.MaxInFlight)
+	enc.AddString("namespace", c.Namespace)
+	enc.AddString("org", c.Org)
+	enc.AddReflected("tags", c.Tags)
+	return nil
 }

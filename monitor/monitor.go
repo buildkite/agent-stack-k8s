@@ -64,7 +64,7 @@ func (m *Monitor) Scheduled() <-chan Job {
 }
 
 func (m *Monitor) start() {
-	m.logger.Info("started", zap.String("org", m.cfg.Org), zap.String("namespace", m.cfg.Namespace), zap.Int("max-in-flight", m.cfg.MaxInFlight))
+	m.logger.Info("started")
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {

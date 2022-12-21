@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/monitor"
 	"github.com/buildkite/agent-stack-k8s/scheduler"
+	"github.com/go-playground/validator/v10"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -52,6 +53,10 @@ func ParseConfig() (api.Config, error) {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return cfg, fmt.Errorf("failed to parse config: %w", err)
 	}
+	if err := validator.New().Struct(cfg); err != nil {
+		return cfg, fmt.Errorf("failed to validate config: %w", err)
+	}
+
 	return cfg, nil
 }
 
@@ -64,16 +69,13 @@ func Run(ctx context.Context, k8sClient kubernetes.Interface, cfg api.Config) {
 	}
 
 	log := zap.Must(config.Build())
-
-	if cfg.MaxInFlight < 0 {
-		log.Fatal("max-in-flight must be greater than or equal to zero")
-	}
+	log.Info("configuration loaded", zap.Object("config", cfg))
 
 	monitor, err := monitor.New(ctx, log.Named("monitor"), k8sClient, cfg)
 	if err != nil {
 		log.Fatal("failed to create monitor", zap.Error(err))
 	}
-	if err := scheduler.Run(ctx, zap.L().Named("scheduler"), monitor, k8sClient, cfg); err != nil {
+	if err := scheduler.Run(ctx, log.Named("scheduler"), monitor, k8sClient, cfg); err != nil {
 		log.Fatal("failed to run scheduler", zap.Error(err))
 	}
 }
