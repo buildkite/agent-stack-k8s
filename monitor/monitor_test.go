@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestInvalidOrg(t *testing.T) {
@@ -25,9 +25,8 @@ func TestInvalidOrg(t *testing.T) {
 	require.ErrorContains(t, job.Err, "invalid organization")
 }
 
-func TestSynchronize(t *testing.T) {
-	tag := "some-tag=yep"
-	ctx := context.Background()
+func TestScheduleBuild(t *testing.T) {
+	tag := "testtag=matching"
 	jobs := []runtime.Object{
 		&batchv1.Job{
 			ObjectMeta: v1.ObjectMeta{
@@ -38,7 +37,7 @@ func TestSynchronize(t *testing.T) {
 			ObjectMeta: v1.ObjectMeta{
 				Name: "different-tag",
 				Labels: map[string]string{
-					api.TagLabel:  "something-else",
+					api.TagLabel:  api.TagToLabel(tag),
 					api.UUIDLabel: "1",
 				},
 			},
@@ -54,10 +53,71 @@ func TestSynchronize(t *testing.T) {
 		},
 	}
 	client := fake.NewSimpleClientset(jobs...)
-	m := New(ctx, zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManagerOrDie(context.Background(), client, tag), Config{
-		Org: "foo",
+
+	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManagerOrDie(context.Background(), client, tag), Config{
+		Token:       "test_token",
+		MaxInFlight: 1,
+		Org:         "foo",
 	})
-	jobList, err := m.k8s.JobLister.List(labels.Everything())
-	require.NoError(t, err)
-	require.Equal(t, 1, len(jobList))
+	tests := []struct {
+		name           string
+		job            *api.JobJobTypeCommand
+		tag            string
+		shouldSchedule bool
+		shouldError    bool
+	}{{
+		name: "Matching UUID don't run",
+		job: &api.JobJobTypeCommand{
+			CommandJob: api.CommandJob{
+				Uuid: "2",
+			},
+		},
+		tag:            tag,
+		shouldSchedule: false,
+		shouldError:    false,
+	}, {
+		name: "New job should schedule",
+		job: &api.JobJobTypeCommand{
+			CommandJob: api.CommandJob{
+				Uuid: "6",
+			},
+		},
+		tag:            tag,
+		shouldSchedule: true,
+		shouldError:    false,
+	}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var errResult error
+			jobCreated := 0
+			functionReturned := 0
+
+			returned := make(chan error)
+			go func() {
+				err := m.scheduleBuild(test.job, test.tag)
+				returned <- err
+			}()
+			select {
+			case <-m.jobs:
+				jobCreated++
+			case errResult = <-returned:
+				functionReturned++
+			}
+			if test.shouldSchedule {
+				if jobCreated == 0 {
+					if errResult != nil {
+						t.Fatalf("Test should schedule job, but error was returned: %s", errResult)
+					} else {
+						t.Fatalf("Test should schedule job, but nil error was returned")
+					}
+				}
+			}
+			if test.shouldError {
+				if errResult == nil {
+					t.Fatalf("Test should error, but no error was returned")
+				}
+			}
+		})
+	}
+
 }

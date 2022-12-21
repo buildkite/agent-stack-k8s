@@ -95,17 +95,9 @@ func (m *Monitor) start() {
 
 				for _, job := range builds {
 					cmdJob := job.Node.(*api.JobJobTypeCommand)
-					if m.isJobInFlight(cmdJob.Uuid) {
-						m.logger.Debug("skipping already queued job", zap.String("uuid", cmdJob.Uuid))
-					} else if m.reachedMaxInFlight() {
-						m.logger.Debug("max in flight reached", zap.Int32("in-flight", m.cfg.MaxInFlight))
+					err := m.scheduleBuild(cmdJob, tag)
+					if errors.Is(err, &reachedMaxInFlight{}) {
 						break Out
-					} else {
-						m.jobs <- Job{
-							CommandJob: cmdJob.CommandJob,
-							Tag:        tag,
-						}
-						m.logger.Info("added job", zap.String("uuid", cmdJob.Uuid))
 					}
 				}
 			}
@@ -113,15 +105,33 @@ func (m *Monitor) start() {
 	}
 }
 
+func (m *Monitor) scheduleBuild(cmdJob *api.JobJobTypeCommand, tag string) error {
+	if m.isJobInFlight(cmdJob.Uuid) {
+		m.logger.Debug("skipping already queued job", zap.String("uuid", cmdJob.Uuid))
+	} else if m.reachedMaxInFlight() {
+		m.logger.Debug("max in flight reached", zap.Int32("in-flight", m.cfg.MaxInFlight))
+		return &reachedMaxInFlight{}
+	} else {
+		m.jobs <- Job{
+			CommandJob: cmdJob.CommandJob,
+			Tag:        tag,
+		}
+		m.logger.Info("added job", zap.String("uuid", cmdJob.Uuid))
+	}
+	return nil
+}
+
 func (m *Monitor) isJobInFlight(uuid string) bool {
 	req, err := labels.NewRequirement(api.UUIDLabel, selection.Equals, []string{uuid})
 	if err != nil {
+		m.logger.Error(fmt.Sprintf("Failed to build label selector for job in flight flight: %s", err))
 		return false
 	}
 	selector := labels.NewSelector()
-	selector.Add(*req)
+	selector = selector.Add(*req)
 	jobsResp, err := m.k8s.JobLister.List(selector)
 	if err != nil {
+		m.logger.Error(fmt.Sprintf("Failed to query for job in flight: %s", err))
 		return false
 	}
 	return len(jobsResp) > 0
@@ -154,4 +164,10 @@ func (m *Monitor) reachedMaxInFlight() bool {
 		}
 	}
 	return activeJobs >= m.cfg.MaxInFlight
+}
+
+type reachedMaxInFlight struct{}
+
+func (*reachedMaxInFlight) Error() string {
+	return "not scheduling job because max in flight"
 }
