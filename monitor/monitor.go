@@ -142,5 +142,16 @@ func (m *Monitor) reachedMaxInFlight() bool {
 	if m.cfg.MaxInFlight == 0 {
 		return false
 	}
-	return *m.k8s.ActiveJobs >= m.cfg.MaxInFlight
+	var activeJobs int32
+	jobList, err := m.k8s.JobLister.List(labels.Everything())
+	if err != nil {
+		m.logger.Error(fmt.Sprintf("Unable to list active jobs: %s", err))
+		return true
+	}
+	for _, job := range jobList {
+		if job.Status.Active != 0 {
+			activeJobs++
+		}
+	}
+	return activeJobs >= m.cfg.MaxInFlight
 }

@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync/atomic"
 
-	batchv1api "k8s.io/api/batch/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	batchv1 "k8s.io/client-go/listers/batch/v1"
@@ -22,8 +20,7 @@ import (
 type BuildkiteJobManager struct {
 	batchv1.JobLister
 	kubernetes.Interface
-	ActiveJobs *int32
-	Tags       []string
+	Tags []string
 }
 
 // a valid label must be an empty string or consist of alphanumeric characters,
@@ -42,19 +39,17 @@ func tagsToLabels(tags []string) []string {
 	return labels
 }
 
-func NewBuildkiteJobManager(ctx context.Context, clientset kubernetes.Interface, tags ...string) *BuildkiteJobManager {
-	var activeJobs int32
+func NewBuildkiteJobManagerOrDie(ctx context.Context, clientset kubernetes.Interface, tags ...string) *BuildkiteJobManager {
+	hasTag, err := labels.NewRequirement(TagLabel, selection.In, tagsToLabels(tags))
+	if err != nil {
+		log.Panic("Failed to build tag label selector for job manager", err)
+	}
+	hasUuid, err := labels.NewRequirement(UUIDLabel, selection.Exists, nil)
+	if err != nil {
+		log.Panic("Failed to build uuid label selector for job manager", err)
+	}
 	factory := informers.NewSharedInformerFactoryWithOptions(clientset, 0, informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
-		hasTag, err := labels.NewRequirement(TagLabel, selection.In, tagsToLabels(tags))
-		if err != nil {
-			return
-		}
-		hasUuid, err := labels.NewRequirement(UUIDLabel, selection.Exists, nil)
-		if err != nil {
-			return
-		}
 		opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUuid).String()
-		opt.FieldSelector = "status.successful!=1"
 	}))
 	informer := factory.Batch().V1().Jobs()
 	jobInformer := informer.Informer()
@@ -64,31 +59,13 @@ func NewBuildkiteJobManager(ctx context.Context, clientset kubernetes.Interface,
 	go factory.Start(ctx.Done())
 
 	if !cache.WaitForCacheSync(ctx.Done(), jobInformer.HasSynced) {
-		//TODO handle error here
 		log.Panic(fmt.Errorf("Failed to sync informer cache"))
 	}
 
-	jobInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(_ interface{}) { atomic.AddInt32(&activeJobs, 1) },
-		UpdateFunc: func(_ interface{}, obj interface{}) {
-			job := obj.(batchv1api.Job)
-			if job.Status.Active != 1 {
-				atomic.AddInt32(&activeJobs, -1)
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			job := obj.(batchv1api.Job)
-			if job.Status.Active == 1 {
-				atomic.AddInt32(&activeJobs, -1)
-			}
-		},
-	})
-
 	return &BuildkiteJobManager{
-		JobLister:  informer.Lister(),
-		Interface:  clientset,
-		Tags:       tags,
-		ActiveJobs: &activeJobs,
+		JobLister: informer.Lister(),
+		Interface: clientset,
+		Tags:      tags,
 	}
 }
 

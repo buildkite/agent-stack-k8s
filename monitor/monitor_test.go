@@ -16,7 +16,7 @@ import (
 )
 
 func TestInvalidOrg(t *testing.T) {
-	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManager(context.Background(), fake.NewSimpleClientset()), Config{
+	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManagerOrDie(context.Background(), fake.NewSimpleClientset()), Config{
 		Token:       os.Getenv("BUILDKITE_TOKEN"),
 		MaxInFlight: 1,
 		Org:         "foo",
@@ -54,7 +54,7 @@ func TestSynchronize(t *testing.T) {
 		},
 	}
 	client := fake.NewSimpleClientset(jobs...)
-	m := New(ctx, zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManager(context.Background(), client, tag), Config{
+	m := New(ctx, zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManagerOrDie(context.Background(), client, tag), Config{
 		Org: "foo",
 	})
 	jobList, err := m.k8s.JobLister.List(labels.Everything())
