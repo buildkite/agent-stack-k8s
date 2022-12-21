@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/monitor"
@@ -23,24 +22,7 @@ const (
 	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 )
 
-type Config struct {
-	Namespace        string
-	AgentTokenSecret string
-	JobTTL           time.Duration
-	AgentImage       string
-}
-
-func (c Config) WithDefaults() Config {
-	if c.AgentImage == "" {
-		c.AgentImage = api.DefaultAgentImage
-	}
-	if c.Namespace == "" {
-		c.Namespace = api.DefaultNamespace
-	}
-	return c
-}
-
-func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, client kubernetes.Interface, cfg Config) error {
+func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, client kubernetes.Interface, cfg api.Config) error {
 	worker := worker{
 		ctx:    ctx,
 		cfg:    cfg,
@@ -96,7 +78,7 @@ func (w *worker) k8sify(
 	} else {
 		kjob.Spec.Template.Spec.Containers = []corev1.Container{
 			{
-				Image:   w.cfg.AgentImage,
+				Image:   w.cfg.Image,
 				Command: []string{job.Command},
 			},
 		}
@@ -174,7 +156,7 @@ func (w *worker) k8sify(
 	if artifactPaths, found := envMap["BUILDKITE_ARTIFACT_PATHS"]; found && artifactPaths != "" {
 		artifactsContainer := corev1.Container{
 			Name:            "upload-artifacts",
-			Image:           w.cfg.AgentImage,
+			Image:           w.cfg.Image,
 			Args:            []string{"bootstrap"},
 			WorkingDir:      "/workspace",
 			VolumeMounts:    volumeMounts,
@@ -207,7 +189,7 @@ func (w *worker) k8sify(
 	agentContainer := corev1.Container{
 		Name:            "agent",
 		Args:            []string{"start"},
-		Image:           w.cfg.AgentImage,
+		Image:           w.cfg.Image,
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
 		ImagePullPolicy: corev1.PullAlways,
@@ -225,7 +207,7 @@ func (w *worker) k8sify(
 	// system client container(s)
 	checkoutContainer := corev1.Container{
 		Name:            "checkout",
-		Image:           w.cfg.AgentImage,
+		Image:           w.cfg.Image,
 		Args:            []string{"bootstrap"},
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
@@ -249,7 +231,7 @@ func (w *worker) k8sify(
 	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
 	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
 		Name:            "copy-agent",
-		Image:           w.cfg.AgentImage,
+		Image:           w.cfg.Image,
 		ImagePullPolicy: corev1.PullAlways,
 		Command:         []string{"cp"},
 		Args:            []string{"/usr/local/bin/buildkite-agent", "/workspace"},
@@ -272,7 +254,7 @@ func (w *worker) k8sify(
 
 type worker struct {
 	ctx    context.Context
-	cfg    Config
+	cfg    api.Config
 	client kubernetes.Interface
 	logger *zap.Logger
 }

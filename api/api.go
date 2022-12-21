@@ -1,6 +1,9 @@
 package api
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 const (
 	UUIDLabel         = "buildkite.com/job-uuid"
@@ -23,4 +26,16 @@ func TagsToLabels(tags []string) []string {
 		labels[i] = TagToLabel(tag)
 	}
 	return labels
+}
+
+type Config struct {
+	AgentTokenSecret string `mapstructure:"agent-token-secret"`
+	BuildkiteToken   string `mapstructure:"buildkite-token"`
+	Debug            bool
+	Image            string
+	JobTTL           time.Duration `mapstructure:"job-ttl"`
+	MaxInFlight      int           `mapstructure:"max-in-flight"`
+	Namespace        string
+	Org              string
+	Tags             []string
 }

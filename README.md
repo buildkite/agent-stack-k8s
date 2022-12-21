@@ -66,7 +66,7 @@ Usage of agent-stack-k8s:
       --tags strings                A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8") (default [queue=kubernetes])
 ```
 
-An example config file is available [here](examples/config.yaml).
+Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](examples) folder there is a sample [YAML config](examples/config.yaml) and a sample [dotenv config](examples/config.env).
 
 ## Architecture
 
