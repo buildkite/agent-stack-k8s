@@ -6,6 +6,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -41,7 +42,8 @@ func TestJobLister(t *testing.T) {
 		},
 	}
 	client := fake.NewSimpleClientset(jobs...)
-	lister := NewJobListerOrDie(context.Background(), client, tag)
+	lister, err := NewJobLister(context.Background(), zap.Must(zap.NewDevelopment()), client, []string{tag})
+	require.NoError(t, err)
 
 	jobList, err := lister.List(labels.Everything())
 	require.NoError(t, err)

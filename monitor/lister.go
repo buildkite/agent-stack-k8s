@@ -3,9 +3,9 @@ package monitor
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/buildkite/agent-stack-k8s/api"
+	"go.uber.org/zap"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	batchv1 "k8s.io/client-go/listers/batch/v1"
@@ -17,14 +17,14 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 )
 
-func NewJobListerOrDie(ctx context.Context, clientset kubernetes.Interface, tags ...string) batchv1.JobLister {
+func NewJobLister(ctx context.Context, log *zap.Logger, clientset kubernetes.Interface, tags []string) (batchv1.JobLister, error) {
 	hasTag, err := labels.NewRequirement(api.TagLabel, selection.In, api.TagsToLabels(tags))
 	if err != nil {
-		log.Panic("Failed to build tag label selector for job manager", err)
+		return nil, fmt.Errorf("failed to build tag label selector for job manager: %w", err)
 	}
 	hasUuid, err := labels.NewRequirement(api.UUIDLabel, selection.Exists, nil)
 	if err != nil {
-		log.Panic("Failed to build uuid label selector for job manager", err)
+		return nil, fmt.Errorf("failed to build uuid label selector for job manager: %w", err)
 	}
 	factory := informers.NewSharedInformerFactoryWithOptions(clientset, 0, informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
 		opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUuid).String()
@@ -37,10 +37,10 @@ func NewJobListerOrDie(ctx context.Context, clientset kubernetes.Interface, tags
 	go factory.Start(ctx.Done())
 
 	if !cache.WaitForCacheSync(ctx.Done(), jobInformer.HasSynced) {
-		log.Panic(fmt.Errorf("Failed to sync informer cache"))
+		return nil, fmt.Errorf("failed to sync informer cache")
 	}
 
-	return informer.Lister()
+	return informer.Lister(), nil
 }
 
 func MetaJobLabelKeyFunc(obj interface{}) (string, error) {

@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/client-go/kubernetes"
 	batchlisters "k8s.io/client-go/listers/batch/v1"
 )
 
@@ -40,17 +41,21 @@ type Job struct {
 	Tag string
 }
 
-func New(ctx context.Context, logger *zap.Logger, k8s batchlisters.JobLister, cfg Config) *Monitor {
+func New(ctx context.Context, logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
 	graphqlClient := api.NewClient(cfg.Token)
+	jobLister, err := NewJobLister(ctx, logger.Named("lister"), k8s, cfg.Tags)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Monitor{
 		ctx:    ctx,
 		gql:    graphqlClient,
-		k8s:    k8s,
+		k8s:    jobLister,
 		logger: logger,
 		cfg:    cfg,
 		jobs:   make(chan Job),
-	}
+	}, nil
 }
 
 func (m *Monitor) Scheduled() <-chan Job {
