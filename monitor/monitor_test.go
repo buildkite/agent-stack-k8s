@@ -16,7 +16,7 @@ import (
 )
 
 func TestInvalidOrg(t *testing.T) {
-	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManagerOrDie(context.Background(), fake.NewSimpleClientset()), Config{
+	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManagerOrDie(context.Background(), fake.NewSimpleClientset(), "foo"), Config{
 		Token:       os.Getenv("BUILDKITE_TOKEN"),
 		MaxInFlight: 1,
 		Org:         "foo",

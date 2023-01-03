@@ -110,17 +110,18 @@ func basicTest(t *testing.T, fixture, repo string) {
 
 	k8sClient, err := kubernetes.NewForConfig(clientConfig)
 	require.NoError(t, err)
-	monitor, err := monitor.New(ctx, logger.Named("monitor"), k8sClient, monitor.Config{
+	tags := []string{fmt.Sprintf("queue=%s", pipelineName)}
+	jobManager := api.NewBuildkiteJobManagerOrDie(ctx, k8sClient, tags...)
+	monitor := monitor.New(ctx, logger.Named("monitor"), jobManager, monitor.Config{
 		Token:       token,
 		MaxInFlight: 1,
 		Org:         org,
-		Tags:        []string{fmt.Sprintf("queue=%s", pipelineName)},
 		Namespace:   api.DefaultNamespace,
 	})
 	require.NoError(t, err)
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	go scheduler.Run(runCtx, logger.Named("scheduler"), monitor, k8sClient, scheduler.Config{
+	go scheduler.Run(runCtx, logger.Named("scheduler"), monitor, jobManager, scheduler.Config{
 		AgentTokenSecret: agentTokenSecret,
 		JobTTL:           time.Minute,
 	}.WithDefaults())
