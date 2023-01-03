@@ -152,6 +152,35 @@ You'll also need to create an SSH secret in your cluster to run [this test pipel
 kubectl create secret generic agent-stack-k8s --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
 ```
 
+### Deploying with Helm
+
+`just deploy` will build the container image using [ko](https://ko.build/) and
+deploy it with [Helm](https://helm.sh/).
+
+You'll need to have set `KO_DOCKER_REPO` to a repository you have push access
+to. For development something like the [kind local
+registry](https://kind.sigs.k8s.io/docs/user/local-registry/) or the [minikube
+registry](https://minikube.sigs.k8s.io/docs/handbook/registry) can be used. More
+information is available at [ko's
+website](https://ko.build/configuration/#local-publishing-options).
+
+You'll also need to provide required configuration values to Helm, which can be done by passing extra args to `just`:
+
+```bash
+just deploy --values config.yaml
+```
+
+With config.yaml being a file containing [required Helm values](values.yaml), such as:
+
+```yaml
+agentToken: "abcdef"
+graphqlToken: "12345"
+config:
+  org: "my-buildkite-org"
+```
+
+The `config` key contains configuration passed directly to the binary, and so supports all the keys documented in [the example](examples/config.yaml).
+
 ## Open questions
 
 - How to deal with stuck jobs? Timeouts?

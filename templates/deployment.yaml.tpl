@@ -1,28 +1,31 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: buildkite-controller
-  namespace: buildkite
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
 spec:
   selector:
     matchLabels:
-      app: buildkite-controller
+      app: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        app: buildkite-controller
+        app: {{ .Release.Name }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml.tpl") . | sha256sum }}
+        checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml.tpl") . | sha256sum }}
     spec:
-      serviceAccountName: buildkite-controller
+      serviceAccountName: {{ .Release.Name }}
       containers:
       - name: controller
         terminationMessagePolicy: FallbackToLogsOnError
-        image: ko://github.com/buildkite/agent-stack-k8s
+        image: {{ .Values.image }}
         env:
         - name: CONFIG
           value: /etc/config.yaml
         envFrom:
           - secretRef:
-              name: buildkite-secrets
+              name: {{ .Release.Name }}-secrets
         volumeMounts:
           - name: config
             mountPath: /etc/config.yaml
@@ -44,4 +47,4 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: buildkite-config
+            name: {{ .Release.Name }}-config

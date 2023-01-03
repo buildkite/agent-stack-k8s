@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$id": "http://example.com/example.json",
+  "type": "object",
+  "default": {},
+  "title": "Root Schema",
+  "required": ["agentToken", "graphqlToken", "namespace", "image", "config"],
+  "properties": {
+    "agentToken": {
+      "type": "string",
+      "default": "",
+      "minLength": 1,
+      "title": "The agentToken Schema",
+      "examples": [""]
+    },
+    "graphqlToken": {
+      "type": "string",
+      "default": "",
+      "minLength": 1,
+      "title": "The graphqlToken Schema",
+      "examples": [""]
+    },
+    "namespace": {
+      "type": "string",
+      "default": "",
+      "title": "The namespace Schema",
+      "examples": ["buildkite"]
+    },
+    "image": {
+      "type": "string",
+      "default": "",
+      "title": "The image Schema",
+      "examples": ["ghcr.io/buildkite/agent-stack-k8s:latest"]
+    },
+    "config": {
+      "type": "object",
+      "default": {},
+      "title": "The config Schema",
+      "required": ["org"],
+      "properties": {
+        "image": {
+          "type": "string",
+          "default": "",
+          "title": "The image Schema",
+          "examples": [""]
+        },
+        "debug": {
+          "type": "boolean",
+          "default": false,
+          "title": "The debug Schema",
+          "examples": [false]
+        },
+        "job-ttl": {
+          "type": "string",
+          "default": "",
+          "title": "The job-ttl Schema",
+          "examples": [""]
+        },
+        "max-in-flight": {
+          "type": "integer",
+          "default": 0,
+          "title": "The max-in-flight Schema",
+          "examples": [100]
+        },
+        "org": {
+          "type": "string",
+          "default": "",
+          "minLength": 1,
+          "title": "The org Schema",
+          "examples": [""]
+        },
+        "tags": {
+          "type": "array",
+          "default": [],
+          "title": "The tags Schema",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["queue=kubernetes"]]
+        }
+      },
+      "examples": [
+        {
+          "image": "",
+          "debug": false,
+          "job-ttl": "5m",
+          "max-in-flight": 100,
+          "org": "",
+          "tags": []
+        }
+      ]
+    }
+  },
+  "examples": [
+    {
+      "agentToken": "",
+      "graphqlToken": "",
+      "namespace": "buildkite",
+      "image": "ghcr.io/buildkite/agent-stack-k8s:latest",
+      "config": {
+        "agentImage": "",
+        "debug": false,
+        "jobTTL": "",
+        "maxInFlight": 100,
+        "org": "",
+        "tags": []
+      }
+    }
+  ]
+}
