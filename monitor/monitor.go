@@ -30,7 +30,7 @@ type Monitor struct {
 type Config struct {
 	Namespace   string
 	Token       string
-	MaxInFlight int32
+	MaxInFlight int
 	Org         string
 }
 
@@ -59,7 +59,7 @@ func (m *Monitor) Scheduled() <-chan Job {
 }
 
 func (m *Monitor) start() {
-	m.logger.Info("started", zap.String("org", m.cfg.Org), zap.String("namespace", m.cfg.Namespace), zap.Int32("max-in-flight", m.cfg.MaxInFlight))
+	m.logger.Info("started", zap.String("org", m.cfg.Org), zap.String("namespace", m.cfg.Namespace), zap.Int("max-in-flight", m.cfg.MaxInFlight))
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -68,7 +68,7 @@ func (m *Monitor) start() {
 			return
 		case <-ticker.C:
 			if m.reachedMaxInFlight() {
-				m.logger.Info("max in flight reached", zap.Int32("in-flight", m.cfg.MaxInFlight))
+				m.logger.Info("max in flight reached", zap.Int("in-flight", m.cfg.MaxInFlight))
 				continue
 			}
 		Out:
@@ -109,7 +109,7 @@ func (m *Monitor) scheduleBuild(cmdJob *api.JobJobTypeCommand, tag string) error
 	if m.isJobInFlight(cmdJob.Uuid) {
 		m.logger.Debug("skipping already queued job", zap.String("uuid", cmdJob.Uuid))
 	} else if m.reachedMaxInFlight() {
-		m.logger.Debug("max in flight reached", zap.Int32("in-flight", m.cfg.MaxInFlight))
+		m.logger.Debug("max in flight reached", zap.Int("in-flight", m.cfg.MaxInFlight))
 		return &reachedMaxInFlight{}
 	} else {
 		m.jobs <- Job{
@@ -152,7 +152,7 @@ func (m *Monitor) reachedMaxInFlight() bool {
 	if m.cfg.MaxInFlight == 0 {
 		return false
 	}
-	var activeJobs int32
+	var activeJobs int
 	jobList, err := m.k8s.JobLister.List(labels.Everything())
 	if err != nil {
 		m.logger.Error(fmt.Sprintf("Unable to list active jobs: %s", err))
