@@ -43,7 +43,7 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to create clienset", zap.Error(err))
 	}
-	jobLister := api.NewJobListerOrDie(ctx, k8sClient, *tags...)
+	jobLister := monitor.NewJobListerOrDie(ctx, k8sClient, *tags...)
 
 	monitor := monitor.New(ctx, log.Named("monitor"), jobLister, monitor.Config{
 		Namespace:   *ns,

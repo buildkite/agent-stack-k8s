@@ -111,7 +111,7 @@ func basicTest(t *testing.T, fixture, repo string) {
 	k8sClient, err := kubernetes.NewForConfig(clientConfig)
 	require.NoError(t, err)
 	tags := []string{fmt.Sprintf("queue=%s", pipelineName)}
-	jobLister := api.NewJobListerOrDie(ctx, k8sClient, tags...)
+	jobLister := monitor.NewJobListerOrDie(ctx, k8sClient, tags...)
 	monitor := monitor.New(ctx, logger.Named("monitor"), jobLister, monitor.Config{
 		Token:       token,
 		MaxInFlight: 1,

@@ -17,7 +17,7 @@ import (
 
 func TestInvalidOrg(t *testing.T) {
 	tags := []string{"foo=bar"}
-	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewJobListerOrDie(context.Background(), fake.NewSimpleClientset(), tags...), Config{
+	m := New(context.Background(), zap.Must(zap.NewDevelopment()), NewJobListerOrDie(context.Background(), fake.NewSimpleClientset(), tags...), Config{
 		Token:       os.Getenv("BUILDKITE_TOKEN"),
 		MaxInFlight: 1,
 		Org:         "foo",
@@ -56,7 +56,7 @@ func TestScheduleBuild(t *testing.T) {
 	}
 	client := fake.NewSimpleClientset(jobs...)
 
-	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewJobListerOrDie(context.Background(), client, tag), Config{
+	m := New(context.Background(), zap.Must(zap.NewDevelopment()), NewJobListerOrDie(context.Background(), client, tag), Config{
 		Token:       "test_token",
 		MaxInFlight: 1,
 		Org:         "foo",

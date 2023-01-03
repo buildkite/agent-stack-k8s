@@ -1,11 +1,11 @@
-package api
+package monitor
 
 import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
+	"github.com/buildkite/agent-stack-k8s/api"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	batchv1 "k8s.io/client-go/listers/batch/v1"
@@ -17,28 +17,12 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 )
 
-// a valid label must be an empty string or consist of alphanumeric characters,
-// '-', '_' or '.', and must start and end with an alphanumeric character (e.g.
-// 'MyValue',  or 'my_value',  or '12345', regex used for validation is
-// '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')
-func TagToLabel(tag string) string {
-	return strings.ReplaceAll(tag, "=", "_")
-}
-
-func tagsToLabels(tags []string) []string {
-	labels := make([]string, len(tags))
-	for i, tag := range tags {
-		labels[i] = TagToLabel(tag)
-	}
-	return labels
-}
-
 func NewJobListerOrDie(ctx context.Context, clientset kubernetes.Interface, tags ...string) batchv1.JobLister {
-	hasTag, err := labels.NewRequirement(TagLabel, selection.In, tagsToLabels(tags))
+	hasTag, err := labels.NewRequirement(api.TagLabel, selection.In, api.TagsToLabels(tags))
 	if err != nil {
 		log.Panic("Failed to build tag label selector for job manager", err)
 	}
-	hasUuid, err := labels.NewRequirement(UUIDLabel, selection.Exists, nil)
+	hasUuid, err := labels.NewRequirement(api.UUIDLabel, selection.Exists, nil)
 	if err != nil {
 		log.Panic("Failed to build uuid label selector for job manager", err)
 	}
@@ -68,7 +52,7 @@ func MetaJobLabelKeyFunc(obj interface{}) (string, error) {
 		return "", fmt.Errorf("object has no meta: %v", err)
 	}
 	labels := meta.GetLabels()
-	if v, ok := labels[UUIDLabel]; ok {
+	if v, ok := labels[api.UUIDLabel]; ok {
 		return v, nil
 	}
 
