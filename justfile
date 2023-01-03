@@ -35,7 +35,7 @@ deploy *FLAGS:
   #!/usr/bin/env bash
   set -euxo pipefail
 
-  image=$(go run github.com/google/ko@latest publish -P)
+  image=$(ko publish -P)
   helm upgrade agent-stack-k8s . \
     --namespace buildkite \
     --install \
