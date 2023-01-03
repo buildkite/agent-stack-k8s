@@ -40,9 +40,9 @@ func TestBuildkiteJobManager(t *testing.T) {
 		},
 	}
 	client := fake.NewSimpleClientset(jobs...)
-	jobManager := NewBuildkiteJobManagerOrDie(context.Background(), client, tag)
+	lister := NewJobListerOrDie(context.Background(), client, tag)
 
-	jobList, err := jobManager.JobLister.List(labels.Everything())
+	jobList, err := lister.List(labels.Everything())
 	require.NoError(t, err)
 	require.Equal(t, 1, len(jobList))
 }

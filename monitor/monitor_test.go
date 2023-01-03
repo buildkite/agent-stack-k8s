@@ -16,10 +16,12 @@ import (
 )
 
 func TestInvalidOrg(t *testing.T) {
-	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManagerOrDie(context.Background(), fake.NewSimpleClientset(), "foo"), Config{
+	tags := []string{"foo=bar"}
+	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewJobListerOrDie(context.Background(), fake.NewSimpleClientset(), tags...), Config{
 		Token:       os.Getenv("BUILDKITE_TOKEN"),
 		MaxInFlight: 1,
 		Org:         "foo",
+		Tags:        tags,
 	})
 	job := <-m.Scheduled()
 	require.ErrorContains(t, job.Err, "invalid organization")
@@ -54,7 +56,7 @@ func TestScheduleBuild(t *testing.T) {
 	}
 	client := fake.NewSimpleClientset(jobs...)
 
-	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewBuildkiteJobManagerOrDie(context.Background(), client, tag), Config{
+	m := New(context.Background(), zap.Must(zap.NewDevelopment()), api.NewJobListerOrDie(context.Background(), client, tag), Config{
 		Token:       "test_token",
 		MaxInFlight: 1,
 		Org:         "foo",

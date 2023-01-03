@@ -15,6 +15,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
 )
 
@@ -39,7 +40,7 @@ func (c Config) WithDefaults() Config {
 	return c
 }
 
-func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, client *api.BuildkiteJobManager, cfg Config) error {
+func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, client kubernetes.Interface, cfg Config) error {
 	worker := worker{
 		ctx:    ctx,
 		cfg:    cfg,
@@ -272,7 +273,7 @@ func (w *worker) k8sify(
 type worker struct {
 	ctx    context.Context
 	cfg    Config
-	client *api.BuildkiteJobManager
+	client kubernetes.Interface
 	logger *zap.Logger
 }
 

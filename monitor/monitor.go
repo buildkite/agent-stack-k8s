@@ -11,16 +11,15 @@ import (
 	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/api"
 	"go.uber.org/zap"
-	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	batchlisters "k8s.io/client-go/listers/batch/v1"
 )
 
 type Monitor struct {
 	ctx    context.Context
 	gql    graphql.Client
-	k8s    *api.BuildkiteJobManager
+	k8s    batchlisters.JobLister
 	logger *zap.Logger
 	cfg    Config
 	once   sync.Once
@@ -32,6 +31,7 @@ type Config struct {
 	Token       string
 	MaxInFlight int
 	Org         string
+	Tags        []string
 }
 
 type Job struct {
@@ -40,13 +40,13 @@ type Job struct {
 	Tag string
 }
 
-func New(ctx context.Context, logger *zap.Logger, jobManager *api.BuildkiteJobManager, cfg Config) *Monitor {
+func New(ctx context.Context, logger *zap.Logger, k8s batchlisters.JobLister, cfg Config) *Monitor {
 	graphqlClient := api.NewClient(cfg.Token)
 
 	return &Monitor{
 		ctx:    ctx,
 		gql:    graphqlClient,
-		k8s:    jobManager,
+		k8s:    k8s,
 		logger: logger,
 		cfg:    cfg,
 		jobs:   make(chan Job),
@@ -72,7 +72,7 @@ func (m *Monitor) start() {
 				continue
 			}
 		Out:
-			for _, tag := range m.k8s.Tags {
+			for _, tag := range m.cfg.Tags {
 				buildsResponse, err := api.GetScheduledBuilds(m.ctx, m.gql, m.cfg.Org, []string{tag})
 				if err != nil {
 					if errors.Is(err, context.Canceled) {
@@ -129,7 +129,7 @@ func (m *Monitor) isJobInFlight(uuid string) bool {
 	}
 	selector := labels.NewSelector()
 	selector = selector.Add(*req)
-	jobsResp, err := m.k8s.JobLister.List(selector)
+	jobsResp, err := m.k8s.List(selector)
 	if err != nil {
 		m.logger.Error(fmt.Sprintf("Failed to query for job in flight: %s", err))
 		return false
@@ -137,23 +137,12 @@ func (m *Monitor) isJobInFlight(uuid string) bool {
 	return len(jobsResp) > 0
 }
 
-func isComplete(job *batchv1.Job) bool {
-	for _, condition := range job.Status.Conditions {
-		if condition.Status == corev1.ConditionTrue {
-			if condition.Type == batchv1.JobComplete || condition.Type == batchv1.JobFailed {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func (m *Monitor) reachedMaxInFlight() bool {
 	if m.cfg.MaxInFlight == 0 {
 		return false
 	}
 	var activeJobs int
-	jobList, err := m.k8s.JobLister.List(labels.Everything())
+	jobList, err := m.k8s.List(labels.Everything())
 	if err != nil {
 		m.logger.Error(fmt.Sprintf("Unable to list active jobs: %s", err))
 		return true

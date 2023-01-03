@@ -43,18 +43,19 @@ func main() {
 	if err != nil {
 		log.Fatal("failed to create clienset", zap.Error(err))
 	}
-	jobManager := api.NewBuildkiteJobManagerOrDie(ctx, k8sClient, *tags...)
+	jobLister := api.NewJobListerOrDie(ctx, k8sClient, *tags...)
 
-	monitor := monitor.New(ctx, log.Named("monitor"), jobManager, monitor.Config{
+	monitor := monitor.New(ctx, log.Named("monitor"), jobLister, monitor.Config{
 		Namespace:   *ns,
 		Org:         org,
 		Token:       token,
 		MaxInFlight: *maxInFlight,
+		Tags:        *tags,
 	})
 	if err != nil {
 		zap.L().Fatal("failed to create monitor", zap.Error(err))
 	}
-	if err := scheduler.Run(ctx, zap.L().Named("scheduler"), monitor, jobManager, scheduler.Config{
+	if err := scheduler.Run(ctx, zap.L().Named("scheduler"), monitor, k8sClient, scheduler.Config{
 		Namespace:        *ns,
 		AgentTokenSecret: *agentTokenSecret,
 		JobTTL:           *jobTTL,

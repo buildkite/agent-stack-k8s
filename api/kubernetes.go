@@ -17,12 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 )
 
-type BuildkiteJobManager struct {
-	batchv1.JobLister
-	kubernetes.Interface
-	Tags []string
-}
-
 // a valid label must be an empty string or consist of alphanumeric characters,
 // '-', '_' or '.', and must start and end with an alphanumeric character (e.g.
 // 'MyValue',  or 'my_value',  or '12345', regex used for validation is
@@ -39,7 +33,7 @@ func tagsToLabels(tags []string) []string {
 	return labels
 }
 
-func NewBuildkiteJobManagerOrDie(ctx context.Context, clientset kubernetes.Interface, tags ...string) *BuildkiteJobManager {
+func NewJobListerOrDie(ctx context.Context, clientset kubernetes.Interface, tags ...string) batchv1.JobLister {
 	hasTag, err := labels.NewRequirement(TagLabel, selection.In, tagsToLabels(tags))
 	if err != nil {
 		log.Panic("Failed to build tag label selector for job manager", err)
@@ -62,11 +56,7 @@ func NewBuildkiteJobManagerOrDie(ctx context.Context, clientset kubernetes.Inter
 		log.Panic(fmt.Errorf("Failed to sync informer cache"))
 	}
 
-	return &BuildkiteJobManager{
-		JobLister: informer.Lister(),
-		Interface: clientset,
-		Tags:      tags,
-	}
+	return informer.Lister()
 }
 
 func MetaJobLabelKeyFunc(obj interface{}) (string, error) {
