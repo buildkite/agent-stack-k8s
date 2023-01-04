@@ -68,7 +68,7 @@ func TestWalkingSkeleton(t *testing.T) {
 
 func TestSSHRepoClone(t *testing.T) {
 	k8s := newk8sClient(t)
-	_, err := k8s.CoreV1().Secrets("default").Get(context.Background(), "agent-stack-k8s", v1.GetOptions{})
+	_, err := k8s.CoreV1().Secrets(cfg.Namespace).Get(context.Background(), "agent-stack-k8s", v1.GetOptions{})
 	require.NoError(t, err, "agent-stack-k8s secret must exist")
 	basicTest(t, "secretref.yaml", repoSSH)
 }

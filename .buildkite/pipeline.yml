@@ -7,9 +7,20 @@ steps:
       - kubernetes:
           podSpec:
             serviceAccountName: integration-tests
+            volumes:
+            - name: agent-stack-k8s-config
+              configMap:
+                name: agent-stack-k8s-config
             containers:
               - image: golang:latest
                 command: [.buildkite/steps/tests.sh]
+                env:
+                - name: CONFIG
+                  value: /etc/config.yaml
                 envFrom:
                   - secretRef:
-                      name: buildkite
+                      name: agent-stack-k8s-secrets
+                volumeMounts:
+                - mountPath: /etc/config.yaml
+                  name: agent-stack-k8s-config
+                  subPath: config.yaml
