@@ -1,10 +1,7 @@
 package main
 
 import (
-	"context"
 	"log"
-	"os"
-	"os/signal"
 	"syscall"
 	"time"
 
@@ -16,7 +13,9 @@ import (
 	flag "github.com/spf13/pflag"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+
+	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
 var debug *bool = flag.Bool("debug", false, "debug logs")
@@ -37,32 +36,19 @@ func main() {
 	initLogger(*debug)
 	log := zap.L()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		cancel()
-	}()
+	ctx := signals.SetupSignalHandler()
 
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, nil)
-	clientConfig, err := kubeConfig.ClientConfig()
-	if err != nil {
-		log.Fatal("failed to create client config", zap.Error(err))
-	}
-
+	clientConfig := restconfig.GetConfigOrDie()
 	k8sClient, err := kubernetes.NewForConfig(clientConfig)
 	if err != nil {
 		log.Fatal("failed to create clienset", zap.Error(err))
 	}
-
 	monitor, err := monitor.New(ctx, log.Named("monitor"), k8sClient, monitor.Config{
 		Namespace:   *ns,
 		Org:         org,
-		Tags:        *tags,
 		Token:       token,
 		MaxInFlight: *maxInFlight,
+		Tags:        *tags,
 	})
 	if err != nil {
 		zap.L().Fatal("failed to create monitor", zap.Error(err))

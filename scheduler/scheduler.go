@@ -104,7 +104,7 @@ func (w *worker) k8sify(
 	kjob.Name = kjobName(job)
 	kjob.Labels = map[string]string{
 		api.UUIDLabel: job.Uuid,
-		api.TagLabel:  monitor.TagToLabel(job.Tag),
+		api.TagLabel:  api.TagToLabel(job.Tag),
 	}
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
 	var env []corev1.EnvVar

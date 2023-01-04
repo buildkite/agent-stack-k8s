@@ -5,34 +5,26 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/api"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"go.uber.org/zap"
-	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/cache"
+	batchlisters "k8s.io/client-go/listers/batch/v1"
 )
 
 type Monitor struct {
-	ctx         context.Context
-	gql         graphql.Client
-	k8s         kubernetes.Interface
-	logger      *zap.Logger
-	knownBuilds *lru.Cache[string, struct{}]
-	cfg         Config
-	jobs        chan Job
-	once        sync.Once
+	ctx    context.Context
+	gql    graphql.Client
+	k8s    batchlisters.JobLister
+	logger *zap.Logger
+	cfg    Config
+	once   sync.Once
+	jobs   chan Job
 }
 
 type Config struct {
@@ -49,33 +41,21 @@ type Job struct {
 	Tag string
 }
 
-func New(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface, cfg Config) (*Monitor, error) {
+func New(ctx context.Context, logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
 	graphqlClient := api.NewClient(cfg.Token)
-	length := cfg.MaxInFlight * 10
-	if cfg.MaxInFlight == 0 {
-		// there are other protections for
-		// ensuring no duplicate jobs
-		// this length just is an early-stage protection against duplicate
-		// jobs in flight
-		length = 1000
-	}
-	cache, err := lru.New[string, struct{}](length)
+	jobLister, err := NewJobLister(ctx, logger.Named("lister"), k8s, cfg.Tags)
 	if err != nil {
 		return nil, err
 	}
-	m := &Monitor{
-		ctx:         ctx,
-		gql:         graphqlClient,
-		k8s:         k8sClient,
-		logger:      logger,
-		knownBuilds: cache,
-		cfg:         cfg,
-		jobs:        make(chan Job),
-	}
-	if err := m.synchronize(ctx); err != nil {
-		return nil, err
-	}
-	return m, nil
+
+	return &Monitor{
+		ctx:    ctx,
+		gql:    graphqlClient,
+		k8s:    jobLister,
+		logger: logger,
+		cfg:    cfg,
+		jobs:   make(chan Job),
+	}, nil
 }
 
 func (m *Monitor) Scheduled() <-chan Job {
@@ -84,7 +64,7 @@ func (m *Monitor) Scheduled() <-chan Job {
 }
 
 func (m *Monitor) start() {
-	m.logger.Info("started", zap.Strings("tags", m.cfg.Tags), zap.String("org", m.cfg.Org), zap.String("namespace", m.cfg.Namespace), zap.Int("max-in-flight", m.cfg.MaxInFlight))
+	m.logger.Info("started", zap.String("org", m.cfg.Org), zap.String("namespace", m.cfg.Namespace), zap.Int("max-in-flight", m.cfg.MaxInFlight))
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -120,18 +100,9 @@ func (m *Monitor) start() {
 
 				for _, job := range builds {
 					cmdJob := job.Node.(*api.JobJobTypeCommand)
-					if m.knownBuilds.Contains(cmdJob.Uuid) {
-						m.logger.Debug("skipping already queued job", zap.String("uuid", cmdJob.Uuid))
-					} else if m.reachedMaxInFlight() {
-						m.logger.Debug("max in flight reached", zap.Int("in-flight", m.cfg.MaxInFlight))
+					err := m.scheduleBuild(cmdJob, tag)
+					if errors.Is(err, &reachedMaxInFlight{}) {
 						break Out
-					} else {
-						m.jobs <- Job{
-							CommandJob: cmdJob.CommandJob,
-							Tag:        tag,
-						}
-						m.logger.Info("added job", zap.String("uuid", cmdJob.Uuid))
-						m.knownBuilds.Add(cmdJob.Uuid, struct{}{})
 					}
 				}
 			}
@@ -139,100 +110,58 @@ func (m *Monitor) start() {
 	}
 }
 
-func (m *Monitor) synchronize(ctx context.Context) error {
-	hasTag, err := labels.NewRequirement(api.TagLabel, selection.In, tagsToLabels(m.cfg.Tags))
-	if err != nil {
-		return fmt.Errorf("failed to create tag label requirement: %w", err)
-	}
-	hasUuid, err := labels.NewRequirement(api.UUIDLabel, selection.Exists, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create uuid label requirement: %w", err)
-	}
-	selector := labels.NewSelector().Add(*hasTag, *hasUuid).String()
-	lw := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			options.LabelSelector = selector
-			return m.k8s.BatchV1().Jobs(m.cfg.Namespace).List(ctx, options)
-		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			options.LabelSelector = selector
-			return m.k8s.BatchV1().Jobs(m.cfg.Namespace).Watch(ctx, options)
-		},
-	}
-	removeIfCompleted := func(obj interface{}) {
-		job := obj.(*batchv1.Job)
-		if isComplete(job) {
-			uuid := job.Labels[api.UUIDLabel]
-			m.logger.Info("job finished", zap.String("uuid", uuid))
-			m.knownBuilds.Remove(job.Labels[api.UUIDLabel])
+func (m *Monitor) scheduleBuild(cmdJob *api.JobJobTypeCommand, tag string) error {
+	if m.isJobInFlight(cmdJob.Uuid) {
+		m.logger.Debug("skipping already queued job", zap.String("uuid", cmdJob.Uuid))
+	} else if m.reachedMaxInFlight() {
+		m.logger.Debug("max in flight reached", zap.Int("in-flight", m.cfg.MaxInFlight))
+		return &reachedMaxInFlight{}
+	} else {
+		m.jobs <- Job{
+			CommandJob: cmdJob.CommandJob,
+			Tag:        tag,
 		}
+		m.logger.Info("added job", zap.String("uuid", cmdJob.Uuid))
 	}
-
-	_, controller := cache.NewInformer(lw, &batchv1.Job{}, 0, cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			job := obj.(*batchv1.Job)
-			if !isComplete(job) {
-				uuid := job.Labels[api.UUIDLabel]
-				found, _ := m.knownBuilds.ContainsOrAdd(job.Labels[api.UUIDLabel], struct{}{})
-				if !found {
-					m.logger.Debug("adding previously scheduled job", zap.String("uuid", uuid))
-				}
-			}
-		},
-		UpdateFunc: func(_, newObj interface{}) {
-			removeIfCompleted(newObj)
-		},
-		DeleteFunc: removeIfCompleted,
-	})
-
-	go controller.Run(ctx.Done())
-	tick := time.NewTicker(time.Second)
-	defer tick.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-tick.C:
-			if controller.HasSynced() {
-				m.logger.Info("controller synchronized")
-				return nil
-			}
-			m.logger.Info("controller synchronizing")
-		}
-	}
+	return nil
 }
 
-func isComplete(job *batchv1.Job) bool {
-	for _, condition := range job.Status.Conditions {
-		if condition.Status == corev1.ConditionTrue {
-			if condition.Type == batchv1.JobComplete || condition.Type == batchv1.JobFailed {
-				return true
-			}
-		}
+func (m *Monitor) isJobInFlight(uuid string) bool {
+	req, err := labels.NewRequirement(api.UUIDLabel, selection.Equals, []string{uuid})
+	if err != nil {
+		m.logger.Error(fmt.Sprintf("Failed to build label selector for job in flight flight: %s", err))
+		return false
 	}
-	return false
+	selector := labels.NewSelector()
+	selector = selector.Add(*req)
+	jobsResp, err := m.k8s.List(selector)
+	if err != nil {
+		m.logger.Error(fmt.Sprintf("Failed to query for job in flight: %s", err))
+		return false
+	}
+	return len(jobsResp) > 0
 }
 
 func (m *Monitor) reachedMaxInFlight() bool {
 	if m.cfg.MaxInFlight == 0 {
 		return false
 	}
-	inFlight := m.knownBuilds.Len()
-	return inFlight >= m.cfg.MaxInFlight
-}
-
-// a valid label must be an empty string or consist of alphanumeric characters,
-// '-', '_' or '.', and must start and end with an alphanumeric character (e.g.
-// 'MyValue',  or 'my_value',  or '12345', regex used for validation is
-// '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')
-func TagToLabel(tag string) string {
-	return strings.ReplaceAll(tag, "=", "_")
-}
-
-func tagsToLabels(tags []string) []string {
-	labels := make([]string, len(tags))
-	for i, tag := range tags {
-		labels[i] = TagToLabel(tag)
+	var activeJobs int
+	jobList, err := m.k8s.List(labels.Everything())
+	if err != nil {
+		m.logger.Error(fmt.Sprintf("Unable to list active jobs: %s", err))
+		return true
 	}
-	return labels
+	for _, job := range jobList {
+		if job.Status.Active != 0 {
+			activeJobs++
+		}
+	}
+	return activeJobs >= m.cfg.MaxInFlight
+}
+
+type reachedMaxInFlight struct{}
+
+func (*reachedMaxInFlight) Error() string {
+	return "not scheduling job because max in flight"
 }
