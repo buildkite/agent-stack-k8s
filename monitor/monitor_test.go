@@ -16,12 +16,11 @@ import (
 )
 
 func TestInvalidOrg(t *testing.T) {
-	tags := []string{"foo=bar"}
-	m, err := New(context.Background(), zap.Must(zap.NewDevelopment()), fake.NewSimpleClientset(), Config{
-		Token:       os.Getenv("BUILDKITE_TOKEN"),
-		MaxInFlight: 1,
-		Org:         "foo",
-		Tags:        tags,
+	m, err := New(context.Background(), zap.Must(zap.NewDevelopment()), fake.NewSimpleClientset(), api.Config{
+		BuildkiteToken: os.Getenv("BUILDKITE_TOKEN"),
+		MaxInFlight:    1,
+		Org:            "foo",
+		Tags:           []string{"foo=bar"},
 	})
 	require.NoError(t, err)
 	job := <-m.Scheduled()
@@ -57,8 +56,7 @@ func TestScheduleBuild(t *testing.T) {
 	}
 	client := fake.NewSimpleClientset(jobs...)
 
-	m, err := New(context.Background(), zap.Must(zap.NewDevelopment()), client, Config{
-		Token:       "test_token",
+	m, err := New(context.Background(), zap.Must(zap.NewDevelopment()), client, api.Config{
 		MaxInFlight: 1,
 		Org:         "foo",
 		Tags:        []string{tag},

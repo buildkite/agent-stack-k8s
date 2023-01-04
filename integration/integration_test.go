@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"context"
 	"embed"
-	"flag"
 	"fmt"
+	"log"
+	"os"
 	"strconv"
-	"syscall"
+	"strings"
 	"testing"
 	"text/template"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/api"
-	"github.com/buildkite/agent-stack-k8s/monitor"
-	"github.com/buildkite/agent-stack-k8s/scheduler"
+	"github.com/buildkite/agent-stack-k8s/cmd/controller"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
+	flag "github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -24,18 +25,42 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-var (
-	preservePipelines *bool = flag.Bool("preserve-pipelines", false, "preserve pipelines created by tests")
-)
-
-//go:embed fixtures/*
-var fixtures embed.FS
-
 const (
 	repoHTTP = "https://github.com/buildkite/agent-stack-k8s"
 	repoSSH  = "git@github.com:buildkite/agent-stack-k8s"
 	branch   = "v2"
 )
+
+var (
+	preservePipelines *bool = flag.Bool("preserve-pipelines", false, "preserve pipelines created by tests")
+	cfg               api.Config
+
+	//go:embed fixtures/*
+	fixtures embed.FS
+)
+
+// hacks to make --config work
+func TestMain(m *testing.M) {
+	if err := os.Chdir(".."); err != nil {
+		log.Fatal(err)
+	}
+	var err error
+	cfg, err = controller.ParseConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := os.Chdir("integration"); err != nil {
+		log.Fatal(err)
+	}
+	for i, v := range os.Args {
+		if strings.Contains(v, "test") {
+			os.Args[i] = v
+		} else {
+			os.Args[i] = ""
+		}
+	}
+	os.Exit(m.Run())
+}
 
 func TestWalkingSkeleton(t *testing.T) {
 	basicTest(t, "helloworld.yaml", repoHTTP)
@@ -48,24 +73,12 @@ func TestSSHRepoClone(t *testing.T) {
 	basicTest(t, "secretref.yaml", repoSSH)
 }
 
-func MustEnv(t *testing.T, key string) string {
-	if v, ok := syscall.Getenv(key); ok {
-		return v
-	}
-
-	t.Fatalf("variable '%s' cannot be found in the environment", key)
-	return ""
-}
-
 func basicTest(t *testing.T, fixture, repo string) {
 	// create pipeline
 	ctx := context.Background()
-	token := MustEnv(t, "BUILDKITE_TOKEN")
-	org := MustEnv(t, "BUILDKITE_ORG")
-	agentTokenSecret := MustEnv(t, "BUILDKITE_AGENT_TOKEN_SECRET")
-	graphqlClient := api.NewClient(token)
+	graphqlClient := api.NewClient(cfg.BuildkiteToken)
 
-	getOrg, err := api.GetOrganization(ctx, graphqlClient, org)
+	getOrg, err := api.GetOrganization(ctx, graphqlClient, cfg.Org)
 	require.NoError(t, err)
 
 	tpl, err := template.ParseFS(fixtures, fmt.Sprintf("fixtures/%s", fixture))
@@ -110,21 +123,12 @@ func basicTest(t *testing.T, fixture, repo string) {
 
 	k8sClient, err := kubernetes.NewForConfig(clientConfig)
 	require.NoError(t, err)
-	monitor, err := monitor.New(ctx, logger.Named("monitor"), k8sClient, monitor.Config{
-		Token:       token,
-		MaxInFlight: 1,
-		Org:         org,
-		Namespace:   api.DefaultNamespace,
-		Tags:        []string{fmt.Sprintf("queue=%s", pipelineName)},
-	})
-	require.NoError(t, err)
 
 	runCtx, cancel := context.WithCancel(context.Background())
-	go scheduler.Run(runCtx, logger.Named("scheduler"), monitor, k8sClient, scheduler.Config{
-		AgentTokenSecret: agentTokenSecret,
-		JobTTL:           time.Minute,
-	}.WithDefaults())
 	EnsureCleanup(t, cancel)
+
+	cfg.Tags = []string{fmt.Sprintf("queue=%s", pipelineName)}
+	go controller.Run(runCtx, k8sClient, cfg)
 
 	// trigger build
 	createBuild, err := api.BuildCreate(ctx, graphqlClient, api.BuildCreateInput{
@@ -161,16 +165,16 @@ Out:
 		}
 	}
 
-	config, err := buildkite.NewTokenConfig(token, false)
+	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
 	require.NoError(t, err)
 
 	client := buildkite.NewClient(config.Client())
-	logs, _, err := client.Jobs.GetJobLog(org, pipeline.Name, strconv.Itoa(build.Number), job.Uuid)
+	logs, _, err := client.Jobs.GetJobLog(cfg.Org, pipeline.Name, strconv.Itoa(build.Number), job.Uuid)
 	require.NoError(t, err)
 	require.NotNil(t, logs.Content)
 	require.Contains(t, *logs.Content, "Buildkite Agent Stack for Kubernetes")
 
-	artifacts, _, err := client.Artifacts.ListByBuild(org, pipeline.Name, strconv.Itoa(build.Number), nil)
+	artifacts, _, err := client.Artifacts.ListByBuild(cfg.Org, pipeline.Name, strconv.Itoa(build.Number), nil)
 	require.NoError(t, err)
 	require.Len(t, artifacts, 2)
 	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
@@ -195,14 +199,12 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 		t.Skip("not cleaning orphaned pipelines")
 	}
 	ctx := context.Background()
-	token := MustEnv(t, "BUILDKITE_TOKEN")
-	org := MustEnv(t, "BUILDKITE_ORG")
-	graphqlClient := api.NewClient(token)
+	graphqlClient := api.NewClient(cfg.BuildkiteToken)
 
-	pipelines, err := api.SearchPipelines(ctx, graphqlClient, org, "agent-k8s-", 100)
+	pipelines, err := api.SearchPipelines(ctx, graphqlClient, cfg.Org, "agent-k8s-", 100)
 	require.NoError(t, err)
 	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
-		builds, err := api.GetBuilds(ctx, graphqlClient, fmt.Sprintf("%s/%s", org, pipeline.Node.Name), []api.BuildStates{api.BuildStatesRunning}, 100)
+		builds, err := api.GetBuilds(ctx, graphqlClient, fmt.Sprintf("%s/%s", cfg.Org, pipeline.Node.Name), []api.BuildStates{api.BuildStatesRunning}, 100)
 		require.NoError(t, err)
 		for _, build := range builds.Pipeline.Builds.Edges {
 			_, err = api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{Id: build.Node.Id})

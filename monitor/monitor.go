@@ -22,7 +22,7 @@ type Monitor struct {
 	gql    graphql.Client
 	k8s    batchlisters.JobLister
 	logger *zap.Logger
-	cfg    Config
+	cfg    api.Config
 	once   sync.Once
 	jobs   chan Job
 }
@@ -41,8 +41,8 @@ type Job struct {
 	Tag string
 }
 
-func New(ctx context.Context, logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
-	graphqlClient := api.NewClient(cfg.Token)
+func New(ctx context.Context, logger *zap.Logger, k8s kubernetes.Interface, cfg api.Config) (*Monitor, error) {
+	graphqlClient := api.NewClient(cfg.BuildkiteToken)
 	jobLister, err := NewJobLister(ctx, logger.Named("lister"), k8s, cfg.Tags)
 	if err != nil {
 		return nil, err
@@ -64,7 +64,7 @@ func (m *Monitor) Scheduled() <-chan Job {
 }
 
 func (m *Monitor) start() {
-	m.logger.Info("started", zap.String("org", m.cfg.Org), zap.String("namespace", m.cfg.Namespace), zap.Int("max-in-flight", m.cfg.MaxInFlight))
+	m.logger.Info("started")
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
