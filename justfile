@@ -53,6 +53,15 @@ release repo=("ghcr.io/buildkite/helm"):
   set -euxo pipefail
 
   goreleaser release --rm-dist
-  version=$(git describe | sed 's/v//')
+  tag=$(git describe)
+  version=$(echo "$tag" | sed 's/v//')
   helm package ./charts/agent-stack-k8s --app-version "$version" -d dist --version "$version"
-  helm push ./dist/agent-stack-k8s-*.tgz oci://{{repo}}
+  push=$(helm push ./dist/agent-stack-k8s-*.tgz oci://{{repo}} 2>&1)
+  gh release view "$tag" --json body -q .body > dist/body.txt
+  cat << EOF >> dist/body.txt
+  ## Helm chart
+  \`\`\`
+  $push
+  \`\`\`
+  EOF
+  gh release edit "$tag" -F dist/body.txt
