@@ -6,8 +6,8 @@ run *FLAGS:
 test *FLAGS:
   go test {{FLAGS}} ./...
 
-lint: gomod
-  golangci-lint run
+lint *FLAGS: gomod
+  golangci-lint run {{FLAGS}}
 
 generate:
     go run github.com/Khan/genqlient api/genqlient.yaml

@@ -8,4 +8,4 @@ apt update && apt install -y just
 
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.50.1
 
-just lint
+just lint -v
