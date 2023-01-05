@@ -1,4 +1,24 @@
 steps:
+  - label: ":lint-roller: lint"
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: golang:alpine
+                command: [.buildkite/steps/lint.sh]
+                env:
+                - name: CONFIG
+                  value: /etc/config.yaml
+                envFrom:
+                  - secretRef:
+                      name: agent-stack-k8s-secrets
+                volumeMounts:
+                - mountPath: /etc/config.yaml
+                  name: agent-stack-k8s-config
+                  subPath: config.yaml
+
   - label: ":buildkite: integration tests"
     agents:
       queue: kubernetes

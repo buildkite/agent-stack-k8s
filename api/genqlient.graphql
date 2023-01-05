@@ -10,7 +10,6 @@ fragment CommandJob on JobTypeCommand {
   scheduledAt
   agentQueryRules
   command
-  label
 }
 
 # @genqlient(omitempty: true)

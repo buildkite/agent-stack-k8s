@@ -1,0 +1,6 @@
+agentToken: "b2fe41bb329a5b25330d456333ef341c29da450c2661a87cb3"
+graphqlToken: "4946d08afb0143c76b73e1bffe4f0c1fd1250bcf"
+config:
+  org: "buildkite-kubernetes-stack"
+  debug: true
+  max-in-flight: 100

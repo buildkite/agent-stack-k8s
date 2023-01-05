@@ -66,11 +66,11 @@ func (w *worker) k8sify(
 			return nil, fmt.Errorf("err parsing plugins: %w", err)
 		}
 		for _, plugin := range plugins {
-			asJson, err := json.Marshal(plugin.Configuration)
+			asJSON, err := json.Marshal(plugin.Configuration)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal config: %w", err)
 			}
-			if err := json.Unmarshal(asJson, &pluginConfig); err != nil {
+			if err := json.Unmarshal(asJSON, &pluginConfig); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 			}
 		}
