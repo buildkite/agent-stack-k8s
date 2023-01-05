@@ -74,6 +74,7 @@ func TestSSHRepoClone(t *testing.T) {
 }
 
 func basicTest(t *testing.T, fixture, repo string) {
+	t.Helper()
 	// create pipeline
 	ctx := context.Background()
 	graphqlClient := api.NewClient(cfg.BuildkiteToken)
@@ -138,9 +139,11 @@ func basicTest(t *testing.T, fixture, repo string) {
 	})
 	require.NoError(t, err)
 	EnsureCleanup(t, func() {
-		api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{
+		if _, err := api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{
 			Id: createBuild.BuildCreate.Build.Id,
-		})
+		}); err != nil {
+			t.Logf("failed to cancel build: %v", err)
+		}
 	})
 	build := createBuild.BuildCreate.Build
 	require.Len(t, build.Jobs.Edges, 1)

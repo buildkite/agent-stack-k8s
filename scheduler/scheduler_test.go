@@ -29,7 +29,7 @@ func TestJobPluginConversion(t *testing.T) {
 			},
 		},
 	}
-	pluginsJson, err := json.Marshal([]map[string]interface{}{
+	pluginsJSON, err := json.Marshal([]map[string]interface{}{
 		{
 			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": pluginConfig,
 		},
@@ -39,7 +39,7 @@ func TestJobPluginConversion(t *testing.T) {
 	input := &monitor.Job{
 		CommandJob: api.CommandJob{
 			Uuid: "abc",
-			Env:  []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJson))},
+			Env:  []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
 		},
 		Tag: "queue=kubernetes",
 	}

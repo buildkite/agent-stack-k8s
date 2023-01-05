@@ -3,8 +3,6 @@ package main
 import (
 	"log"
 
-	_ "net/http/pprof"
-
 	"github.com/buildkite/agent-stack-k8s/cmd/controller"
 	"k8s.io/client-go/kubernetes"
 

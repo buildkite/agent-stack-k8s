@@ -22,17 +22,15 @@ func NewJobLister(ctx context.Context, log *zap.Logger, clientset kubernetes.Int
 	if err != nil {
 		return nil, fmt.Errorf("failed to build tag label selector for job manager: %w", err)
 	}
-	hasUuid, err := labels.NewRequirement(api.UUIDLabel, selection.Exists, nil)
+	hasUUID, err := labels.NewRequirement(api.UUIDLabel, selection.Exists, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build uuid label selector for job manager: %w", err)
 	}
 	factory := informers.NewSharedInformerFactoryWithOptions(clientset, 0, informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
-		opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUuid).String()
+		opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUUID).String()
 	}))
 	informer := factory.Batch().V1().Jobs()
 	jobInformer := informer.Informer()
-	indexer := cache.NewIndexer(MetaJobLabelKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
-	jobInformer.AddIndexers(indexer.GetIndexers())
 
 	go factory.Start(ctx.Done())
 
@@ -49,7 +47,7 @@ func MetaJobLabelKeyFunc(obj interface{}) (string, error) {
 	}
 	meta, err := meta.Accessor(obj)
 	if err != nil {
-		return "", fmt.Errorf("object has no meta: %v", err)
+		return "", fmt.Errorf("object has no meta: %w", err)
 	}
 	labels := meta.GetLabels()
 	if v, ok := labels[api.UUIDLabel]; ok {

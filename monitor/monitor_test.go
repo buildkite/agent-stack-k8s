@@ -89,38 +89,30 @@ func TestScheduleBuild(t *testing.T) {
 		shouldSchedule: true,
 		shouldError:    false,
 	}}
+	m.jobs = make(chan Job, 1)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var errResult error
-			jobCreated := 0
-			functionReturned := 0
-
-			returned := make(chan error)
-			go func() {
-				err := m.scheduleBuild(test.job, test.tag)
-				returned <- err
-			}()
+			err := m.scheduleBuild(test.job, test.tag)
+			var job *Job
 			select {
-			case <-m.jobs:
-				jobCreated++
-			case errResult = <-returned:
-				functionReturned++
+			case j := <-m.jobs:
+				job = &j
+			default:
 			}
 			if test.shouldSchedule {
-				if jobCreated == 0 {
-					if errResult != nil {
-						t.Fatalf("Test should schedule job, but error was returned: %s", errResult)
+				if job == nil {
+					if err != nil {
+						t.Fatalf("Test should schedule job, but error was returned: %s", err)
 					} else {
 						t.Fatalf("Test should schedule job, but nil error was returned")
 					}
 				}
 			}
 			if test.shouldError {
-				if errResult == nil {
+				if err == nil {
 					t.Fatalf("Test should error, but no error was returned")
 				}
 			}
 		})
 	}
-
 }
