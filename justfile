@@ -31,15 +31,28 @@ agent repo=("ghcr.io/buildkite/agent-k8s") tag=("latest"):
   docker buildx build --tag {{repo}}:{{tag}} --platform linux/arm64,linux/amd64 --push .
   rm buildkite-agent-linux*
 
+publish:
+  ko publish -P
+
 deploy *FLAGS:
   #!/usr/bin/env bash
   set -euxo pipefail
 
-  image=$(ko publish -P)
-  helm upgrade agent-stack-k8s . \
+  image=$(just publish)
+  helm upgrade agent-stack-k8s charts/agent-stack-k8s \
     --namespace buildkite \
     --install \
     --create-namespace \
     --wait \
     --set image=$image \
     {{FLAGS}}
+
+
+release repo=("ghcr.io/buildkite/helm"):
+  #!/usr/bin/env bash
+  set -euxo pipefail
+
+  goreleaser release --rm-dist
+  version=$(git describe | sed 's/v//')
+  helm package ./charts/agent-stack-k8s --app-version "$version" -d dist --version "$version"
+  helm push ./dist/agent-stack-k8s-*.tgz oci://{{repo}}
