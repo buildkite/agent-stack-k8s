@@ -188,3 +188,5 @@ The `config` key contains configuration passed directly to the binary, and so su
   - Report failure to buildkite from controller?
   - Emit pod logs to buildkite? If agent isn't starting correctly
   - Retry?
+- How do use other plugins ?
+  - For now, none of the container of the pod seems running any plugin
