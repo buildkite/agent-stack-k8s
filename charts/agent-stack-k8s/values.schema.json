@@ -20,12 +20,6 @@
       "title": "The graphqlToken Schema",
       "examples": [""]
     },
-    "namespace": {
-      "type": "string",
-      "default": "",
-      "title": "The namespace Schema",
-      "examples": ["buildkite"]
-    },
     "image": {
       "type": "string",
       "default": "",
