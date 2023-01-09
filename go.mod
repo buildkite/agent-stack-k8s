@@ -101,4 +101,4 @@ require (
 	k8s.io/client-go v0.26.0
 )
 
-replace github.com/buildkite/go-buildkite/v3 => github.com/benmoss/go-buildkite/v3 v3.0.0-20230106175021-160139159e7c
+replace github.com/buildkite/go-buildkite/v3 => github.com/benmoss/go-buildkite/v3 v3.0.0-20230106175021-160139159e7c // TODO: remove when https://github.com/buildkite/go-buildkite/pull/106 is merged
