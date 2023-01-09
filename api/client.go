@@ -43,7 +43,6 @@ func (t *logTransport) RoundTrip(in *http.Request) (out *http.Response, err erro
 	// Inspired by: github.com/motemen/go-loghttp
 	if _, ok := os.LookupEnv("DEBUG"); !ok {
 		return t.inner.RoundTrip(in)
-
 	}
 
 	log.Printf("--> %s %s", in.Method, in.URL)

@@ -95,7 +95,6 @@ func (m *Monitor) start() {
 					cmdJ := builds[j].Node.(*api.JobJobTypeCommand)
 
 					return cmdI.ScheduledAt.Before(cmdJ.ScheduledAt)
-
 				})
 
 				for _, job := range builds {

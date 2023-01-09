@@ -1,4 +1,14 @@
 steps:
+  - label: ":lint-roller: lint"
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: golang:latest
+                command: [.buildkite/steps/lint.sh]
+
   - label: ":buildkite: integration tests"
     agents:
       queue: kubernetes

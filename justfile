@@ -1,7 +1,4 @@
-default: lint generate build test
-
-build:
-  echo Building…
+default: lint generate test
 
 run *FLAGS:
   go run ./... {{FLAGS}}
@@ -9,7 +6,8 @@ run *FLAGS:
 test *FLAGS:
   go test {{FLAGS}} ./...
 
-lint: gomod
+lint *FLAGS: gomod
+  golangci-lint run {{FLAGS}}
 
 generate:
     go run github.com/Khan/genqlient api/genqlient.yaml
