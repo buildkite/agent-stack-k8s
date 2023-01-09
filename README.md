@@ -152,7 +152,7 @@ You'll also need to create an SSH secret in your cluster to run [this test pipel
 kubectl create secret generic agent-stack-k8s --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
 ```
 
-### Deploying with Helm
+## Deploying with Helm
 
 `just deploy` will build the container image using [ko](https://ko.build/) and
 deploy it with [Helm](https://helm.sh/).
@@ -180,6 +180,18 @@ config:
 ```
 
 The `config` key contains configuration passed directly to the binary, and so supports all the keys documented in [the example](examples/config.yaml).
+
+## Validating your pipeline
+
+With the unstructured nature of Buildkite plugin specs, it can be frustratingly
+easy to mess up your configuration and then have to debug why your agent pods are failing to start.
+To help prevent this sort of error, there's a linter that uses [JSON
+schema](https://json-schema.org/) to validate the pipeline and plugin
+configuration.
+
+This currently can't prevent every sort of error, you might still have a reference to a Kubernetes volume that doesn't exist, or other errors of that sort, but it will validate that the fields match the API spec we expect.
+
+Our JSON schema can also be used with editors that support JSON Schema by configuring your editor to validate against the schema found [here](./cmd/linter/schema.json).
 
 ## Open questions
 
