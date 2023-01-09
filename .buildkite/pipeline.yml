@@ -22,7 +22,8 @@ steps:
               configMap:
                 name: agent-stack-k8s-config
             containers:
-              - image: golang:latest
+              - name: tests
+                image: golang:latest
                 command: [.buildkite/steps/tests.sh]
                 env:
                 - name: CONFIG
