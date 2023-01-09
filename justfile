@@ -1,4 +1,5 @@
-default: lint generate test
+default:
+  just --list
 
 run *FLAGS:
   go run ./... {{FLAGS}}
@@ -63,3 +64,6 @@ release repo=("ghcr.io/buildkite/helm"):
   \`\`\`
   EOF
   gh release edit "$tag" -F dist/body.txt
+
+cleanup-orphans:
+  go test -v -run TestCleanupOrphanedPipelines ./integration --delete-orphaned-pipelines
