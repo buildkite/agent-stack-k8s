@@ -96,8 +96,12 @@ func Lint(ctx context.Context, options *Options) error {
 		}
 	}
 	schemaLoader := gojsonschema.NewSchemaLoader()
-	schemaLoader.AddSchema(pipelineSchema, gojsonschema.NewReferenceLoader(pipelineSchema))
-	schemaLoader.AddSchema(k8sSchema, gojsonschema.NewReferenceLoader(k8sSchema))
+	if err := schemaLoader.AddSchema(pipelineSchema, gojsonschema.NewReferenceLoader(pipelineSchema)); err != nil {
+		return fmt.Errorf("failed to add pipeline schema: %w", err)
+	}
+	if err := schemaLoader.AddSchema(k8sSchema, gojsonschema.NewReferenceLoader(k8sSchema)); err != nil {
+		return fmt.Errorf("failed to add kubernetes schema: %w", err)
+	}
 	schema, err := schemaLoader.Compile(gojsonschema.NewStringLoader(schema))
 	if err != nil {
 		return fmt.Errorf("failed to compile schemas: %w", err)

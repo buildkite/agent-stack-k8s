@@ -1,9 +1,13 @@
 package main
 
 import (
+	"log"
+
 	"github.com/buildkite/agent-stack-k8s/cmd/controller"
 )
 
 func main() {
-	controller.New().Execute()
+	if err := controller.New().Execute(); err != nil {
+		log.Fatal(err)
+	}
 }

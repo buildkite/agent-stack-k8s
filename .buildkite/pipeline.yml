@@ -6,7 +6,8 @@ steps:
       - kubernetes:
           podSpec:
             containers:
-              - image: golang:latest
+              - name: lint
+                image: golang:latest
                 command: [.buildkite/steps/lint.sh]
 
   - label: ":buildkite: integration tests"

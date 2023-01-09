@@ -39,7 +39,9 @@ func addFlags(cmd *cobra.Command) {
 
 func ParseConfig(cmd *cobra.Command, args []string) (api.Config, error) {
 	var cfg api.Config
-	cmd.Flags().Parse(args)
+	if err := cmd.Flags().Parse(args); err != nil {
+		return cfg, fmt.Errorf("failed to parse flags: %w", err)
+	}
 	if err := viper.BindPFlags(cmd.Flags()); err != nil {
 		return cfg, fmt.Errorf("failed to bind flags: %w", err)
 	}
