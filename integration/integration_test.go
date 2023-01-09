@@ -44,8 +44,9 @@ func TestMain(m *testing.M) {
 	if err := os.Chdir(".."); err != nil {
 		log.Fatal(err)
 	}
+	cmd := controller.New()
 	var err error
-	cfg, err = controller.ParseConfig()
+	cfg, err = controller.ParseConfig(cmd, os.Args[1:])
 	if err != nil {
 		log.Fatal(err)
 	}
