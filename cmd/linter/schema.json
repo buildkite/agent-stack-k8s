@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/schema#",
+  "$defs": {
+    "kubernetes": {
+      "type": "object",
+      "properties": {
+        "podSpec": {
+          "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
+        },
+        "gitEnvFrom": {
+          "type": "array",
+          "items": {
+            "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
+          }
+        }
+      }
+    }
+  },
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "https://raw.githubusercontent.com/buildkite/pipeline-schema/main/schema.json"
+    }
+  ],
+  "properties": {
+    "steps": {
+      "items": {
+        "properties": {
+          "plugins": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kubernetes": { "$ref": "#/$defs/kubernetes" }
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kubernetes": { "$ref": "#/$defs/kubernetes" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

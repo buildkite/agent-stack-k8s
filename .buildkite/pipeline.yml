@@ -6,7 +6,8 @@ steps:
       - kubernetes:
           podSpec:
             containers:
-              - image: golang:latest
+              - name: lint
+                image: golang:latest
                 command: [.buildkite/steps/lint.sh]
 
   - label: ":buildkite: integration tests"
@@ -22,7 +23,8 @@ steps:
               configMap:
                 name: agent-stack-k8s-config
             containers:
-              - image: golang:latest
+              - name: tests
+                image: golang:latest
                 command: [.buildkite/steps/tests.sh]
                 env:
                 - name: CONFIG
