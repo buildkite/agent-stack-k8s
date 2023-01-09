@@ -1,7 +1,22 @@
 {
   "$schema": "http://json-schema.org/schema#",
+  "$defs": {
+    "kubernetes": {
+      "type": "object",
+      "properties": {
+        "podSpec": {
+          "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
+        },
+        "gitEnvFrom": {
+          "type": "array",
+          "items": {
+            "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
+          }
+        }
+      }
+    }
+  },
   "type": "object",
-  "default": {},
   "allOf": [
     {
       "$ref": "https://raw.githubusercontent.com/buildkite/pipeline-schema/main/schema.json"
@@ -18,31 +33,14 @@
                 "items": {
                   "type": "object",
                   "properties": {
-                    "kubernetes": {
-                      "type": "object",
-                      "default": {},
-                      "title": "The kubernetes Schema",
-                      "required": ["podSpec"],
-                      "properties": {
-                        "podSpec": {
-                          "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
-                        }
-                      }
-                    }
+                    "kubernetes": { "$ref": "#/$defs/kubernetes" }
                   }
                 }
               },
               {
                 "type": "object",
                 "properties": {
-                  "kubernetes": {
-                    "type": "object",
-                    "properties": {
-                      "podSpec": {
-                        "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
-                      }
-                    }
-                  }
+                  "kubernetes": { "$ref": "#/$defs/kubernetes" }
                 }
               }
             ]
