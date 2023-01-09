@@ -1,4 +1,4 @@
-package main
+package linter
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/scheduler"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
+	"github.com/go-playground/validator/v10"
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
 	"sigs.k8s.io/yaml"
@@ -25,11 +26,15 @@ const (
 var schema string
 
 type Options struct {
-	File string
+	File string `validate:"required,file"`
 }
 
 func (o *Options) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&o.File, "file", "f", "", "path to the pipeline file, or {-} for stdin")
+}
+
+func (o *Options) Validate() error {
+	return validator.New().Struct(o)
 }
 
 func New() *cobra.Command {
@@ -37,9 +42,12 @@ func New() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:          "lint",
-		Short:        "A tool for linting Buildkite pipelines using the agent-stack-k8s plugin",
+		Short:        "A tool for linting Buildkite pipelines",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := o.Validate(); err != nil {
+				return fmt.Errorf("failed to validate config: %w", err)
+			}
 			return Lint(cmd.Context(), o)
 		},
 	}
@@ -115,12 +123,4 @@ func Lint(ctx context.Context, options *Options) error {
 	}
 
 	return nil
-}
-
-func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
-	if err := New().Execute(); err != nil {
-		log.Fatal(err)
-	}
 }
