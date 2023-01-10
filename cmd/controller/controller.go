@@ -13,7 +13,10 @@ import (
 	"github.com/buildkite/agent-stack-k8s/cmd/linter"
 	"github.com/buildkite/agent-stack-k8s/monitor"
 	"github.com/buildkite/agent-stack-k8s/scheduler"
+	"github.com/go-playground/locales/en"
+	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
+	en_translations "github.com/go-playground/validator/v10/translations/en"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -60,12 +63,19 @@ func ParseConfig(cmd *cobra.Command, args []string) (api.Config, error) {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return cfg, fmt.Errorf("failed to parse config: %w", err)
 	}
-	if err := validator.New().Struct(cfg); err != nil {
+	if err := validate.Struct(cfg); err != nil {
 		return cfg, fmt.Errorf("failed to validate config: %w", err)
 	}
 
 	return cfg, nil
 }
+
+var (
+	english  = en.New()
+	uni      = ut.New(english, english)
+	validate = validator.New()
+	trans, _ = uni.GetTranslator("en")
+)
 
 func New() *cobra.Command {
 	cmd := &cobra.Command{
@@ -81,6 +91,13 @@ func New() *cobra.Command {
 			}
 			cfg, err := ParseConfig(cmd, args)
 			if err != nil {
+				var errs validator.ValidationErrors
+				if errors.As(err, &errs) {
+					for _, e := range errs {
+						log.Println(e.Translate(trans))
+					}
+					os.Exit(1)
+				}
 				log.Fatalf("failed to parse config: %v", err)
 			}
 			Run(ctx, k8sClient, cfg)
@@ -88,6 +105,9 @@ func New() *cobra.Command {
 	}
 	addFlags(cmd)
 	cmd.AddCommand(linter.New())
+	if err := en_translations.RegisterDefaultTranslations(validate, trans); err != nil {
+		log.Fatalf("failed to register translations: %v", err)
+	}
 
 	return cmd
 }
