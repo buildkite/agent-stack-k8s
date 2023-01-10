@@ -16,7 +16,6 @@ import (
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/cmd/controller"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
-	flag "github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -32,8 +31,9 @@ const (
 )
 
 var (
-	preservePipelines *bool = flag.Bool("preserve-pipelines", false, "preserve pipelines created by tests")
-	cfg               api.Config
+	preservePipelines       bool
+	deleteOrphanedPipelines bool
+	cfg                     api.Config
 
 	//go:embed fixtures/*
 	fixtures embed.FS
@@ -45,6 +45,8 @@ func TestMain(m *testing.M) {
 		log.Fatal(err)
 	}
 	cmd := controller.New()
+	cmd.Flags().BoolVar(&preservePipelines, "preserve-pipelines", false, "preserve pipelines created by tests")
+	cmd.Flags().BoolVar(&deleteOrphanedPipelines, "delete-orphaned-pipelines", false, "delete all pipelines matching agent-k8s-*")
 	var err error
 	cfg, err = controller.ParseConfig(cmd, os.Args[1:])
 	if err != nil {
@@ -104,7 +106,7 @@ func basicTest(t *testing.T, fixture, repo string) {
 	require.NoError(t, err)
 
 	pipeline := createPipeline.PipelineCreate.Pipeline
-	if !*preservePipelines {
+	if !preservePipelines {
 		EnsureCleanup(t, func() {
 			_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
 				Id: pipeline.Id,
@@ -199,7 +201,7 @@ func newk8sClient(t *testing.T) kubernetes.Interface {
 }
 
 func TestCleanupOrphanedPipelines(t *testing.T) {
-	if *preservePipelines {
+	if !deleteOrphanedPipelines {
 		t.Skip("not cleaning orphaned pipelines")
 	}
 	ctx := context.Background()
