@@ -72,7 +72,7 @@ func Lint(ctx context.Context, options *Options) error {
 				if err != nil {
 					return fmt.Errorf("failed to marshal plugin to json: %w", err)
 				}
-				var pluginConfig scheduler.PluginConfig
+				var pluginConfig scheduler.KubernetesPlugin
 				decoder := json.NewDecoder(bytes.NewReader(asJson))
 				decoder.DisallowUnknownFields()
 				if err := decoder.Decode(&pluginConfig); err != nil {

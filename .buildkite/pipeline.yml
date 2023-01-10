@@ -30,9 +30,12 @@ steps:
                 - name: CONFIG
                   value: /etc/config.yaml
                 envFrom:
-                  - secretRef:
-                      name: agent-stack-k8s-secrets
+                - secretRef:
+                    name: agent-stack-k8s-secrets
                 volumeMounts:
                 - mountPath: /etc/config.yaml
                   name: agent-stack-k8s-config
                   subPath: config.yaml
+      - test-collector:
+          files: "junit-*.xml"
+          format: "junit"
