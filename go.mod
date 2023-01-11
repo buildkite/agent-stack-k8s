@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/Khan/genqlient v0.5.0
-	github.com/buildkite/go-buildkite/v3 v3.0.1
+	github.com/buildkite/go-buildkite/v3 v3.1.0
 	github.com/go-playground/validator/v10 v10.11.1
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.14.0
@@ -100,5 +100,3 @@ require (
 	k8s.io/apimachinery v0.26.0
 	k8s.io/client-go v0.26.0
 )
-
-replace github.com/buildkite/go-buildkite/v3 => github.com/benmoss/go-buildkite/v3 v3.0.0-20230106175021-160139159e7c // TODO: remove when https://github.com/buildkite/go-buildkite/pull/106 is merged
