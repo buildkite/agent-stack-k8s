@@ -113,20 +113,20 @@ steps:
 
 To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
 
-```yaml!
+```yaml
 steps:
-- label: build image
-  plugins:
-  - kubernetes:
-      gitEnvFrom:
-      - secretRef: {name: agent-stack-k8s} # <--
-      podSpec:
-        containers:
-        - image: gradle:latest
-          command: [gradle]
-          args:
-          - jib
-          - --image=ttl.sh/example:1h
+  - label: build image
+    plugins:
+      - kubernetes:
+          gitEnvFrom:
+            - secretRef: { name: agent-stack-k8s } # <--
+          podSpec:
+            containers:
+              - image: gradle:latest
+                command: [gradle]
+                args:
+                  - jib
+                  - --image=ttl.sh/example:1h
 ```
 
 ## Development
