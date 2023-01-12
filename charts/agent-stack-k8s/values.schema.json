@@ -4,7 +4,7 @@
   "type": "object",
   "default": {},
   "title": "Root Schema",
-  "required": ["agentToken", "graphqlToken", "namespace", "image", "config"],
+  "required": ["agentToken", "graphqlToken", "image", "config"],
   "properties": {
     "agentToken": {
       "type": "string",
@@ -89,7 +89,6 @@
     {
       "agentToken": "",
       "graphqlToken": "",
-      "namespace": "buildkite",
       "image": "ghcr.io/buildkite/agent-stack-k8s:latest",
       "config": {
         "agentImage": "",
