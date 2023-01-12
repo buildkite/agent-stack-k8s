@@ -1,5 +1,7 @@
 # Buildkite Agent Stack for Kubernetes
 
+[![Build status](https://badge.buildkite.com/d58c90abfe8b48f8d8750dac8e911fc0b6afe026631b4dc97c.svg)](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack)
+
 ## Overview
 
 A Kubernetes controller that runs Buildkite jobs as workloads on Kubernetes.
@@ -43,7 +45,7 @@ helm install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --set graphqlToken=<your Buildkite GraphQL-enabled API token>
 ```
 
-### Go run
+### Run from source
 
 First store the agent token in a Kubernetes secret:
 
@@ -51,10 +53,10 @@ First store the agent token in a Kubernetes secret:
 kubectl create secret generic buildkite-agent-token --from-literal=BUILDKITE_AGENT_TOKEN=my-agent-token
 ```
 
-Next export the required environment variables and start the controller:
+Next start the controller:
 
 ```bash!
-go run . --org my-org --buildkite-token my-api-token
+go run . --org my-org --buildkite-token my-api-token --debug
 ```
 
 ### Options
