@@ -53,7 +53,7 @@ func (w *worker) k8sify(
 ) (*batchv1.Job, error) {
 	envMap := map[string]string{}
 	for _, val := range job.Env {
-		parts := strings.Split(val, "=")
+		parts := strings.SplitN(val, "=", 2)
 		envMap[parts[0]] = parts[1]
 	}
 
@@ -61,6 +61,7 @@ func (w *worker) k8sify(
 	var plugins []map[string]json.RawMessage
 	if pluginsJson, ok := envMap["BUILDKITE_PLUGINS"]; ok {
 		if err := json.Unmarshal([]byte(pluginsJson), &plugins); err != nil {
+			w.logger.Debug("invalid plugin spec", zap.String("json", pluginsJson))
 			return nil, fmt.Errorf("err parsing plugins: %w", err)
 		}
 	}
