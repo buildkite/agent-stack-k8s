@@ -9,6 +9,11 @@ steps:
               - name: lint
                 image: golang:latest
                 command: [.buildkite/steps/lint.sh]
+                resources:
+                  requests:
+                    cpu: 1000m
+                    memory: 512Mi
+
 
   - label: ":buildkite: integration tests"
     agents:
@@ -36,3 +41,7 @@ steps:
                 - mountPath: /etc/config.yaml
                   name: agent-stack-k8s-config
                   subPath: config.yaml
+                resources:
+                  requests:
+                    cpu: 1000m
+                    memory: 512Mi
