@@ -22,17 +22,28 @@ The entrypoint rewriting and ordering logic is heavily inspired by [the approach
 
 ## Requirements
 
-- A Kubernetes cluster and kubeconfig file
+- A Kubernetes cluster
 - An API token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
 - An [agent token](https://buildkite.com/docs/agent/v3/tokens)
 
-We use the [client-go default loading rules](https://pkg.go.dev/k8s.io/client-go/tools/clientcmd), which means we will check:
-
-- The current context configured in `$HOME/.kube/config`
-- In-cluster access via a service account token
-- The `KUBECONFIG` environment variable
-
 ## Usage
+
+### Deploy with Helm
+
+The simplest way to get up and running is by deploying our Helm chart:
+
+We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
+which means you'll need Helm version 3.8.0 or newer.
+
+```bash
+helm install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
+    --namespace buildkite \
+    --set config.org=<your Buildkite org slug> \
+    --set agentToken=<your Buildkite agent token> \
+    --set graphqlToken=<your Buildkite GraphQL-enabled API token>
+```
+
+### Go run
 
 First store the agent token in a Kubernetes secret:
 
@@ -43,10 +54,7 @@ kubectl create secret generic buildkite-agent-token --from-literal=BUILDKITE_AGE
 Next export the required environment variables and start the controller:
 
 ```bash!
-export BUILDKITE_ORG=my-org
-export BUILDKITE_TOKEN=my-api-token
-
-agent-stack-k8s
+go run . --org my-org --buildkite-token my-api-token
 ```
 
 ### Options
