@@ -93,18 +93,20 @@ sequenceDiagram
 
 ## Sample buildkite pipeline
 
-```yaml!
+```yaml
 steps:
-- label: build image
-  plugins:
-  - kubernetes:
-      podSpec:
-        containers:
-        - image: gradle:latest
-          command: [gradle]
-          args:
-          - jib
-          - --image=ttl.sh/example:1h
+  - label: build image
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: gradle:latest
+                command: [gradle]
+                args:
+                  - jib
+                  - --image=ttl.sh/example:1h
 ```
 
 ## Cloning repos via SSH
