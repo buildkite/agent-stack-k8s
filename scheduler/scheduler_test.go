@@ -12,8 +12,8 @@ import (
 )
 
 func TestJobPluginConversion(t *testing.T) {
-	pluginConfig := PluginConfig{
-		PodSpec: corev1.PodSpec{
+	pluginConfig := KubernetesPlugin{
+		PodSpec: &corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
 					Image:   "alpine:latest",
@@ -32,6 +32,9 @@ func TestJobPluginConversion(t *testing.T) {
 	pluginsJSON, err := json.Marshal([]map[string]interface{}{
 		{
 			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": pluginConfig,
+		},
+		{
+			"github.com/buildkite-plugins/some-other-buildkite-plugin": map[string]interface{}{"foo": "bar"},
 		},
 	})
 	require.NoError(t, err)
@@ -58,6 +61,9 @@ func TestJobPluginConversion(t *testing.T) {
 
 	tagLabel := result.Labels[api.TagLabel]
 	require.Equal(t, api.TagToLabel(input.Tag), tagLabel)
+
+	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
+	require.Equal(t, pluginsEnv.Value, `[{"github.com/buildkite-plugins/some-other-buildkite-plugin":{"foo":"bar"}}]`)
 }
 
 func TestJobWithNoKubernetesPlugin(t *testing.T) {
@@ -76,6 +82,8 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
 	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
 	require.Equal(t, input.Command, commandEnv.Value)
+	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
+	require.Nil(t, pluginsEnv)
 }
 
 func findContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {
@@ -90,14 +98,12 @@ func findContainer(t *testing.T, containers []corev1.Container, name string) cor
 	return corev1.Container{}
 }
 
-func findEnv(t *testing.T, envs []corev1.EnvVar, name string) corev1.EnvVar {
+func findEnv(t *testing.T, envs []corev1.EnvVar, name string) *corev1.EnvVar {
 	for _, env := range envs {
 		if env.Name == name {
-			return env
+			return &env
 		}
 	}
-	t.Helper()
-	require.FailNow(t, "envvar not found")
 
-	return corev1.EnvVar{}
+	return nil
 }

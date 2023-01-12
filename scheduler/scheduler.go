@@ -9,7 +9,6 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/monitor"
-	"github.com/buildkite/agent/v3/agent/plugin"
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -43,8 +42,8 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, clie
 	}
 }
 
-type PluginConfig struct {
-	PodSpec    corev1.PodSpec
+type KubernetesPlugin struct {
+	PodSpec    *corev1.PodSpec
 	GitEnvFrom []corev1.EnvFromSource
 }
 
@@ -59,22 +58,32 @@ func (w *worker) k8sify(
 	}
 
 	kjob := &batchv1.Job{}
-	var pluginConfig PluginConfig
-	if envMap["BUILDKITE_PLUGINS"] != "" {
-		plugins, err := plugin.CreateFromJSON(envMap["BUILDKITE_PLUGINS"])
-		if err != nil {
+	var plugins []map[string]json.RawMessage
+	if pluginsJson, ok := envMap["BUILDKITE_PLUGINS"]; ok {
+		if err := json.Unmarshal([]byte(pluginsJson), &plugins); err != nil {
 			return nil, fmt.Errorf("err parsing plugins: %w", err)
 		}
-		for _, plugin := range plugins {
-			asJSON, err := json.Marshal(plugin.Configuration)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+	var (
+		k8sPlugin    KubernetesPlugin
+		otherPlugins []map[string]json.RawMessage
+	)
+	for _, plugin := range plugins {
+		if len(plugin) != 1 {
+			return nil, fmt.Errorf("found invalid plugin: %v", plugin)
+		}
+		if val, ok := plugin["github.com/buildkite-plugins/kubernetes-buildkite-plugin"]; ok {
+			if err := json.Unmarshal(val, &k8sPlugin); err != nil {
+				return nil, fmt.Errorf("err parsing kubernetes plugin: %w", err)
 			}
-			if err := json.Unmarshal(asJSON, &pluginConfig); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+		} else {
+			for k, v := range plugin {
+				otherPlugins = append(otherPlugins, map[string]json.RawMessage{k: v})
 			}
 		}
-		kjob.Spec.Template.Spec = pluginConfig.PodSpec
+	}
+	if k8sPlugin.PodSpec != nil {
+		kjob.Spec.Template.Spec = *k8sPlugin.PodSpec
 	} else {
 		kjob.Spec.Template.Spec.Containers = []corev1.Container{
 			{
@@ -94,6 +103,9 @@ func (w *worker) k8sify(
 		Name:  "BUILDKITE_BUILD_PATH",
 		Value: "/workspace/build",
 	}, corev1.EnvVar{
+		Name:  "BUILDKITE_BIN_PATH",
+		Value: "/workspace",
+	}, corev1.EnvVar{
 		Name: "BUILDKITE_AGENT_TOKEN",
 		ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
@@ -105,6 +117,16 @@ func (w *worker) k8sify(
 		Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
 		Value: job.Uuid,
 	})
+	if otherPlugins != nil {
+		otherPluginsJson, err := json.Marshal(otherPlugins)
+		if err != nil {
+			return nil, fmt.Errorf("failed to remarshal non-k8s plugins: %w", err)
+		}
+		env = append(env, corev1.EnvVar{
+			Name:  "BUILDKITE_PLUGINS",
+			Value: string(otherPluginsJson),
+		})
+	}
 	for k, v := range envMap {
 		switch k {
 		case "BUILDKITE_PLUGINS": //noop
@@ -134,13 +156,16 @@ func (w *worker) k8sify(
 			Value: "kubernetes-exec",
 		}, corev1.EnvVar{
 			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-			Value: "command",
+			Value: "plugin,command",
 		}, corev1.EnvVar{
 			Name:  "BUILDKITE_AGENT_NAME",
 			Value: "buildkite",
 		}, corev1.EnvVar{
 			Name:  "BUILDKITE_CONTAINER_ID",
 			Value: strconv.Itoa(i + systemContainers),
+		}, corev1.EnvVar{
+			Name:  "BUILDKITE_PLUGINS_PATH",
+			Value: "/tmp",
 		})
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
@@ -225,7 +250,7 @@ func (w *worker) k8sify(
 			Name:  "BUILDKITE_CONTAINER_ID",
 			Value: "0",
 		}},
-		EnvFrom: pluginConfig.GitEnvFrom,
+		EnvFrom: k8sPlugin.GitEnvFrom,
 	}
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
 	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
