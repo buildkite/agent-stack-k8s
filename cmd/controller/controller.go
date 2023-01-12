@@ -35,7 +35,7 @@ func addFlags(cmd *cobra.Command) {
 	cmd.Flags().StringSlice("tags", []string{"queue=kubernetes"}, `A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8")`)
 	cmd.Flags().String("namespace", api.DefaultNamespace, "kubernetes namespace to create resources in")
 	cmd.Flags().Bool("debug", false, "debug logs")
-	cmd.Flags().Int("max-in-flight", 1, "max jobs in flight, 0 means no max")
+	cmd.Flags().Int("max-in-flight", 25, "max jobs in flight, 0 means no max")
 	cmd.Flags().Duration("job-ttl", 10*time.Minute, "time to retain kubernetes jobs after completion")
 	cmd.Flags().String("agent-token-secret", "buildkite-agent-token", "name of the Buildkite agent token secret")
 }
