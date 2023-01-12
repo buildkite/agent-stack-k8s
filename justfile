@@ -17,7 +17,7 @@ gomod:
   #!/usr/bin/env bash
   set -euo pipefail
   go mod tidy
-  git diff --no-ext-diff --quiet --exit-code --name-only go.mod go.sum
+  git diff --no-ext-diff --exit-code go.mod go.sum
 
 agent repo=("ghcr.io/buildkite/agent-k8s") tag=("latest"):
   #!/usr/bin/env bash
