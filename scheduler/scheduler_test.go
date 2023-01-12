@@ -8,6 +8,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/monitor"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -17,7 +18,7 @@ func TestJobPluginConversion(t *testing.T) {
 			Containers: []corev1.Container{
 				{
 					Image:   "alpine:latest",
-					Command: []string{"hello world"},
+					Command: []string{"hello world a=b=c"},
 				},
 			},
 		},
@@ -46,7 +47,7 @@ func TestJobPluginConversion(t *testing.T) {
 		},
 		Tag: "queue=kubernetes",
 	}
-	worker := worker{}
+	worker := worker{logger: zaptest.NewLogger(t)}
 	result, err := worker.k8sify(input, "some-secret")
 	require.NoError(t, err)
 

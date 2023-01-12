@@ -19,6 +19,7 @@ require (
 )
 
 require (
+	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/cenkalti/backoff v1.1.1-0.20171020064038-309aa717adbf // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dnephin/pflag v1.0.7 // indirect
