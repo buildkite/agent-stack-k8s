@@ -22,13 +22,14 @@ When a job is available, the controller will create a pod to acquire and run the
 
 The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
 
-## Requirements
+## Installation
+
+### Requirements
 
 - A Kubernetes cluster
 - An API token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
 - An [agent token](https://buildkite.com/docs/agent/v3/tokens)
 
-## Usage
 
 ### Deploy with Helm
 
@@ -38,25 +39,12 @@ We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topic
 which means you'll need Helm version 3.8.0 or newer.
 
 ```bash
-helm install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
+helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
+    --create-namespace \
     --namespace buildkite \
     --set config.org=<your Buildkite org slug> \
     --set agentToken=<your Buildkite agent token> \
     --set graphqlToken=<your Buildkite GraphQL-enabled API token>
-```
-
-### Run from source
-
-First store the agent token in a Kubernetes secret:
-
-```bash!
-kubectl create secret generic buildkite-agent-token --from-literal=BUILDKITE_AGENT_TOKEN=my-agent-token
-```
-
-Next start the controller:
-
-```bash!
-go run . --org my-org --buildkite-token my-api-token --debug
 ```
 
 ### Options
@@ -119,6 +107,20 @@ steps:
                   - --image=ttl.sh/example:1h
 ```
 
+The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec` resource [in the Kubernetes API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#podspec-v1-core).
+
+### Validating your pipeline
+
+With the unstructured nature of Buildkite plugin specs, it can be frustratingly
+easy to mess up your configuration and then have to debug why your agent pods are failing to start.
+To help prevent this sort of error, there's a linter that uses [JSON
+schema](https://json-schema.org/) to validate the pipeline and plugin
+configuration.
+
+This currently can't prevent every sort of error, you might still have a reference to a Kubernetes volume that doesn't exist, or other errors of that sort, but it will validate that the fields match the API spec we expect.
+
+Our JSON schema can also be used with editors that support JSON Schema by configuring your editor to validate against the schema found [here](./cmd/linter/schema.json).
+
 ## Cloning repos via SSH
 
 To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
@@ -164,7 +166,21 @@ You'll also need to create an SSH secret in your cluster to run [this test pipel
 kubectl create secret generic agent-stack-k8s --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
 ```
 
-## Deploying with Helm
+### Run from source
+
+First store the agent token in a Kubernetes secret:
+
+```bash!
+kubectl create secret generic buildkite-agent-token --from-literal=BUILDKITE_AGENT_TOKEN=my-agent-token
+```
+
+Next start the controller:
+
+```bash!
+just run --org my-org --buildkite-token my-api-token --debug
+```
+
+### Local Deployment with Helm
 
 `just deploy` will build the container image using [ko](https://ko.build/) and
 deploy it with [Helm](https://helm.sh/).
@@ -192,18 +208,6 @@ config:
 ```
 
 The `config` key contains configuration passed directly to the binary, and so supports all the keys documented in [the example](examples/config.yaml).
-
-## Validating your pipeline
-
-With the unstructured nature of Buildkite plugin specs, it can be frustratingly
-easy to mess up your configuration and then have to debug why your agent pods are failing to start.
-To help prevent this sort of error, there's a linter that uses [JSON
-schema](https://json-schema.org/) to validate the pipeline and plugin
-configuration.
-
-This currently can't prevent every sort of error, you might still have a reference to a Kubernetes volume that doesn't exist, or other errors of that sort, but it will validate that the fields match the API spec we expect.
-
-Our JSON schema can also be used with editors that support JSON Schema by configuring your editor to validate against the schema found [here](./cmd/linter/schema.json).
 
 ## Open questions
 
