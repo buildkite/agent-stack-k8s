@@ -13,6 +13,7 @@ import (
 
 func NewClient(token string) graphql.Client {
 	httpClient := http.Client{
+		Timeout: 60 * time.Second,
 		Transport: NewLogger(&authedTransport{
 			key:     token,
 			wrapped: http.DefaultTransport,
