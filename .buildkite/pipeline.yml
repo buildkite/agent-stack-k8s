@@ -14,8 +14,21 @@ steps:
                     cpu: 1000m
                     memory: 512Mi
 
+  - label: ":docker: build agent"
+    key: agent
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          podSpec:
+            serviceAccountName: docker
+            containers:
+              - name: docker
+                image: crazymax/docker:latest
+                command: [.buildkite/steps/agent.sh]
 
   - label: ":buildkite: integration tests"
+    depends_on: agent
     agents:
       queue: kubernetes
     artifact_paths: junit-*.xml
