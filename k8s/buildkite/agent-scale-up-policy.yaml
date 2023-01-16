@@ -9,7 +9,7 @@ spec:
     kind: Deployment
     name: agent
   minReplicas: 1
-  maxReplicas: 20
+  maxReplicas: 90
   metrics:
     - type: External
       external:
@@ -17,7 +17,7 @@ spec:
           name: buildkite_scheduled_jobs_count
           selector:
             matchLabels:
-              queue: kubi
+              queue: gcp
         target:
           type: Value
           value: 1

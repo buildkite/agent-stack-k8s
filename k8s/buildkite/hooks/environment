@@ -30,3 +30,12 @@ if [[ -f "$ENV_VARS_PATH" ]]; then
 else
   echo "Env vars not found"
 fi
+
+echo "--- Clean up before build"
+
+if [ -z "$(docker info | grep -i error)" ]; then
+  if [ ! -z "$(docker ps -aq)" ]; then
+    docker ps -aq | xargs docker stop | xargs docker rm
+  fi
+  docker network prune -f
+fi

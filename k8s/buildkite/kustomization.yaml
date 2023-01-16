@@ -21,6 +21,7 @@ configMapGenerator:
   - name: agent-hooks
     files:
       - ./hooks/environment
+      - ./hooks/pre-exit
   - name: agent-config
     files:
       - ./buildkite-agent.cfg

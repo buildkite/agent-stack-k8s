@@ -18,7 +18,7 @@ spec:
       containers:
         - name: buildkiteagent
           image: buildkite/agent:edge-alpine-k8s
-          imagePullPolicy: IfNotPresent
+          # imagePullPolicy: IfNotPresent
           env:
             - name: DOCKER_HOST
               value: tcp://localhost:2375
@@ -34,10 +34,6 @@ spec:
                   name: buildkite-agent-token
                   key: token
                   optional: false
-          resources:
-            limits:
-              cpu: "0.7"
-              memory: "1Gi"
           volumeMounts:
             - name: builds
               mountPath: "/buildkite/builds"
@@ -52,18 +48,23 @@ spec:
               readOnly: true
         - name: dind-daemon
           image: docker:dind
-          imagePullPolicy: IfNotPresent
-          command: ["dockerd", "--host=unix:///var/run/docker.sock", "--host=tcp://0.0.0.0:2375", "--tls=false", "--debug", "--oom-score-adjust=-1000"]
+          # imagePullPolicy: IfNotPresent
+          command: ["dockerd", "--host=unix:///var/run/docker.sock", "--host=tcp://0.0.0.0:2375"]
           securityContext:
             privileged: true
           resources:
+            requests:
+              cpu: "2"
+              memory: "10Gi"
             limits:
-              cpu: "1"
-              memory: "9Gi"
+              cpu: "2"
+              memory: "14Gi"
           volumeMounts:
+            - name: builds
+              mountPath: /buildkite/builds
             - name: docker-graph-storage
               mountPath: /var/lib/docker
-      terminationGracePeriodSeconds: 1900
+      terminationGracePeriodSeconds: 900
       volumes:
         - name: config
           configMap:
@@ -77,6 +78,8 @@ spec:
             items:
               - key: "environment"
                 path: "environment"
+              - key: "pre-exit"
+                path: "pre-exit"
         - name: secrets
           secret:
             secretName: buildkite-secrets

@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "--- Clean up after build"
+
+if [ -z "$(docker info | grep -i error)" ]; then
+  if [ ! -z "$(docker ps -aq)" ]; then
+    docker ps -aq | xargs docker stop | xargs docker rm
+  fi
+  docker network prune -f
+fi
+
+docker info
