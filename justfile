@@ -19,15 +19,20 @@ gomod:
   go mod tidy
   git diff --no-ext-diff --exit-code go.mod go.sum
 
-agent repo=("ghcr.io/buildkite/agent-k8s") tag=("latest"):
+agent target=("ghcr.io/buildkite/agent-k8s:latest") os=("linux") arch=("amd64 arm64"):
   #!/usr/bin/env bash
   set -euxo pipefail
-  pushd agent/packaging/docker/alpine-linux
-  for arch in arm64 amd64; do
-    export GOOS=linux GOARCH=$arch
-    go build -o buildkite-agent-linux-$arch github.com/buildkite/agent/v3
+  pushd agent/packaging/docker/alpine
+  platforms=()
+  for os in {{os}}; do
+    for arch in {{arch}}; do
+      platforms+=("${os}/${arch}")
+      export GOOS=$os GOARCH=$arch
+      go build -o buildkite-agent-${os}-${arch} github.com/buildkite/agent/v3
+    done
   done
-  docker buildx build --tag {{repo}}:{{tag}} --platform linux/arm64,linux/amd64 --push --metadata-file {{justfile_directory()}}/dist/metadata.json .
+  commaified=$(IFS=, ; echo "${platforms[*]}")
+  docker buildx build --tag {{target}} --platform "$commaified" --push --metadata-file {{justfile_directory()}}/dist/metadata.json .
   rm buildkite-agent-linux*
 
 publish *FLAGS:
