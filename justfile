@@ -27,7 +27,7 @@ agent repo=("ghcr.io/buildkite/agent-k8s") tag=("latest"):
     export GOOS=linux GOARCH=$arch
     go build -o buildkite-agent-linux-$arch github.com/buildkite/agent/v3
   done
-  docker buildx build --tag {{repo}}:{{tag}} --platform linux/arm64,linux/amd64 --push .
+  docker buildx build --tag {{repo}}:{{tag}} --platform linux/arm64,linux/amd64 --push --metadata-file {{justfile_directory()}}/dist/metadata.json .
   rm buildkite-agent-linux*
 
 publish *FLAGS:
