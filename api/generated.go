@@ -11,6 +11,36 @@ import (
 	"github.com/Khan/genqlient/graphql"
 )
 
+// Build includes the GraphQL fields of Build requested by the fragment Build.
+// The GraphQL type's documentation follows.
+//
+// A build from a pipeline
+type Build struct {
+	// The UUID for the build
+	Uuid string `json:"uuid"`
+	Id   string `json:"id"`
+	// The number of the build
+	Number int `json:"number"`
+	// The current state of the build
+	State BuildStates            `json:"state"`
+	Jobs  BuildJobsJobConnection `json:"jobs"`
+}
+
+// GetUuid returns Build.Uuid, and is useful for accessing the field via an interface.
+func (v *Build) GetUuid() string { return v.Uuid }
+
+// GetId returns Build.Id, and is useful for accessing the field via an interface.
+func (v *Build) GetId() string { return v.Id }
+
+// GetNumber returns Build.Number, and is useful for accessing the field via an interface.
+func (v *Build) GetNumber() int { return v.Number }
+
+// GetState returns Build.State, and is useful for accessing the field via an interface.
+func (v *Build) GetState() BuildStates { return v.State }
+
+// GetJobs returns Build.Jobs, and is useful for accessing the field via an interface.
+func (v *Build) GetJobs() BuildJobsJobConnection { return v.Jobs }
+
 // Author for a build
 type BuildAuthorInput struct {
 	// The name for the build author
@@ -81,86 +111,64 @@ func (v *BuildCreateBuildCreateBuildCreatePayload) GetBuild() BuildCreateBuildCr
 //
 // A build from a pipeline
 type BuildCreateBuildCreateBuildCreatePayloadBuild struct {
-	// The UUID for the build
-	Uuid string `json:"uuid"`
-	Id   string `json:"id"`
-	// The number of the build
-	Number int                                                            `json:"number"`
-	Jobs   BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection `json:"jobs"`
+	Build `json:"-"`
 }
 
 // GetUuid returns BuildCreateBuildCreateBuildCreatePayloadBuild.Uuid, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetUuid() string { return v.Uuid }
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetUuid() string { return v.Build.Uuid }
 
 // GetId returns BuildCreateBuildCreateBuildCreatePayloadBuild.Id, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetId() string { return v.Id }
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetId() string { return v.Build.Id }
 
 // GetNumber returns BuildCreateBuildCreateBuildCreatePayloadBuild.Number, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetNumber() int { return v.Number }
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetNumber() int { return v.Build.Number }
+
+// GetState returns BuildCreateBuildCreateBuildCreatePayloadBuild.State, and is useful for accessing the field via an interface.
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetState() BuildStates { return v.Build.State }
 
 // GetJobs returns BuildCreateBuildCreateBuildCreatePayloadBuild.Jobs, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetJobs() BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection {
-	return v.Jobs
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) GetJobs() BuildJobsJobConnection {
+	return v.Build.Jobs
 }
 
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
-type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection struct {
-	Edges []BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge `json:"edges"`
-}
-
-// GetEdges returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection.Edges, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnection) GetEdges() []BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge {
-	return v.Edges
-}
-
-// BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
-type BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge struct {
-	Node Job `json:"-"`
-}
-
-// GetNode returns BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge.Node, and is useful for accessing the field via an interface.
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge) GetNode() Job {
-	return v.Node
-}
-
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge) UnmarshalJSON(b []byte) error {
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) UnmarshalJSON(b []byte) error {
 
 	if string(b) == "null" {
 		return nil
 	}
 
 	var firstPass struct {
-		*BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge
-		Node json.RawMessage `json:"node"`
+		*BuildCreateBuildCreateBuildCreatePayloadBuild
 		graphql.NoUnmarshalJSON
 	}
-	firstPass.BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge = v
+	firstPass.BuildCreateBuildCreateBuildCreatePayloadBuild = v
 
 	err := json.Unmarshal(b, &firstPass)
 	if err != nil {
 		return err
 	}
 
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalJob(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"Unable to unmarshal BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge.Node: %w", err)
-			}
-		}
+	err = json.Unmarshal(
+		b, &v.Build)
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
-type __premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge struct {
-	Node json.RawMessage `json:"node"`
+type __premarshalBuildCreateBuildCreateBuildCreatePayloadBuild struct {
+	Uuid string `json:"uuid"`
+
+	Id string `json:"id"`
+
+	Number int `json:"number"`
+
+	State BuildStates `json:"state"`
+
+	Jobs BuildJobsJobConnection `json:"jobs"`
 }
 
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge) MarshalJSON() ([]byte, error) {
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) MarshalJSON() ([]byte, error) {
 	premarshaled, err := v.__premarshalJSON()
 	if err != nil {
 		return nil, err
@@ -168,21 +176,14 @@ func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobE
 	return json.Marshal(premarshaled)
 }
 
-func (v *BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge) __premarshalJSON() (*__premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge, error) {
-	var retval __premarshalBuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge
+func (v *BuildCreateBuildCreateBuildCreatePayloadBuild) __premarshalJSON() (*__premarshalBuildCreateBuildCreateBuildCreatePayloadBuild, error) {
+	var retval __premarshalBuildCreateBuildCreateBuildCreatePayloadBuild
 
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalJob(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"Unable to marshal BuildCreateBuildCreateBuildCreatePayloadBuildJobsJobConnectionEdgesJobEdge.Node: %w", err)
-		}
-	}
+	retval.Uuid = v.Build.Uuid
+	retval.Id = v.Build.Id
+	retval.Number = v.Build.Number
+	retval.State = v.Build.State
+	retval.Jobs = v.Build.Jobs
 	return &retval, nil
 }
 
@@ -237,6 +238,85 @@ type BuildCreateResponse struct {
 // GetBuildCreate returns BuildCreateResponse.BuildCreate, and is useful for accessing the field via an interface.
 func (v *BuildCreateResponse) GetBuildCreate() BuildCreateBuildCreateBuildCreatePayload {
 	return v.BuildCreate
+}
+
+// BuildJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
+type BuildJobsJobConnection struct {
+	Edges []BuildJobsJobConnectionEdgesJobEdge `json:"edges"`
+}
+
+// GetEdges returns BuildJobsJobConnection.Edges, and is useful for accessing the field via an interface.
+func (v *BuildJobsJobConnection) GetEdges() []BuildJobsJobConnectionEdgesJobEdge { return v.Edges }
+
+// BuildJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
+type BuildJobsJobConnectionEdgesJobEdge struct {
+	Node Job `json:"-"`
+}
+
+// GetNode returns BuildJobsJobConnectionEdgesJobEdge.Node, and is useful for accessing the field via an interface.
+func (v *BuildJobsJobConnectionEdgesJobEdge) GetNode() Job { return v.Node }
+
+func (v *BuildJobsJobConnectionEdgesJobEdge) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*BuildJobsJobConnectionEdgesJobEdge
+		Node json.RawMessage `json:"node"`
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.BuildJobsJobConnectionEdgesJobEdge = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	{
+		dst := &v.Node
+		src := firstPass.Node
+		if len(src) != 0 && string(src) != "null" {
+			err = __unmarshalJob(
+				src, dst)
+			if err != nil {
+				return fmt.Errorf(
+					"Unable to unmarshal BuildJobsJobConnectionEdgesJobEdge.Node: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+type __premarshalBuildJobsJobConnectionEdgesJobEdge struct {
+	Node json.RawMessage `json:"node"`
+}
+
+func (v *BuildJobsJobConnectionEdgesJobEdge) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *BuildJobsJobConnectionEdgesJobEdge) __premarshalJSON() (*__premarshalBuildJobsJobConnectionEdgesJobEdge, error) {
+	var retval __premarshalBuildJobsJobConnectionEdgesJobEdge
+
+	{
+
+		dst := &retval.Node
+		src := v.Node
+		var err error
+		*dst, err = __marshalJob(
+			&src)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"Unable to marshal BuildJobsJobConnectionEdgesJobEdge.Node: %w", err)
+		}
+	}
+	return &retval, nil
 }
 
 // Meta-data key/value pairs for a build
@@ -318,12 +398,79 @@ func (v *CommandJob) GetCommand() string { return v.Command }
 //
 // A build from a pipeline
 type GetBuildBuild struct {
-	// The current state of the build
-	State BuildStates `json:"state"`
+	Build `json:"-"`
 }
 
+// GetUuid returns GetBuildBuild.Uuid, and is useful for accessing the field via an interface.
+func (v *GetBuildBuild) GetUuid() string { return v.Build.Uuid }
+
+// GetId returns GetBuildBuild.Id, and is useful for accessing the field via an interface.
+func (v *GetBuildBuild) GetId() string { return v.Build.Id }
+
+// GetNumber returns GetBuildBuild.Number, and is useful for accessing the field via an interface.
+func (v *GetBuildBuild) GetNumber() int { return v.Build.Number }
+
 // GetState returns GetBuildBuild.State, and is useful for accessing the field via an interface.
-func (v *GetBuildBuild) GetState() BuildStates { return v.State }
+func (v *GetBuildBuild) GetState() BuildStates { return v.Build.State }
+
+// GetJobs returns GetBuildBuild.Jobs, and is useful for accessing the field via an interface.
+func (v *GetBuildBuild) GetJobs() BuildJobsJobConnection { return v.Build.Jobs }
+
+func (v *GetBuildBuild) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*GetBuildBuild
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.GetBuildBuild = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(
+		b, &v.Build)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type __premarshalGetBuildBuild struct {
+	Uuid string `json:"uuid"`
+
+	Id string `json:"id"`
+
+	Number int `json:"number"`
+
+	State BuildStates `json:"state"`
+
+	Jobs BuildJobsJobConnection `json:"jobs"`
+}
+
+func (v *GetBuildBuild) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *GetBuildBuild) __premarshalJSON() (*__premarshalGetBuildBuild, error) {
+	var retval __premarshalGetBuildBuild
+
+	retval.Uuid = v.Build.Uuid
+	retval.Id = v.Build.Id
+	retval.Number = v.Build.Number
+	retval.State = v.Build.State
+	retval.Jobs = v.Build.Jobs
+	return &retval, nil
+}
 
 // GetBuildResponse is returned by GetBuild on success.
 type GetBuildResponse struct {
@@ -371,11 +518,89 @@ func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdge) GetNode() GetBuil
 //
 // A build from a pipeline
 type GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild struct {
-	Id string `json:"id"`
+	Build `json:"-"`
+}
+
+// GetUuid returns GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild.Uuid, and is useful for accessing the field via an interface.
+func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild) GetUuid() string {
+	return v.Build.Uuid
 }
 
 // GetId returns GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild.Id, and is useful for accessing the field via an interface.
-func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild) GetId() string { return v.Id }
+func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild) GetId() string {
+	return v.Build.Id
+}
+
+// GetNumber returns GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild.Number, and is useful for accessing the field via an interface.
+func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild) GetNumber() int {
+	return v.Build.Number
+}
+
+// GetState returns GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild.State, and is useful for accessing the field via an interface.
+func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild) GetState() BuildStates {
+	return v.Build.State
+}
+
+// GetJobs returns GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild.Jobs, and is useful for accessing the field via an interface.
+func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild) GetJobs() BuildJobsJobConnection {
+	return v.Build.Jobs
+}
+
+func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(
+		b, &v.Build)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+type __premarshalGetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild struct {
+	Uuid string `json:"uuid"`
+
+	Id string `json:"id"`
+
+	Number int `json:"number"`
+
+	State BuildStates `json:"state"`
+
+	Jobs BuildJobsJobConnection `json:"jobs"`
+}
+
+func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *GetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild) __premarshalJSON() (*__premarshalGetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild, error) {
+	var retval __premarshalGetBuildsPipelineBuildsBuildConnectionEdgesBuildEdgeNodeBuild
+
+	retval.Uuid = v.Build.Uuid
+	retval.Id = v.Build.Id
+	retval.Number = v.Build.Number
+	retval.State = v.Build.State
+	retval.Jobs = v.Build.Jobs
+	return &retval, nil
+}
 
 // GetBuildsResponse is returned by GetBuilds on success.
 type GetBuildsResponse struct {
@@ -1161,16 +1386,20 @@ func BuildCreate(
 mutation BuildCreate ($input: BuildCreateInput!) {
 	buildCreate(input: $input) {
 		build {
-			uuid
-			id
-			number
-			jobs(first: 100) {
-				edges {
-					node {
-						__typename
-						... Job
-					}
-				}
+			... Build
+		}
+	}
+}
+fragment Build on Build {
+	uuid
+	id
+	number
+	state
+	jobs(first: 100) {
+		edges {
+			node {
+				__typename
+				... Job
 			}
 		}
 	}
@@ -1216,8 +1445,34 @@ func GetBuild(
 		Query: `
 query GetBuild ($uuid: ID!) {
 	build(uuid: $uuid) {
-		state
+		... Build
 	}
+}
+fragment Build on Build {
+	uuid
+	id
+	number
+	state
+	jobs(first: 100) {
+		edges {
+			node {
+				__typename
+				... Job
+			}
+		}
+	}
+}
+fragment Job on Job {
+	... on JobTypeCommand {
+		... CommandJob
+	}
+}
+fragment CommandJob on JobTypeCommand {
+	uuid
+	env
+	scheduledAt
+	agentQueryRules
+	command
 }
 `,
 		Variables: &__GetBuildInput{
@@ -1253,11 +1508,37 @@ query GetBuilds ($slug: ID!, $state: [BuildStates!], $first: Int) {
 		builds(state: $state, first: $first) {
 			edges {
 				node {
-					id
+					... Build
 				}
 			}
 		}
 	}
+}
+fragment Build on Build {
+	uuid
+	id
+	number
+	state
+	jobs(first: 100) {
+		edges {
+			node {
+				__typename
+				... Job
+			}
+		}
+	}
+}
+fragment Job on Job {
+	... on JobTypeCommand {
+		... CommandJob
+	}
+}
+fragment CommandJob on JobTypeCommand {
+	uuid
+	env
+	scheduledAt
+	agentQueryRules
+	command
 }
 `,
 		Variables: &__GetBuildsInput{
