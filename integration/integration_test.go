@@ -100,6 +100,22 @@ func TestSSHRepoClone(t *testing.T) {
 	tc.AssertSuccess(ctx, build)
 }
 
+func TestPluginCloneFailsTests(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "unknown-plugin.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+}
+
 func TestCleanupOrphanedPipelines(t *testing.T) {
 	if !deleteOrphanedPipelines {
 		t.Skip("not cleaning orphaned pipelines")
@@ -238,21 +254,7 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 
 func (t testcase) AssertSuccess(ctx context.Context, build api.Build) {
 	t.Helper()
-Out:
-	for {
-		getBuild, err := api.GetBuild(ctx, t.GraphQL, build.Uuid)
-		require.NoError(t, err)
-		switch getBuild.Build.State {
-		case api.BuildStatesPassed:
-			t.Logger.Debug("build passed!")
-			break Out
-		case api.BuildStatesFailed:
-			t.Fatalf("build failed")
-		default:
-			t.Logger.Debug("sleeping", zap.Any("build state", getBuild.Build.State))
-			time.Sleep(time.Second)
-		}
-	}
+	require.Equal(t, api.BuildStatesPassed, t.waitForBuild(ctx, build))
 
 	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
 	require.NoError(t, err)
@@ -270,4 +272,26 @@ Out:
 	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
 	require.Contains(t, filenames, "README.md")
 	require.Contains(t, filenames, "CODE_OF_CONDUCT.md")
+}
+
+func (t testcase) AssertFail(ctx context.Context, build api.Build) {
+	t.Helper()
+
+	require.Equal(t, api.BuildStatesFailed, t.waitForBuild(ctx, build))
+}
+
+func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildStates {
+	t.Helper()
+
+	for {
+		getBuild, err := api.GetBuild(ctx, t.GraphQL, build.Uuid)
+		require.NoError(t, err)
+		switch getBuild.Build.State {
+		case api.BuildStatesPassed, api.BuildStatesFailed:
+			return getBuild.Build.State
+		default:
+			t.Logger.Debug("sleeping", zap.Any("build state", getBuild.Build.State))
+			time.Sleep(time.Second)
+		}
+	}
 }
