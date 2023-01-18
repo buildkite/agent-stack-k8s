@@ -28,7 +28,6 @@ steps:
                 command: [.buildkite/steps/agent.sh]
 
   - label: ":buildkite: integration tests"
-    key: integration
     depends_on: agent
     agents:
       queue: kubernetes
@@ -62,23 +61,3 @@ steps:
       - test-collector:
           files: "junit-*.xml"
           format: "junit"
-
-  - label: "publish and deploy"
-    if: "build.branch == pipeline.default_branch"
-    depends_on:
-    - agent
-    - integration
-    agents:
-      queue: kubernetes
-    env:
-      BUILDKITE_SHELL: /bin/sh -e -c
-    plugins:
-      - kubernetes:
-          podSpec:
-            containers:
-              - name: deploy
-                image: alpine:latest
-                command: [.buildkite/steps/deploy.sh]
-                envFrom:
-                - secretRef:
-                    name: agent-stack-k8s-secrets
