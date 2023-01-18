@@ -13,15 +13,18 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/cmd/controller"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 const (
@@ -66,138 +69,51 @@ func TestMain(m *testing.M) {
 }
 
 func TestWalkingSkeleton(t *testing.T) {
-	basicTest(t, "helloworld.yaml", repoHTTP)
+	tc := testcase{
+		T:       t,
+		Fixture: "helloworld.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
 }
 
 func TestSSHRepoClone(t *testing.T) {
-	k8s := newk8sClient(t)
-	_, err := k8s.CoreV1().Secrets(cfg.Namespace).Get(context.Background(), "agent-stack-k8s", v1.GetOptions{})
-	require.NoError(t, err, "agent-stack-k8s secret must exist")
-	basicTest(t, "secretref.yaml", repoSSH)
-}
+	tc := testcase{
+		T:       t,
+		Fixture: "secretref.yaml",
+		Repo:    repoSSH,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
 
-func basicTest(t *testing.T, fixture, repo string) {
-	t.Helper()
-	// create pipeline
 	ctx := context.Background()
-	graphqlClient := api.NewClient(cfg.BuildkiteToken)
+	_, err := tc.Kubernetes.CoreV1().Secrets(cfg.Namespace).Get(ctx, "agent-stack-k8s", v1.GetOptions{})
+	require.NoError(t, err, "agent-stack-k8s secret must exist")
 
-	getOrg, err := api.GetOrganization(ctx, graphqlClient, cfg.Org)
-	require.NoError(t, err)
-
-	tpl, err := template.ParseFS(fixtures, fmt.Sprintf("fixtures/%s", fixture))
-	require.NoError(t, err)
-
-	pipelineName := fmt.Sprintf("agent-k8s-%d", time.Now().UnixNano())
-	var steps bytes.Buffer
-	require.NoError(t, tpl.Execute(&steps, map[string]string{
-		"queue": pipelineName,
-	}))
-	createPipeline, err := api.PipelineCreate(ctx, graphqlClient, api.PipelineCreateInput{
-		OrganizationId: getOrg.Organization.Id,
-		Name:           pipelineName,
-		Repository: api.PipelineRepositoryInput{
-			Url: repo,
-		},
-		Steps: api.PipelineStepsInput{
-			Yaml: steps.String(),
-		},
-	})
-	require.NoError(t, err)
-
-	pipeline := createPipeline.PipelineCreate.Pipeline
-	if !preservePipelines {
-		EnsureCleanup(t, func() {
-			_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
-				Id: pipeline.Id,
-			})
-			assert.NoError(t, err)
-			t.Logf("deleted pipeline! %v", pipeline.Name)
-		})
-	}
-
-	//start controller
-	logger, err := zap.NewDevelopment()
-	require.NoError(t, err)
-
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, nil)
-	clientConfig, err := kubeConfig.ClientConfig()
-	require.NoError(t, err)
-
-	k8sClient, err := kubernetes.NewForConfig(clientConfig)
-	require.NoError(t, err)
-
-	runCtx, cancel := context.WithCancel(context.Background())
-	EnsureCleanup(t, cancel)
-
-	cfg.Tags = []string{fmt.Sprintf("queue=%s", pipelineName)}
-	go controller.Run(runCtx, k8sClient, cfg)
-
-	// trigger build
-	createBuild, err := api.BuildCreate(ctx, graphqlClient, api.BuildCreateInput{
-		PipelineID: pipeline.Id,
-		Commit:     "HEAD",
-		Branch:     branch,
-	})
-	require.NoError(t, err)
-	EnsureCleanup(t, func() {
-		if _, err := api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{
-			Id: createBuild.BuildCreate.Build.Id,
-		}); err != nil {
-			t.Logf("failed to cancel build: %v", err)
-		}
-	})
-	build := createBuild.BuildCreate.Build
-	require.Len(t, build.Jobs.Edges, 1)
-	node := build.Jobs.Edges[0].Node
-	job, ok := node.(*api.JobJobTypeCommand)
-	require.True(t, ok)
-
-	// assert build success
-Out:
-	for {
-		getBuild, err := api.GetBuild(ctx, graphqlClient, build.Uuid)
-		require.NoError(t, err)
-		switch getBuild.Build.State {
-		case api.BuildStatesPassed:
-			logger.Debug("build passed!")
-			break Out
-		case api.BuildStatesFailed:
-			t.Fatalf("build failed")
-		default:
-			logger.Debug("sleeping", zap.Any("build state", getBuild.Build.State))
-			time.Sleep(time.Second)
-		}
-	}
-
-	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
-	require.NoError(t, err)
-
-	client := buildkite.NewClient(config.Client())
-	logs, _, err := client.Jobs.GetJobLog(cfg.Org, pipeline.Name, strconv.Itoa(build.Number), job.Uuid)
-	require.NoError(t, err)
-	require.NotNil(t, logs.Content)
-	require.Contains(t, *logs.Content, "Buildkite Agent Stack for Kubernetes")
-
-	artifacts, _, err := client.Artifacts.ListByBuild(cfg.Org, pipeline.Name, strconv.Itoa(build.Number), nil)
-	require.NoError(t, err)
-	require.Len(t, artifacts, 2)
-	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
-	require.Contains(t, filenames, "README.md")
-	require.Contains(t, filenames, "CODE_OF_CONDUCT.md")
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
 }
 
-func newk8sClient(t *testing.T) kubernetes.Interface {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, nil)
-	clientConfig, err := kubeConfig.ClientConfig()
-	require.NoError(t, err)
+func TestPluginCloneFailsTests(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "unknown-plugin.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
 
-	clientset, err := kubernetes.NewForConfig(clientConfig)
-	require.NoError(t, err)
+	ctx := context.Background()
 
-	return clientset
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
 }
 
 func TestCleanupOrphanedPipelines(t *testing.T) {
@@ -221,5 +137,161 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 		})
 		require.NoError(t, err)
 		t.Logf("deleted orphaned pipeline! %v", pipeline.Node.Name)
+	}
+}
+
+type testcase struct {
+	*testing.T
+	Logger       *zap.Logger
+	Fixture      string
+	Repo         string
+	GraphQL      graphql.Client
+	Kubernetes   kubernetes.Interface
+	PipelineName string // autogenerated
+}
+
+func (t testcase) Init() testcase {
+	t.Helper()
+	t.Parallel()
+
+	t.PipelineName = fmt.Sprintf("agent-k8s-%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
+	t.Logger = zaptest.NewLogger(t)
+
+	clientConfig, err := restconfig.GetConfig()
+	require.NoError(t, err)
+	clientset, err := kubernetes.NewForConfig(clientConfig)
+	require.NoError(t, err)
+	t.Kubernetes = clientset
+
+	return t
+}
+
+func (t testcase) CreatePipeline(ctx context.Context) string {
+	t.Helper()
+
+	getOrg, err := api.GetOrganization(ctx, t.GraphQL, cfg.Org)
+	require.NoError(t, err)
+
+	tpl, err := template.ParseFS(fixtures, fmt.Sprintf("fixtures/%s", t.Fixture))
+	require.NoError(t, err)
+
+	var steps bytes.Buffer
+	require.NoError(t, tpl.Execute(&steps, map[string]string{
+		"queue": t.PipelineName,
+	}))
+	createPipeline, err := api.PipelineCreate(ctx, t.GraphQL, api.PipelineCreateInput{
+		OrganizationId: getOrg.Organization.Id,
+		Name:           t.PipelineName,
+		Repository: api.PipelineRepositoryInput{
+			Url: t.Repo,
+		},
+		Steps: api.PipelineStepsInput{
+			Yaml: steps.String(),
+		},
+	})
+	require.NoError(t, err)
+
+	pipeline := createPipeline.PipelineCreate.Pipeline
+	if !preservePipelines {
+		EnsureCleanup(t.T, func() {
+			_, err = api.PipelineDelete(ctx, t.GraphQL, api.PipelineDeleteInput{
+				Id: pipeline.Id,
+			})
+			assert.NoError(t, err)
+			t.Logf("deleted pipeline! %v", pipeline.Name)
+		})
+	}
+
+	return pipeline.Id
+}
+
+func (t testcase) StartController(ctx context.Context) {
+	t.Helper()
+
+	//start controller
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, nil)
+	clientConfig, err := kubeConfig.ClientConfig()
+	require.NoError(t, err)
+
+	k8sClient, err := kubernetes.NewForConfig(clientConfig)
+	require.NoError(t, err)
+
+	runCtx, cancel := context.WithCancel(ctx)
+	EnsureCleanup(t.T, cancel)
+
+	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.PipelineName)}
+	go controller.Run(runCtx, k8sClient, cfg)
+}
+
+func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build {
+	t.Helper()
+
+	// trigger build
+	createBuild, err := api.BuildCreate(ctx, t.GraphQL, api.BuildCreateInput{
+		PipelineID: pipelineID,
+		Commit:     "HEAD",
+		Branch:     branch,
+	})
+	require.NoError(t, err)
+	EnsureCleanup(t.T, func() {
+		if _, err := api.BuildCancel(ctx, t.GraphQL, api.BuildCancelInput{
+			Id: createBuild.BuildCreate.Build.Id,
+		}); err != nil {
+			if !strings.Contains(err.Error(), "Build can't be canceled because it's already finished") {
+				t.Logf("failed to cancel build: %v", err)
+			}
+		}
+	})
+	build := createBuild.BuildCreate.Build
+	require.Len(t, build.Jobs.Edges, 1)
+	node := build.Jobs.Edges[0].Node
+	_, ok := node.(*api.JobJobTypeCommand)
+	require.True(t, ok)
+
+	return build.Build
+}
+
+func (t testcase) AssertSuccess(ctx context.Context, build api.Build) {
+	t.Helper()
+	require.Equal(t, api.BuildStatesPassed, t.waitForBuild(ctx, build))
+
+	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
+	require.NoError(t, err)
+
+	client := buildkite.NewClient(config.Client())
+	job := build.Jobs.Edges[0].Node.(*api.JobJobTypeCommand)
+	logs, _, err := client.Jobs.GetJobLog(cfg.Org, t.PipelineName, strconv.Itoa(build.Number), job.Uuid)
+	require.NoError(t, err)
+	require.NotNil(t, logs.Content)
+	require.Contains(t, *logs.Content, "Buildkite Agent Stack for Kubernetes")
+
+	artifacts, _, err := client.Artifacts.ListByBuild(cfg.Org, t.PipelineName, strconv.Itoa(build.Number), nil)
+	require.NoError(t, err)
+	require.Len(t, artifacts, 2)
+	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
+	require.Contains(t, filenames, "README.md")
+	require.Contains(t, filenames, "CODE_OF_CONDUCT.md")
+}
+
+func (t testcase) AssertFail(ctx context.Context, build api.Build) {
+	t.Helper()
+
+	require.Equal(t, api.BuildStatesFailed, t.waitForBuild(ctx, build))
+}
+
+func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildStates {
+	t.Helper()
+
+	for {
+		getBuild, err := api.GetBuild(ctx, t.GraphQL, build.Uuid)
+		require.NoError(t, err)
+		switch getBuild.Build.State {
+		case api.BuildStatesPassed, api.BuildStatesFailed:
+			return getBuild.Build.State
+		default:
+			t.Logger.Debug("sleeping", zap.Any("build state", getBuild.Build.State))
+			time.Sleep(time.Second)
+		}
 	}
 }

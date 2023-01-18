@@ -12,6 +12,21 @@ fragment CommandJob on JobTypeCommand {
   command
 }
 
+fragment Build on Build {
+  uuid
+  id
+  number
+  state
+  jobs(first: 100) {
+    edges {
+      # @genqlient(flatten: true)
+      node {
+        ...Job
+      }
+    }
+  }
+}
+
 # @genqlient(omitempty: true)
 mutation PipelineCreate(
   # need line break here due to https://github.com/Khan/genqlient/issues/151
@@ -47,17 +62,7 @@ query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
 mutation BuildCreate($input: BuildCreateInput!) {
   buildCreate(input: $input) {
     build {
-      uuid
-      id
-      number
-      jobs(first: 100) {
-        edges {
-          # @genqlient(flatten: true)
-          node {
-            ...Job
-          }
-        }
-      }
+      ...Build
     }
   }
 }
@@ -76,7 +81,7 @@ query GetOrganization($slug: ID!) {
 
 query GetBuild($uuid: ID!) {
   build(uuid: $uuid) {
-    state
+    ...Build
   }
 }
 
@@ -107,7 +112,7 @@ query GetBuilds($slug: ID!, $state: [BuildStates!], $first: Int) {
     builds(state: $state, first: $first) {
       edges {
         node {
-          id
+          ...Build
         }
       }
     }
