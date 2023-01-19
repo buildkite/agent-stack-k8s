@@ -5,6 +5,6 @@ go version
 go install gotest.tools/gotestsum
 
 echo '+++ Running tests'
-export IMAGE=$(buildkite-agent meta-data get "image")
+export IMAGE=$(buildkite-agent meta-data get "agent-image")
 
 gotestsum -f standard-verbose --junitfile "junit-${BUILDKITE_JOB_ID}.xml" -- -count=1 -failfast "$@" ./...
