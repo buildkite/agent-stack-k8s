@@ -24,7 +24,7 @@ steps:
             serviceAccountName: docker
             containers:
               - name: docker
-                image: crazymax/docker:latest
+                image: golang:latest
                 command: [.buildkite/steps/agent.sh]
 
   - label: ":buildkite: integration tests"
@@ -65,10 +65,29 @@ steps:
           files: "junit-*.xml"
           format: "junit"
 
-  - label: "publish and deploy"
+  - label: ":docker: build controller"
+    key: controller
+    if: "build.branch == pipeline.default_branch"
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - name: ko
+                image: golang:latest
+                command: [.buildkite/steps/controller.sh]
+                envFrom:
+                - configMapRef:
+                    name: build-config
+                - secretRef:
+                    name: deploy-secrets
+
+  - label: ":shipit: deploy"
     if: "build.branch == pipeline.default_branch"
     depends_on:
     - agent
+    - controller
     - integration
     agents:
       queue: kubernetes
