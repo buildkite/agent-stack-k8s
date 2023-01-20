@@ -5,6 +5,9 @@ apt update && apt install -y --no-install-recommends jq
 
 OS=$(go env GOOS)
 ARCH=$(go env GOARCH)
+if [ "$ARCH" == "amd64" ]; then
+    ARCH="x86_64"
+fi
 latest=$(curl -L -s https://api.github.com/repos/ko-build/ko/releases/latest | jq -r '.tag_name')
 curl -sSfL "https://github.com/ko-build/ko/releases/download/${latest}/ko_${latest:1}_${OS^}_${ARCH}.tar.gz" | tar -xzv -C /bin ko
 
