@@ -30,7 +30,6 @@ The entrypoint rewriting and ordering logic is heavily inspired by [the approach
 - An API token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
 - An [agent token](https://buildkite.com/docs/agent/v3/tokens)
 
-
 ### Deploy with Helm
 
 The simplest way to get up and running is by deploying our Helm chart:
@@ -128,6 +127,8 @@ To use SSH to clone your repos, you'll need to add a secret reference via an [En
 ```yaml
 steps:
   - label: build image
+    agents:
+      queue: kubernetes
     plugins:
       - kubernetes:
           gitEnvFrom:
