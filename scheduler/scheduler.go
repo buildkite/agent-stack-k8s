@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/monitor"
+	"github.com/buildkite/agent/v3/clicommand"
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -167,6 +168,9 @@ func (w *worker) k8sify(
 		}, corev1.EnvVar{
 			Name:  "BUILDKITE_PLUGINS_PATH",
 			Value: "/tmp",
+		}, corev1.EnvVar{
+			Name:  clicommand.RedactedVars.EnvVar,
+			Value: strings.Join(clicommand.RedactedVars.Value.Value(), ","),
 		})
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
