@@ -1,21 +1,19 @@
 #!/bin/ash
 set -euxo pipefail
 
-echo @testing https://dl-cdn.alpinelinux.org/alpine/edge/testing/ >>/etc/apk/repositories
-apk update
-apk add helm yq skopeo git go ko@testing --quiet --no-progress
+apk add helm yq skopeo git --quiet --no-progress
 
 tag=$(git describe)
 version=$(echo "$tag" | sed 's/v//')
 temp_agent_image=$(buildkite-agent meta-data get "agent-image")
 agent_image="${KO_DOCKER_REPO}/agent-k8s:${tag}"
+controller_image=$(buildkite-agent meta-data get "controller-image")
 
 set +x
-ko login ghcr.io -u $REGISTRY_USERNAME --password $REGISTRY_PASSWORD
+skopeo login ghcr.io -u $REGISTRY_USERNAME --password $REGISTRY_PASSWORD --authfile ~/.docker/config.json
 set -x
 
 skopeo copy "docker://${temp_agent_image}" "docker://${agent_image}" --authfile ~/.docker/config.json
-controller_image=$(ko build -B --tags "$tag")
 
 yq -i ".image = \"$controller_image\"" charts/agent-stack-k8s/values.yaml
 yq -i ".config.image = \"$agent_image\"" charts/agent-stack-k8s/values.yaml

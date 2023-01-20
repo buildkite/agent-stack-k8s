@@ -22,6 +22,7 @@ gomod:
 agent target=("ghcr.io/buildkite/agent-k8s:latest") os=("linux") arch=("amd64 arm64"):
   #!/usr/bin/env bash
   set -euxo pipefail
+  export CGO_ENABLED=0
   pushd agent/packaging/docker/alpine
   platforms=()
   for os in {{os}}; do
