@@ -160,6 +160,7 @@ For running the integration tests you'll need to add some additional scopes to y
 
 - `read_artifacts`
 - `read_build_logs`
+- `write_pipelines`
 
 You'll also need to create an SSH secret in your cluster to run [this test pipeline](integration/fixtures/secretref.yaml). This SSH key needs to be associated with your GitHub account to be able to clone this public repo, and must be in a form acceptable to OpenSSH (aka `BEGIN OPENSSH PRIVATE KEY`, not `BEGIN PRIVATE KEY`).
 

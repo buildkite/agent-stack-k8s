@@ -163,3 +163,5 @@ require (
 	k8s.io/apimachinery v0.26.0
 	k8s.io/client-go v0.26.0
 )
+
+replace github.com/buildkite/go-buildkite/v3 => github.com/benmoss/go-buildkite/v3 v3.0.0-20230123160229-4d43d72f967e
