@@ -152,7 +152,7 @@ func (m *Monitor) reachedMaxInFlight() bool {
 		return true
 	}
 	for _, job := range jobList {
-		if job.Status.Active != 0 {
+		if job.Status.CompletionTime != nil {
 			activeJobs++
 		}
 	}
