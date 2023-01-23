@@ -33,6 +33,7 @@ agent target=("ghcr.io/buildkite/agent-k8s:latest") os=("linux") arch=("amd64 ar
     done
   done
   commaified=$(IFS=, ; echo "${platforms[*]}")
+  mkdir -p {{justfile_directory()}}/dist
   docker buildx build --tag {{target}} --platform "$commaified" --push --metadata-file {{justfile_directory()}}/dist/metadata.json .
   rm buildkite-agent-linux*
 
