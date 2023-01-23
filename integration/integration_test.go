@@ -77,7 +77,7 @@ func TestWalkingSkeleton(t *testing.T) {
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.CreatePipeline(ctx)
-	tc.StartController(ctx)
+	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 }
@@ -95,7 +95,7 @@ func TestSSHRepoClone(t *testing.T) {
 	require.NoError(t, err, "agent-stack-k8s secret must exist")
 
 	pipelineID := tc.CreatePipeline(ctx)
-	tc.StartController(ctx)
+	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 }
@@ -111,9 +111,41 @@ func TestPluginCloneFailsTests(t *testing.T) {
 	ctx := context.Background()
 
 	pipelineID := tc.CreatePipeline(ctx)
-	tc.StartController(ctx)
+	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
+}
+
+func TestMaxInFlight(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "parallel.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+
+	pipelineID := tc.CreatePipeline(ctx)
+	cfg := cfg
+	cfg.MaxInFlight = 1
+	tc.StartController(ctx, cfg)
+	buildID := tc.TriggerBuild(ctx, pipelineID).Number
+
+	for {
+		build, _, err := tc.Buildkite.Builds.Get(cfg.Org, tc.PipelineName, fmt.Sprintf("%d", buildID), nil)
+		require.NoError(t, err)
+		if *build.State == "running" {
+			require.LessOrEqual(t, *build.Pipeline.RunningJobsCount, 1)
+		} else if *build.State == "passed" {
+			break
+		} else if *build.State == "scheduled" {
+			time.Sleep(time.Second)
+			continue
+		} else {
+			t.Fatalf("unexpected build state: %v", *build.State)
+		}
+	}
 }
 
 func TestCleanupOrphanedPipelines(t *testing.T) {
@@ -202,7 +234,7 @@ func (t testcase) CreatePipeline(ctx context.Context) string {
 	return *pipeline.GraphQLID
 }
 
-func (t testcase) StartController(ctx context.Context) {
+func (t testcase) StartController(ctx context.Context, cfg api.Config) {
 	t.Helper()
 
 	//start controller
@@ -241,7 +273,7 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 		}
 	})
 	build := createBuild.BuildCreate.Build
-	require.Len(t, build.Jobs.Edges, 1)
+	require.GreaterOrEqual(t, len(build.Jobs.Edges), 1)
 	node := build.Jobs.Edges[0].Node
 	_, ok := node.(*api.JobJobTypeCommand)
 	require.True(t, ok)
