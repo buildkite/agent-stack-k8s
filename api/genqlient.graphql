@@ -27,19 +27,6 @@ fragment Build on Build {
   }
 }
 
-# @genqlient(omitempty: true)
-mutation PipelineCreate(
-  # need line break here due to https://github.com/Khan/genqlient/issues/151
-  $input: PipelineCreateInput!
-) {
-  pipelineCreate(input: $input) {
-    pipeline {
-      id
-      name
-    }
-  }
-}
-
 mutation PipelineDelete($input: PipelineDeleteInput!) {
   pipelineDelete(input: $input) {
     clientMutationId
