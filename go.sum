@@ -83,6 +83,8 @@ github.com/aws/aws-sdk-go v1.44.181 h1:w4OzE8bwIVo62gUTAp/uEFO2HSsUtf1pjXpSs36cl
 github.com/aws/aws-sdk-go v1.44.181/go.mod h1:aVsgQcEevwlmQ7qHE9I3h+dtQgpqhFB+i8Phjh7fkwI=
 github.com/benbjohnson/clock v1.1.0 h1:Q92kusRqC1XV2MjkWETPvjJVqKetz1OzxZB7mHJLju8=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
+github.com/benmoss/go-buildkite/v3 v3.0.0-20230123160229-4d43d72f967e h1:YyZYO5g1GVCxFoApaFs37vlEEVLeCYrWEi2DVE6A7hY=
+github.com/benmoss/go-buildkite/v3 v3.0.0-20230123160229-4d43d72f967e/go.mod h1:6pweknacVv7He5Lvbf54urp2P0W6/b4Nrcxn718PQrE=
 github.com/bradleyjkemp/cupaloy/v2 v2.6.0 h1:knToPYa2xtfg42U3I6punFEjaGFKWQRXJwj0JTv4mTs=
 github.com/bradleyjkemp/cupaloy/v2 v2.6.0/go.mod h1:bm7JXdkRd4BHJk9HpwqAI8BoAY1lps46Enkdqw6aRX0=
 github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf h1:WCnJxXZXx9c8gwz598wvdqmu+YTzB9wx2X1OovK3Le8=
@@ -90,8 +92,6 @@ github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf
 github.com/buildkite/agent/v3 v3.43.0 h1:nj2O/3TGbGdOYwn7n/twX4hJ3MaJ7nr4q2qHh9kliyA=
 github.com/buildkite/agent/v3 v3.43.0/go.mod h1:dpM7xBoDHo7hibBQHwcCJ35Nbt7gQK9CgrqK0OBNaXo=
 github.com/buildkite/bintest/v3 v3.1.1 h1:bS924OU8Ljm46DesONXzxxTBMjbliQRnPB+H4DOeUDE=
-github.com/buildkite/go-buildkite/v3 v3.1.0 h1:vTAz4R/ZHvTjgmkVEZPqnZJcxAVP80IhowmrX4OhzzY=
-github.com/buildkite/go-buildkite/v3 v3.1.0/go.mod h1:6pweknacVv7He5Lvbf54urp2P0W6/b4Nrcxn718PQrE=
 github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251 h1:k6UDF1uPYOs0iy1HPeotNa155qXRWrzKnqAaGXHLZCE=
 github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251/go.mod h1:gbPR1gPu9dB96mucYIR7T3B7p/78hRVSOuzIWLHK2Y4=
 github.com/buildkite/roko v1.0.3-0.20221121010703-599521c80157 h1:lqcTyaty4fY7XmGPKep+MtOYDvj7OKogKX2C2Y783BQ=
