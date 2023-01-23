@@ -1,6 +1,5 @@
 agentToken: ""
 graphqlToken: ""
-image: "ghcr.io/buildkite/agent-stack-k8s:v0.1.0"
 
 config:
   org: ""
