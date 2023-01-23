@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/cmd/controller"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
+	"github.com/buildkite/roko"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -225,7 +226,17 @@ func (t testcase) CreatePipeline(ctx context.Context) string {
 
 	if !preservePipelines {
 		EnsureCleanup(t.T, func() {
-			_, err = t.Buildkite.Pipelines.Delete(cfg.Org, t.PipelineName)
+			err := roko.NewRetrier(
+				roko.WithMaxAttempts(10),
+				roko.WithStrategy(roko.Constant(5*time.Second)),
+			).DoWithContext(ctx, func(r *roko.Retrier) error {
+				_, err = t.Buildkite.Pipelines.Delete(cfg.Org, t.PipelineName)
+				if err != nil {
+					t.Logf("waiting for build to be canceled on pipeline %s", t.PipelineName)
+					return err
+				}
+				return nil
+			})
 			assert.NoError(t, err)
 			t.Logf("deleted pipeline! %v", pipeline.Name)
 		})

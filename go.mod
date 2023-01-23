@@ -5,6 +5,7 @@ go 1.19
 require (
 	github.com/Khan/genqlient v0.5.0
 	github.com/buildkite/go-buildkite/v3 v3.1.0
+	github.com/buildkite/roko v1.0.3-0.20221121010703-599521c80157
 	github.com/go-playground/locales v0.14.0
 	github.com/go-playground/universal-translator v0.18.0
 	github.com/go-playground/validator/v10 v10.11.1
@@ -32,7 +33,6 @@ require (
 	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf // indirect
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251 // indirect
-	github.com/buildkite/roko v1.0.3-0.20221121010703-599521c80157 // indirect
 	github.com/buildkite/shellwords v0.0.0-20180315084142-c3f497d1e000 // indirect
 	github.com/buildkite/yaml v0.0.0-20210326113714-4a3f40911396 // indirect
 	github.com/cenkalti/backoff v1.1.1-0.20171020064038-309aa717adbf // indirect
