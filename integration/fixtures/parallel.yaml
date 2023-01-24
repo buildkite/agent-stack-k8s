@@ -1,6 +1,6 @@
 steps:
   - label: ":wave:"
-    parallelism: 10
+    parallelism: 4
     agents:
       queue: {{.queue}}
     env:

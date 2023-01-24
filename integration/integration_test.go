@@ -117,7 +117,7 @@ func TestPluginCloneFailsTests(t *testing.T) {
 	tc.AssertFail(ctx, build)
 }
 
-func TestMaxInFlight(t *testing.T) {
+func TestMaxInFlightLimited(t *testing.T) {
 	tc := testcase{
 		T:       t,
 		Fixture: "parallel.yaml",
@@ -137,10 +137,11 @@ func TestMaxInFlight(t *testing.T) {
 		build, _, err := tc.Buildkite.Builds.Get(cfg.Org, tc.PipelineName, fmt.Sprintf("%d", buildID), nil)
 		require.NoError(t, err)
 		if *build.State == "running" {
-			require.LessOrEqual(t, *build.Pipeline.RunningJobsCount, 1)
+			require.LessOrEqual(t, *build.Pipeline.RunningJobsCount, cfg.MaxInFlight)
 		} else if *build.State == "passed" {
 			break
 		} else if *build.State == "scheduled" {
+			t.Log("waiting for build to start")
 			time.Sleep(time.Second)
 			continue
 		} else {
@@ -189,7 +190,7 @@ func (t testcase) Init() testcase {
 	t.Parallel()
 
 	t.PipelineName = fmt.Sprintf("agent-k8s-%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
-	t.Logger = zaptest.NewLogger(t)
+	t.Logger = zaptest.NewLogger(t).Named(t.Name())
 
 	clientConfig, err := restconfig.GetConfig()
 	require.NoError(t, err)
