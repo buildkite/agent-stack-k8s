@@ -17,17 +17,23 @@ spec:
       serviceAccountName: agent-k8s-job
       containers:
         - name: buildkiteagent
-          image: buildkite/agent:edge-alpine-k8s
-          # imagePullPolicy: IfNotPresent
+          image: buildkite/agent:3.43.1-alpine-k8s
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "1"
+              memory: "5Gi"
+          securityContext:
+            privileged: true
           env:
-            - name: DOCKER_HOST
-              value: tcp://localhost:2375
             - name: BUILDKITE_AGENT_NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
             - name: BUILDKITE_AGENT_CONFIG
               value: "/buildkite/config/buildkite-agent.cfg"
+            - name: BUILDKITE_BUILD_PATH
+              value: "/var/buildkite/builds"
             - name: BUILDKITE_AGENT_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -36,7 +42,7 @@ spec:
                   optional: false
           volumeMounts:
             - name: builds
-              mountPath: "/buildkite/builds"
+              mountPath: "/var/buildkite/builds"
             - name: config
               mountPath: "/buildkite/config"
               readOnly: true
@@ -46,24 +52,12 @@ spec:
             - name: secrets
               mountPath: "/buildkite/secrets"
               readOnly: true
-        - name: dind-daemon
-          image: docker:dind
-          # imagePullPolicy: IfNotPresent
-          command: ["dockerd", "--host=unix:///var/run/docker.sock", "--host=tcp://0.0.0.0:2375"]
-          securityContext:
-            privileged: true
-          resources:
-            requests:
-              cpu: "2"
-              memory: "10Gi"
-            limits:
-              cpu: "2"
-              memory: "14Gi"
-          volumeMounts:
-            - name: builds
-              mountPath: /buildkite/builds
-            - name: docker-graph-storage
-              mountPath: /var/lib/docker
+            - mountPath: /var/run/docker.sock
+              name: docker-sock
+              readOnly: false
+            - mountPath: "/var/lib/docker"
+              name: docker-directory
+              readOnly: false
       terminationGracePeriodSeconds: 900
       volumes:
         - name: config
@@ -86,6 +80,11 @@ spec:
             defaultMode: 0600
             optional: true
         - name: builds
-          emptyDir: {}
-        - name: docker-graph-storage
-          emptyDir: {}
+          hostPath:
+            path: /var/buildkite/builds
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+        - name: docker-directory
+          hostPath:
+            path: /var/lib/docker

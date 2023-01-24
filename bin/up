@@ -13,7 +13,6 @@ kubectx $context || {
 }
 
 k8s_apply_kustomize $context $overlay
-k8s_wait_for_deployment $context kube-system metrics-server
 k8s_wait_for_deployment $context buildkite buildscaler-apiserver
 
 echo "Ready!"

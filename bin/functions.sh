@@ -58,7 +58,6 @@ k8s_apply_kustomize() {
   local kubecontext=$1
   local overlay=$2
   describe ":kubernetes: Applying kustomize template ${overlay}"
-  kustomize build k8s/metrics | kubectl --context ${kubecontext} apply -f -
   kustomize build ${overlay} | kubectl --context ${kubecontext} apply -f -
 }
 
@@ -67,7 +66,6 @@ k8s_destroy_kustomize() {
   local overlay=$2
   describe ":kubernetes: Destroying kustomize resources"
   kustomize build ${overlay} | kubectl --context ${kubecontext} delete -f -
-  kustomize build k8s/metrics | kubectl --context ${kubecontext} delete -f -
 }
 
 k8s_wait_for_deployment() {
@@ -80,7 +78,7 @@ k8s_wait_for_deployment() {
     --namespace ${kubenamespace} \
     wait --for=condition=available \
     deployments/${deploymentname} \
-    --timeout=120s
+    --timeout=240s
 }
 
 k8s_watch_hpa() {

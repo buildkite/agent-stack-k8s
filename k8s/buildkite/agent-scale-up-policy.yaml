@@ -8,7 +8,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: agent
-  minReplicas: 1
+  minReplicas: 3
   maxReplicas: 90
   metrics:
     - type: External
@@ -17,7 +17,7 @@ spec:
           name: buildkite_scheduled_jobs_count
           selector:
             matchLabels:
-              queue: gcp
+              queue: default
         target:
           type: Value
           value: 1
