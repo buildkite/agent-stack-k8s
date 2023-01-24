@@ -72,7 +72,7 @@ func (l *MaxInFlightLimiter) Run(ctx context.Context) {
 		l.mu.RLock()
 		inFlight := len(l.inFlight)
 		l.mu.RUnlock()
-		if inFlight >= l.MaxInFlight {
+		if l.MaxInFlight > 0 && inFlight >= l.MaxInFlight {
 			<-l.completions // wait for a completion
 			continue
 		}
@@ -115,9 +115,7 @@ func (l *MaxInFlightLimiter) OnUpdate(_, obj interface{}) {
 		l.logger.Debug("waiting for job completion", zap.String("uuid", uuid))
 		l.inFlight[uuid] = struct{}{}
 	} else {
-		l.logger.Debug("job complete", zap.String("uuid", uuid))
-		l.completions <- struct{}{}
-		delete(l.inFlight, uuid)
+		l.markComplete(job)
 	}
 }
 
@@ -126,9 +124,14 @@ func (l *MaxInFlightLimiter) OnDelete(obj interface{}) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	job := obj.(*batchv1.Job)
+	l.markComplete(obj.(*batchv1.Job))
+}
+
+func (l *MaxInFlightLimiter) markComplete(job *batchv1.Job) {
 	uuid := job.Labels[api.UUIDLabel]
 	l.logger.Debug("job complete", zap.String("uuid", uuid))
-	l.completions <- struct{}{}
+	if l.MaxInFlight != 0 {
+		l.completions <- struct{}{}
+	}
 	delete(l.inFlight, uuid)
 }

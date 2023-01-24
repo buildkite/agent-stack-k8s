@@ -150,6 +150,47 @@ func TestMaxInFlightLimited(t *testing.T) {
 	}
 }
 
+func TestMaxInFlightUnlimited(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "parallel.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+
+	pipelineID := tc.CreatePipeline(ctx)
+	cfg := cfg
+	cfg.MaxInFlight = 0
+	tc.StartController(ctx, cfg)
+	buildID := tc.TriggerBuild(ctx, pipelineID).Number
+
+	var maxRunningJobs int
+	for {
+		build, _, err := tc.Buildkite.Builds.Get(cfg.Org, tc.PipelineName, fmt.Sprintf("%d", buildID), nil)
+		require.NoError(t, err)
+		if *build.State == "running" {
+			t.Logf("running, runningJobs: %d", *build.Pipeline.RunningJobsCount)
+			maxRunningJobs = maxOf(maxRunningJobs, *build.Pipeline.RunningJobsCount)
+		} else if *build.State == "passed" {
+			require.Equal(t, 4, maxRunningJobs) // all jobs should have run at once
+			break
+		} else if *build.State == "scheduled" {
+			t.Log("waiting for build to start")
+		} else {
+			t.Fatalf("unexpected build state: %v", *build.State)
+		}
+	}
+}
+
+func maxOf(x, y int) int {
+	if x < y {
+		return y
+	}
+	return x
+}
+
 func TestCleanupOrphanedPipelines(t *testing.T) {
 	if !deleteOrphanedPipelines {
 		t.Skip("not cleaning orphaned pipelines")

@@ -131,6 +131,34 @@ func TestForwardsErrors(t *testing.T) {
 	}
 }
 
+func TestUnlimitedMaxInFlight(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	input := make(chan monitor.Job, 10)
+	output := make(chan monitor.Job, 10)
+	limiter := NewLimiter(zaptest.NewLogger(t), input, output, 0)
+
+	go limiter.Run(ctx)
+
+	// simulate receiving a bunch of jobs
+	for i := 0; i < 5; i++ {
+		input <- monitor.Job{
+			CommandJob: api.CommandJob{
+				Uuid: fmt.Sprintf("job-%d", i),
+			},
+		}
+	}
+
+	// output instantly gets all the jobs, no completions required
+	var jobs []monitor.Job
+	for i := 0; i < 5; i++ {
+		jobs = append(jobs, <-output)
+	}
+	require.Len(t, jobs, 5)
+	// assert that we're not just piling up completions we'll never look at
+	require.Empty(t, limiter.completions)
+}
+
 func timePtr(t metav1.Time) *metav1.Time {
 	return &t
 }
