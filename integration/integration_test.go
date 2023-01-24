@@ -238,7 +238,7 @@ func (t testcase) CreatePipeline(ctx context.Context) string {
 				return nil
 			})
 			assert.NoError(t, err)
-			t.Logf("deleted pipeline! %v", pipeline.Name)
+			t.Logf("deleted pipeline! %s", *pipeline.Name)
 		})
 	}
 
