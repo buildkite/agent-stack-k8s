@@ -171,8 +171,14 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 		build, _, err := tc.Buildkite.Builds.Get(cfg.Org, tc.PipelineName, fmt.Sprintf("%d", buildID), nil)
 		require.NoError(t, err)
 		if *build.State == "running" {
-			t.Logf("running, runningJobs: %d", *build.Pipeline.RunningJobsCount)
-			maxRunningJobs = maxOf(maxRunningJobs, *build.Pipeline.RunningJobsCount)
+			var runningJobs int
+			for _, job := range build.Jobs {
+				if *job.State == "running" {
+					runningJobs++
+				}
+			}
+			t.Logf("running, runningJobs: %d", runningJobs)
+			maxRunningJobs = maxOf(maxRunningJobs, runningJobs)
 		} else if *build.State == "passed" {
 			require.Equal(t, 4, maxRunningJobs) // all jobs should have run at once
 			break
