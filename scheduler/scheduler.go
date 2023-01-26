@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
@@ -22,7 +23,7 @@ const (
 	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 )
 
-func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, client kubernetes.Interface, cfg api.Config) error {
+func Run(ctx context.Context, logger *zap.Logger, queue <-chan monitor.Job, client kubernetes.Interface, cfg api.Config) error {
 	worker := worker{
 		ctx:    ctx,
 		cfg:    cfg,
@@ -34,7 +35,7 @@ func Run(ctx context.Context, logger *zap.Logger, monitor *monitor.Monitor, clie
 		select {
 		case <-ctx.Done():
 			return nil
-		case job := <-monitor.Scheduled():
+		case job := <-queue:
 			if job.Err != nil {
 				return job.Err
 			}
@@ -290,7 +291,8 @@ type worker struct {
 }
 
 func (w *worker) Create(job *monitor.Job) {
-	logger := w.logger.With(zap.String("job", job.Uuid))
+	logger := w.logger.With(zap.String("uuid", job.Uuid))
+	logger.Debug("creating job")
 	kjob, err := w.k8sify(job, w.cfg.AgentTokenSecret)
 	if err != nil {
 		logger.Error("failed to convert job to pod", zap.Error(err))
@@ -299,10 +301,13 @@ func (w *worker) Create(job *monitor.Job) {
 	logger = logger.With(zap.String("kjob", kjob.Name))
 	_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(w.ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
-		logger.Error("failed to create job", zap.Error(err))
+		if errors.IsAlreadyExists(err) {
+			logger.Debug("job already exists")
+		} else {
+			logger.Error("failed to create job", zap.Error(err))
+		}
 		return
 	}
-	logger.Debug("created job")
 }
 
 func kjobName(job *monitor.Job) string {

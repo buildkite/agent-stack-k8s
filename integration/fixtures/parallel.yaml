@@ -1,0 +1,14 @@
+steps:
+  - label: ":wave:"
+    parallelism: 4
+    agents:
+      queue: {{.queue}}
+    env:
+      BUILDKITE_SHELL: /bin/sh -e -c
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: alpine:latest
+                command: [cat]
+                args: [README.md]

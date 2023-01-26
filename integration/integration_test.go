@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/api"
 	"github.com/buildkite/agent-stack-k8s/cmd/controller"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
+	"github.com/buildkite/roko"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -77,7 +78,7 @@ func TestWalkingSkeleton(t *testing.T) {
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.CreatePipeline(ctx)
-	tc.StartController(ctx)
+	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 }
@@ -95,7 +96,7 @@ func TestSSHRepoClone(t *testing.T) {
 	require.NoError(t, err, "agent-stack-k8s secret must exist")
 
 	pipelineID := tc.CreatePipeline(ctx)
-	tc.StartController(ctx)
+	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 }
@@ -111,9 +112,83 @@ func TestPluginCloneFailsTests(t *testing.T) {
 	ctx := context.Background()
 
 	pipelineID := tc.CreatePipeline(ctx)
-	tc.StartController(ctx)
+	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
+}
+
+func TestMaxInFlightLimited(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "parallel.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+
+	pipelineID := tc.CreatePipeline(ctx)
+	cfg := cfg
+	cfg.MaxInFlight = 1
+	tc.StartController(ctx, cfg)
+	buildID := tc.TriggerBuild(ctx, pipelineID).Number
+
+	for {
+		build, _, err := tc.Buildkite.Builds.Get(cfg.Org, tc.PipelineName, fmt.Sprintf("%d", buildID), nil)
+		require.NoError(t, err)
+		if *build.State == "running" {
+			require.LessOrEqual(t, *build.Pipeline.RunningJobsCount, cfg.MaxInFlight)
+		} else if *build.State == "passed" {
+			break
+		} else if *build.State == "scheduled" {
+			t.Log("waiting for build to start")
+			time.Sleep(time.Second)
+			continue
+		} else {
+			t.Fatalf("unexpected build state: %v", *build.State)
+		}
+	}
+}
+
+func TestMaxInFlightUnlimited(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "parallel.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+
+	pipelineID := tc.CreatePipeline(ctx)
+	cfg := cfg
+	cfg.MaxInFlight = 0
+	tc.StartController(ctx, cfg)
+	buildID := tc.TriggerBuild(ctx, pipelineID).Number
+
+	var maxRunningJobs int
+	for {
+		build, _, err := tc.Buildkite.Builds.Get(cfg.Org, tc.PipelineName, fmt.Sprintf("%d", buildID), nil)
+		require.NoError(t, err)
+		if *build.State == "running" {
+			t.Logf("running, runningJobs: %d", *build.Pipeline.RunningJobsCount)
+			maxRunningJobs = maxOf(maxRunningJobs, *build.Pipeline.RunningJobsCount)
+		} else if *build.State == "passed" {
+			require.Equal(t, 4, maxRunningJobs) // all jobs should have run at once
+			break
+		} else if *build.State == "scheduled" {
+			t.Log("waiting for build to start")
+		} else {
+			t.Fatalf("unexpected build state: %v", *build.State)
+		}
+	}
+}
+
+func maxOf(x, y int) int {
+	if x < y {
+		return y
+	}
+	return x
 }
 
 func TestCleanupOrphanedPipelines(t *testing.T) {
@@ -156,7 +231,7 @@ func (t testcase) Init() testcase {
 	t.Parallel()
 
 	t.PipelineName = fmt.Sprintf("agent-k8s-%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
-	t.Logger = zaptest.NewLogger(t)
+	t.Logger = zaptest.NewLogger(t).Named(t.Name())
 
 	clientConfig, err := restconfig.GetConfig()
 	require.NoError(t, err)
@@ -193,16 +268,26 @@ func (t testcase) CreatePipeline(ctx context.Context) string {
 
 	if !preservePipelines {
 		EnsureCleanup(t.T, func() {
-			_, err = t.Buildkite.Pipelines.Delete(cfg.Org, t.PipelineName)
+			err := roko.NewRetrier(
+				roko.WithMaxAttempts(10),
+				roko.WithStrategy(roko.Constant(5*time.Second)),
+			).DoWithContext(ctx, func(r *roko.Retrier) error {
+				_, err = t.Buildkite.Pipelines.Delete(cfg.Org, t.PipelineName)
+				if err != nil {
+					t.Logf("waiting for build to be canceled on pipeline %s", t.PipelineName)
+					return err
+				}
+				return nil
+			})
 			assert.NoError(t, err)
-			t.Logf("deleted pipeline! %v", pipeline.Name)
+			t.Logf("deleted pipeline! %s", *pipeline.Name)
 		})
 	}
 
 	return *pipeline.GraphQLID
 }
 
-func (t testcase) StartController(ctx context.Context) {
+func (t testcase) StartController(ctx context.Context, cfg api.Config) {
 	t.Helper()
 
 	//start controller
@@ -241,7 +326,7 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 		}
 	})
 	build := createBuild.BuildCreate.Build
-	require.Len(t, build.Jobs.Edges, 1)
+	require.GreaterOrEqual(t, len(build.Jobs.Edges), 1)
 	node := build.Jobs.Edges[0].Node
 	_, ok := node.(*api.JobJobTypeCommand)
 	require.True(t, ok)
