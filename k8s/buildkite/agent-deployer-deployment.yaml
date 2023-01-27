@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-deployer
+  namespace: buildkite
+  labels:
+    app: agent-deployer
+spec:
+  selector:
+    matchLabels:
+      app: agent-deployer
+  template:
+    metadata:
+      labels:
+        app: agent-deployer
+    spec:
+      serviceAccountName: agent-k8s-job
+      containers:
+        - name: buildkiteagent
+          image: buildkite/agent:3.43.1-alpine-k8s
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "1"
+              memory: "5Gi"
+          securityContext:
+            privileged: true
+          env:
+            - name: BUILDKITE_AGENT_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: BUILDKITE_AGENT_CONFIG
+              value: "/buildkite/config/buildkite-agent.cfg"
+            - name: BUILDKITE_AGENT_TAGS
+              value: "queue=deployer"
+            - name: BUILDKITE_BUILD_PATH
+              value: "/var/buildkite/builds"
+            - name: BUILDKITE_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: buildkite-agent-token
+                  key: token
+                  optional: false
+          volumeMounts:
+            - name: builds
+              mountPath: "/var/buildkite/builds"
+            - name: config
+              mountPath: "/buildkite/config"
+              readOnly: true
+            - name: hooks
+              mountPath: "/buildkite/hooks"
+              readOnly: true
+            - name: secrets
+              mountPath: "/buildkite/secrets"
+              readOnly: true
+            - mountPath: /var/run/docker.sock
+              name: docker-sock
+              readOnly: false
+            - mountPath: "/var/lib/docker"
+              name: docker-directory
+              readOnly: false
+      terminationGracePeriodSeconds: 900
+      volumes:
+        - name: config
+          configMap:
+            name: agent-config
+            items:
+              - key: "buildkite-agent.cfg"
+                path: "buildkite-agent.cfg"
+        - name: hooks
+          configMap:
+            name: agent-hooks
+            items:
+              - key: "environment"
+                path: "environment"
+              - key: "pre-exit"
+                path: "pre-exit"
+        - name: secrets
+          secret:
+            secretName: buildkite-secrets
+            defaultMode: 0600
+            optional: true
+        - name: builds
+          emptyDir: {}
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+        - name: docker-directory
+          hostPath:
+            path: /var/lib/docker

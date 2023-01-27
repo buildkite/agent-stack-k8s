@@ -16,6 +16,9 @@ resources:
   - ./agent-deployment.yaml
   - ./agent-scale-up-policy.yaml
   - ./agent-scale-down-policy.yaml
+  - ./agent-deployer-deployment.yaml
+  - ./agent-deployer-scale-up-policy.yaml
+  - ./agent-deployer-scale-down-policy.yaml
 
 configMapGenerator:
   - name: agent-hooks

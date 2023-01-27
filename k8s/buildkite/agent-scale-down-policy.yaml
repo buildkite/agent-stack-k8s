@@ -9,7 +9,7 @@ spec:
     kind: Deployment
     name: agent
   minReplicas: 3
-  maxReplicas: 90
+  maxReplicas: 250
   metrics:
     - type: External
       external:

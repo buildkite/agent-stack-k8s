@@ -1,15 +1,15 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: agent-scale-up
+  name: agent-deployer-scale-up
   namespace: buildkite
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: agent
-  minReplicas: 3
-  maxReplicas: 250
+    name: agent-deployer
+  minReplicas: 1
+  maxReplicas: 5
   metrics:
     - type: External
       external:
@@ -17,7 +17,7 @@ spec:
           name: buildkite_scheduled_jobs_count
           selector:
             matchLabels:
-              queue: default
+              queue: deployer
         target:
           type: Value
           value: 1
