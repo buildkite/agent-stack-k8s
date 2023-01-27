@@ -22,20 +22,20 @@ gomod:
 agent target=("ghcr.io/buildkite/agent-k8s:latest") os=("linux") arch=("amd64 arm64"):
   #!/usr/bin/env bash
   set -euxo pipefail
-  export CGO_ENABLED=0
-  pushd agent/packaging/docker/alpine
+  pushd agent
+  version=$(git describe --tags)
   platforms=()
   for os in {{os}}; do
     for arch in {{arch}}; do
       platforms+=("${os}/${arch}")
-      export GOOS=$os GOARCH=$arch
-      go build -o buildkite-agent-${os}-${arch} github.com/buildkite/agent/v3
+      ./scripts/build-binary.sh $os $arch $version
     done
   done
   commaified=$(IFS=, ; echo "${platforms[*]}")
   mkdir -p {{justfile_directory()}}/dist
-  docker buildx build --tag {{target}} --platform "$commaified" --push --metadata-file {{justfile_directory()}}/dist/metadata.json .
-  rm buildkite-agent-linux*
+  mv pkg/buildkite-agent-* packaging/docker/alpine/
+  docker buildx build --tag {{target}} --platform "$commaified" --push --metadata-file {{justfile_directory()}}/dist/metadata.json packaging/docker/alpine
+  rm packaging/docker/alpine/buildkite-agent-*
 
 controller *FLAGS:
   ko build -P {{FLAGS}}
