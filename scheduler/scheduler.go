@@ -45,8 +45,8 @@ func Run(ctx context.Context, logger *zap.Logger, queue <-chan monitor.Job, clie
 }
 
 type KubernetesPlugin struct {
-	PodSpec    *corev1.PodSpec
-	GitEnvFrom []corev1.EnvFromSource
+	PodSpec    *corev1.PodSpec        `json:"podSpec,omitempty"`
+	GitEnvFrom []corev1.EnvFromSource `json:"gitEnvFrom,omitempty"`
 }
 
 func (w *worker) k8sify(

@@ -83,8 +83,8 @@ github.com/aws/aws-sdk-go v1.44.181 h1:w4OzE8bwIVo62gUTAp/uEFO2HSsUtf1pjXpSs36cl
 github.com/aws/aws-sdk-go v1.44.181/go.mod h1:aVsgQcEevwlmQ7qHE9I3h+dtQgpqhFB+i8Phjh7fkwI=
 github.com/benbjohnson/clock v1.1.0 h1:Q92kusRqC1XV2MjkWETPvjJVqKetz1OzxZB7mHJLju8=
 github.com/benbjohnson/clock v1.1.0/go.mod h1:J11/hYXuz8f4ySSvYwY0FKfm+ezbsZBKZxNJlLklBHA=
-github.com/benmoss/go-buildkite/v3 v3.0.0-20230123160229-4d43d72f967e h1:YyZYO5g1GVCxFoApaFs37vlEEVLeCYrWEi2DVE6A7hY=
-github.com/benmoss/go-buildkite/v3 v3.0.0-20230123160229-4d43d72f967e/go.mod h1:6pweknacVv7He5Lvbf54urp2P0W6/b4Nrcxn718PQrE=
+github.com/benmoss/go-buildkite/v3 v3.0.0-20230130184050-23542a36e9d7 h1:a0A2Zz5MQU6keab4/KtFBBK6On8KLjUhTozmFAlkNRM=
+github.com/benmoss/go-buildkite/v3 v3.0.0-20230130184050-23542a36e9d7/go.mod h1:6pweknacVv7He5Lvbf54urp2P0W6/b4Nrcxn718PQrE=
 github.com/bradleyjkemp/cupaloy/v2 v2.6.0 h1:knToPYa2xtfg42U3I6punFEjaGFKWQRXJwj0JTv4mTs=
 github.com/bradleyjkemp/cupaloy/v2 v2.6.0/go.mod h1:bm7JXdkRd4BHJk9HpwqAI8BoAY1lps46Enkdqw6aRX0=
 github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf h1:WCnJxXZXx9c8gwz598wvdqmu+YTzB9wx2X1OovK3Le8=

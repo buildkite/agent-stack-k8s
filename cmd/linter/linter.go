@@ -14,6 +14,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
 )
 
@@ -27,6 +28,11 @@ var schema string
 
 type Options struct {
 	File string `validate:"required,file"`
+}
+
+type KubernetesPlugin struct {
+	scheduler.KubernetesPlugin
+	File *string `json:"file,omitempty"`
 }
 
 func (o *Options) AddFlags(cmd *cobra.Command) {
@@ -72,15 +78,32 @@ func Lint(ctx context.Context, options *Options) error {
 				if err != nil {
 					return fmt.Errorf("failed to marshal plugin to json: %w", err)
 				}
-				var pluginConfig scheduler.KubernetesPlugin
+				var pluginConfig KubernetesPlugin
 				decoder := json.NewDecoder(bytes.NewReader(asJson))
 				decoder.DisallowUnknownFields()
 				if err := decoder.Decode(&pluginConfig); err != nil {
 					return fmt.Errorf("failed to unmarshal Kubernetes plugin: %w", err)
 				}
-				for i, container := range pluginConfig.PodSpec.Containers {
-					if container.Name == "" {
-						container.Name = fmt.Sprintf("container-%d", i)
+				if pluginConfig.File != nil {
+					if pluginConfig.PodSpec != nil {
+						return fmt.Errorf("step %q: file and podSpec should not both be defined", *step.Label)
+					}
+					contents, err := os.ReadFile(*pluginConfig.File)
+					if err != nil {
+						return fmt.Errorf("failed to read file: %w", err)
+					}
+					var pod corev1.Pod
+					if err := yaml.UnmarshalStrict(contents, &pod); err != nil {
+						return fmt.Errorf("failed to unmarshal file into pod: %w", err)
+					}
+					pluginConfig.PodSpec = &pod.Spec
+					pluginConfig.File = nil
+				}
+				if pluginConfig.PodSpec != nil {
+					for i, container := range pluginConfig.PodSpec.Containers {
+						if container.Name == "" {
+							container.Name = fmt.Sprintf("container-%d", i)
+						}
 					}
 				}
 				bs, err := json.Marshal(pluginConfig)
@@ -124,7 +147,10 @@ func Lint(ctx context.Context, options *Options) error {
 		for _, desc := range result.Errors() {
 			log.Printf("- %s", desc)
 		}
+		os.Exit(1)
 	}
+
+	fmt.Println(string(bs))
 
 	return nil
 }
