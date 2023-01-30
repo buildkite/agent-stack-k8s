@@ -32,5 +32,7 @@ helm upgrade agent-stack-k8s ${helm_image}/agent-stack-k8s \
     --set agentToken=$BUILDKITE_AGENT_TOKEN \
     --set graphqlToken=$BUILDKITE_TOKEN \
     --set image=$controller_image \
-    --set config.image=$agent_image
+    --set config.image=$agent_image \
+    --set config.debug=true \
+    --set config.profiler-address=localhost:6060
 set -x
