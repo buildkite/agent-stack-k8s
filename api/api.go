@@ -51,6 +51,6 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt("max-in-flight", c.MaxInFlight)
 	enc.AddString("namespace", c.Namespace)
 	enc.AddString("org", c.Org)
-	enc.AddString("profiler-address", c.Org)
+	enc.AddString("profiler-address", c.ProfilerAddress)
 	return enc.AddReflected("tags", c.Tags)
 }
