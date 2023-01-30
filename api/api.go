@@ -40,6 +40,7 @@ type Config struct {
 	Namespace        string        `validate:"required"`
 	Org              string        `validate:"required"`
 	Tags             []string      `validate:"min=1"`
+	ProfilerAddress  string        `mapstructure:"profiler-address" validate:"omitempty,hostname_port"`
 }
 
 func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
@@ -50,5 +51,6 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt("max-in-flight", c.MaxInFlight)
 	enc.AddString("namespace", c.Namespace)
 	enc.AddString("org", c.Org)
+	enc.AddString("profiler-address", c.Org)
 	return enc.AddReflected("tags", c.Tags)
 }

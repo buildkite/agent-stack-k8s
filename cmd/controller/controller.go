@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"strings"
 	"time"
@@ -38,6 +40,8 @@ func addFlags(cmd *cobra.Command) {
 	cmd.Flags().Int("max-in-flight", 25, "max jobs in flight, 0 means no max")
 	cmd.Flags().Duration("job-ttl", 10*time.Minute, "time to retain kubernetes jobs after completion")
 	cmd.Flags().String("agent-token-secret", "buildkite-agent-token", "name of the Buildkite agent token secret")
+	cmd.Flags().String("profiler-address", "",
+		"Bind address to expose the pprof profiler (e.g. localhost:6060)")
 }
 
 func ParseConfig(cmd *cobra.Command, args []string) (api.Config, error) {
@@ -122,6 +126,16 @@ func Run(ctx context.Context, k8sClient kubernetes.Interface, cfg api.Config) {
 
 	log := zap.Must(config.Build())
 	log.Info("configuration loaded", zap.Object("config", cfg))
+
+	if cfg.ProfilerAddress != "" {
+		log.Info("profiler listening for requests")
+		go func() {
+			srv := http.Server{Addr: cfg.ProfilerAddress, ReadHeaderTimeout: 2 * time.Second}
+			if err := srv.ListenAndServe(); err != nil {
+				log.Error("problem running profiler server", zap.Error(err))
+			}
+		}()
+	}
 
 	m, err := monitor.New(ctx, log.Named("monitor"), k8sClient, cfg)
 	if err != nil {
