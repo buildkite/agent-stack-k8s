@@ -34,6 +34,7 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg api.Config) *worke
 type KubernetesPlugin struct {
 	PodSpec    *corev1.PodSpec
 	GitEnvFrom []corev1.EnvFromSource
+	Sidecars   []corev1.Container `json:"sidecars,omitempty"`
 }
 
 func (w *worker) k8sify(
@@ -131,6 +132,7 @@ func (w *worker) k8sify(
 	ttl := int32(w.cfg.JobTTL.Seconds())
 	kjob.Spec.TTLSecondsAfterFinished = &ttl
 	podSpec := &kjob.Spec.Template.Spec
+	podSpec.ShareProcessNamespace = pointer.Bool(true)
 
 	for i, c := range podSpec.Containers {
 		command := strings.Join(append(c.Command, c.Args...), " ")
@@ -171,6 +173,15 @@ func (w *worker) k8sify(
 	}
 
 	containerCount := len(podSpec.Containers) + systemContainers
+
+	for i, c := range k8sPlugin.Sidecars {
+		if c.Name == "" {
+			c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
+		}
+		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
+		podSpec.Containers = append(podSpec.Containers, c)
+	}
+
 	if artifactPaths, found := envMap["BUILDKITE_ARTIFACT_PATHS"]; found && artifactPaths != "" {
 		artifactsContainer := corev1.Container{
 			Name:            "upload-artifacts",
