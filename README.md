@@ -22,11 +22,16 @@ When a job is available, the controller will create a pod to acquire and run the
 
 The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
 
+### Diagram
+
+![Kubernetes Components and Workflow](./images/k8s.drawio.svg "Kubernetes Components and Workflow")
+
 ## Installation
 
 ### Requirements
 
 - A Kubernetes cluster
+- A Buildkite organization
 - An API token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
 - An [agent token](https://buildkite.com/docs/agent/v3/tokens)
 
@@ -34,8 +39,7 @@ The entrypoint rewriting and ordering logic is heavily inspired by [the approach
 
 The simplest way to get up and running is by deploying our Helm chart:
 
-We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
-which means you'll need Helm version 3.8.0 or newer.
+We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/), which means you'll need Helm version 3.8.0 or newer.
 
 ```bash
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
@@ -110,11 +114,8 @@ The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec
 
 ### Validating your pipeline
 
-With the unstructured nature of Buildkite plugin specs, it can be frustratingly
-easy to mess up your configuration and then have to debug why your agent pods are failing to start.
-To help prevent this sort of error, there's a linter that uses [JSON
-schema](https://json-schema.org/) to validate the pipeline and plugin
-configuration.
+With the unstructured nature of Buildkite plugin specs, it can be frustratingly easy to mess up your configuration and then have to debug why your agent pods are failing to start.
+To help prevent this sort of error, there's a linter that uses [JSON schema](https://json-schema.org/) to validate the pipeline and plugin configuration.
 
 This currently can't prevent every sort of error, you might still have a reference to a Kubernetes volume that doesn't exist, or other errors of that sort, but it will validate that the fields match the API spec we expect.
 
@@ -122,7 +123,7 @@ Our JSON schema can also be used with editors that support JSON Schema by config
 
 ## Cloning repos via SSH
 
-To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
+To use SSH to clone your repositories, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
 
 ```yaml
 steps:
@@ -187,20 +188,16 @@ just run --org my-org --buildkite-token my-api-token --debug
 `just deploy` will build the container image using [ko](https://ko.build/) and
 deploy it with [Helm](https://helm.sh/).
 
-You'll need to have set `KO_DOCKER_REPO` to a repository you have push access
-to. For development something like the [kind local
-registry](https://kind.sigs.k8s.io/docs/user/local-registry/) or the [minikube
-registry](https://minikube.sigs.k8s.io/docs/handbook/registry) can be used. More
-information is available at [ko's
+You'll need to set `KO_DOCKER_REPO` to a repository that you have push access to. For development, something like the [kind local registry](https://kind.sigs.k8s.io/docs/user/local-registry/) or the [minikube registry](https://minikube.sigs.k8s.io/docs/handbook/registry) can be used. More information is available on [ko's
 website](https://ko.build/configuration/#local-publishing-options).
 
-You'll also need to provide required configuration values to Helm, which can be done by passing extra args to `just`:
+You'll also need to provide the required configuration values to Helm, which can be done by passing extra args to `just`:
 
 ```bash
 just deploy --values config.yaml
 ```
 
-With config.yaml being a file containing [required Helm values](values.yaml), such as:
+With _config.yaml_ being a file containing [required Helm values](values.yaml), such as:
 
 ```yaml
 agentToken: "abcdef"
