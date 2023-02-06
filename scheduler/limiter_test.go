@@ -2,6 +2,7 @@ package scheduler_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -75,6 +76,33 @@ func TestSkipsDuplicateJobs(t *testing.T) {
 
 	// only expect 1
 	handler.EXPECT().Create(gomock.Eq(ctx), gomock.Any()).Times(1)
+
+	for i := 0; i < 5; i++ {
+		job := api.CommandJob{
+			Uuid: "job-0",
+		}
+		// chan can receive
+		input <- monitor.Job{
+			CommandJob: job,
+		}
+	}
+}
+
+func TestSkipsCreateErrors(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	input := make(chan monitor.Job)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	handler := NewMockJobHandler(ctrl)
+	limiter := scheduler.NewLimiter(zaptest.NewLogger(t), input, handler, 1)
+
+	go limiter.Run(ctx)
+
+	handler.EXPECT().Create(gomock.Eq(ctx), gomock.Any()).Times(5).
+		DoAndReturn(func(context.Context, *monitor.Job) error {
+			return errors.New("invalid")
+		})
 
 	for i := 0; i < 5; i++ {
 		job := api.CommandJob{

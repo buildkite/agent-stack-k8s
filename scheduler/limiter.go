@@ -95,8 +95,11 @@ func (l *MaxInFlightLimiter) add(ctx context.Context, job *monitor.Job) {
 		l.logger.Debug("skipping already queued job", zap.String("uuid", job.Uuid))
 		return
 	}
+	if err := l.scheduler.Create(ctx, job); err != nil {
+		l.logger.Error("failed to create job", zap.Error(err))
+		return
+	}
 	l.inFlight[job.Uuid] = struct{}{}
-	l.scheduler.Create(ctx, job)
 }
 
 // load jobs at controller startup/restart
