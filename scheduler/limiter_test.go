@@ -54,7 +54,9 @@ func TestLimiter(t *testing.T) {
 				},
 			},
 			Status: batchv1.JobStatus{
-				CompletionTime: timePtr(metav1.Now()),
+				Conditions: []batchv1.JobCondition{
+					{Type: batchv1.JobComplete},
+				},
 			},
 		})
 		// none are in now flight
@@ -100,7 +102,9 @@ func TestSkipsDuplicateJobs(t *testing.T) {
 			},
 		},
 		Status: batchv1.JobStatus{
-			CompletionTime: timePtr(metav1.Now()),
+			Conditions: []batchv1.JobCondition{
+				{Type: batchv1.JobComplete},
+			},
 		},
 	})
 

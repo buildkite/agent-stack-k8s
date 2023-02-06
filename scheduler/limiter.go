@@ -111,11 +111,11 @@ func (l *MaxInFlightLimiter) OnUpdate(_, obj interface{}) {
 
 	job := obj.(*batchv1.Job)
 	uuid := job.Labels[api.UUIDLabel]
-	if job.Status.CompletionTime == nil {
+	if isFinished(job) {
+		l.markComplete(job)
+	} else {
 		l.logger.Debug("waiting for job completion", zap.String("uuid", uuid))
 		l.inFlight[uuid] = struct{}{}
-	} else {
-		l.markComplete(job)
 	}
 }
 
@@ -130,8 +130,16 @@ func (l *MaxInFlightLimiter) OnDelete(obj interface{}) {
 func (l *MaxInFlightLimiter) markComplete(job *batchv1.Job) {
 	uuid := job.Labels[api.UUIDLabel]
 	l.logger.Debug("job complete", zap.String("uuid", uuid))
-	if l.MaxInFlight != 0 {
-		l.completions <- struct{}{}
-	}
 	delete(l.inFlight, uuid)
+}
+
+func isFinished(job *batchv1.Job) bool {
+	var finished bool
+	for _, cond := range job.Status.Conditions {
+		switch cond.Type {
+		case batchv1.JobComplete, batchv1.JobFailed:
+			finished = true
+		}
+	}
+	return finished
 }
