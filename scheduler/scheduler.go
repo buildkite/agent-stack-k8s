@@ -23,24 +23,15 @@ const (
 	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 )
 
-func Run(ctx context.Context, logger *zap.Logger, queue <-chan monitor.Job, client kubernetes.Interface, cfg api.Config) error {
-	worker := worker{
-		ctx:    ctx,
+type JobHandler interface {
+	Create(context.Context, *monitor.Job) error
+}
+
+func New(logger *zap.Logger, client kubernetes.Interface, cfg api.Config) *worker {
+	return &worker{
 		cfg:    cfg,
 		client: client,
 		logger: logger.Named("worker"),
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case job := <-queue:
-			if job.Err != nil {
-				return job.Err
-			}
-			worker.Create(&job)
-		}
 	}
 }
 
@@ -284,30 +275,29 @@ func (w *worker) k8sify(
 }
 
 type worker struct {
-	ctx    context.Context
 	cfg    api.Config
 	client kubernetes.Interface
 	logger *zap.Logger
 }
 
-func (w *worker) Create(job *monitor.Job) {
+func (w *worker) Create(ctx context.Context, job *monitor.Job) error {
 	logger := w.logger.With(zap.String("uuid", job.Uuid))
 	logger.Debug("creating job")
 	kjob, err := w.k8sify(job, w.cfg.AgentTokenSecret)
 	if err != nil {
-		logger.Error("failed to convert job to pod", zap.Error(err))
-		return
+		return fmt.Errorf("failed to convert job to pod: %w", err)
 	}
 	logger = logger.With(zap.String("kjob", kjob.Name))
-	_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(w.ctx, kjob, metav1.CreateOptions{})
+	_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
 		if errors.IsAlreadyExists(err) {
 			logger.Debug("job already exists")
 		} else {
 			logger.Error("failed to create job", zap.Error(err))
 		}
-		return
+		return err
 	}
+	return nil
 }
 
 func kjobName(job *monitor.Job) string {

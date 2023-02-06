@@ -19,6 +19,5 @@ func TestInvalidOrg(t *testing.T) {
 		Tags:           []string{"foo=bar"},
 	})
 	require.NoError(t, err)
-	job := <-m.Scheduled()
-	require.ErrorContains(t, job.Err, "invalid organization")
+	require.ErrorContains(t, <-m.Start(), "invalid organization")
 }

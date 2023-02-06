@@ -12,6 +12,7 @@ lint *FLAGS: gomod
 
 generate:
     go run github.com/Khan/genqlient api/genqlient.yaml
+    go generate ./...
 
 gomod:
   #!/usr/bin/env bash

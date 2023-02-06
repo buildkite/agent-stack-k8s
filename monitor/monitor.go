@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
@@ -19,7 +18,6 @@ type Monitor struct {
 	gql    graphql.Client
 	logger *zap.Logger
 	cfg    api.Config
-	once   sync.Once
 	jobs   chan Job
 }
 
@@ -33,7 +31,6 @@ type Config struct {
 
 type Job struct {
 	api.CommandJob
-	Err error
 	Tag string
 }
 
@@ -50,46 +47,51 @@ func New(ctx context.Context, logger *zap.Logger, k8s kubernetes.Interface, cfg 
 }
 
 func (m *Monitor) Scheduled() <-chan Job {
-	go m.once.Do(func() { go m.start() })
 	return m.jobs
 }
 
-func (m *Monitor) start() {
-	m.logger.Info("started")
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-m.ctx.Done():
-			return
-		case <-ticker.C:
-			for _, tag := range m.cfg.Tags {
-				buildsResponse, err := api.GetScheduledBuilds(m.ctx, m.gql, m.cfg.Org, []string{tag})
-				if err != nil {
-					if errors.Is(err, context.Canceled) {
+func (m *Monitor) Start() <-chan error {
+	errs := make(chan error, 1)
+	go func() {
+		m.logger.Info("started")
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-m.ctx.Done():
+				close(errs)
+				return
+			case <-ticker.C:
+				for _, tag := range m.cfg.Tags {
+					buildsResponse, err := api.GetScheduledBuilds(m.ctx, m.gql, m.cfg.Org, []string{tag})
+					if err != nil {
+						if errors.Is(err, context.Canceled) {
+							continue
+						}
+						m.logger.Warn("failed to retrieve builds for pipeline", zap.Error(err))
 						continue
 					}
-					m.logger.Warn("failed to retrieve builds for pipeline", zap.Error(err))
-					continue
-				}
-				if buildsResponse.Organization.Id == nil {
-					m.jobs <- Job{Err: fmt.Errorf("invalid organization: %s", m.cfg.Org)}
-				}
-				builds := buildsResponse.Organization.Jobs.Edges
-				sort.Slice(builds, func(i, j int) bool {
-					cmdI := builds[i].Node.(*api.JobJobTypeCommand)
-					cmdJ := builds[j].Node.(*api.JobJobTypeCommand)
+					if buildsResponse.Organization.Id == nil {
+						errs <- fmt.Errorf("invalid organization: %s", m.cfg.Org)
+						return
+					}
+					builds := buildsResponse.Organization.Jobs.Edges
+					sort.Slice(builds, func(i, j int) bool {
+						cmdI := builds[i].Node.(*api.JobJobTypeCommand)
+						cmdJ := builds[j].Node.(*api.JobJobTypeCommand)
 
-					return cmdI.ScheduledAt.Before(cmdJ.ScheduledAt)
-				})
+						return cmdI.ScheduledAt.Before(cmdJ.ScheduledAt)
+					})
 
-				for _, job := range builds {
-					cmdJob := job.Node.(*api.JobJobTypeCommand)
-					m.scheduleBuild(cmdJob, tag)
+					for _, job := range builds {
+						cmdJob := job.Node.(*api.JobJobTypeCommand)
+						m.scheduleBuild(cmdJob, tag)
+					}
 				}
 			}
 		}
-	}
+	}()
+	return errs
 }
 
 func (m *Monitor) scheduleBuild(cmdJob *api.JobJobTypeCommand, tag string) {

@@ -19,7 +19,7 @@ import (
 
 type MaxInFlightLimiter struct {
 	Input       <-chan monitor.Job
-	Output      chan<- monitor.Job
+	scheduler   JobHandler
 	MaxInFlight int
 
 	logger      *zap.Logger
@@ -28,10 +28,10 @@ type MaxInFlightLimiter struct {
 	completions chan struct{}
 }
 
-func NewLimiter(logger *zap.Logger, input <-chan monitor.Job, output chan<- monitor.Job, maxInFlight int) *MaxInFlightLimiter {
+func NewLimiter(logger *zap.Logger, input <-chan monitor.Job, scheduler JobHandler, maxInFlight int) *MaxInFlightLimiter {
 	return &MaxInFlightLimiter{
 		Input:       input,
-		Output:      output,
+		scheduler:   scheduler,
 		MaxInFlight: maxInFlight,
 		logger:      logger,
 		inFlight:    make(map[string]struct{}),
@@ -73,6 +73,7 @@ func (l *MaxInFlightLimiter) Run(ctx context.Context) {
 		inFlight := len(l.inFlight)
 		l.mu.RUnlock()
 		if l.MaxInFlight > 0 && inFlight >= l.MaxInFlight {
+			l.logger.Debug("max-in-flight reached", zap.Int("in-flight", inFlight))
 			<-l.completions // wait for a completion
 			continue
 		}
@@ -81,28 +82,40 @@ func (l *MaxInFlightLimiter) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case job := <-l.Input:
-			l.add(&job)
+			l.add(ctx, &job)
 		}
 	}
 }
 
-func (l *MaxInFlightLimiter) add(job *monitor.Job) {
+func (l *MaxInFlightLimiter) add(ctx context.Context, job *monitor.Job) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if job.Err != nil {
-		l.Output <- *job
-		return
-	}
+
 	if _, found := l.inFlight[job.Uuid]; found {
 		l.logger.Debug("skipping already queued job", zap.String("uuid", job.Uuid))
 		return
 	}
+	if err := l.scheduler.Create(ctx, job); err != nil {
+		l.logger.Error("failed to create job", zap.Error(err))
+		return
+	}
 	l.inFlight[job.Uuid] = struct{}{}
-	l.Output <- *job
 }
 
-// ignored
-func (l *MaxInFlightLimiter) OnAdd(obj interface{}) {}
+// load jobs at controller startup/restart
+func (l *MaxInFlightLimiter) OnAdd(obj interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	job := obj.(*batchv1.Job)
+	if !isFinished(job) {
+		uuid := job.Labels[api.UUIDLabel]
+		if _, alreadyInFlight := l.inFlight[uuid]; !alreadyInFlight {
+			l.logger.Debug("adding in-flight job", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
+			l.inFlight[uuid] = struct{}{}
+		}
+	}
+}
 
 // if a job is still running, add it to inFlight, otherwise try to remove it
 func (l *MaxInFlightLimiter) OnUpdate(_, obj interface{}) {
@@ -111,11 +124,13 @@ func (l *MaxInFlightLimiter) OnUpdate(_, obj interface{}) {
 
 	job := obj.(*batchv1.Job)
 	uuid := job.Labels[api.UUIDLabel]
-	if job.Status.CompletionTime == nil {
-		l.logger.Debug("waiting for job completion", zap.String("uuid", uuid))
-		l.inFlight[uuid] = struct{}{}
-	} else {
+	if isFinished(job) {
 		l.markComplete(job)
+	} else {
+		if _, alreadyInFlight := l.inFlight[uuid]; !alreadyInFlight {
+			l.logger.Debug("waiting for job completion", zap.String("uuid", uuid))
+			l.inFlight[uuid] = struct{}{}
+		}
 	}
 }
 
@@ -129,9 +144,20 @@ func (l *MaxInFlightLimiter) OnDelete(obj interface{}) {
 
 func (l *MaxInFlightLimiter) markComplete(job *batchv1.Job) {
 	uuid := job.Labels[api.UUIDLabel]
-	l.logger.Debug("job complete", zap.String("uuid", uuid))
-	if l.MaxInFlight != 0 {
+	if _, alreadyInFlight := l.inFlight[uuid]; alreadyInFlight {
+		l.logger.Debug("job complete", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
+		delete(l.inFlight, uuid)
 		l.completions <- struct{}{}
 	}
-	delete(l.inFlight, uuid)
+}
+
+func isFinished(job *batchv1.Job) bool {
+	var finished bool
+	for _, cond := range job.Status.Conditions {
+		switch cond.Type {
+		case batchv1.JobComplete, batchv1.JobFailed:
+			finished = true
+		}
+	}
+	return finished
 }

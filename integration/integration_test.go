@@ -18,7 +18,6 @@ import (
 	"github.com/buildkite/agent-stack-k8s/cmd/controller"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/buildkite/roko"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
@@ -285,7 +284,10 @@ func (t testcase) CreatePipeline(ctx context.Context) string {
 				}
 				return nil
 			})
-			assert.NoError(t, err)
+			if err != nil {
+				t.Logf("failed to cleanup pipeline %s: %v", *pipeline.Name, err)
+				return
+			}
 			t.Logf("deleted pipeline! %s", *pipeline.Name)
 		})
 	}
@@ -375,11 +377,14 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 		getBuild, err := api.GetBuild(ctx, t.GraphQL, build.Uuid)
 		require.NoError(t, err)
 		switch getBuild.Build.State {
-		case api.BuildStatesPassed, api.BuildStatesFailed:
+		case api.BuildStatesPassed, api.BuildStatesFailed, api.BuildStatesCanceled, api.BuildStatesCanceling:
 			return getBuild.Build.State
-		default:
+		case api.BuildStatesScheduled, api.BuildStatesRunning:
 			t.Logger.Debug("sleeping", zap.Any("build state", getBuild.Build.State))
 			time.Sleep(time.Second)
+		default:
+			t.Errorf("unknown build state %q", getBuild.Build.State)
+			return getBuild.Build.State
 		}
 	}
 }
