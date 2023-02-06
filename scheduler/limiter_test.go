@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -112,27 +111,6 @@ func TestSkipsDuplicateJobs(t *testing.T) {
 	input <- job
 	// now it is output again
 	<-output
-}
-
-func TestForwardsErrors(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	input := make(chan monitor.Job, 10)
-	output := make(chan monitor.Job, 10)
-	limiter := NewLimiter(zaptest.NewLogger(t), input, output, 1)
-
-	go limiter.Run(ctx)
-
-	// do this several times to show that we aren't caching a blank uuid
-	for i := 0; i < 5; i++ {
-		inputJob := monitor.Job{
-			Err: errors.New("some error"),
-		}
-		input <- inputJob
-		outputJob := <-output
-
-		require.Equal(t, inputJob, outputJob)
-	}
 }
 
 func TestUnlimitedMaxInFlight(t *testing.T) {

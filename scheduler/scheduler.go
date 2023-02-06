@@ -23,7 +23,7 @@ const (
 	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 )
 
-func Run(ctx context.Context, logger *zap.Logger, queue <-chan monitor.Job, client kubernetes.Interface, cfg api.Config) error {
+func Run(ctx context.Context, logger *zap.Logger, queue <-chan monitor.Job, client kubernetes.Interface, cfg api.Config) {
 	worker := worker{
 		ctx:    ctx,
 		cfg:    cfg,
@@ -34,11 +34,8 @@ func Run(ctx context.Context, logger *zap.Logger, queue <-chan monitor.Job, clie
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
+			return
 		case job := <-queue:
-			if job.Err != nil {
-				return job.Err
-			}
 			worker.Create(&job)
 		}
 	}

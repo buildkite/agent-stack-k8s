@@ -90,10 +90,7 @@ func (l *MaxInFlightLimiter) Run(ctx context.Context) {
 func (l *MaxInFlightLimiter) add(job *monitor.Job) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if job.Err != nil {
-		l.Output <- *job
-		return
-	}
+
 	if _, found := l.inFlight[job.Uuid]; found {
 		l.logger.Debug("skipping already queued job", zap.String("uuid", job.Uuid))
 		return
