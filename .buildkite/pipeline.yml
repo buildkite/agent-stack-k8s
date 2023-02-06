@@ -1,19 +1,4 @@
 steps:
-  - label: ":lint-roller: lint"
-    agents:
-      queue: kubernetes
-    plugins:
-      - kubernetes:
-          podSpec:
-            containers:
-              - name: lint
-                image: golang:latest
-                command: [.buildkite/steps/lint.sh]
-                resources:
-                  requests:
-                    cpu: 1000m
-                    memory: 512Mi
-
   - label: ":docker: build agent"
     key: agent
     agents:
