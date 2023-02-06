@@ -19,7 +19,7 @@ import (
 
 type MaxInFlightLimiter struct {
 	Input       <-chan monitor.Job
-	Output      chan<- monitor.Job
+	scheduler   JobHandler
 	MaxInFlight int
 
 	logger      *zap.Logger
@@ -28,10 +28,10 @@ type MaxInFlightLimiter struct {
 	completions chan struct{}
 }
 
-func NewLimiter(logger *zap.Logger, input <-chan monitor.Job, output chan<- monitor.Job, maxInFlight int) *MaxInFlightLimiter {
+func NewLimiter(logger *zap.Logger, input <-chan monitor.Job, scheduler JobHandler, maxInFlight int) *MaxInFlightLimiter {
 	return &MaxInFlightLimiter{
 		Input:       input,
-		Output:      output,
+		scheduler:   scheduler,
 		MaxInFlight: maxInFlight,
 		logger:      logger,
 		inFlight:    make(map[string]struct{}),
@@ -82,12 +82,12 @@ func (l *MaxInFlightLimiter) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case job := <-l.Input:
-			l.add(&job)
+			l.add(ctx, &job)
 		}
 	}
 }
 
-func (l *MaxInFlightLimiter) add(job *monitor.Job) {
+func (l *MaxInFlightLimiter) add(ctx context.Context, job *monitor.Job) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -96,7 +96,7 @@ func (l *MaxInFlightLimiter) add(job *monitor.Job) {
 		return
 	}
 	l.inFlight[job.Uuid] = struct{}{}
-	l.Output <- *job
+	l.scheduler.Create(ctx, job)
 }
 
 // load jobs at controller startup/restart
