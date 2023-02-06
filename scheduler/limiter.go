@@ -111,7 +111,7 @@ func (l *MaxInFlightLimiter) OnAdd(obj interface{}) {
 	if !isFinished(job) {
 		uuid := job.Labels[api.UUIDLabel]
 		if _, alreadyInFlight := l.inFlight[uuid]; !alreadyInFlight {
-			l.logger.Debug("adding in-flight job", zap.String("uuid", uuid))
+			l.logger.Debug("adding in-flight job", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
 			l.inFlight[uuid] = struct{}{}
 		}
 	}
@@ -145,7 +145,7 @@ func (l *MaxInFlightLimiter) OnDelete(obj interface{}) {
 func (l *MaxInFlightLimiter) markComplete(job *batchv1.Job) {
 	uuid := job.Labels[api.UUIDLabel]
 	if _, alreadyInFlight := l.inFlight[uuid]; alreadyInFlight {
-		l.logger.Debug("job complete", zap.String("uuid", uuid))
+		l.logger.Debug("job complete", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
 		delete(l.inFlight, uuid)
 		l.completions <- struct{}{}
 	}
