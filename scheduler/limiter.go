@@ -18,8 +18,7 @@ import (
 )
 
 type MaxInFlightLimiter struct {
-	Input       <-chan monitor.Job
-	scheduler   JobHandler
+	scheduler   monitor.JobHandler
 	MaxInFlight int
 
 	logger      *zap.Logger
@@ -28,9 +27,8 @@ type MaxInFlightLimiter struct {
 	completions chan struct{}
 }
 
-func NewLimiter(logger *zap.Logger, input <-chan monitor.Job, scheduler JobHandler, maxInFlight int) *MaxInFlightLimiter {
+func NewLimiter(logger *zap.Logger, scheduler monitor.JobHandler, maxInFlight int) *MaxInFlightLimiter {
 	return &MaxInFlightLimiter{
-		Input:       input,
 		scheduler:   scheduler,
 		MaxInFlight: maxInFlight,
 		logger:      logger,
@@ -67,39 +65,36 @@ func RegisterInformer(ctx context.Context, clientset kubernetes.Interface, tags 
 	return nil
 }
 
-func (l *MaxInFlightLimiter) Run(ctx context.Context) {
-	for {
-		l.mu.RLock()
-		inFlight := len(l.inFlight)
-		l.mu.RUnlock()
-		if l.MaxInFlight > 0 && inFlight >= l.MaxInFlight {
-			l.logger.Debug("max-in-flight reached", zap.Int("in-flight", inFlight))
-			<-l.completions // wait for a completion
-			continue
-		}
+func (l *MaxInFlightLimiter) Create(ctx context.Context, job *monitor.Job) error {
+	l.mu.RLock()
+	inFlight := len(l.inFlight)
+	l.mu.RUnlock()
+	if l.MaxInFlight > 0 && inFlight >= l.MaxInFlight {
+		l.logger.Debug("max-in-flight reached", zap.Int("in-flight", inFlight))
+		<-l.completions // wait for a completion
+	}
 
-		select {
-		case <-ctx.Done():
-			return
-		case job := <-l.Input:
-			l.add(ctx, &job)
-		}
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+		return l.add(ctx, job)
 	}
 }
 
-func (l *MaxInFlightLimiter) add(ctx context.Context, job *monitor.Job) {
+func (l *MaxInFlightLimiter) add(ctx context.Context, job *monitor.Job) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if _, found := l.inFlight[job.Uuid]; found {
 		l.logger.Debug("skipping already queued job", zap.String("uuid", job.Uuid))
-		return
+		return nil
 	}
 	if err := l.scheduler.Create(ctx, job); err != nil {
-		l.logger.Error("failed to create job", zap.Error(err))
-		return
+		return err
 	}
 	l.inFlight[job.Uuid] = struct{}{}
+	return nil
 }
 
 // load jobs at controller startup/restart

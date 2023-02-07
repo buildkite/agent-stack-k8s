@@ -6,6 +6,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/cmd/controller"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/buildkite/roko"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
@@ -210,13 +212,15 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 		require.NoError(t, err)
 		for _, build := range builds.Pipeline.Builds.Edges {
 			_, err = api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{Id: build.Node.Id})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		}
 		_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
 			Id: pipeline.Node.Id,
 		})
-		require.NoError(t, err)
-		t.Logf("deleted orphaned pipeline! %v", pipeline.Node.Name)
+		assert.NoError(t, err)
+		if err == nil {
+			t.Logf("deleted orphaned pipeline! %v", pipeline.Node.Name)
+		}
 	}
 }
 

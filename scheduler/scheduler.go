@@ -23,10 +23,6 @@ const (
 	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 )
 
-type JobHandler interface {
-	Create(context.Context, *monitor.Job) error
-}
-
 func New(logger *zap.Logger, client kubernetes.Interface, cfg api.Config) *worker {
 	return &worker{
 		cfg:    cfg,
