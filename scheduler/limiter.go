@@ -66,14 +66,6 @@ func RegisterInformer(ctx context.Context, clientset kubernetes.Interface, tags 
 }
 
 func (l *MaxInFlightLimiter) Create(ctx context.Context, job *monitor.Job) error {
-	l.mu.RLock()
-	inFlight := len(l.inFlight)
-	l.mu.RUnlock()
-	if l.MaxInFlight > 0 && inFlight >= l.MaxInFlight {
-		l.logger.Debug("max-in-flight reached", zap.Int("in-flight", inFlight))
-		<-l.completions // wait for a completion
-	}
-
 	select {
 	case <-ctx.Done():
 		return nil
@@ -89,6 +81,13 @@ func (l *MaxInFlightLimiter) add(ctx context.Context, job *monitor.Job) error {
 	if _, found := l.inFlight[job.Uuid]; found {
 		l.logger.Debug("skipping already queued job", zap.String("uuid", job.Uuid))
 		return nil
+	}
+	inFlight := len(l.inFlight)
+	if l.MaxInFlight > 0 && inFlight >= l.MaxInFlight {
+		l.logger.Debug("max-in-flight reached", zap.Int("in-flight", inFlight))
+		l.mu.Unlock()
+		<-l.completions // wait for a completion
+		l.mu.Lock()
 	}
 	if err := l.scheduler.Create(ctx, job); err != nil {
 		return err
