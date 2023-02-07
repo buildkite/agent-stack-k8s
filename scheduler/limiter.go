@@ -24,17 +24,18 @@ type MaxInFlightLimiter struct {
 	logger      *zap.Logger
 	mu          sync.RWMutex
 	inFlight    map[string]struct{}
-	completions chan struct{}
+	completions *sync.Cond
 }
 
 func NewLimiter(logger *zap.Logger, scheduler monitor.JobHandler, maxInFlight int) *MaxInFlightLimiter {
-	return &MaxInFlightLimiter{
+	l := &MaxInFlightLimiter{
 		scheduler:   scheduler,
 		MaxInFlight: maxInFlight,
 		logger:      logger,
 		inFlight:    make(map[string]struct{}),
-		completions: make(chan struct{}, maxInFlight),
 	}
+	l.completions = sync.NewCond(&l.mu)
+	return l
 }
 
 // Creates a Jobs informer, registers the handler on it, and waits for cache sync
@@ -85,9 +86,7 @@ func (l *MaxInFlightLimiter) add(ctx context.Context, job *monitor.Job) error {
 	inFlight := len(l.inFlight)
 	if l.MaxInFlight > 0 && inFlight >= l.MaxInFlight {
 		l.logger.Debug("max-in-flight reached", zap.Int("in-flight", inFlight))
-		l.mu.Unlock()
-		<-l.completions // wait for a completion
-		l.mu.Lock()
+		l.completions.Wait()
 	}
 	if err := l.scheduler.Create(ctx, job); err != nil {
 		return err
@@ -139,9 +138,9 @@ func (l *MaxInFlightLimiter) OnDelete(obj interface{}) {
 func (l *MaxInFlightLimiter) markComplete(job *batchv1.Job) {
 	uuid := job.Labels[api.UUIDLabel]
 	if _, alreadyInFlight := l.inFlight[uuid]; alreadyInFlight {
-		l.logger.Debug("job complete", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
 		delete(l.inFlight, uuid)
-		l.completions <- struct{}{}
+		l.logger.Debug("job complete", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
+		l.completions.Signal()
 	}
 }
 
