@@ -281,8 +281,11 @@ func (t testcase) CreatePipeline(ctx context.Context) string {
 				roko.WithMaxAttempts(10),
 				roko.WithStrategy(roko.Constant(5*time.Second)),
 			).DoWithContext(ctx, func(r *roko.Retrier) error {
-				_, err = t.Buildkite.Pipelines.Delete(cfg.Org, t.PipelineName)
+				resp, err := t.Buildkite.Pipelines.Delete(cfg.Org, t.PipelineName)
 				if err != nil {
+					if resp.StatusCode == http.StatusNotFound {
+						return nil
+					}
 					t.Logf("waiting for build to be canceled on pipeline %s", t.PipelineName)
 					return err
 				}
@@ -332,9 +335,10 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 		if _, err := api.BuildCancel(ctx, t.GraphQL, api.BuildCancelInput{
 			Id: createBuild.BuildCreate.Build.Id,
 		}); err != nil {
-			if !strings.Contains(err.Error(), "Build can't be canceled because it's already finished") {
-				t.Logf("failed to cancel build: %v", err)
+			if strings.Contains(err.Error(), "already finished") || strings.Contains(err.Error(), "already being canceled") {
+				return
 			}
+			t.Logf("failed to cancel build: %v", err)
 		}
 	})
 	build := createBuild.BuildCreate.Build
