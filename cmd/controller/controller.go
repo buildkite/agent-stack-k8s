@@ -137,21 +137,20 @@ func Run(ctx context.Context, k8sClient kubernetes.Interface, cfg api.Config) {
 		}()
 	}
 
-	m, err := monitor.New(ctx, log.Named("monitor"), k8sClient, cfg)
+	m, err := monitor.New(log.Named("monitor"), k8sClient, cfg)
 	if err != nil {
 		log.Fatal("failed to create monitor", zap.Error(err))
 	}
 	sched := scheduler.New(log.Named("scheduler"), k8sClient, cfg)
-	limiter := scheduler.NewLimiter(log.Named("limiter"), m.Scheduled(), sched, cfg.MaxInFlight)
-	go limiter.Run(ctx)
+	limiter := scheduler.NewLimiter(log.Named("limiter"), sched, cfg.MaxInFlight)
 	if err := scheduler.RegisterInformer(ctx, k8sClient, cfg.Tags, limiter); err != nil {
 		log.Fatal("failed to register job informer", zap.Error(err))
 	}
 
 	select {
 	case <-ctx.Done():
-		log.Info("context canceled", zap.Error(ctx.Err()))
-	case err := <-m.Start():
+		log.Info("controller exiting", zap.Error(ctx.Err()))
+	case err := <-m.Start(ctx, limiter):
 		log.Info("monitor failed", zap.Error(err))
 	}
 }

@@ -18,25 +18,24 @@ import (
 )
 
 type MaxInFlightLimiter struct {
-	Input       <-chan monitor.Job
-	scheduler   JobHandler
+	scheduler   monitor.JobHandler
 	MaxInFlight int
 
 	logger      *zap.Logger
 	mu          sync.RWMutex
 	inFlight    map[string]struct{}
-	completions chan struct{}
+	completions *sync.Cond
 }
 
-func NewLimiter(logger *zap.Logger, input <-chan monitor.Job, scheduler JobHandler, maxInFlight int) *MaxInFlightLimiter {
-	return &MaxInFlightLimiter{
-		Input:       input,
+func NewLimiter(logger *zap.Logger, scheduler monitor.JobHandler, maxInFlight int) *MaxInFlightLimiter {
+	l := &MaxInFlightLimiter{
 		scheduler:   scheduler,
 		MaxInFlight: maxInFlight,
 		logger:      logger,
 		inFlight:    make(map[string]struct{}),
-		completions: make(chan struct{}, maxInFlight),
 	}
+	l.completions = sync.NewCond(&l.mu)
+	return l
 }
 
 // Creates a Jobs informer, registers the handler on it, and waits for cache sync
@@ -67,39 +66,33 @@ func RegisterInformer(ctx context.Context, clientset kubernetes.Interface, tags 
 	return nil
 }
 
-func (l *MaxInFlightLimiter) Run(ctx context.Context) {
-	for {
-		l.mu.RLock()
-		inFlight := len(l.inFlight)
-		l.mu.RUnlock()
-		if l.MaxInFlight > 0 && inFlight >= l.MaxInFlight {
-			l.logger.Debug("max-in-flight reached", zap.Int("in-flight", inFlight))
-			<-l.completions // wait for a completion
-			continue
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case job := <-l.Input:
-			l.add(ctx, &job)
-		}
+func (l *MaxInFlightLimiter) Create(ctx context.Context, job *monitor.Job) error {
+	select {
+	case <-ctx.Done():
+		return nil
+	default:
+		return l.add(ctx, job)
 	}
 }
 
-func (l *MaxInFlightLimiter) add(ctx context.Context, job *monitor.Job) {
+func (l *MaxInFlightLimiter) add(ctx context.Context, job *monitor.Job) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if _, found := l.inFlight[job.Uuid]; found {
 		l.logger.Debug("skipping already queued job", zap.String("uuid", job.Uuid))
-		return
+		return nil
+	}
+	inFlight := len(l.inFlight)
+	if l.MaxInFlight > 0 && inFlight >= l.MaxInFlight {
+		l.logger.Debug("max-in-flight reached", zap.Int("in-flight", inFlight))
+		l.completions.Wait()
 	}
 	if err := l.scheduler.Create(ctx, job); err != nil {
-		l.logger.Error("failed to create job", zap.Error(err))
-		return
+		return err
 	}
 	l.inFlight[job.Uuid] = struct{}{}
+	return nil
 }
 
 // load jobs at controller startup/restart
@@ -145,9 +138,9 @@ func (l *MaxInFlightLimiter) OnDelete(obj interface{}) {
 func (l *MaxInFlightLimiter) markComplete(job *batchv1.Job) {
 	uuid := job.Labels[api.UUIDLabel]
 	if _, alreadyInFlight := l.inFlight[uuid]; alreadyInFlight {
-		l.logger.Debug("job complete", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
 		delete(l.inFlight, uuid)
-		l.completions <- struct{}{}
+		l.logger.Debug("job complete", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
+		l.completions.Signal()
 	}
 }
 

@@ -23,10 +23,6 @@ const (
 	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 )
 
-type JobHandler interface {
-	Create(context.Context, *monitor.Job) error
-}
-
 func New(logger *zap.Logger, client kubernetes.Interface, cfg api.Config) *worker {
 	return &worker{
 		cfg:    cfg,
@@ -282,7 +278,7 @@ type worker struct {
 
 func (w *worker) Create(ctx context.Context, job *monitor.Job) error {
 	logger := w.logger.With(zap.String("uuid", job.Uuid))
-	logger.Debug("creating job")
+	logger.Info("creating job")
 	kjob, err := w.k8sify(job, w.cfg.AgentTokenSecret)
 	if err != nil {
 		return fmt.Errorf("failed to convert job to pod: %w", err)

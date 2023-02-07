@@ -12,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+//go:generate mockgen -destination=mock_handler_test.go -source=scheduler.go -package scheduler_test
 func TestJobPluginConversion(t *testing.T) {
 	pluginConfig := KubernetesPlugin{
 		PodSpec: &corev1.PodSpec{
