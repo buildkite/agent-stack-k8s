@@ -14,8 +14,9 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
-	batchv1 "k8s.io/api/batch/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 //go:generate mockgen -destination=mock_handler_test.go -source=../monitor/monitor.go -package scheduler_test
@@ -26,7 +27,7 @@ func TestLimiter(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	handler := NewMockJobHandler(ctrl)
-	limiter := scheduler.NewLimiter(zaptest.NewLogger(t), handler, 1)
+	limiter := scheduler.NewLimiter(zaptest.NewLogger(t), handler, fake.NewSimpleClientset(), 1)
 	var inFlight int64
 
 	handler.EXPECT().Create(gomock.Eq(ctx), gomock.Any()).Times(5).
@@ -36,15 +37,20 @@ func TestLimiter(t *testing.T) {
 
 			// mark job as completed
 			go func() {
-				limiter.OnUpdate(nil, &batchv1.Job{
+				limiter.OnUpdate(nil, &v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Labels: map[string]string{
 							api.UUIDLabel: job.Uuid,
 						},
 					},
-					Status: batchv1.JobStatus{
-						Conditions: []batchv1.JobCondition{
-							{Type: batchv1.JobComplete},
+					Status: v1.PodStatus{
+						ContainerStatuses: []v1.ContainerStatus{
+							{
+								Name: scheduler.AgentContainerName,
+								State: v1.ContainerState{
+									Terminated: &v1.ContainerStateTerminated{},
+								},
+							},
 						},
 					},
 				})
@@ -78,7 +84,7 @@ func TestSkipsDuplicateJobs(t *testing.T) {
 	defer ctrl.Finish()
 	handler := NewMockJobHandler(ctrl)
 	// no max-in-flight
-	limiter := scheduler.NewLimiter(zaptest.NewLogger(t), handler, 0)
+	limiter := scheduler.NewLimiter(zaptest.NewLogger(t), handler, fake.NewSimpleClientset(), 0)
 
 	// only expect 1
 	handler.EXPECT().Create(gomock.Eq(ctx), gomock.Any()).Times(1)
@@ -96,7 +102,7 @@ func TestSkipsCreateErrors(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	handler := NewMockJobHandler(ctrl)
-	limiter := scheduler.NewLimiter(zaptest.NewLogger(t), handler, 1)
+	limiter := scheduler.NewLimiter(zaptest.NewLogger(t), handler, fake.NewSimpleClientset(), 1)
 	invalid := errors.New("invalid")
 
 	handler.EXPECT().Create(gomock.Eq(ctx), gomock.Any()).Times(5).

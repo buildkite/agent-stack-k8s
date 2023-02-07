@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
+	agentTokenKey      = "BUILDKITE_AGENT_TOKEN"
+	AgentContainerName = "agent"
 )
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg api.Config) *worker {
@@ -84,10 +85,12 @@ func (w *worker) k8sify(
 		}
 	}
 	kjob.Name = kjobName(job)
-	kjob.Labels = map[string]string{
+	labels := map[string]string{
 		api.UUIDLabel: job.Uuid,
 		api.TagLabel:  api.TagToLabel(job.Tag),
 	}
+	kjob.Labels = labels
+	kjob.Spec.Template.Labels = labels
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
 	var env []corev1.EnvVar
 	env = append(env, corev1.EnvVar{
@@ -132,7 +135,6 @@ func (w *worker) k8sify(
 	ttl := int32(w.cfg.JobTTL.Seconds())
 	kjob.Spec.TTLSecondsAfterFinished = &ttl
 	podSpec := &kjob.Spec.Template.Spec
-	podSpec.ShareProcessNamespace = pointer.Bool(true)
 
 	for i, c := range podSpec.Containers {
 		command := strings.Join(append(c.Command, c.Args...), " ")
@@ -216,7 +218,7 @@ func (w *worker) k8sify(
 	}
 	// agent server container
 	agentContainer := corev1.Container{
-		Name:            "agent",
+		Name:            AgentContainerName,
 		Args:            []string{"start"},
 		Image:           w.cfg.Image,
 		WorkingDir:      "/workspace",
