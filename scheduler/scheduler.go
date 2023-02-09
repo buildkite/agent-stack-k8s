@@ -15,6 +15,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
 )
@@ -30,6 +33,22 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg api.Config) *worke
 		client: client,
 		logger: logger.Named("worker"),
 	}
+}
+
+// returns an informer factory configured to watch resources (pods, jobs) created by the scheduler
+func NewInformerFactory(k8s kubernetes.Interface, tags []string) (informers.SharedInformerFactory, error) {
+	hasTag, err := labels.NewRequirement(api.TagLabel, selection.In, api.TagsToLabels(tags))
+	if err != nil {
+		return nil, fmt.Errorf("failed to build tag label selector for job manager: %w", err)
+	}
+	hasUUID, err := labels.NewRequirement(api.UUIDLabel, selection.Exists, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build uuid label selector for job manager: %w", err)
+	}
+	factory := informers.NewSharedInformerFactoryWithOptions(k8s, 0, informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
+		opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUUID).String()
+	}))
+	return factory, nil
 }
 
 type KubernetesPlugin struct {
