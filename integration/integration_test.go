@@ -82,6 +82,8 @@ func TestWalkingSkeleton(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "Buildkite Agent Stack for Kubernetes")
+	tc.AssertArtifactsContain(build, "README.md", "CODE_OF_CONDUCT.md")
 }
 
 func TestSSHRepoClone(t *testing.T) {
@@ -189,6 +191,21 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 			t.Fatalf("unexpected build state: %v", *build.State)
 		}
 	}
+}
+
+func TestSidecars(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "sidecars.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "Welcome to nginx!")
 }
 
 func maxOf(x, y int) int {
@@ -318,6 +335,7 @@ func (t testcase) StartController(ctx context.Context, cfg api.Config) {
 	EnsureCleanup(t.T, cancel)
 
 	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.PipelineName)}
+	cfg.Debug = true
 	go controller.Run(runCtx, k8sClient, cfg)
 }
 
@@ -353,7 +371,10 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 func (t testcase) AssertSuccess(ctx context.Context, build api.Build) {
 	t.Helper()
 	require.Equal(t, api.BuildStatesPassed, t.waitForBuild(ctx, build))
+}
 
+func (t testcase) AssertLogsContain(build api.Build, content string) {
+	t.Helper()
 	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
 	require.NoError(t, err)
 
@@ -362,14 +383,22 @@ func (t testcase) AssertSuccess(ctx context.Context, build api.Build) {
 	logs, _, err := client.Jobs.GetJobLog(cfg.Org, t.PipelineName, strconv.Itoa(build.Number), job.Uuid)
 	require.NoError(t, err)
 	require.NotNil(t, logs.Content)
-	require.Contains(t, *logs.Content, "Buildkite Agent Stack for Kubernetes")
+	require.Contains(t, *logs.Content, content)
+
+}
+func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
+	t.Helper()
+	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
+	require.NoError(t, err)
+	client := buildkite.NewClient(config.Client())
 
 	artifacts, _, err := client.Artifacts.ListByBuild(cfg.Org, t.PipelineName, strconv.Itoa(build.Number), nil)
 	require.NoError(t, err)
 	require.Len(t, artifacts, 2)
 	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
-	require.Contains(t, filenames, "README.md")
-	require.Contains(t, filenames, "CODE_OF_CONDUCT.md")
+	for _, filename := range expected {
+		require.Contains(t, filenames, filename)
+	}
 }
 
 func (t testcase) AssertFail(ctx context.Context, build api.Build) {
