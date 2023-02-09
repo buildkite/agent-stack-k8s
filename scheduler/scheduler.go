@@ -15,12 +15,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
 )
 
 const (
-	agentTokenKey = "BUILDKITE_AGENT_TOKEN"
+	agentTokenKey      = "BUILDKITE_AGENT_TOKEN"
+	AgentContainerName = "agent"
 )
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg api.Config) *worker {
@@ -31,9 +35,26 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg api.Config) *worke
 	}
 }
 
+// returns an informer factory configured to watch resources (pods, jobs) created by the scheduler
+func NewInformerFactory(k8s kubernetes.Interface, tags []string) (informers.SharedInformerFactory, error) {
+	hasTag, err := labels.NewRequirement(api.TagLabel, selection.In, api.TagsToLabels(tags))
+	if err != nil {
+		return nil, fmt.Errorf("failed to build tag label selector for job manager: %w", err)
+	}
+	hasUUID, err := labels.NewRequirement(api.UUIDLabel, selection.Exists, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build uuid label selector for job manager: %w", err)
+	}
+	factory := informers.NewSharedInformerFactoryWithOptions(k8s, 0, informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
+		opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUUID).String()
+	}))
+	return factory, nil
+}
+
 type KubernetesPlugin struct {
 	PodSpec    *corev1.PodSpec
 	GitEnvFrom []corev1.EnvFromSource
+	Sidecars   []corev1.Container `json:"sidecars,omitempty"`
 }
 
 func (w *worker) k8sify(
@@ -83,10 +104,12 @@ func (w *worker) k8sify(
 		}
 	}
 	kjob.Name = kjobName(job)
-	kjob.Labels = map[string]string{
+	labels := map[string]string{
 		api.UUIDLabel: job.Uuid,
 		api.TagLabel:  api.TagToLabel(job.Tag),
 	}
+	kjob.Labels = labels
+	kjob.Spec.Template.Labels = labels
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
 	var env []corev1.EnvVar
 	env = append(env, corev1.EnvVar{
@@ -171,6 +194,15 @@ func (w *worker) k8sify(
 	}
 
 	containerCount := len(podSpec.Containers) + systemContainers
+
+	for i, c := range k8sPlugin.Sidecars {
+		if c.Name == "" {
+			c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
+		}
+		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
+		podSpec.Containers = append(podSpec.Containers, c)
+	}
+
 	if artifactPaths, found := envMap["BUILDKITE_ARTIFACT_PATHS"]; found && artifactPaths != "" {
 		artifactsContainer := corev1.Container{
 			Name:            "upload-artifacts",
@@ -205,7 +237,7 @@ func (w *worker) k8sify(
 	}
 	// agent server container
 	agentContainer := corev1.Container{
-		Name:            "agent",
+		Name:            AgentContainerName,
 		Args:            []string{"start"},
 		Image:           w.cfg.Image,
 		WorkingDir:      "/workspace",

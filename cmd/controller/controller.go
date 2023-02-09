@@ -143,8 +143,16 @@ func Run(ctx context.Context, k8sClient kubernetes.Interface, cfg api.Config) {
 	}
 	sched := scheduler.New(log.Named("scheduler"), k8sClient, cfg)
 	limiter := scheduler.NewLimiter(log.Named("limiter"), sched, cfg.MaxInFlight)
-	if err := scheduler.RegisterInformer(ctx, k8sClient, cfg.Tags, limiter); err != nil {
-		log.Fatal("failed to register job informer", zap.Error(err))
+	informerFactory, err := scheduler.NewInformerFactory(k8sClient, cfg.Tags)
+	if err != nil {
+		log.Fatal("failed to create informer", zap.Error(err))
+	}
+	if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
+		log.Fatal("failed to register limiter informer", zap.Error(err))
+	}
+	completions := scheduler.NewPodCompletionWatcher(log.Named("completions"), k8sClient)
+	if err := completions.RegisterInformer(ctx, informerFactory); err != nil {
+		log.Fatal("failed to register completions informer", zap.Error(err))
 	}
 
 	select {

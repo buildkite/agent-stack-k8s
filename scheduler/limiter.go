@@ -9,11 +9,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/monitor"
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
 
@@ -39,24 +35,13 @@ func NewLimiter(logger *zap.Logger, scheduler monitor.JobHandler, maxInFlight in
 }
 
 // Creates a Jobs informer, registers the handler on it, and waits for cache sync
-func RegisterInformer(ctx context.Context, clientset kubernetes.Interface, tags []string, handler cache.ResourceEventHandler) error {
-	hasTag, err := labels.NewRequirement(api.TagLabel, selection.In, api.TagsToLabels(tags))
-	if err != nil {
-		return fmt.Errorf("failed to build tag label selector for job manager: %w", err)
-	}
-	hasUUID, err := labels.NewRequirement(api.UUIDLabel, selection.Exists, nil)
-	if err != nil {
-		return fmt.Errorf("failed to build uuid label selector for job manager: %w", err)
-	}
-	factory := informers.NewSharedInformerFactoryWithOptions(clientset, 0, informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
-		opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUUID).String()
-	}))
+func (l *MaxInFlightLimiter) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
 	informer := factory.Batch().V1().Jobs()
 	jobInformer := informer.Informer()
-	if _, err := jobInformer.AddEventHandler(handler); err != nil {
+	if _, err := jobInformer.AddEventHandler(l); err != nil {
 		return fmt.Errorf("failed to register event handler: %w", err)
-	}
 
+	}
 	go factory.Start(ctx.Done())
 
 	if !cache.WaitForCacheSync(ctx.Done(), jobInformer.HasSynced) {
@@ -101,7 +86,7 @@ func (l *MaxInFlightLimiter) OnAdd(obj interface{}) {
 	defer l.mu.Unlock()
 
 	job := obj.(*batchv1.Job)
-	if !isFinished(job) {
+	if !jobFinished(job) {
 		uuid := job.Labels[api.UUIDLabel]
 		if _, alreadyInFlight := l.inFlight[uuid]; !alreadyInFlight {
 			l.logger.Debug("adding in-flight job", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
@@ -117,7 +102,7 @@ func (l *MaxInFlightLimiter) OnUpdate(_, obj interface{}) {
 
 	job := obj.(*batchv1.Job)
 	uuid := job.Labels[api.UUIDLabel]
-	if isFinished(job) {
+	if jobFinished(job) {
 		l.markComplete(job)
 	} else {
 		if _, alreadyInFlight := l.inFlight[uuid]; !alreadyInFlight {
@@ -144,13 +129,12 @@ func (l *MaxInFlightLimiter) markComplete(job *batchv1.Job) {
 	}
 }
 
-func isFinished(job *batchv1.Job) bool {
-	var finished bool
+func jobFinished(job *batchv1.Job) bool {
 	for _, cond := range job.Status.Conditions {
 		switch cond.Type {
 		case batchv1.JobComplete, batchv1.JobFailed:
-			finished = true
+			return true
 		}
 	}
-	return finished
+	return false
 }
