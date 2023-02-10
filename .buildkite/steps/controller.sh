@@ -13,6 +13,6 @@ curl -sSfL "https://github.com/ko-build/ko/releases/download/${latest}/ko_${late
 
 tag=$(git describe)
 ko login ghcr.io -u $REGISTRY_USERNAME --password $REGISTRY_PASSWORD
-controller_image=$(ko build -B --tags "$tag")
+controller_image=$(ko build -B --tags "$tag" --platform linux/amd64,linux/arm64)
 
 buildkite-agent meta-data set "controller-image" "${controller_image}"
