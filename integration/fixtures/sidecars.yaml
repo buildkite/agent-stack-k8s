@@ -10,6 +10,7 @@ steps:
           - image: nginx:latest
           podSpec:
             containers:
-              - image: alpine:latest
-                command: [wget]
-                args: ["-qO-", "localhost:80"]
+              - image: curlimages/curl:latest
+                name: curl
+                command: [curl]
+                args: ["--retry 5", "--retry-all-errors", "localhost:80"]
