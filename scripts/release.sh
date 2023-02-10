@@ -9,7 +9,7 @@ fi
 version="${1}"
 tag="v$version"
 
-commitish=$(git describe)
+commitish=$(git describe --exclude "$tag")
 git tag -f -m "$tag" "$tag"
 
 # helm doesn't use v-prefixed versions, everything else does
