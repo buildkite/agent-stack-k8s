@@ -49,7 +49,7 @@ func TestJobPluginConversion(t *testing.T) {
 		Tag: "queue=kubernetes",
 	}
 	worker := worker{logger: zaptest.NewLogger(t)}
-	result, err := worker.k8sify(input, "some-secret")
+	result, err := worker.k8sify(input, parseEnv(input), "some-secret")
 	require.NoError(t, err)
 
 	require.Len(t, result.Spec.Template.Spec.Containers, 3)
@@ -76,7 +76,7 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 		},
 	}
 	worker := worker{}
-	result, err := worker.k8sify(input, "secret")
+	result, err := worker.k8sify(input, parseEnv(input), "secret")
 	require.NoError(t, err)
 
 	require.Len(t, result.Spec.Template.Spec.Containers, 3)

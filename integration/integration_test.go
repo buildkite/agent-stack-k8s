@@ -210,6 +210,36 @@ func TestSidecars(t *testing.T) {
 	tc.AssertLogsContain(build, "Welcome to nginx!")
 }
 
+func TestInvalidPodSpec(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "invalid.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+	tc.AssertLogsContain(build, `is invalid: spec.template.spec.containers[0].volumeMounts[0].name: Not found: "this-doesnt-exist"`)
+}
+
+func TestInvalidPodJSON(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "invalid2.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+	tc.AssertLogsContain(build, `failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.PodSpec.containers.env.value of type string`)
+}
+
 func maxOf(x, y int) int {
 	if x < y {
 		return y

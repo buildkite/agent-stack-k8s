@@ -63,22 +63,62 @@ type Metadata struct {
 	Labels      map[string]string
 }
 
-func (w *worker) k8sify(
-	job *monitor.Job,
-	tokenSecret string,
-) (*batchv1.Job, error) {
+type worker struct {
+	cfg    api.Config
+	client kubernetes.Interface
+	logger *zap.Logger
+}
+
+func (w *worker) Create(ctx context.Context, job *monitor.Job) error {
+	logger := w.logger.With(zap.String("uuid", job.Uuid))
+	logger.Info("creating job")
+	envMap := parseEnv(job)
+	kjob, err := w.k8sify(job, envMap, w.cfg.AgentTokenSecret)
+	if err != nil {
+		if err := w.createFailureJob(ctx, job, w.cfg.AgentTokenSecret, err, envMap); err != nil {
+			if errors.IsAlreadyExists(err) {
+				return nil
+			}
+			return fmt.Errorf("failed to create failure job: %w", err)
+		}
+		return nil
+	}
+	_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
+	if err != nil {
+		if errors.IsInvalid(err) {
+			if err := w.createFailureJob(ctx, job, w.cfg.AgentTokenSecret, err, envMap); err != nil {
+				return fmt.Errorf("failed to create failure job: %w", err)
+			}
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func kjobName(job *monitor.Job) string {
+	return fmt.Sprintf("buildkite-%s", job.Uuid)
+}
+
+func parseEnv(job *monitor.Job) map[string]string {
 	envMap := map[string]string{}
 	for _, val := range job.Env {
 		parts := strings.SplitN(val, "=", 2)
 		envMap[parts[0]] = parts[1]
 	}
+	return envMap
+}
 
-	kjob := &batchv1.Job{}
+func (w *worker) k8sify(
+	job *monitor.Job,
+	envMap map[string]string,
+	tokenSecret string,
+) (*batchv1.Job, error) {
 	var plugins []map[string]json.RawMessage
 	if pluginsJson, ok := envMap["BUILDKITE_PLUGINS"]; ok {
 		if err := json.Unmarshal([]byte(pluginsJson), &plugins); err != nil {
 			w.logger.Debug("invalid plugin spec", zap.String("json", pluginsJson))
-			return nil, fmt.Errorf("err parsing plugins: %w", err)
+			return nil, fmt.Errorf("failed parsing plugins: %w", err)
 		}
 	}
 	var (
@@ -91,7 +131,7 @@ func (w *worker) k8sify(
 		}
 		if val, ok := plugin["github.com/buildkite-plugins/kubernetes-buildkite-plugin"]; ok {
 			if err := json.Unmarshal(val, &k8sPlugin); err != nil {
-				return nil, fmt.Errorf("err parsing kubernetes plugin: %w", err)
+				return nil, fmt.Errorf("failed parsing Kubernetes plugin: %w", err)
 			}
 		} else {
 			for k, v := range plugin {
@@ -99,6 +139,22 @@ func (w *worker) k8sify(
 			}
 		}
 	}
+	kjob, err := w.wrap(job, tokenSecret, &k8sPlugin, otherPlugins, envMap)
+	if err != nil {
+		return nil, err
+	}
+	return kjob, nil
+}
+
+func (w *worker) wrap(
+	job *monitor.Job,
+	tokenSecret string,
+	k8sPlugin *KubernetesPlugin,
+	otherPlugins []map[string]json.RawMessage,
+	envMap map[string]string,
+) (*batchv1.Job, error) {
+	kjob := &batchv1.Job{}
+	kjob.Name = kjobName(job)
 	if k8sPlugin.PodSpec != nil {
 		kjob.Spec.Template.Spec = *k8sPlugin.PodSpec
 	} else {
@@ -109,9 +165,9 @@ func (w *worker) k8sify(
 			},
 		}
 	}
-	kjob.Name = api.JobName(job.Uuid)
-	if k8sPlugin.Metadata.Labels == nil {
-		k8sPlugin.Metadata.Labels = map[string]string{}
+	labels := map[string]string{
+		api.UUIDLabel: job.Uuid,
+		api.TagLabel:  api.TagToLabel(job.Tag),
 	}
 	k8sPlugin.Metadata.Labels[api.UUIDLabel] = job.Uuid
 	k8sPlugin.Metadata.Labels[api.TagLabel] = api.TagToLabel(job.Tag)
@@ -120,25 +176,26 @@ func (w *worker) k8sify(
 	kjob.Annotations = k8sPlugin.Metadata.Annotations
 	kjob.Spec.Template.Annotations = k8sPlugin.Metadata.Annotations
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
-	var env []corev1.EnvVar
-	env = append(env, corev1.EnvVar{
-		Name:  "BUILDKITE_BUILD_PATH",
-		Value: "/workspace/build",
-	}, corev1.EnvVar{
-		Name:  "BUILDKITE_BIN_PATH",
-		Value: "/workspace",
-	}, corev1.EnvVar{
-		Name: "BUILDKITE_AGENT_TOKEN",
-		ValueFrom: &corev1.EnvVarSource{
-			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: tokenSecret},
-				Key:                  agentTokenKey,
+	env := []corev1.EnvVar{
+		{
+			Name:  "BUILDKITE_BUILD_PATH",
+			Value: "/workspace/build",
+		}, {
+			Name:  "BUILDKITE_BIN_PATH",
+			Value: "/workspace",
+		}, {
+			Name: "BUILDKITE_AGENT_TOKEN",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: tokenSecret},
+					Key:                  agentTokenKey,
+				},
 			},
+		}, {
+			Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
+			Value: job.Uuid,
 		},
-	}, corev1.EnvVar{
-		Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
-		Value: job.Uuid,
-	})
+	}
 	if otherPlugins != nil {
 		otherPluginsJson, err := json.Marshal(otherPlugins)
 		if err != nil {
@@ -151,9 +208,7 @@ func (w *worker) k8sify(
 	}
 	for k, v := range envMap {
 		switch k {
-		case "BUILDKITE_PLUGINS": //noop
-		case "BUILDKITE_COMMAND": //noop
-		case "BUILDKITE_ARTIFACT_PATHS": //noop
+		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS": //noop
 		default:
 			env = append(env, corev1.EnvVar{Name: k, Value: v})
 		}
@@ -162,8 +217,8 @@ func (w *worker) k8sify(
 	const systemContainers = 1
 	ttl := int32(w.cfg.JobTTL.Seconds())
 	kjob.Spec.TTLSecondsAfterFinished = &ttl
-	podSpec := &kjob.Spec.Template.Spec
 
+	podSpec := &kjob.Spec.Template.Spec
 	for i, c := range podSpec.Containers {
 		command := strings.Join(append(c.Command, c.Args...), " ")
 		c.Command = []string{"/workspace/buildkite-agent"}
@@ -311,28 +366,27 @@ func (w *worker) k8sify(
 	return kjob, nil
 }
 
-type worker struct {
-	cfg    api.Config
-	client kubernetes.Interface
-	logger *zap.Logger
-}
-
-func (w *worker) Create(ctx context.Context, job *monitor.Job) error {
-	logger := w.logger.With(zap.String("uuid", job.Uuid))
-	logger.Info("creating job")
-	kjob, err := w.k8sify(job, w.cfg.AgentTokenSecret)
-	if err != nil {
-		return fmt.Errorf("failed to convert job to pod: %w", err)
+func (w *worker) createFailureJob(
+	ctx context.Context,
+	job *monitor.Job,
+	tokenSecret string,
+	err error,
+	envMap map[string]string,
+) error {
+	k8sPlugin := &KubernetesPlugin{
+		PodSpec: &corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Image:   w.cfg.Image,
+					Command: []string{fmt.Sprintf("echo %q && exit 1", err.Error())},
+				},
+			},
+		},
 	}
-	logger = logger.With(zap.String("kjob", kjob.Name))
-	_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
+	kjob, err := w.wrap(job, tokenSecret, k8sPlugin, nil, envMap)
 	if err != nil {
-		if errors.IsAlreadyExists(err) {
-			logger.Debug("job already exists")
-		} else {
-			logger.Error("failed to create job", zap.Error(err))
-		}
 		return err
 	}
-	return nil
+	_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
+	return err
 }
