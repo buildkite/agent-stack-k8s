@@ -1,4 +1,4 @@
 [submodule "agent"]
 path = agent
 url = https://github.com/buildkite/agent.git
-branch = "kubernetes-job-runner"
+	branch = triarius/less-bash
