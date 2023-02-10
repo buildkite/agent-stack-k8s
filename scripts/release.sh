@@ -42,4 +42,3 @@ Digest: \`$agent_digest\`
 EOF
 
 gh release edit "$tag" -F dist/body.txt
-git checkout dist
