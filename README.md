@@ -80,10 +80,11 @@ sequenceDiagram
     bc->>kubernetes: create pod with agent sidecar
     kubernetes->>pod: create
     pod->>bapi: agent accepts & starts job
+    pod->>pod: run sidecars
     pod->>pod: agent bootstrap
     pod->>pod: run user pods to completion
     pod->>bapi: upload artifacts, exit code
-    pod->>pod: exit
+    pod->>pod: agent exit
     kubernetes->>bc: pod completion event
     bc->>kubernetes: cleanup finished pods
 ```
@@ -107,6 +108,14 @@ steps:
 ```
 
 The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec` resource [in the Kubernetes API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#podspec-v1-core).
+
+More samples can be found in the [integration test fixtures directory](integration/fixtures).
+
+### Sidecars
+
+Sidecar containers can be added to your job by specifying them under the top-level `sidecars` key. See [this example](integration/fixtures/sidecars.yaml) for a simple job that runs `nginx` as a sidecar, and accesses the nginx server from the main job.
+
+There is no guarantee that your sidecars will have started before your job, so using retries or a tool like [wait-for-it](https://github.com/vishnubob/wait-for-it) is a good idea to avoid flaky tests.
 
 ### Validating your pipeline
 
