@@ -24,8 +24,9 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
@@ -84,6 +85,7 @@ func TestWalkingSkeleton(t *testing.T) {
 	tc.AssertSuccess(ctx, build)
 	tc.AssertLogsContain(build, "Buildkite Agent Stack for Kubernetes")
 	tc.AssertArtifactsContain(build, "README.md", "CODE_OF_CONDUCT.md")
+	tc.AssertMetadata(ctx, map[string]string{"some-annotation": "cool"}, map[string]string{"some-label": "wow"})
 }
 
 func TestSSHRepoClone(t *testing.T) {
@@ -322,21 +324,12 @@ func (t testcase) CreatePipeline(ctx context.Context) string {
 func (t testcase) StartController(ctx context.Context, cfg api.Config) {
 	t.Helper()
 
-	//start controller
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, nil)
-	clientConfig, err := kubeConfig.ClientConfig()
-	require.NoError(t, err)
-
-	k8sClient, err := kubernetes.NewForConfig(clientConfig)
-	require.NoError(t, err)
-
 	runCtx, cancel := context.WithCancel(ctx)
 	EnsureCleanup(t.T, cancel)
 
 	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.PipelineName)}
 	cfg.Debug = true
-	go controller.Run(runCtx, k8sClient, cfg)
+	go controller.Run(runCtx, t.Kubernetes, cfg)
 }
 
 func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build {
@@ -423,6 +416,26 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 			t.Errorf("unknown build state %q", getBuild.Build.State)
 			return getBuild.Build.State
 		}
+	}
+}
+
+func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[string]string) {
+	t.Helper()
+
+	tagReq, err := labels.NewRequirement(api.TagLabel, selection.Equals, []string{fmt.Sprintf("queue_%s", t.PipelineName)})
+	require.NoError(t, err)
+	selector := labels.NewSelector().Add(*tagReq)
+
+	jobs, err := t.Kubernetes.BatchV1().Jobs(cfg.Namespace).List(ctx, v1.ListOptions{LabelSelector: selector.String()})
+	require.NoError(t, err)
+	require.Len(t, jobs.Items, 1)
+	for k, v := range annotations {
+		require.Equal(t, jobs.Items[0].ObjectMeta.Annotations[k], v)
+		require.Equal(t, jobs.Items[0].Spec.Template.Annotations[k], v)
+	}
+	for k, v := range labelz {
+		require.Equal(t, jobs.Items[0].ObjectMeta.Labels[k], v)
+		require.Equal(t, jobs.Items[0].Spec.Template.Labels[k], v)
 	}
 }
 

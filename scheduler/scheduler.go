@@ -55,6 +55,12 @@ type KubernetesPlugin struct {
 	PodSpec    *corev1.PodSpec
 	GitEnvFrom []corev1.EnvFromSource
 	Sidecars   []corev1.Container `json:"sidecars,omitempty"`
+	Metadata   Metadata
+}
+
+type Metadata struct {
+	Annotations map[string]string
+	Labels      map[string]string
 }
 
 func (w *worker) k8sify(
@@ -103,13 +109,16 @@ func (w *worker) k8sify(
 			},
 		}
 	}
-	kjob.Name = kjobName(job)
-	labels := map[string]string{
-		api.UUIDLabel: job.Uuid,
-		api.TagLabel:  api.TagToLabel(job.Tag),
+	kjob.Name = api.JobName(job.Uuid)
+	if k8sPlugin.Metadata.Labels == nil {
+		k8sPlugin.Metadata.Labels = map[string]string{}
 	}
-	kjob.Labels = labels
-	kjob.Spec.Template.Labels = labels
+	k8sPlugin.Metadata.Labels[api.UUIDLabel] = job.Uuid
+	k8sPlugin.Metadata.Labels[api.TagLabel] = api.TagToLabel(job.Tag)
+	kjob.Labels = k8sPlugin.Metadata.Labels
+	kjob.Spec.Template.Labels = k8sPlugin.Metadata.Labels
+	kjob.Annotations = k8sPlugin.Metadata.Annotations
+	kjob.Spec.Template.Annotations = k8sPlugin.Metadata.Annotations
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
 	var env []corev1.EnvVar
 	env = append(env, corev1.EnvVar{
@@ -326,8 +335,4 @@ func (w *worker) Create(ctx context.Context, job *monitor.Job) error {
 		return err
 	}
 	return nil
-}
-
-func kjobName(job *monitor.Job) string {
-	return fmt.Sprintf("buildkite-%s", job.Uuid)
 }

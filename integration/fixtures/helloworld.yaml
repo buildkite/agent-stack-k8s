@@ -7,6 +7,11 @@ steps:
       BUILDKITE_SHELL: /bin/sh -e -c
     plugins:
       - kubernetes:
+          metadata:
+            annotations:
+              some-annotation: cool
+            labels:
+              some-label: wow
           podSpec:
             containers:
               - image: alpine:latest

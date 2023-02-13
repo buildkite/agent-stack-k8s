@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -28,6 +29,10 @@ func TagsToLabels(tags []string) []string {
 		labels[i] = TagToLabel(tag)
 	}
 	return labels
+}
+
+func JobName(uuid string) string {
+	return fmt.Sprintf("buildkite-%s", uuid)
 }
 
 type Config struct {

@@ -18,6 +18,17 @@
           "items": {
             "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Container"
           }
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "labels": {
+              "type": "object"
+            },
+            "annotations": {
+              "type": "object"
+            }
+          }
         }
       }
     }
