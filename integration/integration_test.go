@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"text/template"
 	"time"
@@ -210,6 +211,36 @@ func TestSidecars(t *testing.T) {
 	tc.AssertLogsContain(build, "Welcome to nginx!")
 }
 
+func TestInvalidPodSpec(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "invalid.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+	tc.AssertLogsContain(build, `is invalid: spec.template.spec.containers[0].volumeMounts[0].name: Not found: "this-doesnt-exist"`)
+}
+
+func TestInvalidPodJSON(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "invalid2.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+	tc.AssertLogsContain(build, `failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.PodSpec.containers.env.value of type string`)
+}
+
 func maxOf(x, y int) int {
 	if x < y {
 		return y
@@ -226,21 +257,26 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 
 	pipelines, err := api.SearchPipelines(ctx, graphqlClient, cfg.Org, "agent-k8s-", 100)
 	require.NoError(t, err)
+	var wg sync.WaitGroup
+	wg.Add(len(pipelines.Organization.Pipelines.Edges))
 	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
 		builds, err := api.GetBuilds(ctx, graphqlClient, fmt.Sprintf("%s/%s", cfg.Org, pipeline.Node.Name), []api.BuildStates{api.BuildStatesRunning}, 100)
 		require.NoError(t, err)
-		for _, build := range builds.Pipeline.Builds.Edges {
-			_, err = api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{Id: build.Node.Id})
-			assert.NoError(t, err)
-		}
-		_, err = api.PipelineDelete(ctx, graphqlClient, api.PipelineDeleteInput{
-			Id: pipeline.Node.Id,
-		})
-		assert.NoError(t, err)
-		if err == nil {
-			t.Logf("deleted orphaned pipeline! %v", pipeline.Node.Name)
-		}
+		go func(pipeline string) {
+			for _, build := range builds.Pipeline.Builds.Edges {
+				_, err = api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{Id: build.Node.Id})
+				assert.NoError(t, err)
+			}
+			tc := testcase{
+				T:       t,
+				GraphQL: api.NewClient(cfg.BuildkiteToken),
+			}.Init()
+			tc.PipelineName = pipeline
+			tc.deletePipeline(context.Background())
+			wg.Done()
+		}(pipeline.Node.Name)
 	}
+	wg.Wait()
 }
 
 type testcase struct {
@@ -295,27 +331,7 @@ func (t testcase) CreatePipeline(ctx context.Context) string {
 	require.NoError(t, err)
 
 	if !preservePipelines {
-		EnsureCleanup(t.T, func() {
-			err := roko.NewRetrier(
-				roko.WithMaxAttempts(10),
-				roko.WithStrategy(roko.Constant(5*time.Second)),
-			).DoWithContext(ctx, func(r *roko.Retrier) error {
-				resp, err := t.Buildkite.Pipelines.Delete(cfg.Org, t.PipelineName)
-				if err != nil {
-					if resp.StatusCode == http.StatusNotFound {
-						return nil
-					}
-					t.Logf("waiting for build to be canceled on pipeline %s", t.PipelineName)
-					return err
-				}
-				return nil
-			})
-			if err != nil {
-				t.Logf("failed to cleanup pipeline %s: %v", *pipeline.Name, err)
-				return
-			}
-			t.Logf("deleted pipeline! %s", *pipeline.Name)
-		})
+		t.deletePipeline(ctx)
 	}
 
 	return *pipeline.GraphQLID
@@ -346,7 +362,7 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 		if _, err := api.BuildCancel(ctx, t.GraphQL, api.BuildCancelInput{
 			Id: createBuild.BuildCreate.Build.Id,
 		}); err != nil {
-			if strings.Contains(err.Error(), "already finished") || strings.Contains(err.Error(), "already being canceled") {
+			if ignorableError(err) {
 				return
 			}
 			t.Logf("failed to cancel build: %v", err)
@@ -441,4 +457,45 @@ func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[st
 
 func strPtr(p string) *string {
 	return &p
+}
+
+func ignorableError(err error) bool {
+	reasons := []string{
+		"already finished",
+		"already being canceled",
+		"already been canceled",
+		"No build found",
+	}
+	for _, reason := range reasons {
+		if strings.Contains(err.Error(), reason) {
+			return true
+		}
+	}
+	return false
+}
+
+func (t testcase) deletePipeline(ctx context.Context) {
+	t.Helper()
+
+	EnsureCleanup(t.T, func() {
+		err := roko.NewRetrier(
+			roko.WithMaxAttempts(10),
+			roko.WithStrategy(roko.Exponential(time.Second, 5*time.Second)),
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
+			resp, err := t.Buildkite.Pipelines.Delete(cfg.Org, t.PipelineName)
+			if err != nil {
+				if resp.StatusCode == http.StatusNotFound {
+					return nil
+				}
+				t.Logf("waiting for build to be canceled on pipeline %s", t.PipelineName)
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			t.Logf("failed to cleanup pipeline %s: %v", t.PipelineName, err)
+			return
+		}
+		t.Logf("deleted pipeline! %s", t.PipelineName)
+	})
 }

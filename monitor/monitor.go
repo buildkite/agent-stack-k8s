@@ -77,10 +77,12 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 				for _, job := range builds {
 					cmdJob := job.Node.(*api.JobJobTypeCommand)
 					m.logger.Debug("creating job", zap.String("uuid", cmdJob.Uuid))
-					handler.Create(ctx, &Job{
+					if err := handler.Create(ctx, &Job{
 						CommandJob: cmdJob.CommandJob,
 						Tag:        tag,
-					})
+					}); err != nil {
+						m.logger.Error("failed to create job", zap.Error(err))
+					}
 				}
 			}
 
