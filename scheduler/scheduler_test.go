@@ -48,8 +48,8 @@ func TestJobPluginConversion(t *testing.T) {
 		},
 		Tag: "queue=kubernetes",
 	}
-	worker := worker{logger: zaptest.NewLogger(t)}
-	result, err := worker.k8sify(input, parseEnv(input), "some-secret")
+	wrapper := NewJobWrapper(zaptest.NewLogger(t), input, api.Config{AgentTokenSecret: "token-secret"})
+	result, err := wrapper.ParsePlugins().Build()
 	require.NoError(t, err)
 
 	require.Len(t, result.Spec.Template.Spec.Containers, 3)
@@ -59,7 +59,7 @@ func TestJobPluginConversion(t *testing.T) {
 	require.Equal(t, pluginConfig.PodSpec.Containers[0].Command[0], commandEnv.Value)
 
 	tokenEnv := findEnv(t, commandContainer.Env, "BUILDKITE_AGENT_TOKEN")
-	require.Equal(t, "some-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
+	require.Equal(t, "token-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
 
 	tagLabel := result.Labels[api.TagLabel]
 	require.Equal(t, api.TagToLabel(input.Tag), tagLabel)
@@ -75,8 +75,8 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 			Command: "echo hello world",
 		},
 	}
-	worker := worker{}
-	result, err := worker.k8sify(input, parseEnv(input), "secret")
+	wrapper := NewJobWrapper(zaptest.NewLogger(t), input, api.Config{})
+	result, err := wrapper.ParsePlugins().Build()
 	require.NoError(t, err)
 
 	require.Len(t, result.Spec.Template.Spec.Containers, 3)
@@ -86,6 +86,33 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 	require.Equal(t, input.Command, commandEnv.Value)
 	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
 	require.Nil(t, pluginsEnv)
+}
+
+func TestFailureJobs(t *testing.T) {
+	pluginsJSON, err := json.Marshal([]map[string]interface{}{
+		{
+			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": `"some-invalid-json"`,
+		},
+	})
+
+	input := &monitor.Job{
+		CommandJob: api.CommandJob{
+			Uuid: "abc",
+			Env:  []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
+		},
+		Tag: "queue=kubernetes",
+	}
+	wrapper := NewJobWrapper(zaptest.NewLogger(t), input, api.Config{})
+	_, err = wrapper.ParsePlugins().Build()
+	require.Error(t, err)
+
+	result, err := wrapper.BuildFailureJob(err)
+	require.NoError(t, err)
+
+	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
+	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
+	require.Equal(t, `echo "failed parsing Kubernetes plugin: json: cannot unmarshal string into Go value of type scheduler.KubernetesPlugin" && exit 1`, commandEnv.Value)
+
 }
 
 func findContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {
