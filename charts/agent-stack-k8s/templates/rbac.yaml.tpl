@@ -11,6 +11,7 @@ rules:
       - list
       - watch
       - create
+      - update
   - apiGroups:
     - ""
     resources:
