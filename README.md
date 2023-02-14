@@ -151,6 +151,15 @@ steps:
                   - --image=ttl.sh/example:1h
 ```
 
+The agent will automatically configure SSH access based on environment variables using the [https://github.com/buildkite/docker-ssh-env-config](docker-ssh-env-config) shell script. This script will run during the `checkout` stage of the job, and all resulting SSH keys and SSH config will live in the `/workspace/.ssh` in subsequent containers of the job.
+
+To use these keys and config in a separate step, for example if your job runs `git clone`, you can either:
+
+- symlink the `/workspace/.ssh` directory to `~/.ssh`
+- specify the path to the key explicitly, for example by setting `GIT_SSH_COMMAND="ssh -i /workspace/.ssh/id_rsa"` in your job's environment.
+
+Note that setting the `HOME` environment variable in your container will likely not work, since OpenSSH looks for the home directory configured in `/etc/passwd`.
+
 ## Development
 
 Install dependencies with Homebrew via:
