@@ -260,9 +260,9 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(len(pipelines.Organization.Pipelines.Edges))
 	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
-		builds, err := api.GetBuilds(ctx, graphqlClient, fmt.Sprintf("%s/%s", cfg.Org, pipeline.Node.Name), []api.BuildStates{api.BuildStatesRunning}, 100)
-		require.NoError(t, err)
-		go func(pipeline string) {
+		t.Run(pipeline.Node.Name, func(t *testing.T) {
+			builds, err := api.GetBuilds(ctx, graphqlClient, fmt.Sprintf("%s/%s", cfg.Org, pipeline.Node.Name), []api.BuildStates{api.BuildStatesRunning}, 100)
+			require.NoError(t, err)
 			for _, build := range builds.Pipeline.Builds.Edges {
 				_, err = api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{Id: build.Node.Id})
 				assert.NoError(t, err)
@@ -271,12 +271,10 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 				T:       t,
 				GraphQL: api.NewClient(cfg.BuildkiteToken),
 			}.Init()
-			tc.PipelineName = pipeline
+			tc.PipelineName = pipeline.Node.Name
 			tc.deletePipeline(context.Background())
-			wg.Done()
-		}(pipeline.Node.Name)
+		})
 	}
-	wg.Wait()
 }
 
 type testcase struct {
