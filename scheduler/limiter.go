@@ -68,9 +68,8 @@ func (l *MaxInFlightLimiter) add(ctx context.Context, job *monitor.Job) error {
 		l.logger.Debug("skipping already queued job", zap.String("uuid", job.Uuid))
 		return nil
 	}
-	inFlight := len(l.inFlight)
-	if l.MaxInFlight > 0 && inFlight >= l.MaxInFlight {
-		l.logger.Debug("max-in-flight reached", zap.Int("in-flight", inFlight))
+	for l.MaxInFlight > 0 && len(l.inFlight) >= l.MaxInFlight {
+		l.logger.Debug("max-in-flight reached", zap.Int("in-flight", len(l.inFlight)))
 		l.completions.Wait()
 	}
 	if err := l.scheduler.Create(ctx, job); err != nil {
@@ -127,6 +126,13 @@ func (l *MaxInFlightLimiter) markComplete(job *batchv1.Job) {
 		l.logger.Debug("job complete", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
 		l.completions.Signal()
 	}
+}
+
+func (l *MaxInFlightLimiter) InFlight() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	return len(l.inFlight)
 }
 
 func jobFinished(job *batchv1.Job) bool {
