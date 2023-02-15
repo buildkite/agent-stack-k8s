@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/api"
@@ -27,15 +26,13 @@ func TestLimiter(t *testing.T) {
 	defer ctrl.Finish()
 	handler := NewMockJobHandler(ctrl)
 	limiter := scheduler.NewLimiter(zaptest.NewLogger(t), handler, 1)
-	var inFlight int64
 
+	var wg sync.WaitGroup
+	wg.Add(5)
 	handler.EXPECT().Create(gomock.Eq(ctx), gomock.Any()).Times(5).
 		Do(func(ctx context.Context, job *monitor.Job) error {
-			currentInFlight := atomic.LoadInt64(&inFlight)
-			require.Equal(t, 0, int(currentInFlight))
-
-			// mark job as completed
 			go func() {
+				t.Log("updating", job.Uuid)
 				limiter.OnUpdate(nil, &batchv1.Job{
 					ObjectMeta: metav1.ObjectMeta{
 						Labels: map[string]string{
@@ -48,23 +45,25 @@ func TestLimiter(t *testing.T) {
 						},
 					},
 				})
-				atomic.AddInt64(&inFlight, -1)
+				t.Log("did update for", job.Uuid)
+				wg.Done()
 			}()
 			return nil
 		})
 
-	var wg sync.WaitGroup
 	// simulate receiving a bunch of jobs
+	wg.Add(5)
 	for i := 0; i < 5; i++ {
-		wg.Add(1)
 		job := api.CommandJob{
 			Uuid: fmt.Sprintf("job-%d", i),
 		}
 		go func() {
+			t.Log("creating", job.Uuid)
 			require.NoError(t, limiter.Create(ctx, &monitor.Job{
 				CommandJob: job,
 			}))
-			atomic.AddInt64(&inFlight, 1)
+			require.LessOrEqual(t, limiter.InFlight(), 1)
+			t.Log("did create for", job.Uuid)
 			wg.Done()
 		}()
 	}
