@@ -17,6 +17,13 @@ steps:
               - image: alpine:latest
                 command: [cat]
                 args: [README.md]
+              - image: alpine:latest
+                command: [touch]
+                args: [some-file]
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 1000
+                  runAsGroup: 1001
               - image: buildkite/agent:latest
                 command: [buildkite-agent]
                 args: [artifact upload "README.md"]
