@@ -258,7 +258,6 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			c.WorkingDir = "/workspace"
 		}
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-		c.EnvFrom = w.k8sPlugin.GitEnvFrom
 		podSpec.Containers[i] = c
 	}
 
@@ -269,7 +268,6 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
 		}
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-		c.EnvFrom = w.k8sPlugin.GitEnvFrom
 		podSpec.Containers = append(podSpec.Containers, c)
 	}
 
@@ -337,16 +335,13 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			Value: "kubernetes-exec",
 		}, {
 			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-			Value: "checkout,command",
+			Value: "checkout",
 		}, {
 			Name:  "BUILDKITE_AGENT_NAME",
 			Value: "buildkite",
 		}, {
 			Name:  "BUILDKITE_CONTAINER_ID",
 			Value: "0",
-		}, {
-			Name:  "BUILDKITE_COMMAND",
-			Value: "cp -r ~/.ssh /workspace/.ssh && chmod -R 777 /workspace",
 		}},
 		EnvFrom: w.k8sPlugin.GitEnvFrom,
 	}
@@ -357,7 +352,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		Image:           w.cfg.Image,
 		ImagePullPolicy: corev1.PullAlways,
 		Command:         []string{"cp"},
-		Args:            []string{"/usr/local/bin/buildkite-agent", "/usr/local/bin/ssh-env-config.sh", "/workspace"},
+		Args:            []string{"/usr/local/bin/buildkite-agent", "/workspace"},
 		VolumeMounts: []corev1.VolumeMount{
 			{
 				Name:      "workspace",
