@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	UUIDLabel         = "buildkite.com/job-uuid"
-	TagLabel          = "buildkite.com/job-tag"
-	DefaultNamespace  = "default"
-	DefaultAgentImage = "ghcr.io/buildkite/agent-k8s:latest"
+	UUIDLabel          = "buildkite.com/job-uuid"
+	TagLabel           = "buildkite.com/job-tag"
+	BuildURLAnnotation = "buildkite.com/build-url"
+	DefaultNamespace   = "default"
+	DefaultAgentImage  = "ghcr.io/buildkite/agent-k8s:latest"
 )
 
 // a valid label must be an empty string or consist of alphanumeric characters,
