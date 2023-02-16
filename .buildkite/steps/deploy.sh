@@ -6,7 +6,7 @@ apk add helm yq skopeo git --quiet --no-progress
 tag=$(git describe)
 version=$(echo "$tag" | sed 's/v//')
 temp_agent_image=$(buildkite-agent meta-data get "agent-image")
-agent_image="${KO_DOCKER_REPO}/agent-k8s:${tag}"
+agent_image="ghcr.io/buildkite/agent-stack-k8s/agent:${tag}"
 controller_image=$(buildkite-agent meta-data get "controller-image")
 
 set +x
@@ -18,7 +18,7 @@ skopeo copy "docker://${temp_agent_image}" "docker://${agent_image}" --authfile 
 yq -i ".image = \"$controller_image\"" charts/agent-stack-k8s/values.yaml
 yq -i ".config.image = \"$agent_image\"" charts/agent-stack-k8s/values.yaml
 helm package ./charts/agent-stack-k8s --app-version "$version" -d dist --version "$version"
-helm_image="oci://${KO_DOCKER_REPO}/helm"
+helm_image="oci://ghcr.io/buildkite/agent-stack-k8s/helm"
 helm push ./dist/agent-stack-k8s-*.tgz ${helm_image}
 
 set +x
@@ -31,7 +31,6 @@ helm upgrade agent-stack-k8s ${helm_image}/agent-stack-k8s \
     --set config.org=$BUILDKITE_ORGANIZATION_SLUG \
     --set agentToken=$BUILDKITE_AGENT_TOKEN \
     --set graphqlToken=$BUILDKITE_TOKEN \
-    --set image=$controller_image \
     --set config.image=$agent_image \
     --set config.debug=true \
     --set config.profiler-address=localhost:6060

@@ -20,7 +20,7 @@ gomod:
   go mod tidy
   git diff --no-ext-diff --exit-code go.mod go.sum
 
-agent target=("ghcr.io/buildkite/agent-k8s:latest") os=("linux") arch=("amd64 arm64"):
+agent target os=("linux") arch=("amd64 arm64"):
   #!/usr/bin/env bash
   set -euxo pipefail
   pushd agent
