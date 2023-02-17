@@ -20,13 +20,20 @@ func TestJobPluginConversion(t *testing.T) {
 				{
 					Image:   "alpine:latest",
 					Command: []string{"hello world a=b=c"},
+					EnvFrom: []corev1.EnvFromSource{
+						{
+							ConfigMapRef: &corev1.ConfigMapEnvSource{
+								LocalObjectReference: corev1.LocalObjectReference{Name: "some-configmap"},
+							},
+						},
+					},
 				},
 			},
 		},
 		GitEnvFrom: []corev1.EnvFromSource{
 			{
 				SecretRef: &corev1.SecretEnvSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret"},
+					LocalObjectReference: corev1.LocalObjectReference{Name: "git-secret"},
 				},
 			},
 		},
@@ -57,6 +64,17 @@ func TestJobPluginConversion(t *testing.T) {
 	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
 	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
 	require.Equal(t, pluginConfig.PodSpec.Containers[0].Command[0], commandEnv.Value)
+
+	var envFromNames []string
+	for _, envFrom := range commandContainer.EnvFrom {
+		if envFrom.ConfigMapRef != nil {
+			envFromNames = append(envFromNames, envFrom.ConfigMapRef.Name)
+		}
+		if envFrom.SecretRef != nil {
+			envFromNames = append(envFromNames, envFrom.SecretRef.Name)
+		}
+	}
+	require.ElementsMatch(t, envFromNames, []string{"some-configmap", "git-secret"})
 
 	tokenEnv := findEnv(t, commandContainer.Env, "BUILDKITE_AGENT_TOKEN")
 	require.Equal(t, "token-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
