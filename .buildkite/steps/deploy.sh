@@ -18,7 +18,7 @@ skopeo copy "docker://${temp_agent_image}" "docker://${agent_image}" --authfile 
 yq -i ".image = \"$controller_image\"" charts/agent-stack-k8s/values.yaml
 yq -i ".config.image = \"$agent_image\"" charts/agent-stack-k8s/values.yaml
 helm package ./charts/agent-stack-k8s --app-version "$version" -d dist --version "$version"
-helm_image="oci://ghcr.io/buildkite/agent-stack-k8s/helm"
+helm_image="oci://ghcr.io/buildkite/helm"
 helm push ./dist/agent-stack-k8s-*.tgz ${helm_image}
 
 set +x
