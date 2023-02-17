@@ -258,7 +258,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			c.WorkingDir = "/workspace"
 		}
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-		c.EnvFrom = w.k8sPlugin.GitEnvFrom
+		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
 		podSpec.Containers[i] = c
 	}
 
@@ -269,7 +269,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
 		}
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-		c.EnvFrom = w.k8sPlugin.GitEnvFrom
+		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
 		podSpec.Containers = append(podSpec.Containers, c)
 	}
 
