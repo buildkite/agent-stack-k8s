@@ -53,23 +53,9 @@ deploy *FLAGS:
     {{FLAGS}}
 
 
-release repo=("ghcr.io/buildkite/helm"):
-  #!/usr/bin/env bash
-  set -euxo pipefail
-
-  goreleaser release --rm-dist
-  tag=$(git describe)
-  version=$(echo "$tag" | sed 's/v//')
-  helm package ./charts/agent-stack-k8s --app-version "$version" -d dist --version "$version"
-  push=$(helm push ./dist/agent-stack-k8s-*.tgz oci://{{repo}} 2>&1)
-  gh release view "$tag" --json body -q .body > dist/body.txt
-  cat << EOF >> dist/body.txt
-  ## Helm chart
-  \`\`\`
-  $push
-  \`\`\`
-  EOF
-  gh release edit "$tag" -F dist/body.txt
+# version should be a semver version like `0.1.0`
+release version:
+  ./scripts/release.sh {{version}}
 
 cleanup-orphans:
   go test -v -run TestCleanupOrphanedPipelines ./integration --delete-orphaned-pipelines

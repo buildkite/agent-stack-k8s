@@ -7,21 +7,29 @@ if [[ ${#} -lt 1 ]]; then
 fi
 
 version="${1}"
+version=$(echo $version | sed 's/^v//') # strip leading 'v'
 tag="v$version"
 
 commitish=$(git describe --exclude "$tag")
-git tag -f -m "$tag" "$tag"
 
+tag_image() {
+    crane tag $1 $2 || exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        echo "failed to tag image, maybe the build has not completed yet?"
+        return $exit_code
+    fi
+}
 # helm doesn't use v-prefixed versions, everything else does
 # NB: these will fail if the commit hasn't gone through CI and produced release-candidate images yet
-crane tag ghcr.io/buildkite/helm/agent-stack-k8s:${commitish:1} "$version"
-crane tag ghcr.io/buildkite/agent-stack-k8s:${commitish} "$tag"
-crane tag ghcr.io/buildkite/agent-k8s:${commitish} "$tag"
+tag_image ghcr.io/buildkite/helm/agent-stack-k8s:${commitish:1} "$version"
+tag_image ghcr.io/buildkite/agent-stack-k8s:${commitish} "$tag"
+tag_image ghcr.io/buildkite/agent-k8s:${commitish} "$tag"
 
 chart_digest=$(crane digest ghcr.io/buildkite/helm/agent-stack-k8s:${version})
 controller_digest=$(crane digest ghcr.io/buildkite/agent-stack-k8s:${tag})
 agent_digest=$(crane digest ghcr.io/buildkite/agent-k8s:${tag})
 
+git tag -m "$tag" "$tag"
 git push origin "$tag" --force
 goreleaser release --rm-dist
 gh release view "$tag" --json body -q .body >dist/body.txt
