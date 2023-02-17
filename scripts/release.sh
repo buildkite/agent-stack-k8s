@@ -13,6 +13,7 @@ tag="v$version"
 commitish=$(git describe --exclude "$tag")
 
 tag_image() {
+    exit_code=0
     crane tag $1 $2 || exit_code=$?
     if [ $exit_code -ne 0 ]; then
         echo "failed to tag image, maybe the build has not completed yet?"
