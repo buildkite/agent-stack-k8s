@@ -8,6 +8,7 @@ rules:
     resources:
       - jobs
     verbs:
+      - get
       - list
       - watch
       - create
