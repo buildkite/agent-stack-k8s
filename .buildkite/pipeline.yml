@@ -75,7 +75,6 @@ steps:
     agents:
       queue: kubernetes
     env:
-      BUILDKITE_SHELL: /bin/sh -e
       BUILDKITE_GIT_FETCH_FLAGS: "-v --tags"
     plugins:
       - kubernetes:
@@ -85,6 +84,9 @@ steps:
               - name: deploy
                 image: alpine:latest
                 command: [.buildkite/steps/deploy.sh]
+                env:
+                - name: BUILDKITE_SHELL
+                  value: /bin/sh -e
                 envFrom:
                 - secretRef:
                     name: deploy-secrets
