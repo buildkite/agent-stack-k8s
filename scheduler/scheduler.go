@@ -346,7 +346,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			Value: "0",
 		}, {
 			Name:  "BUILDKITE_COMMAND",
-			Value: "cp -r ~/.ssh /workspace/.ssh",
+			Value: "cp -r ~/.ssh /workspace/.ssh && chmod -R 777 /workspace",
 		}},
 		EnvFrom: w.k8sPlugin.GitEnvFrom,
 	}
