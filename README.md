@@ -4,23 +4,7 @@
 
 ## Overview
 
-A Kubernetes controller that runs Buildkite jobs as workloads on Kubernetes.
-
-## Explain it like I'm 5
-
-The controller uses the [Buildkite GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled work that uses the `kubernetes` plugin.
-
-When a job is available, the controller will create a pod to acquire and run the job. It converts the [PodSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#podspec-v1-core) in the `kubernetes` plugin into a pod by:
-
-- adding an init container to:
-  - copy the agent binary onto the workspace volume
-- adding a container to run the buildkite agent
-- adding a container to clone the source repository
-- modifying the user-specified containers to:
-  - overwrite the entrypoint to the agent binary
-  - run with the working directory set to the workspace
-
-The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
+A Kubernetes controller that runs [Buildkite steps](https://buildkite.com/docs/pipelines/defining-steps) as [Kubernetes jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/).
 
 ## Installation
 
@@ -32,7 +16,7 @@ The entrypoint rewriting and ordering logic is heavily inspired by [the approach
 
 ### Deploy with Helm
 
-The simplest way to get up and running is by deploying our Helm chart:
+The simplest way to get up and running is by deploying our [Helm](https://helm.sh) chart:
 
 We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
 which means you'll need Helm version 3.8.0 or newer.
@@ -63,33 +47,9 @@ Usage of agent-stack-k8s:
       --tags strings                A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8") (default [queue=kubernetes])
 ```
 
-Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](examples) folder there is a sample [YAML config](examples/config.yaml) and a sample [dotenv config](examples/config.env).
+Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](./examples) folder there is a sample [YAML config](./examples/config.yaml) and a sample [dotenv config](./examples/config.env).
 
-## Architecture
-
-```mermaid
-sequenceDiagram
-    participant bc as buildkite controller
-    participant gql as Buildkite GraphQL API
-    participant bapi as Buildkite API
-    participant kubernetes
-    bc->>gql: Get scheduled builds & jobs
-    gql-->>bc: {build: jobs: [{uuid: "abc"}]}
-    kubernetes->>pod: start
-    bc->>kubernetes: watch for pod completions
-    bc->>kubernetes: create pod with agent sidecar
-    kubernetes->>pod: create
-    pod->>bapi: agent accepts & starts job
-    pod->>pod: run sidecars
-    pod->>pod: agent bootstrap
-    pod->>pod: run user pods to completion
-    pod->>bapi: upload artifacts, exit code
-    pod->>pod: agent exit
-    kubernetes->>bc: pod completion event
-    bc->>kubernetes: cleanup finished pods
-```
-
-## Sample buildkite pipeline
+### Sample buildkite pipeline
 
 ```yaml
 steps:
@@ -100,16 +60,15 @@ steps:
       - kubernetes:
           podSpec:
             containers:
-              - image: gradle:latest
-                command: [gradle]
+              - image: alpine:latest
+                command: [echo]
                 args:
-                  - jib
-                  - --image=ttl.sh/example:1h
+                - "Hello, world!"
 ```
 
 The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec` resource [in the Kubernetes API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#podspec-v1-core).
 
-More samples can be found in the [integration test fixtures directory](integration/fixtures).
+More samples can be found in the [integration test fixtures directory](./integration/fixtures).
 
 ### Sidecars
 
@@ -129,7 +88,7 @@ This currently can't prevent every sort of error, you might still have a referen
 
 Our JSON schema can also be used with editors that support JSON Schema by configuring your editor to validate against the schema found [here](./cmd/linter/schema.json).
 
-## Cloning repos via SSH
+### Cloning repos via SSH
 
 To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
 
@@ -159,6 +118,46 @@ To use these keys and config in a separate step, for example if your job runs `g
 - specify the path to the key explicitly, for example by setting `GIT_SSH_COMMAND="ssh -i /workspace/.ssh/id_rsa"` in your job's environment.
 
 Note that setting the `HOME` environment variable in your container will likely not work, since OpenSSH looks for the home directory configured in `/etc/passwd`.
+
+## How does it work
+
+The controller uses the [Buildkite GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled work that uses the `kubernetes` plugin.
+
+When a job is available, the controller will create a pod to acquire and run the job. It converts the [PodSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#podspec-v1-core) in the `kubernetes` plugin into a pod by:
+
+- adding an init container to:
+  - copy the agent binary onto the workspace volume
+- adding a container to run the buildkite agent
+- adding a container to clone the source repository
+- modifying the user-specified containers to:
+  - overwrite the entrypoint to the agent binary
+  - run with the working directory set to the workspace
+
+The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
+
+## Architecture
+
+```mermaid
+sequenceDiagram
+    participant bc as buildkite controller
+    participant gql as Buildkite GraphQL API
+    participant bapi as Buildkite API
+    participant kubernetes
+    bc->>gql: Get scheduled builds & jobs
+    gql-->>bc: {build: jobs: [{uuid: "abc"}]}
+    kubernetes->>pod: start
+    bc->>kubernetes: watch for pod completions
+    bc->>kubernetes: create pod with agent sidecar
+    kubernetes->>pod: create
+    pod->>bapi: agent accepts & starts job
+    pod->>pod: run sidecars
+    pod->>pod: agent bootstrap
+    pod->>pod: run user pods to completion
+    pod->>bapi: upload artifacts, exit code
+    pod->>pod: agent exit
+    kubernetes->>bc: pod completion event
+    bc->>kubernetes: cleanup finished pods
+```
 
 ## Development
 
