@@ -7,9 +7,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/buildkite/agent-stack-k8s/api"
-	"github.com/buildkite/agent-stack-k8s/monitor"
-	"github.com/buildkite/agent-stack-k8s/scheduler"
+	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/monitor"
+	"github.com/buildkite/agent-stack-k8s/v2/scheduler"
 	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"

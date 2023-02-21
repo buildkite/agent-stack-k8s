@@ -8,7 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	monitor "github.com/buildkite/agent-stack-k8s/monitor"
+	monitor "github.com/buildkite/agent-stack-k8s/v2/monitor"
 	gomock "github.com/golang/mock/gomock"
 )
 

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
-	"github.com/buildkite/agent-stack-k8s/api"
+	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 )

@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	"github.com/buildkite/agent-stack-k8s/cmd/controller"
+	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
 )
 
 func main() {

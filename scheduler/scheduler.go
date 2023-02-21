@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/buildkite/agent-stack-k8s/api"
-	"github.com/buildkite/agent-stack-k8s/monitor"
+	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/monitor"
 	"github.com/buildkite/agent/v3/clicommand"
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"

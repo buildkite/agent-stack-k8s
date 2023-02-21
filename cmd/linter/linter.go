@@ -9,7 +9,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/buildkite/agent-stack-k8s/scheduler"
+	"github.com/buildkite/agent-stack-k8s/v2/scheduler"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/cobra"

@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/buildkite/agent-stack-k8s/api"
+	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes/fake"
