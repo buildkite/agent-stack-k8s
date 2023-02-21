@@ -13,8 +13,8 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/linter"
-	"github.com/buildkite/agent-stack-k8s/v2/monitor"
-	"github.com/buildkite/agent-stack-k8s/v2/scheduler"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/scheduler"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
