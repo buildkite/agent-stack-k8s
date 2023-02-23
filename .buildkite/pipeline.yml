@@ -1,67 +1,94 @@
-failure-spec: &failure-spec
-  restartPolicy: OnFailure
-  containers:
-    - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-failure
-      image: deftinc/failwhale
-      command: ["/app/entrypoint.sh"]
-      resources:
-        requests:
-          cpu: "0.25"
-          memory: "250Mi"
-        limits:
-          cpu: "0.25"
-          memory: "250Mi"
-
-success-spec: &success-spec
-  restartPolicy: OnFailure
-  containers:
-    - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-success
-      image: deftinc/winpenguin
-      command: ["/app/entrypoint.sh"]
-      resources:
-        requests:
-          cpu: "0.25"
-          memory: "250Mi"
-        limits:
-          cpu: "0.25"
-          memory: "250Mi"
-
-source-spec: &source-spec
-  restartPolicy: OnFailure
-  containers:
-    - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-source
-      image: deftinc/lawyer_lion
-      command: ["/app/entrypoint.sh"]
-      resources:
-        requests:
-          cpu: "0.25"
-          memory: "250Mi"
-        limits:
-          cpu: "0.25"
-          memory: "250Mi"
-
-busy-spec: &busy-spec
-  restartPolicy: OnFailure
-  containers:
-    - name: ${BUILDKITE_PIPELINE_SLUG}-${BUILDKITE_BUILD_NUMBER}-${BUILDKITE_STEP_ID}-busy
-      image: deftinc/busy_beaver
-      command: ["/app/entrypoint.sh"]
-      resources:
-        requests:
-          cpu: "0.25"
-          memory: "250Mi"
-        limits:
-          cpu: "0.25"
-          memory: "250Mi"
-
 steps:
-  - label: "Consulting my :crystal_ball: thats inside my :k8s: pod"
-    env:
-      BUILDKITE_PLUGINS_ALWAYS_CLONE_FRESH: "true"
+  - label: ":docker: build agent"
+    key: agent
+    agents:
+      queue: kubernetes
     plugins:
-      - k8s-job:
-          pod-spec: *source-spec
-          mount-source: true
-          annotations:
-            foo: bar
-            bar: baz
+      - kubernetes:
+          podSpec:
+            serviceAccountName: docker
+            containers:
+              - name: docker
+                image: golang:latest
+                command: [.buildkite/steps/agent.sh]
+
+  - label: ":buildkite: integration tests"
+    key: integration
+    depends_on: agent
+    agents:
+      queue: kubernetes
+    artifact_paths: junit-*.xml
+    plugins:
+      - kubernetes:
+          podSpec:
+            serviceAccountName: integration-tests
+            volumes:
+            - name: agent-stack-k8s-config
+              configMap:
+                name: agent-stack-k8s-config
+            containers:
+              - name: tests
+                image: golang:latest
+                command: [.buildkite/steps/tests.sh]
+                env:
+                - name: CONFIG
+                  value: /etc/config.yaml
+                envFrom:
+                - secretRef:
+                    name: test-secrets
+                - secretRef:
+                    name: agent-stack-k8s-secrets
+                volumeMounts:
+                - mountPath: /etc/config.yaml
+                  name: agent-stack-k8s-config
+                  subPath: config.yaml
+                resources:
+                  requests:
+                    cpu: 1000m
+                    memory: 512Mi
+      - test-collector:
+          files: "junit-*.xml"
+          format: "junit"
+
+  - label: ":docker: build controller"
+    key: controller
+    if: "build.branch == pipeline.default_branch"
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - name: ko
+                image: golang:latest
+                command: [.buildkite/steps/controller.sh]
+                envFrom:
+                - secretRef:
+                    name: deploy-secrets
+
+  - label: ":shipit: deploy"
+    if: "build.branch == pipeline.default_branch"
+    depends_on:
+    - agent
+    - controller
+    - integration
+    agents:
+      queue: kubernetes
+    env:
+      BUILDKITE_GIT_FETCH_FLAGS: "-v --tags"
+    plugins:
+      - kubernetes:
+          podSpec:
+            serviceAccountName: deploy
+            containers:
+              - name: deploy
+                image: alpine:latest
+                command: [.buildkite/steps/deploy.sh]
+                env:
+                - name: BUILDKITE_SHELL
+                  value: /bin/sh -e
+                envFrom:
+                - secretRef:
+                    name: deploy-secrets
+                - secretRef:
+                    name: agent-stack-k8s-secrets

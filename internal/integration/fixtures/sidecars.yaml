@@ -1,0 +1,16 @@
+steps:
+  - label: ":wave:"
+    agents:
+      queue: {{.queue}}
+    env:
+      BUILDKITE_SHELL: /bin/sh -e -c
+    plugins:
+      - kubernetes:
+          sidecars:
+          - image: nginx:latest
+          podSpec:
+            containers:
+              - image: curlimages/curl:latest
+                name: curl
+                command: [curl]
+                args: ["--retry 5", "--retry-all-errors", "localhost:80"]

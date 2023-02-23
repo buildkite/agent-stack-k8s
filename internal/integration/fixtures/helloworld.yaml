@@ -1,0 +1,29 @@
+steps:
+  - label: ":wave:"
+    agents:
+      queue: {{.queue}}
+    artifact_paths: "CODE_OF_CONDUCT.md"
+    env:
+      BUILDKITE_SHELL: /bin/sh -e -c
+    plugins:
+      - kubernetes:
+          metadata:
+            annotations:
+              some-annotation: cool
+            labels:
+              some-label: wow
+          podSpec:
+            containers:
+              - image: alpine:latest
+                command: [cat]
+                args: [README.md]
+              - image: alpine:latest
+                command: [touch]
+                args: [some-file]
+                securityContext:
+                  runAsNonRoot: true
+                  runAsUser: 1000
+                  runAsGroup: 1001
+              - image: buildkite/agent:latest
+                command: [buildkite-agent]
+                args: [artifact upload "README.md"]

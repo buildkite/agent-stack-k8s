@@ -1,94 +1,237 @@
 # Buildkite Agent Stack for Kubernetes
 
-This is an early prototype for running an autoscaling [Buildkite Agent](https://github.com/buildkite/agent) stack on [Kubernetes](https://kubernetes.io).
+[![Build status](https://badge.buildkite.com/d58c90abfe8b48f8d8750dac8e911fc0b6afe026631b4dc97c.svg)](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack)
 
-We've seen many customers running the Agent on their own Kubernetes clusters. This is an extraction of some of the patterns we've seen. The stack works today, but we'll be improving it over time as we discover the best ways to run Buildkite pipelines on Kubernetes.
+## Overview
 
-## Configuring the stack
+A Kubernetes controller that runs [Buildkite steps](https://buildkite.com/docs/pipelines/defining-steps) as [Kubernetes jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/).
 
-You'll need to create your own overlay to add:
-1. Buildkite agent token
-2. Private repository access using either
-   1. Git credentials
-   2. SSH key
+## Installation
 
-```
-cp -R k8s/overlays/example k8s/overlays/my-stackname
-```
+### Requirements
 
-### Agent token
+- A Kubernetes cluster
+- An API token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
+- An [agent token](https://buildkite.com/docs/agent/v3/tokens)
 
-Your Buildkite agent token can be found here:
-https://buildkite.com/organizations/~/agents
+### Deploy with Helm
 
-Paste that value into the space labeled "BUILDKITE_AGENT_TOKEN" in `k8s/overlays/my-stackname/kustomization.yaml`
+The simplest way to get up and running is by deploying our [Helm](https://helm.sh) chart:
 
-### Private repository access
+We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
+which means you'll need Helm version 3.8.0 or newer.
 
-#### Git credentials
-
-You can create a set of git credentials for testing on GitHub [here](https://github.com/settings/tokens). You only need to select repository access. Fill in the values in `k8s/overlays/my-stackname/git-credentials`.
-
-#### SSH key
-
-We would recommend [making the agent its own ssh key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent) and [adding it as a deploy key to the repository you want to test](https://docs.github.com/en/developers/overview/managing-deploy-keys), or using [a machine user with a dedicated ssh key](https://docs.github.com/en/developers/overview/managing-deploy-keys#machine-users). But for simplicity during local testing you can also use your own ssh key.
-
-Paste the private into `./k8s/overlays/my-stackname/private-ssh-key`
-
-## Viewing the generated manifests
-
-You can view the generated manifests before apply them to the cluster with:
-
-```
-kustomize build k8s/overlays/my-stackname
+```bash
+helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
+    --create-namespace \
+    --namespace buildkite \
+    --set config.org=<your Buildkite org slug> \
+    --set agentToken=<your Buildkite agent token> \
+    --set graphqlToken=<your Buildkite GraphQL-enabled API token>
 ```
 
-You can pipe this input directly into kubectl to apply it:
+### Options
 
-```
-kustomize build k8s/overlays/my-stackname | kubectl apply -f -
-```
-
-## Autoscaling
-
-The example scales Buildkite agent pods using a [horizontal pod autoscaler](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/) and [buildkite metrics](https://github.com/elotl/buildscaler) from the default job queue. Whenever there are scheduled jobs waiting for execution the number of agent boxes scale up by either double or add 7 agents whichever is greater every 30 seconds. Whenever there are idle agent boxes they will begin to scale down 1 box every 20 seconds, but there may appear to be a delay if that box is currently running a job. These rules can be seen and modified in the supplied manifests.
-
-## Running steps in a pod
-
-The example uses the [Buildkite k8s job plugin](https://github.com/buildkite-plugins/k8s-job-buildkite-plugin) to allow running Buildkite pipeline jobs as a Kubenetes [Job](https://kubernetes.io/docs/concepts/workloads/controllers/job/) using a [Pod spec](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec). Some example pipelines are included in this repository, as well as the source Dockerfiles for the associated containers. If you need to network between containers in a pod step you can use [kubedns](https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/) to talk between containers.
-
-There are a couple of really simple test services -- [win penguin](https://github.com/buildkite/agent-stack-k8s) and [fail whale](https://github.com/buildkite/agent-stack-k8s). We also pushed the images for [win penguin](https://hub.docker.com/repository/docker/deftinc/winpenguin) and [fail whale](https://hub.docker.com/repository/docker/deftinc/failwhale) up to Docker Hub for testing.
-
-## Running the stack locally
-
-The easiest way to get started is to run a kind (kubernetes-in-docker) cluster on your local machine. We have a few scripts that make cluster provisioning and bootstrap easier.
-
-You'll need to have the docker community edition installed to run the local tests with kind (kubernetes-in-docker). We recommend installing it directly from [https://www.docker.com/get-started/](https://www.docker.com/get-started/)
-
-The rest of the local development environment dependencies are managed with [homebrew](https://brew.sh) and can be installed with the bootstrap script:
-
-```
-./bin/bootstrap
+```text
+$ agent-stack-k8s --help
+Usage of agent-stack-k8s:
+      --agent-token-secret string   name of the Buildkite agent token secret (default "buildkite-agent-token")
+      --buildkite-token string      Buildkite API token with GraphQL scopes
+  -f, --config string               config file path
+      --debug                       debug logs
+      --image string                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent-k8s:latest")
+      --job-ttl duration            time to retain kubernetes jobs after completion (default 10m0s)
+      --max-in-flight int           max jobs in flight, 0 means no max (default 1)
+      --namespace string            kubernetes namespace to create resources in (default "default")
+      --org string                  Buildkite organization name to watch
+      --tags strings                A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8") (default [queue=kubernetes])
 ```
 
-## Running the stack locally
+Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](./examples) folder there is a sample [YAML config](./examples/config.yaml) and a sample [dotenv config](./examples/config.env).
 
-The easiest way to get started is to run a kind(kubernetes-in-docker) cluster on your local machine. We have a few scripts that make cluster provisioning and bootstrap easier.
+### Sample buildkite pipeline
 
-To get started run the command below. This will setup a single node kubernetes cluster in docker, add the kubernetes metric server, and then add manifests for the buildkite kubernetes stack.
-
+```yaml
+steps:
+  - label: build image
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: alpine:latest
+                command: [echo]
+                args:
+                - "Hello, world!"
 ```
-./bin/up k8s/overlay/my-stackname
+
+The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec` resource [in the Kubernetes API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#podspec-v1-core).
+
+More samples can be found in the [integration test fixtures directory](./integration/fixtures).
+
+### Sidecars
+
+Sidecar containers can be added to your job by specifying them under the top-level `sidecars` key. See [this example](integration/fixtures/sidecars.yaml) for a simple job that runs `nginx` as a sidecar, and accesses the nginx server from the main job.
+
+There is no guarantee that your sidecars will have started before your job, so using retries or a tool like [wait-for-it](https://github.com/vishnubob/wait-for-it) is a good idea to avoid flaky tests.
+
+### Validating your pipeline
+
+With the unstructured nature of Buildkite plugin specs, it can be frustratingly
+easy to mess up your configuration and then have to debug why your agent pods are failing to start.
+To help prevent this sort of error, there's a linter that uses [JSON
+schema](https://json-schema.org/) to validate the pipeline and plugin
+configuration.
+
+This currently can't prevent every sort of error, you might still have a reference to a Kubernetes volume that doesn't exist, or other errors of that sort, but it will validate that the fields match the API spec we expect.
+
+Our JSON schema can also be used with editors that support JSON Schema by configuring your editor to validate against the schema found [here](./cmd/linter/schema.json).
+
+### Cloning repos via SSH
+
+To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
+
+```yaml
+steps:
+  - label: build image
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          gitEnvFrom:
+            - secretRef: { name: agent-stack-k8s } # <--
+          podSpec:
+            containers:
+              - image: gradle:latest
+                command: [gradle]
+                args:
+                  - jib
+                  - --image=ttl.sh/example:1h
 ```
 
-When you are finished tear it down with the command below. This deletes all the resources out of the cluster and
+The agent will automatically configure SSH access based on environment variables using the [https://github.com/buildkite/docker-ssh-env-config](docker-ssh-env-config) shell script. This script will run during the `checkout` stage of the job, and all resulting SSH keys and SSH config will live in the `/workspace/.ssh` in subsequent containers of the job.
 
+To use these keys and config in a separate step, for example if your job runs `git clone`, you can either:
+
+- symlink the `/workspace/.ssh` directory to `~/.ssh`
+- specify the path to the key explicitly, for example by setting `GIT_SSH_COMMAND="ssh -i /workspace/.ssh/id_rsa"` in your job's environment.
+
+Note that setting the `HOME` environment variable in your container will likely not work, since OpenSSH looks for the home directory configured in `/etc/passwd`.
+
+## How does it work
+
+The controller uses the [Buildkite GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled work that uses the `kubernetes` plugin.
+
+When a job is available, the controller will create a pod to acquire and run the job. It converts the [PodSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#podspec-v1-core) in the `kubernetes` plugin into a pod by:
+
+- adding an init container to:
+  - copy the agent binary onto the workspace volume
+- adding a container to run the buildkite agent
+- adding a container to clone the source repository
+- modifying the user-specified containers to:
+  - overwrite the entrypoint to the agent binary
+  - run with the working directory set to the workspace
+
+The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
+
+## Architecture
+
+```mermaid
+sequenceDiagram
+    participant bc as buildkite controller
+    participant gql as Buildkite GraphQL API
+    participant bapi as Buildkite API
+    participant kubernetes
+    bc->>gql: Get scheduled builds & jobs
+    gql-->>bc: {build: jobs: [{uuid: "abc"}]}
+    kubernetes->>pod: start
+    bc->>kubernetes: watch for pod completions
+    bc->>kubernetes: create pod with agent sidecar
+    kubernetes->>pod: create
+    pod->>bapi: agent accepts & starts job
+    pod->>pod: run sidecars
+    pod->>pod: agent bootstrap
+    pod->>pod: run user pods to completion
+    pod->>bapi: upload artifacts, exit code
+    pod->>pod: agent exit
+    kubernetes->>bc: pod completion event
+    bc->>kubernetes: cleanup finished pods
 ```
-./bin/down k8s/overlay/my-stackname
+
+## Development
+
+Install dependencies with Homebrew via:
+
+```bash
+brew bundle
 ```
 
-## Known limitations
+Run tasks via [just](https://github.com/casey/just):
 
-1. Build steps running in a pod spec are currently limited to checking the status code of the first container in the container list.
-2. Agent scaling is pre-defined at the moment to show the functionality, but will be customizeable in the future.
-3. The pod steps are not expected to run for more than 60 seconds within the pod. If they need longer to run adjust the timeout in the plugin configuration.
+```bash
+just --list
+```
+
+For running the integration tests you'll need to add some additional scopes to your Buildkite API token:
+
+- `read_artifacts`
+- `read_build_logs`
+- `write_pipelines`
+
+You'll also need to create an SSH secret in your cluster to run [this test pipeline](integration/fixtures/secretref.yaml). This SSH key needs to be associated with your GitHub account to be able to clone this public repo, and must be in a form acceptable to OpenSSH (aka `BEGIN OPENSSH PRIVATE KEY`, not `BEGIN PRIVATE KEY`).
+
+```bash
+kubectl create secret generic agent-stack-k8s --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
+```
+
+### Run from source
+
+First store the agent token in a Kubernetes secret:
+
+```bash!
+kubectl create secret generic buildkite-agent-token --from-literal=BUILDKITE_AGENT_TOKEN=my-agent-token
+```
+
+Next start the controller:
+
+```bash!
+just run --org my-org --buildkite-token my-api-token --debug
+```
+
+### Local Deployment with Helm
+
+`just deploy` will build the container image using [ko](https://ko.build/) and
+deploy it with [Helm](https://helm.sh/).
+
+You'll need to have set `KO_DOCKER_REPO` to a repository you have push access
+to. For development something like the [kind local
+registry](https://kind.sigs.k8s.io/docs/user/local-registry/) or the [minikube
+registry](https://minikube.sigs.k8s.io/docs/handbook/registry) can be used. More
+information is available at [ko's
+website](https://ko.build/configuration/#local-publishing-options).
+
+You'll also need to provide required configuration values to Helm, which can be done by passing extra args to `just`:
+
+```bash
+just deploy --values config.yaml
+```
+
+With config.yaml being a file containing [required Helm values](values.yaml), such as:
+
+```yaml
+agentToken: "abcdef"
+graphqlToken: "12345"
+config:
+  org: "my-buildkite-org"
+```
+
+The `config` key contains configuration passed directly to the binary, and so supports all the keys documented in [the example](examples/config.yaml).
+
+## Open questions
+
+- How to deal with stuck jobs? Timeouts?
+- How to deal with pod failures (not job failures)?
+  - Report failure to buildkite from controller?
+  - Emit pod logs to buildkite? If agent isn't starting correctly
+  - Retry?

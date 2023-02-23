@@ -1,0 +1,107 @@
+fragment Job on Job {
+  ... on JobTypeCommand {
+    ...CommandJob
+  }
+}
+
+fragment CommandJob on JobTypeCommand {
+  uuid
+  env
+  scheduledAt
+  agentQueryRules
+  command
+}
+
+fragment Build on Build {
+  uuid
+  id
+  number
+  state
+  jobs(first: 100) {
+    edges {
+      # @genqlient(flatten: true)
+      node {
+        ...Job
+      }
+    }
+  }
+}
+
+mutation PipelineDelete($input: PipelineDeleteInput!) {
+  pipelineDelete(input: $input) {
+    clientMutationId
+  }
+}
+
+query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
+  organization(slug: $slug) {
+    pipelines(search: $search, first: $first) {
+      edges {
+        node {
+          id
+          name
+        }
+      }
+    }
+  }
+}
+
+mutation BuildCreate($input: BuildCreateInput!) {
+  buildCreate(input: $input) {
+    build {
+      ...Build
+    }
+  }
+}
+
+mutation BuildCancel($input: BuildCancelInput!) {
+  buildCancel(input: $input) {
+    clientMutationId
+  }
+}
+
+query GetOrganization($slug: ID!) {
+  organization(slug: $slug) {
+    id
+  }
+}
+
+query GetBuild($uuid: ID!) {
+  build(uuid: $uuid) {
+    ...Build
+  }
+}
+
+query GetScheduledBuilds($slug: ID!, $agentQueryRules: [String!]) {
+  organization(slug: $slug) {
+    # @genqlient(pointer: true)
+    id
+    jobs(
+      state: [SCHEDULED]
+      type: [COMMAND]
+      first: 100
+      order: RECENTLY_ASSIGNED
+      agentQueryRules: $agentQueryRules
+    ) {
+      count
+      edges {
+        # @genqlient(flatten: true)
+        node {
+          ...Job
+        }
+      }
+    }
+  }
+}
+
+query GetBuilds($slug: ID!, $state: [BuildStates!], $first: Int) {
+  pipeline(slug: $slug) {
+    builds(state: $state, first: $first) {
+      edges {
+        node {
+          ...Build
+        }
+      }
+    }
+  }
+}

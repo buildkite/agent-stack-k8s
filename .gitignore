@@ -1,3 +1,5 @@
 Brewfile.lock.json
 
-k8s/overlays
+.vscode
+
+dist/

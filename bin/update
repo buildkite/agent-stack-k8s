@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-cd "$(dirname "$0")/.."
-source bin/functions.sh
-
-asdf_add_plugins
-asdf_update_plugins
-asdf_install_tools
