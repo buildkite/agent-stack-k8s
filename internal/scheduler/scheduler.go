@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 	"github.com/buildkite/agent/v3/clicommand"
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
@@ -320,6 +321,9 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			}, {
 				Name:  "BUILDKITE_CONTAINER_COUNT",
 				Value: strconv.Itoa(containerCount),
+			}, {
+				Name:  "BUILDKITE_AGENT_TAGS",
+				Value: fmt.Sprintf("k8s-stack-version=%s", version.Version()),
 			},
 		},
 	}

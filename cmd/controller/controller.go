@@ -13,6 +13,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/linter"
+	"github.com/buildkite/agent-stack-k8s/v2/cmd/version"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/scheduler"
 	"github.com/go-playground/locales/en"
@@ -109,6 +110,7 @@ func New() *cobra.Command {
 	}
 	addFlags(cmd)
 	cmd.AddCommand(linter.New())
+	cmd.AddCommand(version.New())
 	if err := en_translations.RegisterDefaultTranslations(validate, trans); err != nil {
 		log.Fatalf("failed to register translations: %v", err)
 	}
