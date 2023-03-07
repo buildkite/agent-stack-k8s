@@ -29,7 +29,7 @@ steps:
             containers:
               - name: tests
                 image: golang:latest
-                command: [.buildkite/steps/tests.sh]
+                command: [.buildkite/steps/integration_tests.sh]
                 env:
                 - name: CONFIG
                   value: /etc/config.yaml
