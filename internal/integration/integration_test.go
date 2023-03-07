@@ -392,8 +392,8 @@ func (t testcase) AssertLogsContain(build api.Build, content string) {
 	require.NoError(t, err)
 	require.NotNil(t, logs.Content)
 	require.Contains(t, *logs.Content, content)
-
 }
+
 func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 	t.Helper()
 	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
