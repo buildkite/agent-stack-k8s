@@ -9,4 +9,11 @@ echo '+++ Running integration tests :test:'
 IMAGE=$(buildkite-agent meta-data get "agent-image")
 export IMAGE
 
-gotestsum --junitfile "junit-${BUILDKITE_JOB_ID}.xml" -- -count=1 -failfast "$@" ./...
+gotestsum \
+    --junitfile "junit-${BUILDKITE_JOB_ID}.xml" \
+    -- \
+    -count=1 \
+    -failfast \
+    -ldflags="-X github.com/buildkite/agent-stack-k8s/internal/integration_test.branch=$BUILDKITE_BRANCH" \
+    "$@" \
+    ./...
