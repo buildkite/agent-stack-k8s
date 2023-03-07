@@ -48,7 +48,11 @@ agent target os=("linux") arch=("amd64 arm64"):
   rm packaging/docker/alpine/buildkite-agent-*
 
 controller *FLAGS:
-  ko build -P {{FLAGS}}
+  #!/usr/bin/env bash
+  set -eufo pipefail
+
+  export VERSION=$(git describe)
+  ko build --preserve-import-paths {{FLAGS}}
 
 deploy *FLAGS:
   #!/usr/bin/env bash
