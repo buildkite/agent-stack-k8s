@@ -34,7 +34,7 @@ import (
 const (
 	repoHTTP = "https://github.com/buildkite/agent-stack-k8s"
 	repoSSH  = "git@github.com:buildkite/agent-stack-k8s"
-	branch   = "v2"
+	branch   = "main"
 )
 
 var (
