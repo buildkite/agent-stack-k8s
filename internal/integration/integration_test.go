@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,10 +35,10 @@ import (
 const (
 	repoHTTP = "https://github.com/buildkite/agent-stack-k8s"
 	repoSSH  = "git@github.com:buildkite/agent-stack-k8s"
-	branch   = "v2"
 )
 
 var (
+	branch                  string
 	preservePipelines       bool
 	deleteOrphanedPipelines bool
 	cfg                     api.Config
@@ -48,6 +49,10 @@ var (
 
 // hacks to make --config work
 func TestMain(m *testing.M) {
+	if branch == "" {
+		log.Fatalf(`You need to run the tests with a flag: -ldflags="-X %s.branch=$BRANCH_NAME"`, reflect.TypeOf(testcase{}).PkgPath())
+	}
+
 	if err := os.Chdir(".."); err != nil {
 		log.Fatal(err)
 	}
@@ -238,7 +243,10 @@ func TestInvalidPodJSON(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	tc.AssertLogsContain(build, `failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.PodSpec.containers.env.value of type string`)
+	tc.AssertLogsContain(
+		build,
+		"failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.PodSpec.containers.env.value of type string",
+	)
 }
 
 func maxOf(x, y int) int {
@@ -392,8 +400,8 @@ func (t testcase) AssertLogsContain(build api.Build, content string) {
 	require.NoError(t, err)
 	require.NotNil(t, logs.Content)
 	require.Contains(t, *logs.Content, content)
-
 }
+
 func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 	t.Helper()
 	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
