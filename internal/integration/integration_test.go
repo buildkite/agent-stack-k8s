@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,14 +32,13 @@ import (
 	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-var branch = ""
-
 const (
 	repoHTTP = "https://github.com/buildkite/agent-stack-k8s"
 	repoSSH  = "git@github.com:buildkite/agent-stack-k8s"
 )
 
 var (
+	branch                  string
 	preservePipelines       bool
 	deleteOrphanedPipelines bool
 	cfg                     api.Config
@@ -49,6 +49,10 @@ var (
 
 // hacks to make --config work
 func TestMain(m *testing.M) {
+	if branch == "" {
+		log.Fatalf(`You need to run the tests with a flag: -ldflags="-X %s.branch=$BRANCH_NAME"`, reflect.TypeOf(testcase{}).PkgPath())
+	}
+
 	if err := os.Chdir(".."); err != nil {
 		log.Fatal(err)
 	}
