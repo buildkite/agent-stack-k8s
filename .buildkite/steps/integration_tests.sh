@@ -14,6 +14,6 @@ gotestsum \
     -- \
     -count=1 \
     -failfast \
-    -ldflags="-X github.com/buildkite/agent-stack-k8s/internal/integration_test.branch=$BUILDKITE_BRANCH" \
+    -ldflags="-X github.com/buildkite/agent-stack-k8s/v2/internal/integration_test.branch=$BUILDKITE_BRANCH" \
     "$@" \
     ./...
