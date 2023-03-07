@@ -86,7 +86,7 @@ steps:
                 command: [.buildkite/steps/deploy.sh]
                 env:
                 - name: BUILDKITE_SHELL
-                  value: /bin/sh -e
+                  value: /bin/sh -ec
                 envFrom:
                 - secretRef:
                     name: deploy-secrets
