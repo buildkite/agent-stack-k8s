@@ -2,7 +2,7 @@
 
 set -eufo pipefail
 
-echo "+++ Installing gotestsum :golang::test:"
+echo "+++ Installing gotestsum :golang::test_tube:"
 go install gotest.tools/gotestsum
 
 echo '+++ Running integration tests :test:'
