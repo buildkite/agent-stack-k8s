@@ -31,10 +31,11 @@ import (
 	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
+var branch = ""
+
 const (
 	repoHTTP = "https://github.com/buildkite/agent-stack-k8s"
 	repoSSH  = "git@github.com:buildkite/agent-stack-k8s"
-	branch   = "main"
 )
 
 var (
