@@ -272,3 +272,21 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 		})
 	}
 }
+
+func TestEnvVariables(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "env.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(
+		build,
+		"Testing some env variables: set",
+	)
+}
