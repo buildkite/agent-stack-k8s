@@ -1,8 +1,8 @@
+agents:
+  queue: kubernetes
 steps:
   - label: ":docker: build agent"
     key: agent
-    agents:
-      queue: kubernetes
     plugins:
       - kubernetes:
           podSpec:
@@ -15,8 +15,6 @@ steps:
   - label: ":buildkite: integration tests"
     key: integration
     depends_on: agent
-    agents:
-      queue: kubernetes
     artifact_paths: junit-*.xml
     plugins:
       - kubernetes:
@@ -53,8 +51,6 @@ steps:
   - label: ":docker: build controller"
     key: controller
     if: "build.branch == pipeline.default_branch"
-    agents:
-      queue: kubernetes
     plugins:
       - kubernetes:
           podSpec:
@@ -72,8 +68,6 @@ steps:
     - agent
     - controller
     - integration
-    agents:
-      queue: kubernetes
     env:
       BUILDKITE_GIT_FETCH_FLAGS: "-v --tags"
     plugins:
