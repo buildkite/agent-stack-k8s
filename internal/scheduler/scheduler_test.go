@@ -14,6 +14,7 @@ import (
 
 //go:generate mockgen -destination=mock_handler_test.go -source=scheduler.go -package scheduler_test
 func TestJobPluginConversion(t *testing.T) {
+	t.Parallel()
 	pluginConfig := KubernetesPlugin{
 		PodSpec: &corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -87,6 +88,7 @@ func TestJobPluginConversion(t *testing.T) {
 }
 
 func TestJobWithNoKubernetesPlugin(t *testing.T) {
+	t.Parallel()
 	input := &monitor.Job{
 		CommandJob: api.CommandJob{
 			Uuid:    "abc",
@@ -107,6 +109,7 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 }
 
 func TestFailureJobs(t *testing.T) {
+	t.Parallel()
 	pluginsJSON, err := json.Marshal([]map[string]interface{}{
 		{
 			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": `"some-invalid-json"`,
