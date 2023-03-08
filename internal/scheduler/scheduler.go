@@ -335,6 +335,30 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 				Name:  "BUILDKITE_AGENT_TAGS",
 				Value: createAgentTagString(agentTags),
 			},
+			{
+				Name: "BUILDKITE_K8S_NODE",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "spec.nodeName",
+					},
+				},
+			},
+			{
+				Name: "BUILDKITE_K8S_NAMESPACE",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "metadata.namespace",
+					},
+				},
+			},
+			{
+				Name: "BUILDKITE_K8S_SERVICE_ACCOUNT",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "spec.serviceAccountName",
+					},
+				},
+			},
 		},
 	}
 	agentContainer.Env = append(agentContainer.Env, env...)
