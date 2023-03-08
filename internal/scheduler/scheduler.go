@@ -306,6 +306,14 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		containerCount++
 		podSpec.Containers = append(podSpec.Containers, artifactsContainer)
 	}
+
+	agentTags := []agentTag{
+		{
+			Name:  "bk-k8s:version",
+			Value: version.Version(),
+		},
+	}
+
 	// agent server container
 	agentContainer := corev1.Container{
 		Name:            AgentContainerName,
@@ -318,12 +326,14 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			{
 				Name:  "BUILDKITE_AGENT_EXPERIMENT",
 				Value: "kubernetes-exec",
-			}, {
+			},
+			{
 				Name:  "BUILDKITE_CONTAINER_COUNT",
 				Value: strconv.Itoa(containerCount),
-			}, {
+			},
+			{
 				Name:  "BUILDKITE_AGENT_TAGS",
-				Value: fmt.Sprintf("k8s-stack-version=%s", version.Version()),
+				Value: createAgentTagString(agentTags),
 			},
 		},
 	}
@@ -397,4 +407,22 @@ func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
 
 func kjobName(job *monitor.Job) string {
 	return fmt.Sprintf("buildkite-%s", job.Uuid)
+}
+
+type agentTag struct {
+	Name  string
+	Value string
+}
+
+func createAgentTagString(tags []agentTag) string {
+	var sb strings.Builder
+	for i, t := range tags {
+		sb.WriteString(t.Name)
+		sb.WriteString("=")
+		sb.WriteString(t.Value)
+		if i < len(tags)-1 {
+			sb.WriteString(",")
+		}
+	}
+	return sb.String()
 }
