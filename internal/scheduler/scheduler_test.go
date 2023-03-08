@@ -7,6 +7,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	corev1 "k8s.io/api/core/v1"
@@ -85,6 +86,58 @@ func TestJobPluginConversion(t *testing.T) {
 
 	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
 	require.Equal(t, pluginsEnv.Value, `[{"github.com/buildkite-plugins/some-other-buildkite-plugin":{"foo":"bar"}}]`)
+}
+
+func TestTagEnv(t *testing.T) {
+	t.Parallel()
+	logger := zaptest.NewLogger(t)
+
+	pluginConfig := KubernetesPlugin{
+		PodSpec: &corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Image:   "alpine:latest",
+					Command: []string{"hello world a=b=c"},
+				},
+			},
+		},
+	}
+	pluginsJSON, err := json.Marshal([]map[string]any{
+		{
+			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": pluginConfig,
+		},
+	})
+	require.NoError(t, err)
+
+	input := &monitor.Job{
+		CommandJob: api.CommandJob{
+			Uuid: "abc",
+			Env:  []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
+		},
+		Tag: "queue=kubernetes",
+	}
+	wrapper := NewJobWrapper(logger, input, api.Config{AgentTokenSecret: "token-secret"})
+	result, err := wrapper.ParsePlugins().Build()
+	require.NoError(t, err)
+
+	container := findContainer(t, result.Spec.Template.Spec.Containers, "agent")
+	assertEnvFieldPath(t, container, "BUILDKITE_K8S_NODE", "spec.nodeName")
+	assertEnvFieldPath(t, container, "BUILDKITE_K8S_NAMESPACE", "metadata.namespace")
+	assertEnvFieldPath(t, container, "BUILDKITE_K8S_SERVICE_ACCOUNT", "spec.serviceAccountName")
+}
+
+func assertEnvFieldPath(t *testing.T, container corev1.Container, envVarName, fieldPath string) {
+	env := findEnv(t, container.Env, envVarName)
+
+	t.Helper()
+	if assert.NotNil(t, env) {
+		assert.Equal(t, env.Value, "")
+		hasFieldRef := assert.NotNil(t, env.ValueFrom) && assert.NotNil(t, env.ValueFrom.FieldRef)
+		if hasFieldRef {
+			assert.Equal(t, env.ValueFrom.FieldRef.FieldPath, fieldPath)
+		}
+	}
+
 }
 
 func TestJobWithNoKubernetesPlugin(t *testing.T) {
