@@ -112,6 +112,7 @@ func TestFailureJobs(t *testing.T) {
 			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": `"some-invalid-json"`,
 		},
 	})
+	require.NoError(t, err)
 
 	input := &monitor.Job{
 		CommandJob: api.CommandJob{
@@ -129,17 +130,20 @@ func TestFailureJobs(t *testing.T) {
 
 	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
 	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
-	require.Equal(t, `echo "failed parsing Kubernetes plugin: json: cannot unmarshal string into Go value of type scheduler.KubernetesPlugin" && exit 1`, commandEnv.Value)
-
+	require.Equal(t,
+		`echo "failed parsing Kubernetes plugin: json: cannot unmarshal string into Go value of type scheduler.KubernetesPlugin" && exit 1`,
+		commandEnv.Value,
+	)
 }
 
 func findContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {
+	t.Helper()
+
 	for _, container := range containers {
 		if container.Name == name {
 			return container
 		}
 	}
-	t.Helper()
 	require.FailNow(t, "container not found")
 
 	return corev1.Container{}
@@ -151,6 +155,5 @@ func findEnv(t *testing.T, envs []corev1.EnvVar, name string) *corev1.EnvVar {
 			return &env
 		}
 	}
-
 	return nil
 }
