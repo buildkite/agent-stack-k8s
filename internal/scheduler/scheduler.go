@@ -309,7 +309,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 
 	agentTags := []agentTag{
 		{
-			Name:  "bk-k8s:version",
+			Name:  "k8s:agent-stack-version",
 			Value: version.Version(),
 		},
 	}
