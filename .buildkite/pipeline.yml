@@ -50,7 +50,6 @@ steps:
 
   - label: ":docker: build controller"
     key: controller
-    if: "build.branch == pipeline.default_branch"
     plugins:
       - kubernetes:
           podSpec:
@@ -58,6 +57,27 @@ steps:
               - name: ko
                 image: golang:latest
                 command: [.buildkite/steps/controller.sh]
+                envFrom:
+                - secretRef:
+                    name: deploy-secrets
+
+  - label: ":helm::docker: push helm chart"
+    depends_on:
+    - agent
+    - controller
+    env:
+      BUILDKITE_GIT_FETCH_FLAGS: "-v --tags"
+    plugins:
+      - kubernetes:
+          podSpec:
+            serviceAccountName: deploy
+            containers:
+              - name: deploy
+                image: alpine:latest
+                command: [.buildkite/steps/build_and_push.sh]
+                env:
+                - name: BUILDKITE_SHELL
+                  value: /bin/sh -ec
                 envFrom:
                 - secretRef:
                     name: deploy-secrets
