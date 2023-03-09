@@ -250,6 +250,9 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		}, corev1.EnvVar{
 			Name:  clicommand.RedactedVars.EnvVar,
 			Value: strings.Join(clicommand.RedactedVars.Value.Value(), ","),
+		}, corev1.EnvVar{
+			Name:  "BUILDKITE_SHELL",
+			Value: "/bin/sh -ec",
 		})
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
