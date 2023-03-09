@@ -18,9 +18,6 @@ A Kubernetes controller that runs [Buildkite steps](https://buildkite.com/docs/p
 
 The simplest way to get up and running is by deploying our [Helm](https://helm.sh) chart:
 
-We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
-which means you'll need Helm version 3.8.0 or newer.
-
 ```bash
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --create-namespace \
@@ -28,6 +25,24 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --set config.org=<your Buildkite org slug> \
     --set agentToken=<your Buildkite agent token> \
     --set graphqlToken=<your Buildkite GraphQL-enabled API token>
+```
+
+We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
+which means you'll need Helm version 3.8.0 or newer.
+
+You can also use this chart as a dependency:
+
+```yaml
+dependencies:
+- name: agent-stack-k8s
+  version: "0.4.0"
+  repository: "oci://ghcr.io/buildkite/helm"
+```
+
+or use it as a template:
+
+```
+helm template oci://ghcr.io/buildkite/helm/agent-stack-k8s -f my-values.yaml
 ```
 
 ### Options
