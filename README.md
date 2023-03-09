@@ -45,7 +45,7 @@ or use it as a template:
 helm template oci://ghcr.io/buildkite/helm/agent-stack-k8s -f my-values.yaml
 ```
 
-Availabler versions and their digests can be found on [the Releases page](https://github.com/buildkite/agent-stack-k8s/releases).
+Available versions and their digests can be found on [the releases page](https://github.com/buildkite/agent-stack-k8s/releases).
 
 ### Options
 
