@@ -1,5 +1,7 @@
 agentToken: ""
 graphqlToken: ""
 
+nodeSelector: {}
+
 config:
   org: ""

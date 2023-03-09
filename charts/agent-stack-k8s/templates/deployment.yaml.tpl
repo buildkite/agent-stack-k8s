@@ -16,6 +16,8 @@ spec:
         checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml.tpl") . | sha256sum }}
     spec:
       serviceAccountName: {{ .Release.Name }}
+      nodeSelector:
+{{ toYaml $.Values.nodeSelector | indent 8 }}
       containers:
       - name: controller
         terminationMessagePolicy: FallbackToLogsOnError

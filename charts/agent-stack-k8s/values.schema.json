@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "http://example.com/example.json",
   "type": "object",
   "default": {},
@@ -25,6 +25,16 @@
       "default": "",
       "title": "The image Schema",
       "examples": ["ghcr.io/buildkite/agent-stack-k8s:latest"]
+    },
+    "nodeSelector": {
+      "type": "object",
+      "default": {},
+      "title": "The nodeSelector Schema",
+      "examples": [
+        {
+          "kubernetes.io/arch": "amd64"
+        }
+      ]
     },
     "config": {
       "type": "object",
@@ -90,6 +100,7 @@
       "agentToken": "",
       "graphqlToken": "",
       "image": "ghcr.io/buildkite/agent-stack-k8s:latest",
+      "nodeSelector": {},
       "config": {
         "agentImage": "",
         "debug": false,
