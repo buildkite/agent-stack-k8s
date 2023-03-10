@@ -7,6 +7,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	corev1 "k8s.io/api/core/v1"
@@ -14,6 +15,7 @@ import (
 
 //go:generate mockgen -destination=mock_handler_test.go -source=scheduler.go -package scheduler_test
 func TestJobPluginConversion(t *testing.T) {
+	t.Parallel()
 	pluginConfig := KubernetesPlugin{
 		PodSpec: &corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -86,7 +88,60 @@ func TestJobPluginConversion(t *testing.T) {
 	require.Equal(t, pluginsEnv.Value, `[{"github.com/buildkite-plugins/some-other-buildkite-plugin":{"foo":"bar"}}]`)
 }
 
+func TestTagEnv(t *testing.T) {
+	t.Parallel()
+	logger := zaptest.NewLogger(t)
+
+	pluginConfig := KubernetesPlugin{
+		PodSpec: &corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Image:   "alpine:latest",
+					Command: []string{"hello world a=b=c"},
+				},
+			},
+		},
+	}
+	pluginsJSON, err := json.Marshal([]map[string]any{
+		{
+			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": pluginConfig,
+		},
+	})
+	require.NoError(t, err)
+
+	input := &monitor.Job{
+		CommandJob: api.CommandJob{
+			Uuid: "abc",
+			Env:  []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
+		},
+		Tag: "queue=kubernetes",
+	}
+	wrapper := NewJobWrapper(logger, input, api.Config{AgentTokenSecret: "token-secret"})
+	result, err := wrapper.ParsePlugins().Build()
+	require.NoError(t, err)
+
+	container := findContainer(t, result.Spec.Template.Spec.Containers, "agent")
+	assertEnvFieldPath(t, container, "BUILDKITE_K8S_NODE", "spec.nodeName")
+	assertEnvFieldPath(t, container, "BUILDKITE_K8S_NAMESPACE", "metadata.namespace")
+	assertEnvFieldPath(t, container, "BUILDKITE_K8S_SERVICE_ACCOUNT", "spec.serviceAccountName")
+}
+
+func assertEnvFieldPath(t *testing.T, container corev1.Container, envVarName, fieldPath string) {
+	env := findEnv(t, container.Env, envVarName)
+
+	t.Helper()
+	if assert.NotNil(t, env) {
+		assert.Equal(t, env.Value, "")
+		hasFieldRef := assert.NotNil(t, env.ValueFrom) && assert.NotNil(t, env.ValueFrom.FieldRef)
+		if hasFieldRef {
+			assert.Equal(t, env.ValueFrom.FieldRef.FieldPath, fieldPath)
+		}
+	}
+
+}
+
 func TestJobWithNoKubernetesPlugin(t *testing.T) {
+	t.Parallel()
 	input := &monitor.Job{
 		CommandJob: api.CommandJob{
 			Uuid:    "abc",
@@ -107,11 +162,13 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 }
 
 func TestFailureJobs(t *testing.T) {
+	t.Parallel()
 	pluginsJSON, err := json.Marshal([]map[string]interface{}{
 		{
 			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": `"some-invalid-json"`,
 		},
 	})
+	require.NoError(t, err)
 
 	input := &monitor.Job{
 		CommandJob: api.CommandJob{
@@ -129,17 +186,20 @@ func TestFailureJobs(t *testing.T) {
 
 	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
 	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
-	require.Equal(t, `echo "failed parsing Kubernetes plugin: json: cannot unmarshal string into Go value of type scheduler.KubernetesPlugin" && exit 1`, commandEnv.Value)
-
+	require.Equal(t,
+		`echo "failed parsing Kubernetes plugin: json: cannot unmarshal string into Go value of type scheduler.KubernetesPlugin" && exit 1`,
+		commandEnv.Value,
+	)
 }
 
 func findContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {
+	t.Helper()
+
 	for _, container := range containers {
 		if container.Name == name {
 			return container
 		}
 	}
-	t.Helper()
 	require.FailNow(t, "container not found")
 
 	return corev1.Container{}
@@ -151,6 +211,5 @@ func findEnv(t *testing.T, envs []corev1.EnvVar, name string) *corev1.EnvVar {
 			return &env
 		}
 	}
-
 	return nil
 }

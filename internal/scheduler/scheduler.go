@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 	"github.com/buildkite/agent/v3/clicommand"
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
@@ -308,6 +309,14 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		containerCount++
 		podSpec.Containers = append(podSpec.Containers, artifactsContainer)
 	}
+
+	agentTags := []agentTag{
+		{
+			Name:  "k8s:agent-stack-version",
+			Value: version.Version(),
+		},
+	}
+
 	// agent server container
 	agentContainer := corev1.Container{
 		Name:            AgentContainerName,
@@ -320,9 +329,38 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			{
 				Name:  "BUILDKITE_AGENT_EXPERIMENT",
 				Value: "kubernetes-exec",
-			}, {
+			},
+			{
 				Name:  "BUILDKITE_CONTAINER_COUNT",
 				Value: strconv.Itoa(containerCount),
+			},
+			{
+				Name:  "BUILDKITE_AGENT_TAGS",
+				Value: createAgentTagString(agentTags),
+			},
+			{
+				Name: "BUILDKITE_K8S_NODE",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "spec.nodeName",
+					},
+				},
+			},
+			{
+				Name: "BUILDKITE_K8S_NAMESPACE",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "metadata.namespace",
+					},
+				},
+			},
+			{
+				Name: "BUILDKITE_K8S_SERVICE_ACCOUNT",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "spec.serviceAccountName",
+					},
+				},
 			},
 		},
 	}
@@ -396,4 +434,22 @@ func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
 
 func kjobName(job *monitor.Job) string {
 	return fmt.Sprintf("buildkite-%s", job.Uuid)
+}
+
+type agentTag struct {
+	Name  string
+	Value string
+}
+
+func createAgentTagString(tags []agentTag) string {
+	var sb strings.Builder
+	for i, t := range tags {
+		sb.WriteString(t.Name)
+		sb.WriteString("=")
+		sb.WriteString(t.Value)
+		if i < len(tags)-1 {
+			sb.WriteString(",")
+		}
+	}
+	return sb.String()
 }

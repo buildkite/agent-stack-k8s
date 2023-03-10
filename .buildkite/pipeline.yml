@@ -1,8 +1,8 @@
+agents:
+  queue: kubernetes
 steps:
   - label: ":docker: build agent"
     key: agent
-    agents:
-      queue: kubernetes
     plugins:
       - kubernetes:
           podSpec:
@@ -15,8 +15,6 @@ steps:
   - label: ":buildkite: integration tests"
     key: integration
     depends_on: agent
-    agents:
-      queue: kubernetes
     artifact_paths: junit-*.xml
     plugins:
       - kubernetes:
@@ -29,7 +27,7 @@ steps:
             containers:
               - name: tests
                 image: golang:latest
-                command: [.buildkite/steps/integration_tests.sh]
+                command: [.buildkite/steps/tests.sh]
                 env:
                 - name: CONFIG
                   value: /etc/config.yaml
@@ -52,9 +50,6 @@ steps:
 
   - label: ":docker: build controller"
     key: controller
-    if: "build.branch == pipeline.default_branch"
-    agents:
-      queue: kubernetes
     plugins:
       - kubernetes:
           podSpec:
@@ -66,14 +61,33 @@ steps:
                 - secretRef:
                     name: deploy-secrets
 
+  - label: ":helm::docker: push helm chart"
+    depends_on:
+    - agent
+    - controller
+    env:
+      BUILDKITE_GIT_FETCH_FLAGS: "-v --tags"
+    plugins:
+      - kubernetes:
+          podSpec:
+            serviceAccountName: deploy
+            containers:
+              - name: deploy
+                image: alpine:latest
+                command: [.buildkite/steps/build_and_push.sh]
+                env:
+                - name: BUILDKITE_SHELL
+                  value: /bin/sh -ec
+                envFrom:
+                - secretRef:
+                    name: deploy-secrets
+
   - label: ":shipit: deploy"
     if: "build.branch == pipeline.default_branch"
     depends_on:
     - agent
     - controller
     - integration
-    agents:
-      queue: kubernetes
     env:
       BUILDKITE_GIT_FETCH_FLAGS: "-v --tags"
     plugins:
@@ -86,7 +100,7 @@ steps:
                 command: [.buildkite/steps/deploy.sh]
                 env:
                 - name: BUILDKITE_SHELL
-                  value: /bin/sh -e
+                  value: /bin/sh -ec
                 envFrom:
                 - secretRef:
                     name: deploy-secrets

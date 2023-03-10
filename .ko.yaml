@@ -1,0 +1,14 @@
+defaultPlatforms:
+- linux/amd64
+- linux/arm64
+builds:
+- id: agent-k8s-stack
+  dir: .
+  main: .
+  env:
+  - CGO_ENABLED=0
+  ldflags:
+  - -s
+  - -w
+  - -extldflags "-static"
+  - -X github.com/buildkite/agent-stack-k8s/v2/internal/version.version={{.Env.VERSION}}
