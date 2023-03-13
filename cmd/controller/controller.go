@@ -158,7 +158,11 @@ func Run(ctx context.Context, k8sClient kubernetes.Interface, cfg api.Config) {
 		log.Fatal("failed to register completions informer", zap.Error(err))
 	}
 
-	imagePullBackoffWatcher := scheduler.NewImagePullBackOffWatcher(log.Named("imagePullBackoffWatcher"), k8sClient)
+	imagePullBackoffWatcher := scheduler.NewImagePullBackOffWatcher(
+		log.Named("imagePullBackoffWatcher"),
+		k8sClient,
+		cfg,
+	)
 	if err := imagePullBackoffWatcher.RegisterInformer(ctx, informerFactory); err != nil {
 		log.Fatal("failed to register imagePullBackoffWatcher informer", zap.Error(err))
 	}
