@@ -51,15 +51,17 @@ func (w *imagePullBackOffWatcher) OnAdd(obj any) {
 	w.cancelImagePullBackOff(context.Background(), pod)
 }
 
-func (w *imagePullBackOffWatcher) OnUpdate(old, new any) {
-	oldPod, _ := old.(*v1.Pod)
-	if terminated := getTermination(oldPod); terminated != nil {
-		// skip subsequent reconciles after we've already handled termination
-		return
-	}
+func (w *imagePullBackOffWatcher) OnUpdate(oldMaybePod, newMaybePod any) {
+	oldPod, oldWasPod := newMaybePod.(*v1.Pod)
+	newPod, newWasPod := newMaybePod.(*v1.Pod)
 
-	newPod, _ := new.(*v1.Pod)
-	w.cancelImagePullBackOff(context.Background(), newPod)
+	// This nonsense statement is only necessary because the types are too loose.
+	// Most likely both old and new are going to be Pods.
+	if newWasPod {
+		w.cancelImagePullBackOff(context.Background(), newPod)
+	} else if oldWasPod {
+		w.cancelImagePullBackOff(context.Background(), oldPod)
+	}
 }
 
 func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, pod *v1.Pod) {
