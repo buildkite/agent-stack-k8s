@@ -66,7 +66,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	log := w.logger.With(zap.String("namespace", pod.Namespace), zap.String("podName", pod.Name))
 	log.Debug("Checking pod for ImagePullBackOff")
 
-	clientMutationId := uuid.New()
+	clientMutationId := pod.GetName()
 	rawJobUUID, exists := pod.GetLabels()[api.UUIDLabel]
 	if !exists {
 		log.Info("Job UUID label not present. Skipping.")
@@ -93,7 +93,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 			switch job := resp.GetJob().(type) {
 			case *api.GetCommandJobJobJobTypeCommand:
 				if _, err := api.CancelCommandJob(ctx, w.gql, api.JobTypeCommandCancelInput{
-					ClientMutationId: clientMutationId.String(),
+					ClientMutationId: clientMutationId,
 					Id:               job.GetId(),
 				}); err != nil {
 					log.Warn("Failed to cancel command job", zap.Error(err))
