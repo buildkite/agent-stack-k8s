@@ -25,4 +25,6 @@ helm package ./charts/agent-stack-k8s --app-version "$version" -d dist --version
 helm_image="oci://${KO_DOCKER_REPO}/helm"
 
 echo --- :helm: Pushing helm chart to ghcr.io
-helm push ./dist/agent-stack-k8s-*.tgz ${helm_image}
+helm push ./dist/agent-stack-k8s-*.tgz "$helm_image"
+
+buildkite-agent annotate "Version: $version of the helm chart has been pushed to $helm_image/agent-stack-k8s:$version"
