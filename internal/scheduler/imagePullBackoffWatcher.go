@@ -34,13 +34,10 @@ func NewImagePullBackOffWatcher(
 
 // Creates a Pods informer and registers the handler on it
 func (w *imagePullBackOffWatcher) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
-	w.logger.Info("registering imagePullBackOffWatcher with informer")
 	informer := factory.Core().V1().Pods().Informer()
 	if _, err := informer.AddEventHandler(w); err != nil {
 		return fmt.Errorf("failed to register pod event handler: %w", err)
 	}
-
-	w.logger.Info("starting imagePullBackOffWatcher")
 	go factory.Start(ctx.Done())
 	return nil
 }
@@ -67,18 +64,18 @@ func (w *imagePullBackOffWatcher) OnUpdate(old, new any) {
 
 func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, pod *v1.Pod) {
 	log := w.logger.With(zap.String("namespace", pod.Namespace), zap.String("podName", pod.Name))
-	log.Info("Checking pod for ImagePullBackOff")
+	log.Debug("Checking pod for ImagePullBackOff")
 
 	clientMutationId := uuid.New()
 	rawJobUUID, exists := pod.GetLabels()[api.UUIDLabel]
 	if !exists {
-		log.Info("Job UUID label not present")
+		log.Info("Job UUID label not present. Skipping.")
 		return
 	}
 
 	jobUUID, err := uuid.Parse(rawJobUUID)
 	if err != nil {
-		log.Error("Job UUID label was not a UUID!", zap.String("jobUUID", rawJobUUID))
+		log.Warn("Job UUID label was not a UUID!", zap.String("jobUUID", rawJobUUID))
 		return
 	}
 
@@ -86,7 +83,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if shouldCancel(&containerStatus) {
-			log.Info("Job exceeded ImagePullBackOff limit. Cancelling")
+			log.Info("Job has a container in ImagePullBackOff. Cancelling.")
 			resp, err := api.GetCommandJob(ctx, w.gql, jobUUID.String())
 			if err != nil {
 				log.Warn("Failed to query command job", zap.Error(err))
@@ -99,7 +96,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 					ClientMutationId: clientMutationId.String(),
 					Id:               job.GetId(),
 				}); err != nil {
-					log.Warn("Failed to cancel job", zap.Error(err))
+					log.Warn("Failed to cancel command job", zap.Error(err))
 				}
 				return
 			default:
