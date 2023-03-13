@@ -14,8 +14,6 @@ import (
 	_ "k8s.io/client-go/tools/cache"
 )
 
-const restartCountLimit = 1
-
 type imagePullBackOffWatcher struct {
 	logger *zap.Logger
 	k8s    kubernetes.Interface
@@ -94,6 +92,5 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 
 func shouldCancel(containerStatus *v1.ContainerStatus) bool {
 	return containerStatus.State.Waiting != nil &&
-		containerStatus.State.Waiting.Reason == "ImagePullBackOff" &&
-		containerStatus.RestartCount > restartCountLimit
+		containerStatus.State.Waiting.Reason == "ImagePullBackOff"
 }
