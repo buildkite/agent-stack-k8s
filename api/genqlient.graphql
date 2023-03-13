@@ -106,7 +106,16 @@ query GetBuilds($slug: ID!, $state: [BuildStates!], $first: Int) {
   }
 }
 
-mutation CommandJobCancel($input: JobTypeCommandCancelInput!) {
+query GetCommandJob($uuid: ID!) {
+  job(uuid: $uuid) {
+    __typename
+    ... on JobTypeCommand {
+        id
+    }
+  }
+}
+
+mutation CancelCommandJob($input: JobTypeCommandCancelInput!) {
   jobTypeCommandCancel(input: $input) {
     clientMutationId
   }

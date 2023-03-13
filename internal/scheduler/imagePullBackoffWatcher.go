@@ -70,22 +70,43 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	log.Info("Checking pod for ImagePullBackOff")
 
 	clientMutationId := uuid.New()
-	jobUUID, exists := pod.GetLabels()[api.UUIDLabel]
+	rawJobUUID, exists := pod.GetLabels()[api.UUIDLabel]
 	if !exists {
 		log.Info("Job UUID label not present")
 		return
 	}
 
+	jobUUID, err := uuid.Parse(rawJobUUID)
+	if err != nil {
+		log.Error("Job UUID label was not a UUID!", zap.String("jobUUID", rawJobUUID))
+		return
+	}
+
+	log = log.With(zap.String("jobUUID", jobUUID.String()))
+
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if shouldCancel(&containerStatus) {
 			log.Info("Job exceeded ImagePullBackOff limit. Cancelling")
-			if _, err := api.CommandJobCancel(ctx, w.gql, api.JobTypeCommandCancelInput{
-				ClientMutationId: clientMutationId.String(),
-				Id:               jobUUID,
-			}); err != nil {
-				log.Warn("Failed to cancel job", zap.Error(err))
+			resp, err := api.GetCommandJob(ctx, w.gql, jobUUID.String())
+			if err != nil {
+				log.Warn("Failed to query command job", zap.Error(err))
+				return
 			}
-			return
+
+			switch job := resp.GetJob().(type) {
+			case *api.GetCommandJobJobJobTypeCommand:
+				if _, err := api.CancelCommandJob(ctx, w.gql, api.JobTypeCommandCancelInput{
+					ClientMutationId: clientMutationId.String(),
+					Id:               job.GetId(),
+				}); err != nil {
+					log.Warn("Failed to cancel job", zap.Error(err))
+				}
+				return
+			default:
+				log.Warn("Job was not a command job")
+				return
+			}
+
 		}
 	}
 }
