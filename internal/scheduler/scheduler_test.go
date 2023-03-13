@@ -1,4 +1,4 @@
-package scheduler
+package scheduler_test
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/scheduler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -17,7 +18,7 @@ import (
 
 func TestJobPluginConversion(t *testing.T) {
 	t.Parallel()
-	pluginConfig := KubernetesPlugin{
+	pluginConfig := scheduler.KubernetesPlugin{
 		PodSpec: &corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
@@ -58,7 +59,7 @@ func TestJobPluginConversion(t *testing.T) {
 		},
 		Tag: "queue=kubernetes",
 	}
-	wrapper := NewJobWrapper(zaptest.NewLogger(t), input, api.Config{AgentTokenSecret: "token-secret"})
+	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, api.Config{AgentTokenSecret: "token-secret"})
 	result, err := wrapper.ParsePlugins().Build()
 	require.NoError(t, err)
 
@@ -93,7 +94,7 @@ func TestTagEnv(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 
-	pluginConfig := KubernetesPlugin{
+	pluginConfig := scheduler.KubernetesPlugin{
 		PodSpec: &corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
@@ -117,7 +118,7 @@ func TestTagEnv(t *testing.T) {
 		},
 		Tag: "queue=kubernetes",
 	}
-	wrapper := NewJobWrapper(logger, input, api.Config{AgentTokenSecret: "token-secret"})
+	wrapper := scheduler.NewJobWrapper(logger, input, api.Config{AgentTokenSecret: "token-secret"})
 	result, err := wrapper.ParsePlugins().Build()
 	require.NoError(t, err)
 
@@ -149,7 +150,7 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 			Command: "echo hello world",
 		},
 	}
-	wrapper := NewJobWrapper(zaptest.NewLogger(t), input, api.Config{})
+	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, api.Config{})
 	result, err := wrapper.ParsePlugins().Build()
 	require.NoError(t, err)
 
@@ -178,7 +179,7 @@ func TestFailureJobs(t *testing.T) {
 		},
 		Tag: "queue=kubernetes",
 	}
-	wrapper := NewJobWrapper(zaptest.NewLogger(t), input, api.Config{})
+	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, api.Config{})
 	_, err = wrapper.ParsePlugins().Build()
 	require.Error(t, err)
 
