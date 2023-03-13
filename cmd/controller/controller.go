@@ -152,9 +152,15 @@ func Run(ctx context.Context, k8sClient kubernetes.Interface, cfg api.Config) {
 	if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
 		log.Fatal("failed to register limiter informer", zap.Error(err))
 	}
+
 	completions := scheduler.NewPodCompletionWatcher(log.Named("completions"), k8sClient)
 	if err := completions.RegisterInformer(ctx, informerFactory); err != nil {
 		log.Fatal("failed to register completions informer", zap.Error(err))
+	}
+
+	imagePullBackoffWatcher := scheduler.NewImagePullBackOffWatcher(log.Named("imagePullBackoffWatcher"), k8sClient)
+	if err := imagePullBackoffWatcher.RegisterInformer(ctx, informerFactory); err != nil {
+		log.Fatal("failed to register imagePullBackoffWatcher informer", zap.Error(err))
 	}
 
 	select {
