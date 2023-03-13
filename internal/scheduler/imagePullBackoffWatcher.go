@@ -78,12 +78,12 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if shouldCancel(&containerStatus) {
-			log.Info("Job exceeded ImagePullBackOff Limit. Cancelling")
+			log.Info("Job exceeded ImagePullBackOff limit. Cancelling")
 			if _, err := api.CommandJobCancel(ctx, w.gql, api.JobTypeCommandCancelInput{
 				ClientMutationId: clientMutationId.String(),
 				Id:               jobUUID,
 			}); err != nil {
-				log.Warn("Failed to cancel job")
+				log.Warn("Failed to cancel job", zap.Error(err))
 			}
 			return
 		}
