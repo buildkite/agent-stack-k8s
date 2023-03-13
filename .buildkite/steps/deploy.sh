@@ -3,13 +3,14 @@
 set -euo pipefail
 
 echo --- :hammer: Installing tools
-apk add helm yq skopeo git --quiet --no-progress
+apk add helm git --quiet --no-progress
 
 tag=$(git describe)
 version=$(echo "$tag" | sed 's/v//')
 temp_agent_image=$(buildkite-agent meta-data get "agent-image")
 agent_image="ghcr.io/buildkite/agent-stack-k8s/agent:${tag}"
 controller_image=$(buildkite-agent meta-data get "controller-image")
+helm_image="oci://ghcr.io/buildkite/helm"
 
 echo --- :helm: Help upgrade
 helm upgrade agent-stack-k8s ${helm_image}/agent-stack-k8s \
