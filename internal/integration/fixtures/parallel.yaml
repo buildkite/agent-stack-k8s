@@ -10,5 +10,5 @@ steps:
           podSpec:
             containers:
               - image: alpine:latest
-                command: [cat]
-                args: [README.md]
+                command: [sleep]
+                args: ["1"]
