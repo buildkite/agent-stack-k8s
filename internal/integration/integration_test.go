@@ -236,6 +236,20 @@ func TestInvalidPodJSON(t *testing.T) {
 	)
 }
 
+func TestImagePullBackOffCancelled(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "image-pull-back-off-cancelled.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+}
+
 func maxOf(x, y int) int {
 	if x < y {
 		return y

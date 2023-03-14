@@ -1,0 +1,11 @@
+steps:
+  - label: ":x:"
+    agents:
+      queue: {{.queue}}
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: buildkite/non-existant-image:latest
+                command: [cat]
+                args: [README.md]
