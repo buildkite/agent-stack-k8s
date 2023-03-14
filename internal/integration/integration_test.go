@@ -46,14 +46,17 @@ func TestMain(m *testing.M) {
 	cmd := controller.New()
 	cmd.Flags().BoolVar(&preservePipelines, "preserve-pipelines", false, "preserve pipelines created by tests")
 	cmd.Flags().BoolVar(&deleteOrphanedPipelines, "delete-orphaned-pipelines", false, "delete all pipelines matching agent-k8s-*")
+
 	var err error
 	cfg, err = controller.ParseConfig(cmd, os.Args[1:])
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	if err := os.Chdir("integration"); err != nil {
 		log.Fatal(err)
 	}
+
 	for i, v := range os.Args {
 		if strings.Contains(v, "test") {
 			os.Args[i] = v
@@ -61,6 +64,7 @@ func TestMain(m *testing.M) {
 			os.Args[i] = ""
 		}
 	}
+
 	os.Exit(m.Run())
 }
 
@@ -236,21 +240,6 @@ func TestInvalidPodJSON(t *testing.T) {
 	)
 }
 
-func TestImagePullBackOffCancelled(t *testing.T) {
-	t.Skip("remove me")
-	tc := testcase{
-		T:       t,
-		Fixture: "image-pull-back-off-cancelled.yaml",
-		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
-	}.Init()
-	ctx := context.Background()
-	pipelineID := tc.CreatePipeline(ctx)
-	tc.StartController(ctx, cfg)
-	build := tc.TriggerBuild(ctx, pipelineID)
-	tc.AssertFail(ctx, build)
-}
-
 func maxOf(x, y int) int {
 	if x < y {
 		return y
@@ -272,7 +261,13 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
 		pipeline := pipeline // prevent loop variable capture
 		t.Run(pipeline.Node.Name, func(t *testing.T) {
-			builds, err := api.GetBuilds(ctx, graphqlClient, fmt.Sprintf("%s/%s", cfg.Org, pipeline.Node.Name), []api.BuildStates{api.BuildStatesRunning}, 100)
+			builds, err := api.GetBuilds(
+				ctx,
+				graphqlClient,
+				fmt.Sprintf("%s/%s", cfg.Org, pipeline.Node.Name),
+				[]api.BuildStates{api.BuildStatesRunning},
+				100,
+			)
 			require.NoError(t, err)
 			for _, build := range builds.Pipeline.Builds.Edges {
 				_, err = api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{Id: build.Node.Id})
@@ -304,4 +299,18 @@ func TestEnvVariables(t *testing.T) {
 		build,
 		"Testing some env variables: set",
 	)
+}
+
+func TestImagePullBackOffCancelled(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "image-pull-back-off-cancelled.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
 }
