@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
@@ -13,6 +14,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/tools/cache"
 )
+
+const gracePeriodSeconds = 30
 
 type imagePullBackOffWatcher struct {
 	logger *zap.Logger
@@ -82,9 +85,10 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	}
 
 	log = log.With(zap.String("jobUUID", jobUUID.String()))
+	startedAt := pod.GetCreationTimestamp().Time
 
 	for _, containerStatus := range pod.Status.ContainerStatuses {
-		if shouldCancel(&containerStatus) {
+		if shouldCancel(&containerStatus, startedAt) {
 			log.Info("Job has a container in ImagePullBackOff. Cancelling.")
 			resp, err := api.GetCommandJob(ctx, w.gql, jobUUID.String())
 			if err != nil {
@@ -110,7 +114,8 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	}
 }
 
-func shouldCancel(containerStatus *v1.ContainerStatus) bool {
+func shouldCancel(containerStatus *v1.ContainerStatus, startedAt time.Time) bool {
 	return containerStatus.State.Waiting != nil &&
-		containerStatus.State.Waiting.Reason == "ImagePullBackOff"
+		containerStatus.State.Waiting.Reason == "ImagePullBackOff" &&
+		time.Since(startedAt) > gracePeriodSeconds*time.Second
 }
