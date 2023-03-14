@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -euxo pipefail
+
+set -eufo pipefail
 
 apt update && apt install -y --no-install-recommends ca-certificates curl gnupg lsb-release jq
 mkdir -p /etc/apt/keyrings
@@ -19,5 +20,5 @@ trap cleanup EXIT
 
 just agent ttl.sh/buildkite-agent:1h
 
-image=$(cat dist/metadata.json | jq -r '"ttl.sh/buildkite-agent@\(."containerimage.digest")"')
-buildkite-agent meta-data set "agent-image" "${image}"
+image=$(jq -r '"ttl.sh/buildkite-agent@\(."containerimage.digest")"' dist/metadata.json)
+buildkite-agent meta-data set agent-image "$image"

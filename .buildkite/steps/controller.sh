@@ -17,4 +17,4 @@ ko login ghcr.io -u "$REGISTRY_USERNAME" --password "$REGISTRY_PASSWORD"
 export KO_DOCKER_REPO=ghcr.io/buildkite/agent-stack-k8s/controller
 controller_image=$(VERSION="$tag" ko build --bare --tags "$tag" --platform linux/amd64,linux/arm64)
 
-buildkite-agent meta-data set controller-image "${controller_image}"
+buildkite-agent meta-data set controller-image "$controller_image"
