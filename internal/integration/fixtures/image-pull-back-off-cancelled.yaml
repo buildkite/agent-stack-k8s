@@ -7,5 +7,5 @@ steps:
           podSpec:
             containers:
               - image: buildkite/non-existant-image:latest
-                command: [cat]
-                args: [README.md]
+                command:
+                  - "true"
