@@ -90,6 +90,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if shouldCancel(&containerStatus, startedAt) {
 			log.Info("Job has a container in ImagePullBackOff. Cancelling.")
+
 			resp, err := api.GetCommandJob(ctx, w.gql, jobUUID.String())
 			if err != nil {
 				log.Warn("Failed to query command job", zap.Error(err))
@@ -109,7 +110,6 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 				log.Warn("Job was not a command job")
 				return
 			}
-
 		}
 	}
 }
