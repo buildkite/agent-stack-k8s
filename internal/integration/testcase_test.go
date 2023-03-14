@@ -3,6 +3,7 @@ package integration_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -41,7 +42,13 @@ func (t testcase) Init() testcase {
 	t.Helper()
 	t.Parallel()
 
-	t.PipelineName = fmt.Sprintf("agent-k8s-%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
+	queuePrefix := "queue_"
+	namePrefix := "agent-stack-k8s-test-"
+	nameVariable := fmt.Sprintf("%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(nameVariable)))
+
+	// labels are limited to length 63
+	t.PipelineName = fmt.Sprintf("%s%s", namePrefix, hash[:63-len(namePrefix)-len(queuePrefix)])
 	t.Logger = zaptest.NewLogger(t).Named(t.Name())
 
 	clientConfig, err := restconfig.GetConfig()
