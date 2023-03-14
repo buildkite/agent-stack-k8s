@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/buildkite/roko"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
@@ -160,14 +161,14 @@ func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 	require.Len(t, artifacts, 2)
 	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
 	for _, filename := range expected {
-		require.Contains(t, filenames, filename)
+		assert.Contains(t, filenames, filename)
 	}
 }
 
 func (t testcase) AssertFail(ctx context.Context, build api.Build) {
 	t.Helper()
 
-	require.Equal(t, api.BuildStatesFailed, t.waitForBuild(ctx, build))
+	assert.Equal(t, api.BuildStatesFailed, t.waitForBuild(ctx, build))
 }
 
 func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildStates {
@@ -200,12 +201,12 @@ func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[st
 	require.NoError(t, err)
 	require.Len(t, jobs.Items, 1)
 	for k, v := range annotations {
-		require.Equal(t, jobs.Items[0].ObjectMeta.Annotations[k], v)
-		require.Equal(t, jobs.Items[0].Spec.Template.Annotations[k], v)
+		assert.Equal(t, jobs.Items[0].ObjectMeta.Annotations[k], v)
+		assert.Equal(t, jobs.Items[0].Spec.Template.Annotations[k], v)
 	}
 	for k, v := range labelz {
-		require.Equal(t, jobs.Items[0].ObjectMeta.Labels[k], v)
-		require.Equal(t, jobs.Items[0].Spec.Template.Labels[k], v)
+		assert.Equal(t, jobs.Items[0].ObjectMeta.Labels[k], v)
+		assert.Equal(t, jobs.Items[0].Spec.Template.Labels[k], v)
 	}
 }
 
