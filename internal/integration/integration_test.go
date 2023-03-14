@@ -313,4 +313,5 @@ func TestImagePullBackOffCancelled(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
+	tc.AssertLogsContain(build, "other job has run")
 }
