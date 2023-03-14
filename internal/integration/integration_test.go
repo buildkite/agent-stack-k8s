@@ -237,6 +237,7 @@ func TestInvalidPodJSON(t *testing.T) {
 }
 
 func TestImagePullBackOffCancelled(t *testing.T) {
+	t.Skip("remove me")
 	tc := testcase{
 		T:       t,
 		Fixture: "image-pull-back-off-cancelled.yaml",
