@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/scheduler"
 	gomock "github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	batchv1 "k8s.io/api/batch/v1"
@@ -83,9 +84,10 @@ func TestSkipsDuplicateJobs(t *testing.T) {
 	handler.EXPECT().Create(gomock.Eq(ctx), gomock.Any()).Times(1)
 
 	for i := 0; i < 5; i++ {
-		limiter.Create(ctx, &monitor.Job{
+		err := limiter.Create(ctx, &monitor.Job{
 			CommandJob: api.CommandJob{Uuid: "some-job"},
 		})
+		assert.NoError(t, err)
 	}
 }
 
