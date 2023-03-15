@@ -93,35 +93,37 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	startedAt := pod.GetCreationTimestamp().Time
 
 	for _, containerStatus := range pod.Status.ContainerStatuses {
-		if shouldCancel(&containerStatus, startedAt) {
-			log.Info("Job has a container in ImagePullBackOff. Cancelling.")
+		if !shouldCancel(&containerStatus, startedAt) {
+			continue
+		}
 
-			resp, err := api.GetCommandJob(ctx, w.gql, jobUUID.String())
-			if err != nil {
-				log.Warn("Failed to query command job", zap.Error(err))
+		log.Info("Job has a container in ImagePullBackOff. Cancelling.")
+
+		resp, err := api.GetCommandJob(ctx, w.gql, jobUUID.String())
+		if err != nil {
+			log.Warn("Failed to query command job", zap.Error(err))
+			return
+		}
+
+		switch job := resp.GetJob().(type) {
+		case *api.GetCommandJobJobJobTypeCommand:
+			// This is expected as there will be a gap between when cancel request completes and
+			// the kubernets job is cleaned up, during which more pods with containers destined to
+			// ImagePullBackOff may be created.
+			if job.GetState() == api.JobStatesCanceled || job.GetState() == api.JobStatesCanceling {
 				return
 			}
 
-			switch job := resp.GetJob().(type) {
-			case *api.GetCommandJobJobJobTypeCommand:
-				// This is expected as there will be a gap between when cancel request completes and
-				// the kubernets job is cleaned up, during which more pods with containers destined to
-				// ImagePullBackOff may be created.
-				if job.GetState() == api.JobStatesCanceled || job.GetState() == api.JobStatesCanceling {
-					return
-				}
-
-				if _, err := api.CancelCommandJob(ctx, w.gql, api.JobTypeCommandCancelInput{
-					ClientMutationId: clientMutationId,
-					Id:               job.GetId(),
-				}); err != nil {
-					log.Warn("Failed to cancel command job", zap.Error(err), zap.String("state", string(job.GetState())))
-				}
-				return
-			default:
-				log.Warn("Job was not a command job")
-				return
+			if _, err := api.CancelCommandJob(ctx, w.gql, api.JobTypeCommandCancelInput{
+				ClientMutationId: clientMutationId,
+				Id:               job.GetId(),
+			}); err != nil {
+				log.Warn("Failed to cancel command job", zap.Error(err), zap.String("state", string(job.GetState())))
 			}
+			return
+		default:
+			log.Warn("Job was not a command job")
+			return
 		}
 	}
 }
