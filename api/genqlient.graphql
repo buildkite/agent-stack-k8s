@@ -108,7 +108,6 @@ query GetBuilds($slug: ID!, $state: [BuildStates!], $first: Int) {
 
 query GetCommandJob($uuid: ID!) {
   job(uuid: $uuid) {
-    __typename
     ... on JobTypeCommand {
         id
         state
