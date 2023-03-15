@@ -23,6 +23,9 @@ type imagePullBackOffWatcher struct {
 	gql    graphql.Client
 }
 
+// NewImagePullBackOffWatcher creates an informer that will use the Buildkite
+// GraphQL API to cancel jobs that have pods with containers in the
+// ImagePullBackOff state
 func NewImagePullBackOffWatcher(
 	logger *zap.Logger,
 	k8s kubernetes.Interface,
@@ -45,10 +48,8 @@ func (w *imagePullBackOffWatcher) RegisterInformer(ctx context.Context, factory 
 	return nil
 }
 
-// ignored
 func (w *imagePullBackOffWatcher) OnDelete(obj any) {}
 
-// handle pods completed while the controller wasn't running
 func (w *imagePullBackOffWatcher) OnAdd(obj any) {
 	pod, _ := obj.(*v1.Pod)
 	w.cancelImagePullBackOff(context.Background(), pod)
