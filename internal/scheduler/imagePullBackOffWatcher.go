@@ -103,7 +103,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 					ClientMutationId: clientMutationId,
 					Id:               job.GetId(),
 				}); err != nil {
-					log.Warn("Failed to cancel command job", zap.Error(err))
+					log.Warn("Failed to cancel command job", zap.Error(err), zap.String("state", string(job.GetState())))
 				}
 				return
 			default:

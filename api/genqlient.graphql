@@ -111,6 +111,7 @@ query GetCommandJob($uuid: ID!) {
     __typename
     ... on JobTypeCommand {
         id
+        state
     }
   }
 }
