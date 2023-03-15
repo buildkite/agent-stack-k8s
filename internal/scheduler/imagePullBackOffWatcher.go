@@ -76,6 +76,12 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	log := w.logger.With(zap.String("namespace", pod.Namespace), zap.String("podName", pod.Name))
 	log.Debug("Checking pod for ImagePullBackOff")
 
+	now := time.Now()
+	startedAt := pod.GetCreationTimestamp().Time
+	if now.Sub(startedAt) < gracePeriodSeconds*time.Second {
+		return
+	}
+
 	clientMutationId := pod.GetName()
 	rawJobUUID, exists := pod.GetLabels()[api.UUIDLabel]
 	if !exists {
@@ -90,10 +96,9 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	}
 
 	log = log.With(zap.String("jobUUID", jobUUID.String()))
-	startedAt := pod.GetCreationTimestamp().Time
 
 	for _, containerStatus := range pod.Status.ContainerStatuses {
-		if !shouldCancel(&containerStatus, startedAt) {
+		if !shouldCancel(&containerStatus) {
 			continue
 		}
 
@@ -128,8 +133,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	}
 }
 
-func shouldCancel(containerStatus *v1.ContainerStatus, startedAt time.Time) bool {
+func shouldCancel(containerStatus *v1.ContainerStatus) bool {
 	return containerStatus.State.Waiting != nil &&
-		containerStatus.State.Waiting.Reason == "ImagePullBackOff" &&
-		time.Since(startedAt) > gracePeriodSeconds*time.Second
+		containerStatus.State.Waiting.Reason == "ImagePullBackOff"
 }
