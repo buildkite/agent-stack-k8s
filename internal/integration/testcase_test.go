@@ -143,11 +143,24 @@ func (t testcase) AssertLogsContain(build api.Build, content string) {
 	require.NoError(t, err)
 
 	client := buildkite.NewClient(config.Client())
-	job := build.Jobs.Edges[0].Node.(*api.JobJobTypeCommand)
-	logs, _, err := client.Jobs.GetJobLog(cfg.Org, t.PipelineName, strconv.Itoa(build.Number), job.Uuid)
-	require.NoError(t, err)
-	require.NotNil(t, logs.Content)
-	require.Contains(t, *logs.Content, content)
+
+	var logs strings.Builder
+	for _, edge := range build.Jobs.Edges {
+		job, wasJob := edge.Node.(*api.JobJobTypeCommand)
+		if !assert.True(t, wasJob) {
+			continue
+		}
+
+		jobLog, _, err := client.Jobs.GetJobLog(cfg.Org, t.PipelineName, strconv.Itoa(build.Number), job.Uuid)
+		if !assert.NoError(t, err) || !assert.NotNil(t, jobLog.Content) {
+			continue
+		}
+
+		_, err = logs.WriteString(*jobLog.Content)
+		assert.NoError(t, err)
+	}
+
+	assert.Contains(t, logs.String(), content)
 }
 
 func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
