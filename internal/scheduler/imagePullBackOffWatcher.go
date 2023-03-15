@@ -50,8 +50,12 @@ func (w *imagePullBackOffWatcher) RegisterInformer(ctx context.Context, factory 
 
 func (w *imagePullBackOffWatcher) OnDelete(obj any) {}
 
-func (w *imagePullBackOffWatcher) OnAdd(obj any) {
-	pod, _ := obj.(*v1.Pod)
+func (w *imagePullBackOffWatcher) OnAdd(maybePod any) {
+	pod, wasPod := maybePod.(*v1.Pod)
+	if !wasPod {
+		return
+	}
+
 	w.cancelImagePullBackOff(context.Background(), pod)
 }
 
