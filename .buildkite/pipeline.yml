@@ -1,6 +1,22 @@
 agents:
   queue: kubernetes
 steps:
+  - name: ":go::lint-roller: lint"
+    plugins:
+    - kubernetes:
+        podSpec:
+          containers:
+          - image: golangci/golangci-lint:v1.51.1
+            command:
+            - golangci-lint
+            args:
+            - run
+            - ./...
+            resources:
+              requests:
+                cpu: 1000m
+                memory: 1Gi
+
   - label: ":docker: build agent"
     key: agent
     plugins:

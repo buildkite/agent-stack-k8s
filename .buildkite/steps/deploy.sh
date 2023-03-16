@@ -1,20 +1,15 @@
 #!/usr/bin/env ash
 
-set -euo pipefail
+set -eufo pipefail
 
 echo --- :hammer: Installing tools
 apk add helm git --quiet --no-progress
 
-tag=$(git describe)
-version=$(echo "$tag" | sed 's/v//')
-temp_agent_image=$(buildkite-agent meta-data get "agent-image")
-agent_image="ghcr.io/buildkite/agent-stack-k8s/agent:${tag}"
-controller_image=$(buildkite-agent meta-data get "controller-image")
-helm_image="oci://ghcr.io/buildkite/helm"
+. .buildkite/steps/repo_info.sh
 
 echo --- :helm: Help upgrade
-helm upgrade agent-stack-k8s ${helm_image}/agent-stack-k8s \
-    --version ${version} \
+helm upgrade agent-stack-k8s "${helm_repo}/agent-stack-k8s" \
+    --version "$version" \
     --namespace buildkite \
     --install \
     --create-namespace \
