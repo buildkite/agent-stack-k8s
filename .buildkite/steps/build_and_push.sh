@@ -19,4 +19,6 @@ yq -i ".config.image = \"$agent_image\"" charts/agent-stack-k8s/values.yaml
 helm package ./charts/agent-stack-k8s --app-version "$version" -d dist --version "$version"
 
 echo --- :helm: Pushing helm chart to ghcr.io
-helm push ./dist/agent-stack-k8s-*.tgz ${helm_repo}
+helm push ./dist/agent-stack-k8s-*.tgz "$helm_repo"
+
+buildkite-agent annotate "Version: $version of the helm chart has been pushed to $helm_repo/agent-stack-k8s:$version"

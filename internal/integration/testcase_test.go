@@ -3,6 +3,7 @@ package integration_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -16,6 +17,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/buildkite/roko"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
@@ -41,7 +43,13 @@ func (t testcase) Init() testcase {
 	t.Helper()
 	t.Parallel()
 
-	t.PipelineName = fmt.Sprintf("agent-k8s-%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
+	queuePrefix := "queue_"
+	namePrefix := "agent-stack-k8s-test-"
+	nameVariable := fmt.Sprintf("%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(nameVariable)))
+
+	// labels are limited to length 63
+	t.PipelineName = fmt.Sprintf("%s%s", namePrefix, hash[:63-len(namePrefix)-len(queuePrefix)])
 	t.Logger = zaptest.NewLogger(t).Named(t.Name())
 
 	clientConfig, err := restconfig.GetConfig()
@@ -135,11 +143,24 @@ func (t testcase) AssertLogsContain(build api.Build, content string) {
 	require.NoError(t, err)
 
 	client := buildkite.NewClient(config.Client())
-	job := build.Jobs.Edges[0].Node.(*api.JobJobTypeCommand)
-	logs, _, err := client.Jobs.GetJobLog(cfg.Org, t.PipelineName, strconv.Itoa(build.Number), job.Uuid)
-	require.NoError(t, err)
-	require.NotNil(t, logs.Content)
-	require.Contains(t, *logs.Content, content)
+
+	var logs strings.Builder
+	for _, edge := range build.Jobs.Edges {
+		job, wasJob := edge.Node.(*api.JobJobTypeCommand)
+		if !assert.True(t, wasJob) {
+			continue
+		}
+
+		jobLog, _, err := client.Jobs.GetJobLog(cfg.Org, t.PipelineName, strconv.Itoa(build.Number), job.Uuid)
+		if !assert.NoError(t, err) || !assert.NotNil(t, jobLog.Content) {
+			continue
+		}
+
+		_, err = logs.WriteString(*jobLog.Content)
+		assert.NoError(t, err)
+	}
+
+	assert.Contains(t, logs.String(), content)
 }
 
 func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
@@ -153,14 +174,14 @@ func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 	require.Len(t, artifacts, 2)
 	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
 	for _, filename := range expected {
-		require.Contains(t, filenames, filename)
+		assert.Contains(t, filenames, filename)
 	}
 }
 
 func (t testcase) AssertFail(ctx context.Context, build api.Build) {
 	t.Helper()
 
-	require.Equal(t, api.BuildStatesFailed, t.waitForBuild(ctx, build))
+	assert.Equal(t, api.BuildStatesFailed, t.waitForBuild(ctx, build))
 }
 
 func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildStates {
@@ -193,12 +214,12 @@ func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[st
 	require.NoError(t, err)
 	require.Len(t, jobs.Items, 1)
 	for k, v := range annotations {
-		require.Equal(t, jobs.Items[0].ObjectMeta.Annotations[k], v)
-		require.Equal(t, jobs.Items[0].Spec.Template.Annotations[k], v)
+		assert.Equal(t, jobs.Items[0].ObjectMeta.Annotations[k], v)
+		assert.Equal(t, jobs.Items[0].Spec.Template.Annotations[k], v)
 	}
 	for k, v := range labelz {
-		require.Equal(t, jobs.Items[0].ObjectMeta.Labels[k], v)
-		require.Equal(t, jobs.Items[0].Spec.Template.Labels[k], v)
+		assert.Equal(t, jobs.Items[0].ObjectMeta.Labels[k], v)
+		assert.Equal(t, jobs.Items[0].Spec.Template.Labels[k], v)
 	}
 }
 

@@ -21,6 +21,8 @@ import (
 //go:generate mockgen -destination=mock_handler_test.go -source=../monitor/monitor.go -package scheduler_test
 
 func TestLimiter(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctrl := gomock.NewController(t)
@@ -72,6 +74,8 @@ func TestLimiter(t *testing.T) {
 }
 
 func TestSkipsDuplicateJobs(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctrl := gomock.NewController(t)
@@ -92,6 +96,8 @@ func TestSkipsDuplicateJobs(t *testing.T) {
 }
 
 func TestSkipsCreateErrors(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctrl := gomock.NewController(t)

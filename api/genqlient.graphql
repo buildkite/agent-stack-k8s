@@ -105,3 +105,18 @@ query GetBuilds($slug: ID!, $state: [BuildStates!], $first: Int) {
     }
   }
 }
+
+query GetCommandJob($uuid: ID!) {
+  job(uuid: $uuid) {
+    ... on JobTypeCommand {
+        id
+        state
+    }
+  }
+}
+
+mutation CancelCommandJob($input: JobTypeCommandCancelInput!) {
+  jobTypeCommandCancel(input: $input) {
+    clientMutationId
+  }
+}
