@@ -64,7 +64,7 @@ Usage of agent-stack-k8s:
       --tags strings                A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8") (default [queue=kubernetes])
 ```
 
-Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](./examples) folder there is a sample [YAML config](./examples/config.yaml) and a sample [dotenv config](./examples/config.env).
+Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](examples) folder there is a sample [YAML config](examples/config.yaml) and a sample [dotenv config](examples/config.env).
 
 ### Sample buildkite pipeline
 
@@ -85,11 +85,11 @@ steps:
 
 The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec` resource [in the Kubernetes API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#podspec-v1-core).
 
-More samples can be found in the [integration test fixtures directory](./integration/fixtures).
+More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
 
 ### Sidecars
 
-Sidecar containers can be added to your job by specifying them under the top-level `sidecars` key. See [this example](integration/fixtures/sidecars.yaml) for a simple job that runs `nginx` as a sidecar, and accesses the nginx server from the main job.
+Sidecar containers can be added to your job by specifying them under the top-level `sidecars` key. See [this example](internal/integration/fixtures/sidecars.yaml) for a simple job that runs `nginx` as a sidecar, and accesses the nginx server from the main job.
 
 There is no guarantee that your sidecars will have started before your job, so using retries or a tool like [wait-for-it](https://github.com/vishnubob/wait-for-it) is a good idea to avoid flaky tests.
 
@@ -196,7 +196,7 @@ For running the integration tests you'll need to add some additional scopes to y
 - `read_build_logs`
 - `write_pipelines`
 
-You'll also need to create an SSH secret in your cluster to run [this test pipeline](integration/fixtures/secretref.yaml). This SSH key needs to be associated with your GitHub account to be able to clone this public repo, and must be in a form acceptable to OpenSSH (aka `BEGIN OPENSSH PRIVATE KEY`, not `BEGIN PRIVATE KEY`).
+You'll also need to create an SSH secret in your cluster to run [this test pipeline](internal/integration/fixtures/secretref.yaml). This SSH key needs to be associated with your GitHub account to be able to clone this public repo, and must be in a form acceptable to OpenSSH (aka `BEGIN OPENSSH PRIVATE KEY`, not `BEGIN PRIVATE KEY`).
 
 ```bash
 kubectl create secret generic agent-stack-k8s --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
