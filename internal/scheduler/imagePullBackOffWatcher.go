@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
@@ -41,9 +40,7 @@ func NewImagePullBackOffWatcher(
 // Creates a Pods informer and registers the handler on it
 func (w *imagePullBackOffWatcher) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
 	informer := factory.Core().V1().Pods().Informer()
-	if _, err := informer.AddEventHandler(w); err != nil {
-		return fmt.Errorf("failed to register pod event handler: %w", err)
-	}
+	informer.AddEventHandler(w)
 	go factory.Start(ctx.Done())
 	return nil
 }

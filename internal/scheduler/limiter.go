@@ -38,10 +38,7 @@ func NewLimiter(logger *zap.Logger, scheduler monitor.JobHandler, maxInFlight in
 func (l *MaxInFlightLimiter) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
 	informer := factory.Batch().V1().Jobs()
 	jobInformer := informer.Informer()
-	if _, err := jobInformer.AddEventHandler(l); err != nil {
-		return fmt.Errorf("failed to register event handler: %w", err)
-
-	}
+	jobInformer.AddEventHandler(l)
 	go factory.Start(ctx.Done())
 
 	if !cache.WaitForCacheSync(ctx.Done(), jobInformer.HasSynced) {
