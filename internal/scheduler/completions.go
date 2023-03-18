@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"go.uber.org/zap"
@@ -31,9 +30,7 @@ func NewPodCompletionWatcher(logger *zap.Logger, k8s kubernetes.Interface) *comp
 // Creates a Pods informer and registers the handler on it
 func (w *completionsWatcher) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
 	informer := factory.Core().V1().Pods().Informer()
-	if _, err := informer.AddEventHandler(w); err != nil {
-		return fmt.Errorf("failed to register pod event handler: %w", err)
-	}
+	informer.AddEventHandler(w)
 	go factory.Start(ctx.Done())
 	return nil
 }
