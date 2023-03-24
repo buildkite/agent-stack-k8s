@@ -1,6 +1,8 @@
 # vim: ft=sh
 # shellcheck disable=SC2034  # this file will be sourced
 
+set -eufo pipefail
+
 docker_repo_prefix=ghcr.io/buildkite
 tag=$(git describe)
 version=${tag/v/}
