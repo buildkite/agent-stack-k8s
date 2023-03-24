@@ -5,7 +5,7 @@ set -eufo pipefail
 echo --- :hammer: Installing tools
 apk add --update-cache --no-progress helm yq skopeo git
 
-. .buildkite/steps/repo_info.sh
+source .buildkite/steps/repo_info.sh
 
 echo --- :docker: Logging into ghcr.io
 skopeo login ghcr.io -u "$REGISTRY_USERNAME" --password "$REGISTRY_PASSWORD" --authfile ~/.docker/config.json

@@ -5,7 +5,7 @@ set -eufo pipefail
 echo --- :hammer: Installing tools
 apk add --update-cache --no-progress helm git
 
-. .buildkite/steps/repo_info.sh
+source .buildkite/steps/repo_info.sh
 
 echo --- :helm: Helm upgrade
 helm upgrade agent-stack-k8s "${helm_repo}/agent-stack-k8s" \
