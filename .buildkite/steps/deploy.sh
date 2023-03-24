@@ -3,7 +3,7 @@
 set -eufo pipefail
 
 echo --- :hammer: Installing tools
-apk add helm git --quiet --no-progress
+apk add --update-cache --no-progress helm git
 
 . .buildkite/steps/repo_info.sh
 

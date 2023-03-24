@@ -1,9 +1,9 @@
 #!/bin/ash
 
-set -euo pipefail
+set -eufo pipefail
 
 echo --- :hammer: Installing tools
-apk add helm yq skopeo git --quiet --no-progress
+apk add --update-cache --no-progress helm yq skopeo git
 
 . .buildkite/steps/repo_info.sh
 
