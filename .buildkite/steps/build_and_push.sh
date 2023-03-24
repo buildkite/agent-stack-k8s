@@ -1,4 +1,4 @@
-#!/bin/ash
+#!/usr/bin/env ash
 
 set -eufo pipefail
 
@@ -16,9 +16,9 @@ skopeo copy --multi-arch=all "docker://${temp_agent_image}" "docker://${agent_im
 echo --- :helm: Packaging helm chart
 yq -i ".image = \"$controller_image\"" charts/agent-stack-k8s/values.yaml
 yq -i ".config.image = \"$agent_image\"" charts/agent-stack-k8s/values.yaml
-helm package ./charts/agent-stack-k8s --app-version "$version" -d dist --version "$version"
+helm package charts/agent-stack-k8s --app-version "$version" -d dist --version "$version"
 
 echo --- :helm: Pushing helm chart to ghcr.io
-helm push ./dist/agent-stack-k8s-*.tgz "$helm_repo"
+helm push "dist/agent-stack-k8s-${version}.tgz" "$helm_repo"
 
 buildkite-agent annotate "Version: $version of the helm chart has been pushed to $helm_repo/agent-stack-k8s:$version"
