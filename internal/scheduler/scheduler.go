@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -176,6 +177,8 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	w.k8sPlugin.Metadata.Labels[api.UUIDLabel] = w.job.Uuid
 	w.k8sPlugin.Metadata.Labels[api.TagLabel] = api.TagToLabel(w.job.Tag)
 	w.k8sPlugin.Metadata.Annotations[api.BuildURLAnnotation] = w.envMap["BUILDKITE_BUILD_URL"]
+	w.annotateWithJobURL()
+
 	kjob.Labels = w.k8sPlugin.Metadata.Labels
 	kjob.Spec.Template.Labels = w.k8sPlugin.Metadata.Labels
 	kjob.Annotations = w.k8sPlugin.Metadata.Annotations
@@ -430,6 +433,17 @@ func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
 	}
 	w.otherPlugins = nil
 	return w.Build()
+}
+
+func (w *jobWrapper) annotateWithJobURL() {
+	buildURL := w.envMap["BUILDKITE_BUILD_URL"]
+	u, err := url.Parse(buildURL)
+	if err != nil {
+		w.logger.Warn("could not parse BuildURL when annotating with JobURL", zap.String("buildURL", buildURL))
+		return
+	}
+	u.Fragment = w.job.Uuid
+	w.k8sPlugin.Metadata.Annotations[api.JobURLAnnotation] = u.String()
 }
 
 func kjobName(job *monitor.Job) string {

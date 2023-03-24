@@ -12,6 +12,7 @@ const (
 	UUIDLabel          = "buildkite.com/job-uuid"
 	TagLabel           = "buildkite.com/job-tag"
 	BuildURLAnnotation = "buildkite.com/build-url"
+	JobURLAnnotation   = "buildkite.com/job-url"
 	DefaultNamespace   = "default"
 	DefaultAgentImage  = "ghcr.io/buildkite/agent-k8s:latest"
 )
