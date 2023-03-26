@@ -25,3 +25,11 @@ controller_image=$(
 )
 
 buildkite-agent meta-data set controller-image "$controller_image"
+buildkite-agent annotate --style success --append <<EOF
+### Controller
+-------------------------------
+| Version | Image             |
+|---------|-------------------|
+|$version | $controller_image |
+-------------------------------
+EOF
