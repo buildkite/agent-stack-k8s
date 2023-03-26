@@ -7,38 +7,39 @@ if [[ ${#} -lt 1 ]]; then
     exit 1
 fi
 
-version="${1}"
 # ensure we remove leading `v`
-version="${version/#v/}"
+version="${1#v}"
 # put it back
 tag="v$version"
 
-commitish=$(git describe --exclude "$tag")
+# Release-Candidate Images
+build_tag=$(git describe --exclude "$tag")
+build_version=${build_tag#v}
 
 tag_image() {
     if ! crane tag "$1" "$2"; then
-        echo "Failed to tag image $1 with $2, maybe the build has not completed yet?"
+        echo "Failed to tag image $1 with $2, maybe the build has not completed yet?" >&2
         return 1
     fi
 }
 
-# helm doesn't use v-prefixed versions, everything else does
 # NB: these will fail if the commit hasn't gone through CI and produced release-candidate images yet
 tag_failures=0
-tag_image "ghcr.io/buildkite/helm/agent-stack-k8s:${commitish:1}" "$version"
+set +e
+tag_image "ghcr.io/buildkite/helm/agent-stack-k8s:${build_version}" "$version"
 ((tag_failures+=$?))
-tag_image "ghcr.io/buildkite/agent-stack-k8s/controller:${commitish}" "$tag"
+tag_image "ghcr.io/buildkite/agent-stack-k8s/controller:${build_version}" "$version"
 ((tag_failures+=$?))
-tag_image "ghcr.io/buildkite/agent-stack-k8s/agent:${commitish}" "$tag"
+tag_image "ghcr.io/buildkite/agent-stack-k8s/agent:${build_version}" "$version"
 ((tag_failures+=$?))
-
+set -e
 if [[ $tag_failures != 0 ]]; then
     exit 1
 fi
 
 chart_digest=$(crane digest "ghcr.io/buildkite/helm/agent-stack-k8s:$version")
-controller_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/controller:$tag")
-agent_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/agent:$tag")
+controller_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/controller:$version")
+agent_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/agent:$version")
 
 git tag -m "$tag" "$tag"
 git push origin "$tag" --force
@@ -52,11 +53,11 @@ Image: \`ghcr.io/buildkite/helm/agent-stack-k8s:${version}\`
 Digest: \`$chart_digest\`
 
 ### Controller
-Image: \`ghcr.io/buildkite/agent-stack-k8s/controller:${tag}\`
+Image: \`ghcr.io/buildkite/agent-stack-k8s/controller:${version}\`
 Digest: \`$controller_digest\`
 
 ### Agent
-Image: \`ghcr.io/buildkite/agent-stack-k8s/agent:${tag}\`
+Image: \`ghcr.io/buildkite/agent-stack-k8s/agent:${version}\`
 Digest: \`$agent_digest\`
 EOF
 
