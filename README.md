@@ -1,6 +1,6 @@
 # Buildkite Agent Stack for Kubernetes
 
-[![Build status](https://badge.buildkite.com/d58c90abfe8b48f8d8750dac8e911fc0b6afe026631b4dc97c.svg)](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack)
+[![Build status](https://badge.buildkite.com/d58c90abfe8b48f8d8750dac8e911fc0b6afe026631b4dc97c.svg?branch=main)](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack)
 
 ## Overview
 
