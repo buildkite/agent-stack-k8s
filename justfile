@@ -28,7 +28,7 @@ gomod:
   set -euf
 
   go mod tidy
-  git diff --no-ext-diff --exit-code go.mod go.sum
+  git diff -G. --no-ext-diff --exit-code go.mod go.sum
 
 agent target os=("linux") arch=("amd64 arm64"):
   #!/usr/bin/env bash
