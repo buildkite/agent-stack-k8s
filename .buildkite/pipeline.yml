@@ -1,6 +1,18 @@
 agents:
   queue: kubernetes
 steps:
+  - name: ":go::broom: tidy"
+    plugins:
+    - kubernetes:
+        podSpec:
+          containers:
+          - image: golang:alpine
+            command:
+            - go
+            args:
+            - run
+            - github.com/katexochen/go-tidy-check@v1.0.2
+
   - name: ":go::lint-roller: lint"
     plugins:
     - kubernetes:
