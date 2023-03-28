@@ -127,7 +127,7 @@ steps:
                   - --image=ttl.sh/example:1h
 ```
 
-The agent will automatically configure SSH access based on environment variables using the [https://github.com/buildkite/docker-ssh-env-config](docker-ssh-env-config) shell script. This script will run during the `checkout` stage of the job, and all resulting SSH keys and SSH config will live in the `/workspace/.ssh` in subsequent containers of the job.
+The agent will automatically configure SSH access based on environment variables using the [docker-ssh-env-config](https://github.com/buildkite/docker-ssh-env-config) shell script. This script will run during the `checkout` stage of the job, and all resulting SSH keys and SSH config will live in the `/workspace/.ssh` in subsequent containers of the job.
 
 To use these keys and config in a separate step, for example if your job runs `git clone`, you can either:
 
