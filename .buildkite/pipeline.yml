@@ -6,12 +6,8 @@ steps:
     - kubernetes:
         podSpec:
           containers:
-          - image: golang:alpine
-            command:
-            - go
-            args:
-            - run
-            - github.com/katexochen/go-tidy-check@v1.0.2
+          - image: golang:1.20.2-alpine
+            command: [.buildkite/steps/tidy.sh]
 
   - name: ":go::lint-roller: lint"
     plugins:
