@@ -35,7 +35,7 @@ You can also use this chart as a dependency:
 ```yaml
 dependencies:
 - name: agent-stack-k8s
-  version: "0.4.0"
+  version: "0.5.0"
   repository: "oci://ghcr.io/buildkite/helm"
 ```
 
