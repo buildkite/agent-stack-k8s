@@ -320,6 +320,12 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		},
 	}
 
+	if tag, err := agentTagFromJob(w.job); err != nil {
+		w.logger.Warn("error parsing job tags", zap.String("job", w.job.Uuid))
+	} else {
+		agentTags = append(agentTags, *tag)
+	}
+
 	// agent server container
 	agentContainer := corev1.Container{
 		Name:            AgentContainerName,
@@ -453,6 +459,19 @@ func kjobName(job *monitor.Job) string {
 type agentTag struct {
 	Name  string
 	Value string
+}
+
+func agentTagFromJob(j *monitor.Job) (*agentTag, error) {
+	if j == nil {
+		return nil, fmt.Errorf("job is nil")
+	}
+
+	k, v, found := strings.Cut(j.Tag, "=")
+	if !found {
+		return nil, fmt.Errorf("could not parse tag")
+	}
+
+	return &agentTag{Name: k, Value: v}, nil
 }
 
 func createAgentTagString(tags []agentTag) string {
