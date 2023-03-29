@@ -20,14 +20,15 @@ lint *FLAGS: gomod
   golangci-lint run {{FLAGS}}
 
 generate:
-    go run github.com/Khan/genqlient api/genqlient.yaml
-    go generate ./...
+  go run github.com/Khan/genqlient api/genqlient.yaml
+  go generate ./...
 
 gomod:
-  #!/usr/bin/env bash
-  set -euo pipefail
+  #!/usr/bin/env sh
+  set -euf
+
   go mod tidy
-  git diff --no-ext-diff --exit-code go.mod go.sum
+  git diff -G. --no-ext-diff --exit-code go.mod go.sum
 
 agent target os=("linux") arch=("amd64 arm64"):
   #!/usr/bin/env bash
