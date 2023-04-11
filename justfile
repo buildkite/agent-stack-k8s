@@ -30,24 +30,6 @@ gomod:
   go mod tidy
   git diff -G. --no-ext-diff --exit-code go.mod go.sum
 
-agent target os=("linux") arch=("amd64 arm64"):
-  #!/usr/bin/env bash
-  set -euxo pipefail
-  pushd agent
-  version=$(git describe --tags)
-  platforms=()
-  for os in {{os}}; do
-    for arch in {{arch}}; do
-      platforms+=("${os}/${arch}")
-      ./scripts/build-binary.sh $os $arch $version
-    done
-  done
-  commaified=$(IFS=, ; echo "${platforms[*]}")
-  mkdir -p {{justfile_directory()}}/dist
-  mv pkg/buildkite-agent-* packaging/docker/alpine/
-  docker buildx build --tag {{target}} --platform "$commaified" --push --metadata-file {{justfile_directory()}}/dist/metadata.json packaging/docker/alpine
-  rm packaging/docker/alpine/buildkite-agent-*
-
 controller *FLAGS:
   #!/usr/bin/env bash
   set -eufo pipefail
