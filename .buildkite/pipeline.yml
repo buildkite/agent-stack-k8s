@@ -25,15 +25,14 @@ steps:
                 cpu: 1000m
                 memory: 1Gi
 
-  - label: ":docker: build agent"
+  - label: ":docker: choose agent"
     key: agent
     plugins:
       - kubernetes:
           podSpec:
-            serviceAccountName: docker
             containers:
               - name: docker
-                image: golang:latest
+                image: alpine:latest
                 command: [.buildkite/steps/agent.sh]
 
   - label: ":buildkite: integration tests"

@@ -1,5 +1,6 @@
 Brewfile.lock.json
 
+.DS_Store
 .vscode
 
 dist/
