@@ -170,10 +170,15 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			},
 		}
 	}
+
 	if w.k8sPlugin.Metadata.Labels == nil {
 		w.k8sPlugin.Metadata.Labels = map[string]string{}
+	}
+
+	if w.k8sPlugin.Metadata.Annotations == nil {
 		w.k8sPlugin.Metadata.Annotations = map[string]string{}
 	}
+
 	w.k8sPlugin.Metadata.Labels[api.UUIDLabel] = w.job.Uuid
 	w.k8sPlugin.Metadata.Labels[api.TagLabel] = api.TagToLabel(w.job.Tag)
 	w.k8sPlugin.Metadata.Annotations[api.BuildURLAnnotation] = w.envMap["BUILDKITE_BUILD_URL"]
