@@ -1,5 +1,7 @@
 package api
 
+//go:generate go run github.com/Khan/genqlient@v0.5.0
+
 import (
 	"fmt"
 	"strings"

@@ -20,7 +20,6 @@ lint *FLAGS: gomod
   golangci-lint run {{FLAGS}}
 
 generate:
-  go run github.com/Khan/genqlient api/genqlient.yaml
   go generate ./...
 
 gomod:
