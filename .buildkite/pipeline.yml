@@ -36,7 +36,7 @@ steps:
                 command: [.buildkite/steps/check-code-generation.sh]
 
 
-  - label: ":docker: choose agent"
+  - label: ":docker::buildkite: choose agent image"
     key: agent
     plugins:
       - kubernetes:
