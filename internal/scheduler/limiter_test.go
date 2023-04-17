@@ -18,7 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-//go:generate mockgen -destination=mock_handler_test.go -source=../monitor/monitor.go -package scheduler_test
+//go:generate go run github.com/golang/mock/mockgen -destination=mock_handler_test.go -source=../monitor/monitor.go -package scheduler_test
 
 func TestLimiter(t *testing.T) {
 	t.Parallel()
