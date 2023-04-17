@@ -27,25 +27,6 @@ fragment Build on Build {
   }
 }
 
-mutation PipelineDelete($input: PipelineDeleteInput!) {
-  pipelineDelete(input: $input) {
-    clientMutationId
-  }
-}
-
-query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
-  organization(slug: $slug) {
-    pipelines(search: $search, first: $first) {
-      edges {
-        node {
-          id
-          name
-        }
-      }
-    }
-  }
-}
-
 mutation BuildCreate($input: BuildCreateInput!) {
   buildCreate(input: $input) {
     build {
@@ -118,5 +99,26 @@ query GetCommandJob($uuid: ID!) {
 mutation CancelCommandJob($input: JobTypeCommandCancelInput!) {
   jobTypeCommandCancel(input: $input) {
     clientMutationId
+  }
+}
+
+
+### The following are used in the cleanup integration "test"
+mutation PipelineDelete($input: PipelineDeleteInput!) {
+  pipelineDelete(input: $input) {
+    clientMutationId
+  }
+}
+
+query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
+  organization(slug: $slug) {
+    pipelines(search: $search, first: $first) {
+      edges {
+        node {
+          id
+          name
+        }
+      }
+    }
   }
 }
