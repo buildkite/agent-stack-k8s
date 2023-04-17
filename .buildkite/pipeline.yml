@@ -25,6 +25,17 @@ steps:
                 cpu: 1000m
                 memory: 1Gi
 
+  - name: ":golang::robot_face: check code generation"
+    key: check-code-generation
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - name: docker
+                image: golang:1.20.2-alpine
+                command: [.buildkite/steps/check-code-generation.sh]
+
+
   - label: ":docker: choose agent"
     key: agent
     plugins:
