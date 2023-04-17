@@ -2,6 +2,9 @@
 
 set -euf
 
+echo --- :hammer: Installing tools
+apk add --update-cache --no-progress git
+
 echo --- :golang: Generating code
 go generate ./...
 
