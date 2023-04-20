@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"sort"
@@ -54,34 +55,76 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 		defer ticker.Stop()
 		for {
 			for _, tag := range m.cfg.Tags {
-				buildsResponse, err := api.GetScheduledBuilds(ctx, m.gql, m.cfg.Org, []string{tag})
-				if err != nil {
-					if errors.Is(err, context.Canceled) {
+				if m.cfg.ClusterUUID == "" {
+					buildsResponse, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{tag})
+					if err != nil {
+						if errors.Is(err, context.Canceled) {
+							continue
+						}
+						m.logger.Warn("failed to retrieve builds for pipeline", zap.Error(err))
 						continue
 					}
-					m.logger.Warn("failed to retrieve builds for pipeline", zap.Error(err))
-					continue
-				}
-				if buildsResponse.Organization.Id == nil {
-					errs <- fmt.Errorf("invalid organization: %s", m.cfg.Org)
-					return
-				}
-				builds := buildsResponse.Organization.Jobs.Edges
-				sort.Slice(builds, func(i, j int) bool {
-					cmdI := builds[i].Node.(*api.JobJobTypeCommand)
-					cmdJ := builds[j].Node.(*api.JobJobTypeCommand)
 
-					return cmdI.ScheduledAt.Before(cmdJ.ScheduledAt)
-				})
+					if buildsResponse.Organization.Id == nil {
+						errs <- fmt.Errorf("invalid organization: %s", m.cfg.Org)
+						return
+					}
 
-				for _, job := range builds {
-					cmdJob := job.Node.(*api.JobJobTypeCommand)
-					m.logger.Debug("creating job", zap.String("uuid", cmdJob.Uuid))
-					if err := handler.Create(ctx, &Job{
-						CommandJob: cmdJob.CommandJob,
-						Tag:        tag,
-					}); err != nil {
-						m.logger.Error("failed to create job", zap.Error(err))
+					builds := buildsResponse.Organization.Jobs.Edges
+
+					sort.Slice(builds, func(i, j int) bool {
+						cmdI := builds[i].Node.(*api.JobJobTypeCommand)
+						cmdJ := builds[j].Node.(*api.JobJobTypeCommand)
+
+						return cmdI.ScheduledAt.Before(cmdJ.ScheduledAt)
+					})
+
+					for _, job := range builds {
+						cmdJob := job.Node.(*api.JobJobTypeCommand)
+						m.logger.Debug("creating job", zap.String("uuid", cmdJob.Uuid))
+						if err := handler.Create(ctx, &Job{
+							CommandJob: cmdJob.CommandJob,
+							Tag:        tag,
+						}); err != nil {
+							m.logger.Error("failed to create job", zap.Error(err))
+						}
+					}
+				} else {
+					clusterGraphQLID := encodeClusterGraphQLID(m.cfg.ClusterUUID)
+					logger := m.logger.With(zap.String("cluster-uuid", m.cfg.ClusterUUID), zap.String("cluster-graphql-id", clusterGraphQLID))
+
+					buildsResponse, err := api.GetScheduledJobsClustered(ctx, m.gql, m.cfg.Org, []string{tag}, clusterGraphQLID)
+					if err != nil {
+						if errors.Is(err, context.Canceled) {
+							continue
+						}
+						logger.Warn("failed to retrieve builds for pipeline", zap.Error(err))
+						continue
+					}
+
+					if buildsResponse.Organization.Id == nil {
+						errs <- fmt.Errorf("invalid organization: %s", m.cfg.Org)
+						return
+					}
+
+					builds := buildsResponse.Organization.Jobs.Edges
+
+					sort.Slice(builds, func(i, j int) bool {
+						cmdI := builds[i].Node.(*api.JobJobTypeCommand)
+						cmdJ := builds[j].Node.(*api.JobJobTypeCommand)
+
+						return cmdI.ScheduledAt.Before(cmdJ.ScheduledAt)
+					})
+
+					for _, job := range builds {
+						cmdJob := job.Node.(*api.JobJobTypeCommand)
+						logger.Debug("creating job", zap.String("uuid", cmdJob.Uuid))
+						if err := handler.Create(ctx, &Job{
+							CommandJob: cmdJob.CommandJob,
+							Tag:        tag,
+						}); err != nil {
+							logger.Error("failed to create job", zap.Error(err))
+						}
 					}
 				}
 			}
@@ -96,4 +139,8 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 		}
 	}()
 	return errs
+}
+
+func encodeClusterGraphQLID(clusterUUID string) string {
+	return base64.StdEncoding.EncodeToString([]byte("Cluster---" + clusterUUID))
 }

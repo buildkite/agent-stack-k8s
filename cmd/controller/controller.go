@@ -35,14 +35,18 @@ func addFlags(cmd *cobra.Command) {
 	cmd.Flags().String("buildkite-token", "", "Buildkite API token with GraphQL scopes")
 	cmd.Flags().String("org", "", "Buildkite organization name to watch")
 	cmd.Flags().String("image", api.DefaultAgentImage, "The image to use for the Buildkite agent")
-	cmd.Flags().StringSlice("tags", []string{"queue=kubernetes"}, `A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8")`)
+	cmd.Flags().StringSlice(
+		"tags", []string{"queue=kubernetes"}, `A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8")`,
+	)
 	cmd.Flags().String("namespace", api.DefaultNamespace, "kubernetes namespace to create resources in")
 	cmd.Flags().Bool("debug", false, "debug logs")
 	cmd.Flags().Int("max-in-flight", 25, "max jobs in flight, 0 means no max")
 	cmd.Flags().Duration("job-ttl", 10*time.Minute, "time to retain kubernetes jobs after completion")
 	cmd.Flags().String("agent-token-secret", "buildkite-agent-token", "name of the Buildkite agent token secret")
-	cmd.Flags().String("profiler-address", "",
-		"Bind address to expose the pprof profiler (e.g. localhost:6060)")
+	cmd.Flags().String(
+		"cluster-uuid", "", "UUID of the Cluster. The agent token must be for the Cluster.",
+	)
+	cmd.Flags().String("profiler-address", "", "Bind address to expose the pprof profiler (e.g. localhost:6060)")
 }
 
 func ParseConfig(cmd *cobra.Command, args []string) (api.Config, error) {
