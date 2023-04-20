@@ -1,4 +1,4 @@
-package monitor
+package monitor_test
 
 import (
 	"context"
@@ -6,13 +6,14 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestInvalidOrg(t *testing.T) {
-	m, err := New(zap.Must(zap.NewDevelopment()), fake.NewSimpleClientset(), api.Config{
+	m, err := monitor.New(zap.Must(zap.NewDevelopment()), fake.NewSimpleClientset(), api.Config{
 		BuildkiteToken: os.Getenv("BUILDKITE_TOKEN"),
 		MaxInFlight:    1,
 		Org:            "foo",

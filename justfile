@@ -20,7 +20,6 @@ lint *FLAGS: gomod
   golangci-lint run {{FLAGS}}
 
 generate:
-  go run github.com/Khan/genqlient api/genqlient.yaml
   go generate ./...
 
 gomod:
@@ -28,7 +27,15 @@ gomod:
   set -euf
 
   go mod tidy
-  git diff -G. --no-ext-diff --exit-code go.mod go.sum
+
+  # TODO: remove `-G.` once chmod 777 issue is fixed
+  if ! git diff -G. --no-ext-diff --exit-code go.mod go.sum; then
+    echo "Run"
+    echo "  go mod tidy"
+    echo "and make a commit."
+
+    exit 1
+  fi
 
 controller *FLAGS:
   #!/usr/bin/env bash
