@@ -32,7 +32,7 @@ steps:
           podSpec:
             containers:
               - name: docker
-                image: golang:1.20.2-alpine
+                image: golang:alpine
                 command: [.buildkite/steps/check-code-generation.sh]
 
 
