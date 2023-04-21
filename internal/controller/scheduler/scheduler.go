@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 	"github.com/buildkite/agent/v3/clicommand"
 	"go.uber.org/zap"

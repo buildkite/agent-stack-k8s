@@ -14,7 +14,7 @@ import (
 
 	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
-	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/buildkite/roko"
 	"github.com/stretchr/testify/assert"
@@ -100,7 +100,8 @@ func (t testcase) StartController(ctx context.Context, cfg api.Config) {
 
 	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.PipelineName)}
 	cfg.Debug = true
-	go Run(runCtx, t.Logger, t.Kubernetes, cfg)
+
+	go controller.Run(runCtx, t.Logger, t.Kubernetes, cfg)
 }
 
 func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build {
