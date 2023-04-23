@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
@@ -83,7 +83,7 @@ func (l *MaxInFlightLimiter) OnAdd(obj interface{}) {
 
 	job := obj.(*batchv1.Job)
 	if !jobFinished(job) {
-		uuid := job.Labels[api.UUIDLabel]
+		uuid := job.Labels[config.UUIDLabel]
 		if _, alreadyInFlight := l.inFlight[uuid]; !alreadyInFlight {
 			l.logger.Debug("adding in-flight job", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
 			l.inFlight[uuid] = struct{}{}
@@ -97,7 +97,7 @@ func (l *MaxInFlightLimiter) OnUpdate(_, obj interface{}) {
 	defer l.mu.Unlock()
 
 	job := obj.(*batchv1.Job)
-	uuid := job.Labels[api.UUIDLabel]
+	uuid := job.Labels[config.UUIDLabel]
 	if jobFinished(job) {
 		l.markComplete(job)
 	} else {
@@ -117,7 +117,7 @@ func (l *MaxInFlightLimiter) OnDelete(obj interface{}) {
 }
 
 func (l *MaxInFlightLimiter) markComplete(job *batchv1.Job) {
-	uuid := job.Labels[api.UUIDLabel]
+	uuid := job.Labels[config.UUIDLabel]
 	if _, alreadyInFlight := l.inFlight[uuid]; alreadyInFlight {
 		delete(l.inFlight, uuid)
 		l.logger.Debug("job complete", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))

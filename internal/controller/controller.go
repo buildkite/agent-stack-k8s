@@ -6,14 +6,14 @@ import (
 	_ "net/http/pprof"
 	"time"
 
-	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 )
 
-func Run(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface, cfg api.Config) {
+func Run(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface, cfg config.Config) {
 	if cfg.ProfilerAddress != "" {
 		logger.Info("profiler listening for requests")
 		go func() {
@@ -24,12 +24,24 @@ func Run(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface
 		}()
 	}
 
-	m, err := monitor.New(logger.Named("monitor"), k8sClient, cfg)
+	m, err := monitor.New(logger.Named("monitor"), k8sClient, monitor.Config{
+		Namespace:   cfg.Namespace,
+		Org:         cfg.Org,
+		ClusterUUID: cfg.ClusterUUID,
+		MaxInFlight: cfg.MaxInFlight,
+		Tags:        cfg.Tags,
+		Token:       cfg.BuildkiteToken,
+	})
 	if err != nil {
 		logger.Fatal("failed to create monitor", zap.Error(err))
 	}
 
-	sched := scheduler.New(logger.Named("scheduler"), k8sClient, cfg)
+	sched := scheduler.New(logger.Named("scheduler"), k8sClient, scheduler.Config{
+		Namespace:  cfg.Namespace,
+		Image:      cfg.Image,
+		AgentToken: cfg.AgentTokenSecret,
+		JobTTL:     cfg.JobTTL,
+	})
 	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)
 
 	informerFactory, err := scheduler.NewInformerFactory(k8sClient, cfg.Tags)

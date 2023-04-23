@@ -5,7 +5,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -13,11 +12,11 @@ import (
 )
 
 func TestInvalidOrg(t *testing.T) {
-	m, err := monitor.New(zap.Must(zap.NewDevelopment()), fake.NewSimpleClientset(), api.Config{
-		BuildkiteToken: os.Getenv("BUILDKITE_TOKEN"),
-		MaxInFlight:    1,
-		Org:            "foo",
-		Tags:           []string{"foo=bar"},
+	m, err := monitor.New(zap.Must(zap.NewDevelopment()), fake.NewSimpleClientset(), monitor.Config{
+		Token:       os.Getenv("BUILDKITE_TOKEN"),
+		MaxInFlight: 1,
+		Org:         "foo",
+		Tags:        []string{"foo=bar"},
 	})
 	require.NoError(t, err)
 

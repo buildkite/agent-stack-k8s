@@ -3,7 +3,7 @@ package scheduler
 import (
 	"context"
 
-	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,7 +69,7 @@ func (w *completionsWatcher) cleanupSidecars(pod *v1.Pod) {
 		}); err != nil {
 			w.logger.Error("failed to update job", zap.Error(err))
 		}
-		w.logger.Debug("agent finished", zap.String("uuid", pod.Labels[api.UUIDLabel]), zap.Int32("exit code", terminated.ExitCode))
+		w.logger.Debug("agent finished", zap.String("uuid", pod.Labels[config.UUIDLabel]), zap.Int32("exit code", terminated.ExitCode))
 	}
 }
 

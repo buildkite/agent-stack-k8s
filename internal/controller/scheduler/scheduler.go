@@ -7,8 +7,9 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 	"github.com/buildkite/agent/v3/clicommand"
@@ -29,7 +30,14 @@ const (
 	AgentContainerName = "agent"
 )
 
-func New(logger *zap.Logger, client kubernetes.Interface, cfg api.Config) *worker {
+type Config struct {
+	Namespace  string
+	Image      string
+	AgentToken string
+	JobTTL     time.Duration
+}
+
+func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 	return &worker{
 		cfg:    cfg,
 		client: client,
@@ -39,11 +47,11 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg api.Config) *worke
 
 // returns an informer factory configured to watch resources (pods, jobs) created by the scheduler
 func NewInformerFactory(k8s kubernetes.Interface, tags []string) (informers.SharedInformerFactory, error) {
-	hasTag, err := labels.NewRequirement(api.TagLabel, selection.In, api.TagsToLabels(tags))
+	hasTag, err := labels.NewRequirement(config.TagLabel, selection.In, config.TagsToLabels(tags))
 	if err != nil {
 		return nil, fmt.Errorf("failed to build tag label selector for job manager: %w", err)
 	}
-	hasUUID, err := labels.NewRequirement(api.UUIDLabel, selection.Exists, nil)
+	hasUUID, err := labels.NewRequirement(config.UUIDLabel, selection.Exists, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build uuid label selector for job manager: %w", err)
 	}
@@ -66,7 +74,7 @@ type Metadata struct {
 }
 
 type worker struct {
-	cfg    api.Config
+	cfg    Config
 	client kubernetes.Interface
 	logger *zap.Logger
 }
@@ -108,10 +116,10 @@ type jobWrapper struct {
 	err          error
 	k8sPlugin    KubernetesPlugin
 	otherPlugins []map[string]json.RawMessage
-	cfg          api.Config
+	cfg          Config
 }
 
-func NewJobWrapper(logger *zap.Logger, job *monitor.Job, config api.Config) *jobWrapper {
+func NewJobWrapper(logger *zap.Logger, job *monitor.Job, config Config) *jobWrapper {
 	return &jobWrapper{
 		logger: logger,
 		job:    job,
@@ -179,9 +187,9 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		w.k8sPlugin.Metadata.Annotations = map[string]string{}
 	}
 
-	w.k8sPlugin.Metadata.Labels[api.UUIDLabel] = w.job.Uuid
-	w.k8sPlugin.Metadata.Labels[api.TagLabel] = api.TagToLabel(w.job.Tag)
-	w.k8sPlugin.Metadata.Annotations[api.BuildURLAnnotation] = w.envMap["BUILDKITE_BUILD_URL"]
+	w.k8sPlugin.Metadata.Labels[config.UUIDLabel] = w.job.Uuid
+	w.k8sPlugin.Metadata.Labels[config.TagLabel] = config.TagToLabel(w.job.Tag)
+	w.k8sPlugin.Metadata.Annotations[config.BuildURLAnnotation] = w.envMap["BUILDKITE_BUILD_URL"]
 	w.annotateWithJobURL()
 
 	kjob.Labels = w.k8sPlugin.Metadata.Labels
@@ -200,7 +208,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			Name: agentTokenKey,
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.AgentTokenSecret},
+					LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.AgentToken},
 					Key:                  agentTokenKey,
 				},
 			},
@@ -454,7 +462,7 @@ func (w *jobWrapper) annotateWithJobURL() {
 		return
 	}
 	u.Fragment = w.job.Uuid
-	w.k8sPlugin.Metadata.Annotations[api.JobURLAnnotation] = u.String()
+	w.k8sPlugin.Metadata.Annotations[config.JobURLAnnotation] = u.String()
 }
 
 func kjobName(job *monitor.Job) string {

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/stretchr/testify/assert"
@@ -57,7 +58,7 @@ func TestJobPluginConversion(t *testing.T) {
 		},
 		Tag: "queue=kubernetes",
 	}
-	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, api.Config{AgentTokenSecret: "token-secret"})
+	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{AgentToken: "token-secret"})
 	result, err := wrapper.ParsePlugins().Build()
 	require.NoError(t, err)
 
@@ -81,8 +82,8 @@ func TestJobPluginConversion(t *testing.T) {
 	tokenEnv := findEnv(t, commandContainer.Env, "BUILDKITE_AGENT_TOKEN")
 	require.Equal(t, "token-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
 
-	tagLabel := result.Labels[api.TagLabel]
-	require.Equal(t, api.TagToLabel(input.Tag), tagLabel)
+	tagLabel := result.Labels[config.TagLabel]
+	require.Equal(t, config.TagToLabel(input.Tag), tagLabel)
 
 	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
 	require.Equal(t, pluginsEnv.Value, `[{"github.com/buildkite-plugins/some-other-buildkite-plugin":{"foo":"bar"}}]`)
@@ -116,7 +117,7 @@ func TestTagEnv(t *testing.T) {
 		},
 		Tag: "queue=kubernetes",
 	}
-	wrapper := scheduler.NewJobWrapper(logger, input, api.Config{AgentTokenSecret: "token-secret"})
+	wrapper := scheduler.NewJobWrapper(logger, input, scheduler.Config{AgentToken: "token-secret"})
 	result, err := wrapper.ParsePlugins().Build()
 	require.NoError(t, err)
 
@@ -148,7 +149,7 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 			Command: "echo hello world",
 		},
 	}
-	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, api.Config{})
+	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{})
 	result, err := wrapper.ParsePlugins().Build()
 	require.NoError(t, err)
 
@@ -177,7 +178,7 @@ func TestFailureJobs(t *testing.T) {
 		},
 		Tag: "queue=kubernetes",
 	}
-	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, api.Config{})
+	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{})
 	_, err = wrapper.ParsePlugins().Build()
 	require.Error(t, err)
 

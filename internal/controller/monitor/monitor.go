@@ -16,12 +16,13 @@ import (
 type Monitor struct {
 	gql    graphql.Client
 	logger *zap.Logger
-	cfg    api.Config
+	cfg    Config
 }
 
 type Config struct {
 	Namespace   string
 	Token       string
+	ClusterUUID string
 	MaxInFlight int
 	Org         string
 	Tags        []string
@@ -36,8 +37,8 @@ type JobHandler interface {
 	Create(context.Context, *Job) error
 }
 
-func New(logger *zap.Logger, k8s kubernetes.Interface, cfg api.Config) (*Monitor, error) {
-	graphqlClient := api.NewClient(cfg.BuildkiteToken)
+func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
+	graphqlClient := api.NewClient(cfg.Token)
 
 	return &Monitor{
 		gql:    graphqlClient,
