@@ -11,6 +11,7 @@ import (
 	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -35,6 +36,17 @@ type Job struct {
 
 type JobHandler interface {
 	Create(context.Context, *Job) error
+}
+
+type Cluster struct {
+	UUID      string
+	GraphQLID string
+}
+
+func (c Cluster) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("uuid", c.UUID)
+	enc.AddString("graphql-id", c.GraphQLID)
+	return nil
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg api.Config) (*Monitor, error) {
@@ -75,7 +87,7 @@ func (m *Monitor) getScheduledCommandJobs(
 		}
 	} else {
 		clusterGraphQLID := encodeClusterGraphQLID(m.cfg.ClusterUUID)
-		logger := logger.With(zap.String("cluster-uuid", m.cfg.ClusterUUID), zap.String("cluster-graphql-id", clusterGraphQLID))
+		logger := logger.With(zap.Object("cluster", Cluster{UUID: m.cfg.ClusterUUID, GraphQLID: clusterGraphQLID}))
 
 		jobsResp, err := api.GetScheduledJobsClustered(ctx, m.gql, m.cfg.Org, []string{tag}, clusterGraphQLID)
 		if err != nil {
