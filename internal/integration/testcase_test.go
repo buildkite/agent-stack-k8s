@@ -222,12 +222,9 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[string]string) {
 	t.Helper()
 
-	tagReq, err := labels.NewRequirement(
-		config.TagLabel,
-		selection.Equals,
-		[]string{fmt.Sprintf("queue_%s", t.PipelineName)},
-	)
+	tagReq, err := labels.NewRequirement("buildkite.com/queue", selection.Equals, []string{t.PipelineName})
 	require.NoError(t, err)
+
 	selector := labels.NewSelector().Add(*tagReq)
 
 	jobs, err := t.Kubernetes.BatchV1().
@@ -235,6 +232,7 @@ func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[st
 		List(ctx, v1.ListOptions{LabelSelector: selector.String()})
 	require.NoError(t, err)
 	require.Len(t, jobs.Items, 1)
+
 	for k, v := range annotations {
 		assert.Equal(t, jobs.Items[0].ObjectMeta.Annotations[k], v)
 		assert.Equal(t, jobs.Items[0].Spec.Template.Annotations[k], v)

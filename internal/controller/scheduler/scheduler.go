@@ -171,7 +171,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	}
 
 	w.k8sPlugin.Metadata.Labels[config.UUIDLabel] = w.job.Uuid
-	w.k8sPlugin.Metadata.Labels[config.TagLabel] = config.TagToLabel(w.job.Tag)
+	w.labelWithAgentTags()
 	w.k8sPlugin.Metadata.Annotations[config.BuildURLAnnotation] = w.envMap["BUILDKITE_BUILD_URL"]
 	w.annotateWithJobURL()
 
@@ -316,10 +316,10 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		},
 	}
 
-	if tag, err := agentTagFromJob(w.job); err != nil {
+	if tags, err := agentTagsFromJob(w.job); err != nil {
 		w.logger.Warn("error parsing job tags", zap.String("job", w.job.Uuid))
 	} else {
-		agentTags = append(agentTags, *tag)
+		agentTags = append(agentTags, tags...)
 	}
 
 	// agent server container
@@ -441,6 +441,13 @@ func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
 	return w.Build()
 }
 
+func (w *jobWrapper) labelWithAgentTags() {
+	labels := TagsToLabels(w.logger, w.job.Tags)
+	for k, v := range labels {
+		w.k8sPlugin.Metadata.Labels[k] = v
+	}
+}
+
 func (w *jobWrapper) annotateWithJobURL() {
 	buildURL := w.envMap["BUILDKITE_BUILD_URL"]
 	u, err := url.Parse(buildURL)
@@ -464,17 +471,21 @@ type agentTag struct {
 	Value string
 }
 
-func agentTagFromJob(j *monitor.Job) (*agentTag, error) {
+func agentTagsFromJob(j *monitor.Job) ([]agentTag, error) {
 	if j == nil {
 		return nil, fmt.Errorf("job is nil")
 	}
 
-	k, v, found := strings.Cut(j.Tag, "=")
-	if !found {
-		return nil, fmt.Errorf("could not parse tag")
+	agentTags := make([]agentTag, 0, len(j.Tags))
+	for _, tag := range j.Tags {
+		k, v, found := strings.Cut(tag, "=")
+		if !found {
+			return nil, fmt.Errorf("could not parse tag: %q", tag)
+		}
+		agentTags = append(agentTags, agentTag{Name: k, Value: v})
 	}
 
-	return &agentTag{Name: k, Value: v}, nil
+	return agentTags, nil
 }
 
 func createAgentTagString(tags []agentTag) string {

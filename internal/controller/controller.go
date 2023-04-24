@@ -85,27 +85,37 @@ func Run(
 	}
 }
 
-// returns an informer factory configured to watch resources (pods, jobs) created by the scheduler
+// NewInformerFactory returns an informer factory configured to watch resources
+// (pods, jobs) created by the scheduler. It matches pods that are labeled with
+// a job uuid and the agent tags that the scheduler was configured with
 func NewInformerFactory(
 	k8s kubernetes.Interface,
 	namespace string,
 	tags []string,
 ) (informers.SharedInformerFactory, error) {
-	hasTag, err := labels.NewRequirement(config.TagLabel, selection.In, config.TagsToLabels(tags))
-	if err != nil {
-		return nil, fmt.Errorf("failed to build tag label selector for job manager: %w", err)
-	}
+	labelsFromTags := scheduler.TagsToLabels(nil, tags)
+	requirements := make(labels.Requirements, 0, len(tags)+1)
+
 	hasUUID, err := labels.NewRequirement(config.UUIDLabel, selection.Exists, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build uuid label selector for job manager: %w", err)
 	}
-	factory := informers.NewSharedInformerFactoryWithOptions(
+	requirements = append(requirements, *hasUUID)
+
+	for l, v := range labelsFromTags {
+		hasLabel, err := labels.NewRequirement(l, selection.Equals, []string{v})
+		if err != nil {
+			return nil, fmt.Errorf("failed to agent tag label selector for job manager: %w", err)
+		}
+		requirements = append(requirements, *hasLabel)
+	}
+
+	return informers.NewSharedInformerFactoryWithOptions(
 		k8s,
 		0,
 		informers.WithNamespace(namespace),
 		informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
-			opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUUID).String()
+			opt.LabelSelector = labels.NewSelector().Add(requirements...).String()
 		}),
-	)
-	return factory, nil
+	), nil
 }

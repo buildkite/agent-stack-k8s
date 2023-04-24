@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/stretchr/testify/assert"
@@ -60,7 +59,7 @@ func TestJobPluginConversion(t *testing.T) {
 			Uuid: "abc",
 			Env:  []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
 		},
-		Tag: "queue=kubernetes",
+		Tags: []string{"queue=kubernetes"},
 	}
 	wrapper := scheduler.NewJobWrapper(
 		zaptest.NewLogger(t),
@@ -70,11 +69,11 @@ func TestJobPluginConversion(t *testing.T) {
 	result, err := wrapper.ParsePlugins().Build()
 	require.NoError(t, err)
 
-	require.Len(t, result.Spec.Template.Spec.Containers, 3)
+	assert.Len(t, result.Spec.Template.Spec.Containers, 3)
 
 	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
 	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
-	require.Equal(t, pluginConfig.PodSpec.Containers[0].Command[0], commandEnv.Value)
+	assert.Equal(t, pluginConfig.PodSpec.Containers[0].Command[0], commandEnv.Value)
 
 	var envFromNames []string
 	for _, envFrom := range commandContainer.EnvFrom {
@@ -88,16 +87,14 @@ func TestJobPluginConversion(t *testing.T) {
 	require.ElementsMatch(t, envFromNames, []string{"some-configmap", "git-secret"})
 
 	tokenEnv := findEnv(t, commandContainer.Env, "BUILDKITE_AGENT_TOKEN")
-	require.Equal(t, "token-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
+	assert.Equal(t, "token-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
 
-	tagLabel := result.Labels[config.TagLabel]
-	require.Equal(t, config.TagToLabel(input.Tag), tagLabel)
+	tagLabel := result.Labels["buildkite.com/queue"]
+	assert.Equal(t, tagLabel, "kubernetes")
 
 	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
-	require.Equal(
-		t,
-		pluginsEnv.Value,
-		`[{"github.com/buildkite-plugins/some-other-buildkite-plugin":{"foo":"bar"}}]`,
+	assert.Equal(
+		t, pluginsEnv.Value, `[{"github.com/buildkite-plugins/some-other-buildkite-plugin":{"foo":"bar"}}]`,
 	)
 }
 
@@ -127,7 +124,7 @@ func TestTagEnv(t *testing.T) {
 			Uuid: "abc",
 			Env:  []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
 		},
-		Tag: "queue=kubernetes",
+		Tags: []string{"queue=kubernetes"},
 	}
 	wrapper := scheduler.NewJobWrapper(logger, input, scheduler.Config{AgentToken: "token-secret"})
 	result, err := wrapper.ParsePlugins().Build()
@@ -187,7 +184,7 @@ func TestFailureJobs(t *testing.T) {
 			Uuid: "abc",
 			Env:  []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
 		},
-		Tag: "queue=kubernetes",
+		Tags: []string{"queue=kubernetes"},
 	}
 	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{})
 	_, err = wrapper.ParsePlugins().Build()
@@ -198,7 +195,7 @@ func TestFailureJobs(t *testing.T) {
 
 	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
 	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
-	require.Equal(
+	assert.Equal(
 		t,
 		`echo "failed parsing Kubernetes plugin: json: cannot unmarshal string into Go value of type scheduler.KubernetesPlugin" && exit 1`,
 		commandEnv.Value,

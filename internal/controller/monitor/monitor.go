@@ -30,7 +30,7 @@ type Config struct {
 
 type Job struct {
 	api.CommandJob
-	Tag string
+	Tags []string
 }
 
 type JobHandler interface {
@@ -87,14 +87,14 @@ func (r clusteredJobResp) CommandJobs() []*api.JobJobTypeCommand {
 
 // getScheduledCommandJobs calls either the clustered or unclustered GraphQL API
 // methods, depending on if a cluster uuid was provided in the config
-func (m *Monitor) getScheduledCommandJobs(ctx context.Context, tag string) (jobResp, error) {
+func (m *Monitor) getScheduledCommandJobs(ctx context.Context, tags []string) (jobResp, error) {
 	if m.cfg.ClusterUUID == "" {
-		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{tag})
+		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, tags)
 		return unclusteredJobResp(*resp), err
 	}
 
 	resp, err := api.GetScheduledJobsClustered(
-		ctx, m.gql, m.cfg.Org, []string{tag}, encodeClusterGraphQLID(m.cfg.ClusterUUID),
+		ctx, m.gql, m.cfg.Org, tags, encodeClusterGraphQLID(m.cfg.ClusterUUID),
 	)
 	return clusteredJobResp(*resp), err
 }
@@ -109,33 +109,31 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 		defer ticker.Stop()
 
 		for {
-			for _, tag := range m.cfg.Tags {
-				resp, err := m.getScheduledCommandJobs(ctx, tag)
-				if err != nil {
-					logger.Warn("failed to get scheduled command jobs", zap.Error(err))
-					continue
-				}
+			resp, err := m.getScheduledCommandJobs(ctx, m.cfg.Tags)
+			if err != nil {
+				logger.Warn("failed to get scheduled command jobs", zap.Error(err))
+				continue
+			}
 
-				if !resp.OrganizationExists() {
-					errs <- fmt.Errorf("invalid organization: %q", m.cfg.Org)
-					return
-				}
+			if !resp.OrganizationExists() {
+				errs <- fmt.Errorf("invalid organization: %q", m.cfg.Org)
+				return
+			}
 
-				jobs := resp.CommandJobs()
+			jobs := resp.CommandJobs()
 
-				// TODO: sort by ScheduledAt in the API
-				sort.Slice(jobs, func(i, j int) bool {
-					return jobs[i].ScheduledAt.Before(jobs[j].ScheduledAt)
-				})
+			// TODO: sort by ScheduledAt in the API
+			sort.Slice(jobs, func(i, j int) bool {
+				return jobs[i].ScheduledAt.Before(jobs[j].ScheduledAt)
+			})
 
-				for _, job := range jobs {
-					logger.Debug("creating job", zap.String("uuid", job.Uuid))
-					if err := handler.Create(ctx, &Job{
-						CommandJob: job.CommandJob,
-						Tag:        tag,
-					}); err != nil {
-						logger.Error("failed to create job", zap.Error(err))
-					}
+			for _, job := range jobs {
+				logger.Debug("creating job", zap.String("uuid", job.Uuid))
+				if err := handler.Create(ctx, &Job{
+					CommandJob: job.CommandJob,
+					Tags:       job.AgentQueryRules,
+				}); err != nil {
+					logger.Error("failed to create job", zap.Error(err))
 				}
 			}
 
