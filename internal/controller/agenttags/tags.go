@@ -1,17 +1,12 @@
 package agenttags
 
 import (
+	"errors"
 	"fmt"
 	"strings"
-)
 
-// a valid label must be an empty string or consist of alphanumeric characters,
-// '-', '_' or '.', and must start and end with an alphanumeric character (e.g.
-// 'MyValue',  or 'my_value',  or '12345', regex used for validation is
-// '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')
-func TagToLabel(tag string) string {
-	return strings.Replace(tag, "=", "_", 1)
-}
+	"k8s.io/apimachinery/pkg/util/validation"
+)
 
 func ToMap(tags []string) (map[string]string, []error) {
 	m := map[string]string{}
@@ -31,17 +26,22 @@ func mapToLabels(m map[string]string) (map[string]string, []error) {
 	labels := map[string]string{}
 	errs := []error{}
 	for k, v := range m {
-		if len(k) == 0 || len(k) > 63 {
-			errs = append(errs, fmt.Errorf("invalid agent tag key: %q", k))
+		namespacedKey := "buildkite.com/" + k
+		if errMsgs := validation.IsQualifiedName(namespacedKey); len(errMsgs) > 0 {
+			for _, errMsg := range errMsgs {
+				errs = append(errs, errors.New(errMsg))
+			}
 			continue
 		}
 
-		if len(v) == 0 || len(v) > 63 {
-			errs = append(errs, fmt.Errorf("invalid agent tag val: %q", v))
+		if errMsgs := validation.IsValidLabelValue(v); len(errMsgs) > 0 {
+			for _, errMsg := range errMsgs {
+				errs = append(errs, errors.New(errMsg))
+			}
 			continue
 		}
 
-		labels["buildkite.com/"+k] = v
+		labels[namespacedKey] = v
 	}
 	return labels, errs
 }
@@ -49,6 +49,5 @@ func mapToLabels(m map[string]string) (map[string]string, []error) {
 func ToLabels(tags []string) (map[string]string, []error) {
 	m, errs1 := ToMap(tags)
 	labels, errs2 := mapToLabels(m)
-	errs := append(errs1, errs2...)
-	return labels, errs
+	return labels, append(errs1, errs2...)
 }
