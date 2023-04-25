@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
@@ -16,7 +17,7 @@ import (
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
@@ -73,7 +74,7 @@ func (w *worker) Create(ctx context.Context, job *monitor.Job) error {
 	}
 	_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
-		if errors.IsInvalid(err) {
+		if kerrors.IsInvalid(err) {
 			kjob, err = jobWrapper.BuildFailureJob(err)
 			if err != nil {
 				return fmt.Errorf("failed to create job: %w", err)
@@ -442,7 +443,11 @@ func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
 }
 
 func (w *jobWrapper) labelWithAgentTags() {
-	labels := TagsToLabels(w.logger, w.job.Tags)
+	labels, errs := agenttags.ToLabels(w.job.Tags)
+	if len(errs) != 0 {
+		w.logger.Warn("converting all tags to labels", zap.Errors("errs", errs))
+	}
+
 	for k, v := range labels {
 		w.k8sPlugin.Metadata.Labels[k] = v
 	}

@@ -2,11 +2,13 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"time"
 
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
@@ -87,15 +89,18 @@ func Run(
 
 // NewInformerFactory returns an informer factory configured to watch resources
 // (pods, jobs) created by the scheduler. It matches pods that are labeled with
-// a job uuid and the agent tags that the scheduler was configured with
+// a job uuid and the agent tags that the scheduler was configured with.
 func NewInformerFactory(
 	k8s kubernetes.Interface,
 	namespace string,
 	tags []string,
 ) (informers.SharedInformerFactory, error) {
-	labelsFromTags := scheduler.TagsToLabels(nil, tags)
-	requirements := make(labels.Requirements, 0, len(tags)+1)
+	labelsFromTags, errs := agenttags.ToLabels(tags)
+	if len(errs) != 0 {
+		return nil, errors.Join(errs...)
+	}
 
+	requirements := make(labels.Requirements, 0, len(labelsFromTags)+1)
 	hasUUID, err := labels.NewRequirement(config.UUIDLabel, selection.Exists, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build uuid label selector for job manager: %w", err)
