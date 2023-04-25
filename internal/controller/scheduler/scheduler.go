@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 	"github.com/buildkite/agent/v3/clicommand"
 	"go.uber.org/zap"
@@ -61,7 +61,7 @@ type worker struct {
 	logger *zap.Logger
 }
 
-func (w *worker) Create(ctx context.Context, job *monitor.Job) error {
+func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 	logger := w.logger.With(zap.String("uuid", job.Uuid))
 	logger.Info("creating job")
 	jobWrapper := NewJobWrapper(w.logger, job, w.cfg).ParsePlugins()
@@ -95,7 +95,7 @@ func (w *worker) Create(ctx context.Context, job *monitor.Job) error {
 
 type jobWrapper struct {
 	logger       *zap.Logger
-	job          *monitor.Job
+	job          *api.CommandJob
 	envMap       map[string]string
 	err          error
 	k8sPlugin    KubernetesPlugin
@@ -103,7 +103,7 @@ type jobWrapper struct {
 	cfg          Config
 }
 
-func NewJobWrapper(logger *zap.Logger, job *monitor.Job, config Config) *jobWrapper {
+func NewJobWrapper(logger *zap.Logger, job *api.CommandJob, config Config) *jobWrapper {
 	return &jobWrapper{
 		logger: logger,
 		job:    job,
@@ -443,7 +443,7 @@ func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
 }
 
 func (w *jobWrapper) labelWithAgentTags() {
-	labels, errs := agenttags.ToLabels(w.job.Tags)
+	labels, errs := agenttags.ToLabels(w.job.AgentQueryRules)
 	if len(errs) != 0 {
 		w.logger.Warn("converting all tags to labels", zap.Errors("errs", errs))
 	}
@@ -467,7 +467,7 @@ func (w *jobWrapper) annotateWithJobURL() {
 	w.k8sPlugin.Metadata.Annotations[config.JobURLAnnotation] = u.String()
 }
 
-func kjobName(job *monitor.Job) string {
+func kjobName(job *api.CommandJob) string {
 	return fmt.Sprintf("buildkite-%s", job.Uuid)
 }
 
@@ -476,13 +476,13 @@ type agentTag struct {
 	Value string
 }
 
-func agentTagsFromJob(j *monitor.Job) ([]agentTag, error) {
+func agentTagsFromJob(j *api.CommandJob) ([]agentTag, error) {
 	if j == nil {
 		return nil, fmt.Errorf("job is nil")
 	}
 
-	agentTags := make([]agentTag, 0, len(j.Tags))
-	for _, tag := range j.Tags {
+	agentTags := make([]agentTag, 0, len(j.AgentQueryRules))
+	for _, tag := range j.AgentQueryRules {
 		k, v, found := strings.Cut(tag, "=")
 		if !found {
 			return nil, fmt.Errorf("could not parse tag: %q", tag)

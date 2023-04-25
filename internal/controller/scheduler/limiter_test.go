@@ -9,7 +9,6 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +33,7 @@ func TestLimiter(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(5)
 	handler.EXPECT().Create(gomock.Eq(ctx), gomock.Any()).Times(5).
-		Do(func(ctx context.Context, job *monitor.Job) error {
+		Do(func(ctx context.Context, job *api.CommandJob) error {
 			go func() {
 				t.Log("updating", job.Uuid)
 				limiter.OnUpdate(nil, &batchv1.Job{
@@ -59,13 +58,12 @@ func TestLimiter(t *testing.T) {
 	wg.Add(5)
 	for i := 0; i < 5; i++ {
 		job := api.CommandJob{
-			Uuid: fmt.Sprintf("job-%d", i),
+			Uuid:            fmt.Sprintf("job-%d", i),
+			AgentQueryRules: []string{},
 		}
 		go func() {
 			t.Log("creating", job.Uuid)
-			require.NoError(t, limiter.Create(ctx, &monitor.Job{
-				CommandJob: job,
-			}))
+			require.NoError(t, limiter.Create(ctx, &job))
 			require.LessOrEqual(t, limiter.InFlight(), 1)
 			t.Log("did create for", job.Uuid)
 			wg.Done()
@@ -89,8 +87,9 @@ func TestSkipsDuplicateJobs(t *testing.T) {
 	handler.EXPECT().Create(gomock.Eq(ctx), gomock.Any()).Times(1)
 
 	for i := 0; i < 5; i++ {
-		err := limiter.Create(ctx, &monitor.Job{
-			CommandJob: api.CommandJob{Uuid: "some-job"},
+		err := limiter.Create(ctx, &api.CommandJob{
+			Uuid:            "some-job",
+			AgentQueryRules: []string{},
 		})
 		assert.NoError(t, err)
 	}
@@ -108,13 +107,14 @@ func TestSkipsCreateErrors(t *testing.T) {
 	invalid := errors.New("invalid")
 
 	handler.EXPECT().Create(gomock.Eq(ctx), gomock.Any()).Times(5).
-		DoAndReturn(func(context.Context, *monitor.Job) error {
+		DoAndReturn(func(context.Context, *api.CommandJob) error {
 			return invalid
 		})
 
 	for i := 0; i < 5; i++ {
-		require.Error(t, invalid, limiter.Create(ctx, &monitor.Job{
-			CommandJob: api.CommandJob{Uuid: "some-job"},
+		require.Error(t, invalid, limiter.Create(ctx, &api.CommandJob{
+			Uuid:            "some-job",
+			AgentQueryRules: []string{},
 		}))
 	}
 }

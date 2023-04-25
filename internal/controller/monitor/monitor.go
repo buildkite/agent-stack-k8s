@@ -30,13 +30,8 @@ type Config struct {
 	Tags        []string
 }
 
-type Job struct {
-	api.CommandJob
-	Tags []string
-}
-
 type JobHandler interface {
-	Create(context.Context, *Job) error
+	Create(context.Context, *api.CommandJob) error
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
@@ -154,10 +149,7 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 				}
 
 				logger.Debug("creating job", zap.String("uuid", job.Uuid))
-				if err := handler.Create(ctx, &Job{
-					CommandJob: job.CommandJob,
-					Tags:       job.AgentQueryRules,
-				}); err != nil {
+				if err := handler.Create(ctx, &job.CommandJob); err != nil {
 					logger.Error("failed to create job", zap.Error(err))
 				}
 			}

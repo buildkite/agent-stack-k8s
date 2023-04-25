@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,12 +53,10 @@ func TestJobPluginConversion(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	input := &monitor.Job{
-		CommandJob: api.CommandJob{
-			Uuid: "abc",
-			Env:  []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
-		},
-		Tags: []string{"queue=kubernetes"},
+	input := &api.CommandJob{
+		Uuid:            "abc",
+		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
+		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	wrapper := scheduler.NewJobWrapper(
 		zaptest.NewLogger(t),
@@ -119,12 +116,10 @@ func TestTagEnv(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	input := &monitor.Job{
-		CommandJob: api.CommandJob{
-			Uuid: "abc",
-			Env:  []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
-		},
-		Tags: []string{"queue=kubernetes"},
+	input := &api.CommandJob{
+		Uuid:            "abc",
+		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
+		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	wrapper := scheduler.NewJobWrapper(logger, input, scheduler.Config{AgentToken: "token-secret"})
 	result, err := wrapper.ParsePlugins().Build()
@@ -151,11 +146,10 @@ func assertEnvFieldPath(t *testing.T, container corev1.Container, envVarName, fi
 
 func TestJobWithNoKubernetesPlugin(t *testing.T) {
 	t.Parallel()
-	input := &monitor.Job{
-		CommandJob: api.CommandJob{
-			Uuid:    "abc",
-			Command: "echo hello world",
-		},
+	input := &api.CommandJob{
+		Uuid:            "abc",
+		Command:         "echo hello world",
+		AgentQueryRules: []string{},
 	}
 	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{})
 	result, err := wrapper.ParsePlugins().Build()
@@ -179,12 +173,10 @@ func TestFailureJobs(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	input := &monitor.Job{
-		CommandJob: api.CommandJob{
-			Uuid: "abc",
-			Env:  []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
-		},
-		Tags: []string{"queue=kubernetes"},
+	input := &api.CommandJob{
+		Uuid:            "abc",
+		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
+		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{})
 	_, err = wrapper.ParsePlugins().Build()
