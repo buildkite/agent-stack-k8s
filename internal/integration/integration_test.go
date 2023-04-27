@@ -14,6 +14,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,7 +29,7 @@ var (
 	branch                  string
 	preservePipelines       bool
 	deleteOrphanedPipelines bool
-	cfg                     api.Config
+	cfg                     config.Config
 
 	//go:embed fixtures/*
 	fixtures embed.FS

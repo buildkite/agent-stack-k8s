@@ -9,7 +9,7 @@ import (
 	reflect "reflect"
 
 	api "github.com/buildkite/agent-stack-k8s/v2/api"
-	monitor "github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
+	monitor "github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	gomock "github.com/golang/mock/gomock"
 )
 

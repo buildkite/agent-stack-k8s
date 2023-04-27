@@ -1,21 +1,17 @@
 package controller
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/linter"
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/version"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/scheduler"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -32,28 +28,33 @@ var configFile string
 
 func addFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVarP(&configFile, "config", "f", "", "config file path")
+
+	// not in the config file
+	cmd.Flags().String("agent-token-secret", "buildkite-agent-token", "name of the Buildkite agent token secret")
 	cmd.Flags().String("buildkite-token", "", "Buildkite API token with GraphQL scopes")
+
+	// in the config file
 	cmd.Flags().String("org", "", "Buildkite organization name to watch")
-	cmd.Flags().String("image", api.DefaultAgentImage, "The image to use for the Buildkite agent")
+	cmd.Flags().String("image", config.DefaultAgentImage, "The image to use for the Buildkite agent")
 	cmd.Flags().StringSlice(
 		"tags", []string{"queue=kubernetes"}, `A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8")`,
 	)
-	cmd.Flags().String("namespace", api.DefaultNamespace, "kubernetes namespace to create resources in")
+	cmd.Flags().String("namespace", config.DefaultNamespace, "kubernetes namespace to create resources in")
 	cmd.Flags().Bool("debug", false, "debug logs")
 	cmd.Flags().Int("max-in-flight", 25, "max jobs in flight, 0 means no max")
 	cmd.Flags().Duration("job-ttl", 10*time.Minute, "time to retain kubernetes jobs after completion")
-	cmd.Flags().String("agent-token-secret", "buildkite-agent-token", "name of the Buildkite agent token secret")
 	cmd.Flags().String(
 		"cluster-uuid", "", "UUID of the Cluster. The agent token must be for the Cluster.",
 	)
 	cmd.Flags().String("profiler-address", "", "Bind address to expose the pprof profiler (e.g. localhost:6060)")
 }
 
-func ParseConfig(cmd *cobra.Command, args []string) (api.Config, error) {
-	var cfg api.Config
+func ParseConfig(cmd *cobra.Command, args []string) (config.Config, error) {
+	var cfg config.Config
 	if err := cmd.Flags().Parse(args); err != nil {
 		return cfg, fmt.Errorf("failed to parse flags: %w", err)
 	}
+
 	if err := viper.BindPFlags(cmd.Flags()); err != nil {
 		return cfg, fmt.Errorf("failed to bind flags: %w", err)
 	}
@@ -93,11 +94,6 @@ func New() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			ctx := signals.SetupSignalHandler()
 
-			clientConfig := restconfig.GetConfigOrDie()
-			k8sClient, err := kubernetes.NewForConfig(clientConfig)
-			if err != nil {
-				log.Fatalf("failed to create clientset: %v", err)
-			}
 			cfg, err := ParseConfig(cmd, args)
 			if err != nil {
 				var errs validator.ValidationErrors
@@ -109,7 +105,24 @@ func New() *cobra.Command {
 				}
 				log.Fatalf("failed to parse config: %v", err)
 			}
-			Run(ctx, k8sClient, cfg)
+
+			config := zap.NewDevelopmentConfig()
+			if cfg.Debug {
+				config.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+			} else {
+				config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+			}
+
+			logger := zap.Must(config.Build())
+			logger.Info("configuration loaded", zap.Object("config", cfg))
+
+			clientConfig := restconfig.GetConfigOrDie()
+			k8sClient, err := kubernetes.NewForConfig(clientConfig)
+			if err != nil {
+				logger.Error("failed to create clientset", zap.Error(err))
+			}
+
+			controller.Run(ctx, logger, k8sClient, cfg)
 		},
 	}
 	addFlags(cmd)
@@ -120,64 +133,4 @@ func New() *cobra.Command {
 	}
 
 	return cmd
-}
-
-func Run(ctx context.Context, k8sClient kubernetes.Interface, cfg api.Config) {
-	config := zap.NewDevelopmentConfig()
-	if cfg.Debug {
-		config.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
-	} else {
-		config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
-	}
-
-	log := zap.Must(config.Build())
-	log.Info("configuration loaded", zap.Object("config", cfg))
-
-	if cfg.ProfilerAddress != "" {
-		log.Info("profiler listening for requests")
-		go func() {
-			srv := http.Server{Addr: cfg.ProfilerAddress, ReadHeaderTimeout: 2 * time.Second}
-			if err := srv.ListenAndServe(); err != nil {
-				log.Error("problem running profiler server", zap.Error(err))
-			}
-		}()
-	}
-
-	m, err := monitor.New(log.Named("monitor"), k8sClient, cfg)
-	if err != nil {
-		log.Fatal("failed to create monitor", zap.Error(err))
-	}
-
-	sched := scheduler.New(log.Named("scheduler"), k8sClient, cfg)
-	limiter := scheduler.NewLimiter(log.Named("limiter"), sched, cfg.MaxInFlight)
-
-	informerFactory, err := scheduler.NewInformerFactory(k8sClient, cfg.Tags)
-	if err != nil {
-		log.Fatal("failed to create informer", zap.Error(err))
-	}
-
-	if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
-		log.Fatal("failed to register limiter informer", zap.Error(err))
-	}
-
-	completions := scheduler.NewPodCompletionWatcher(log.Named("completions"), k8sClient)
-	if err := completions.RegisterInformer(ctx, informerFactory); err != nil {
-		log.Fatal("failed to register completions informer", zap.Error(err))
-	}
-
-	imagePullBackOffWatcher := scheduler.NewImagePullBackOffWatcher(
-		log.Named("imagePullBackoffWatcher"),
-		k8sClient,
-		cfg,
-	)
-	if err := imagePullBackOffWatcher.RegisterInformer(ctx, informerFactory); err != nil {
-		log.Fatal("failed to register imagePullBackoffWatcher informer", zap.Error(err))
-	}
-
-	select {
-	case <-ctx.Done():
-		log.Info("controller exiting", zap.Error(ctx.Err()))
-	case err := <-m.Start(ctx, limiter):
-		log.Info("monitor failed", zap.Error(err))
-	}
 }

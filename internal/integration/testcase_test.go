@@ -14,7 +14,8 @@ import (
 
 	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
-	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/buildkite/roko"
 	"github.com/stretchr/testify/assert"
@@ -92,7 +93,7 @@ func (t testcase) CreatePipeline(ctx context.Context) string {
 	return *pipeline.GraphQLID
 }
 
-func (t testcase) StartController(ctx context.Context, cfg api.Config) {
+func (t testcase) StartController(ctx context.Context, cfg config.Config) {
 	t.Helper()
 
 	runCtx, cancel := context.WithCancel(ctx)
@@ -100,7 +101,8 @@ func (t testcase) StartController(ctx context.Context, cfg api.Config) {
 
 	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.PipelineName)}
 	cfg.Debug = true
-	go controller.Run(runCtx, t.Kubernetes, cfg)
+
+	go controller.Run(runCtx, t.Logger, t.Kubernetes, cfg)
 }
 
 func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build {
@@ -151,7 +153,12 @@ func (t testcase) AssertLogsContain(build api.Build, content string) {
 			continue
 		}
 
-		jobLog, _, err := client.Jobs.GetJobLog(cfg.Org, t.PipelineName, strconv.Itoa(build.Number), job.Uuid)
+		jobLog, _, err := client.Jobs.GetJobLog(
+			cfg.Org,
+			t.PipelineName,
+			strconv.Itoa(build.Number),
+			job.Uuid,
+		)
 		if !assert.NoError(t, err) || !assert.NotNil(t, jobLog.Content) {
 			continue
 		}
@@ -169,7 +176,12 @@ func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 	require.NoError(t, err)
 	client := buildkite.NewClient(config.Client())
 
-	artifacts, _, err := client.Artifacts.ListByBuild(cfg.Org, t.PipelineName, strconv.Itoa(build.Number), nil)
+	artifacts, _, err := client.Artifacts.ListByBuild(
+		cfg.Org,
+		t.PipelineName,
+		strconv.Itoa(build.Number),
+		nil,
+	)
 	require.NoError(t, err)
 	require.Len(t, artifacts, 2)
 	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
@@ -191,7 +203,11 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 		getBuild, err := api.GetBuild(ctx, t.GraphQL, build.Uuid)
 		require.NoError(t, err)
 		switch getBuild.Build.State {
-		case api.BuildStatesPassed, api.BuildStatesFailed, api.BuildStatesCanceled, api.BuildStatesCanceling:
+		case api.BuildStatesPassed,
+			api.BuildStatesFailed,
+			api.BuildStatesCanceled,
+			api.BuildStatesCanceling:
+
 			return getBuild.Build.State
 		case api.BuildStatesScheduled, api.BuildStatesRunning:
 			t.Logger.Debug("sleeping", zap.Any("build state", getBuild.Build.State))
@@ -206,11 +222,17 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[string]string) {
 	t.Helper()
 
-	tagReq, err := labels.NewRequirement(api.TagLabel, selection.Equals, []string{fmt.Sprintf("queue_%s", t.PipelineName)})
+	tagReq, err := labels.NewRequirement(
+		config.TagLabel,
+		selection.Equals,
+		[]string{fmt.Sprintf("queue_%s", t.PipelineName)},
+	)
 	require.NoError(t, err)
 	selector := labels.NewSelector().Add(*tagReq)
 
-	jobs, err := t.Kubernetes.BatchV1().Jobs(cfg.Namespace).List(ctx, v1.ListOptions{LabelSelector: selector.String()})
+	jobs, err := t.Kubernetes.BatchV1().
+		Jobs(cfg.Namespace).
+		List(ctx, v1.ListOptions{LabelSelector: selector.String()})
 	require.NoError(t, err)
 	require.Len(t, jobs.Items, 1)
 	for k, v := range annotations {

@@ -8,8 +8,9 @@ import (
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/scheduler"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	gomock "github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,7 +40,7 @@ func TestLimiter(t *testing.T) {
 				limiter.OnUpdate(nil, &batchv1.Job{
 					ObjectMeta: metav1.ObjectMeta{
 						Labels: map[string]string{
-							api.UUIDLabel: job.Uuid,
+							config.UUIDLabel: job.Uuid,
 						},
 					},
 					Status: batchv1.JobStatus{

@@ -6,6 +6,7 @@ import (
 
 	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
@@ -28,7 +29,7 @@ type imagePullBackOffWatcher struct {
 func NewImagePullBackOffWatcher(
 	logger *zap.Logger,
 	k8s kubernetes.Interface,
-	cfg api.Config,
+	cfg config.Config,
 ) *imagePullBackOffWatcher {
 	return &imagePullBackOffWatcher{
 		logger: logger,
@@ -80,7 +81,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	}
 
 	clientMutationId := pod.GetName()
-	rawJobUUID, exists := pod.GetLabels()[api.UUIDLabel]
+	rawJobUUID, exists := pod.GetLabels()[config.UUIDLabel]
 	if !exists {
 		log.Info("Job UUID label not present. Skipping.")
 		return
