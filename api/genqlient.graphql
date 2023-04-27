@@ -27,25 +27,6 @@ fragment Build on Build {
   }
 }
 
-mutation PipelineDelete($input: PipelineDeleteInput!) {
-  pipelineDelete(input: $input) {
-    clientMutationId
-  }
-}
-
-query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
-  organization(slug: $slug) {
-    pipelines(search: $search, first: $first) {
-      edges {
-        node {
-          id
-          name
-        }
-      }
-    }
-  }
-}
-
 mutation BuildCreate($input: BuildCreateInput!) {
   buildCreate(input: $input) {
     build {
@@ -72,7 +53,7 @@ query GetBuild($uuid: ID!) {
   }
 }
 
-query GetScheduledBuilds($slug: ID!, $agentQueryRules: [String!]) {
+query GetScheduledJobs($slug: ID!, $agentQueryRules: [String!]) {
   organization(slug: $slug) {
     # @genqlient(pointer: true)
     id
@@ -82,6 +63,30 @@ query GetScheduledBuilds($slug: ID!, $agentQueryRules: [String!]) {
       first: 100
       order: RECENTLY_ASSIGNED
       agentQueryRules: $agentQueryRules
+      clustered: false
+    ) {
+      count
+      edges {
+        # @genqlient(flatten: true)
+        node {
+          ...Job
+        }
+      }
+    }
+  }
+}
+
+query GetScheduledJobsClustered($slug: ID!, $agentQueryRules: [String!], $cluster: ID!) {
+  organization(slug: $slug) {
+    # @genqlient(pointer: true)
+    id
+    jobs(
+      state: [SCHEDULED]
+      type: [COMMAND]
+      first: 100
+      order: RECENTLY_ASSIGNED
+      agentQueryRules: $agentQueryRules
+      cluster: $cluster
     ) {
       count
       edges {
@@ -118,5 +123,26 @@ query GetCommandJob($uuid: ID!) {
 mutation CancelCommandJob($input: JobTypeCommandCancelInput!) {
   jobTypeCommandCancel(input: $input) {
     clientMutationId
+  }
+}
+
+
+### The following are used in the cleanup integration "test"
+mutation PipelineDelete($input: PipelineDeleteInput!) {
+  pipelineDelete(input: $input) {
+    clientMutationId
+  }
+}
+
+query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
+  organization(slug: $slug) {
+    pipelines(search: $search, first: $first) {
+      edges {
+        node {
+          id
+          name
+        }
+      }
+    }
   }
 }

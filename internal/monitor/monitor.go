@@ -2,7 +2,7 @@ package monitor
 
 import (
 	"context"
-	"errors"
+	"encoding/base64"
 	"fmt"
 	"sort"
 	"time"
@@ -46,42 +46,94 @@ func New(logger *zap.Logger, k8s kubernetes.Interface, cfg api.Config) (*Monitor
 	}, nil
 }
 
+// jobResp is used to identify the reponse types from methods that call the GraphQL API
+// in the cases where a cluster is specified or otherwise.
+// The return types are are isomorphic, but this has been lost in the generation of the
+// API calling methods. As such, the implmentations should syntacticaly identical, but
+// sematically, they operate on differnt types.
+type jobResp interface {
+	OrganizationExists() bool
+	CommandJobs() []*api.JobJobTypeCommand
+}
+
+type unclusteredJobResp api.GetScheduledJobsResponse
+
+func (r unclusteredJobResp) OrganizationExists() bool {
+	return r.Organization.Id != nil
+}
+
+func (r unclusteredJobResp) CommandJobs() []*api.JobJobTypeCommand {
+	jobs := make([]*api.JobJobTypeCommand, 0, len(r.Organization.Jobs.Edges))
+	for _, edge := range r.Organization.Jobs.Edges {
+		jobs = append(jobs, edge.Node.(*api.JobJobTypeCommand))
+	}
+	return jobs
+}
+
+type clusteredJobResp api.GetScheduledJobsClusteredResponse
+
+func (r clusteredJobResp) OrganizationExists() bool {
+	return r.Organization.Id != nil
+}
+
+func (r clusteredJobResp) CommandJobs() []*api.JobJobTypeCommand {
+	jobs := make([]*api.JobJobTypeCommand, 0, len(r.Organization.Jobs.Edges))
+	for _, edge := range r.Organization.Jobs.Edges {
+		jobs = append(jobs, edge.Node.(*api.JobJobTypeCommand))
+	}
+	return jobs
+}
+
+// getScheduledCommandJobs calls either the clustered or unclustered GraphQL API
+// methods, depending on if a cluster uuid was provided in the config
+func (m *Monitor) getScheduledCommandJobs(ctx context.Context, tag string) (jobResp, error) {
+	if m.cfg.ClusterUUID == "" {
+		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{tag})
+		return unclusteredJobResp(*resp), err
+	}
+
+	resp, err := api.GetScheduledJobsClustered(
+		ctx, m.gql, m.cfg.Org, []string{tag}, encodeClusterGraphQLID(m.cfg.ClusterUUID),
+	)
+	return clusteredJobResp(*resp), err
+}
+
 func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
+	logger := m.logger.With(zap.String("org", m.cfg.Org))
 	errs := make(chan error, 1)
+
 	go func() {
-		m.logger.Info("started")
+		logger.Info("started")
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
+
 		for {
 			for _, tag := range m.cfg.Tags {
-				buildsResponse, err := api.GetScheduledBuilds(ctx, m.gql, m.cfg.Org, []string{tag})
+				resp, err := m.getScheduledCommandJobs(ctx, tag)
 				if err != nil {
-					if errors.Is(err, context.Canceled) {
-						continue
-					}
-					m.logger.Warn("failed to retrieve builds for pipeline", zap.Error(err))
+					logger.Warn("failed to get scheduled command jobs", zap.Error(err))
 					continue
 				}
-				if buildsResponse.Organization.Id == nil {
-					errs <- fmt.Errorf("invalid organization: %s", m.cfg.Org)
+
+				if !resp.OrganizationExists() {
+					errs <- fmt.Errorf("invalid organization: %q", m.cfg.Org)
 					return
 				}
-				builds := buildsResponse.Organization.Jobs.Edges
-				sort.Slice(builds, func(i, j int) bool {
-					cmdI := builds[i].Node.(*api.JobJobTypeCommand)
-					cmdJ := builds[j].Node.(*api.JobJobTypeCommand)
 
-					return cmdI.ScheduledAt.Before(cmdJ.ScheduledAt)
+				jobs := resp.CommandJobs()
+
+				// TODO: sort by ScheduledAt in the API
+				sort.Slice(jobs, func(i, j int) bool {
+					return jobs[i].ScheduledAt.Before(jobs[j].ScheduledAt)
 				})
 
-				for _, job := range builds {
-					cmdJob := job.Node.(*api.JobJobTypeCommand)
-					m.logger.Debug("creating job", zap.String("uuid", cmdJob.Uuid))
+				for _, job := range jobs {
+					logger.Debug("creating job", zap.String("uuid", job.Uuid))
 					if err := handler.Create(ctx, &Job{
-						CommandJob: cmdJob.CommandJob,
+						CommandJob: job.CommandJob,
 						Tag:        tag,
 					}); err != nil {
-						m.logger.Error("failed to create job", zap.Error(err))
+						logger.Error("failed to create job", zap.Error(err))
 					}
 				}
 			}
@@ -95,5 +147,10 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 			}
 		}
 	}()
+
 	return errs
+}
+
+func encodeClusterGraphQLID(clusterUUID string) string {
+	return base64.StdEncoding.EncodeToString([]byte("Cluster---" + clusterUUID))
 }

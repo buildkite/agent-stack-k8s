@@ -8,6 +8,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	api "github.com/buildkite/agent-stack-k8s/v2/api"
 	monitor "github.com/buildkite/agent-stack-k8s/v2/internal/monitor"
 	gomock "github.com/golang/mock/gomock"
 )
@@ -47,4 +48,55 @@ func (m *MockJobHandler) Create(arg0 context.Context, arg1 *monitor.Job) error {
 func (mr *MockJobHandlerMockRecorder) Create(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockJobHandler)(nil).Create), arg0, arg1)
+}
+
+// MockjobResp is a mock of jobResp interface.
+type MockjobResp struct {
+	ctrl     *gomock.Controller
+	recorder *MockjobRespMockRecorder
+}
+
+// MockjobRespMockRecorder is the mock recorder for MockjobResp.
+type MockjobRespMockRecorder struct {
+	mock *MockjobResp
+}
+
+// NewMockjobResp creates a new mock instance.
+func NewMockjobResp(ctrl *gomock.Controller) *MockjobResp {
+	mock := &MockjobResp{ctrl: ctrl}
+	mock.recorder = &MockjobRespMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockjobResp) EXPECT() *MockjobRespMockRecorder {
+	return m.recorder
+}
+
+// CommandJobs mocks base method.
+func (m *MockjobResp) CommandJobs() []*api.JobJobTypeCommand {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CommandJobs")
+	ret0, _ := ret[0].([]*api.JobJobTypeCommand)
+	return ret0
+}
+
+// CommandJobs indicates an expected call of CommandJobs.
+func (mr *MockjobRespMockRecorder) CommandJobs() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CommandJobs", reflect.TypeOf((*MockjobResp)(nil).CommandJobs))
+}
+
+// OrganizationExists mocks base method.
+func (m *MockjobResp) OrganizationExists() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OrganizationExists")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// OrganizationExists indicates an expected call of OrganizationExists.
+func (mr *MockjobRespMockRecorder) OrganizationExists() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OrganizationExists", reflect.TypeOf((*MockjobResp)(nil).OrganizationExists))
 }

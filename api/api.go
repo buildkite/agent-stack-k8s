@@ -1,7 +1,5 @@
 package api
 
-//go:generate go run github.com/Khan/genqlient
-
 import (
 	"fmt"
 	"strings"
@@ -48,8 +46,18 @@ type Config struct {
 	MaxInFlight      int           `mapstructure:"max-in-flight" validate:"min=0"`
 	Namespace        string        `validate:"required"`
 	Org              string        `validate:"required"`
-	Tags             []string      `validate:"min=1"`
+	Tags             stringSlice   `validate:"min=1"`
 	ProfilerAddress  string        `mapstructure:"profiler-address" validate:"omitempty,hostname_port"`
+	ClusterUUID      string        `mapstructure:"cluster-uuid" validate:"omitempty"`
+}
+
+type stringSlice []string
+
+func (s stringSlice) MarshalLogArray(enc zapcore.ArrayEncoder) error {
+	for _, x := range s {
+		enc.AppendString(x)
+	}
+	return nil
 }
 
 func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
@@ -61,5 +69,6 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("namespace", c.Namespace)
 	enc.AddString("org", c.Org)
 	enc.AddString("profiler-address", c.ProfilerAddress)
-	return enc.AddReflected("tags", c.Tags)
+	enc.AddString("cluster-uuid", c.ClusterUUID)
+	return enc.AddArray("tags", c.Tags)
 }
