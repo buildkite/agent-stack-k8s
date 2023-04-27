@@ -77,7 +77,7 @@ steps:
       - kubernetes:
           podSpec:
             containers:
-              - image: alpine:latest
+              - image: ubuntu:latest
                 command: [echo]
                 args:
                 - "Hello, world!"
