@@ -100,6 +100,14 @@ The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec
 
 More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
 
+### Buildkite Clusters
+If you are using [Buildkite Cluster](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or a entry in a values file.
+```yaml
+# values.yaml
+config:
+  cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
+```
+
 ### Sidecars
 
 Sidecar containers can be added to your job by specifying them under the top-level `sidecars` key. See [this example](internal/integration/fixtures/sidecars.yaml) for a simple job that runs `nginx` as a sidecar, and accesses the nginx server from the main job.
