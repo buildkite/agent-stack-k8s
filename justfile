@@ -5,16 +5,21 @@ run *FLAGS:
   go run ./... {{FLAGS}}
 
 test *FLAGS:
+  go test \
+    {{FLAGS}} \
+    $(go list ./... | grep -v /integration)
+
+integration *FLAGS:
   #!/usr/bin/env bash
 
-  set -exufo pipefail
+  set -eufo pipefail
 
   GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
   go test \
     -ldflags="-X github.com/buildkite/agent-stack-k8s/v2/internal/integration_test.branch=${GIT_BRANCH}" \
-    {{FLAGS}} \
-    ./...
+    ./internal/integration/... \
+    {{FLAGS}}
 
 lint *FLAGS: gomod
   golangci-lint run {{FLAGS}}

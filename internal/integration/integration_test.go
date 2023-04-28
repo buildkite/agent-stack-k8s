@@ -53,8 +53,19 @@ func TestMain(m *testing.M) {
 	cmd.Flags().
 		BoolVar(&deleteOrphanedPipelines, "delete-orphaned-pipelines", false, "delete all pipelines matching agent-k8s-*")
 
+	i := 0
+	for ; i < len(os.Args); i++ {
+		if os.Args[i] == "--" {
+			break
+		}
+	}
+
+	if i >= len(os.Args) {
+		i = len(os.Args) - 1
+	}
+
 	var err error
-	cfg, err = controller.ParseConfig(cmd, os.Args[1:])
+	cfg, err = controller.ParseConfig(cmd, os.Args[i+1:])
 	if err != nil {
 		log.Fatal(err)
 	}

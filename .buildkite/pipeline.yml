@@ -46,6 +46,20 @@ steps:
                 image: alpine:latest
                 command: [.buildkite/steps/agent.sh]
 
+  - label: ":buildkite: unit tests"
+    key: unit
+    artifact_paths: junit-*.xml
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - name: tests
+                image: golang:latest
+                command: [.buildkite/steps/unit_tests.sh]
+      - test-collector:
+          files: "junit-*.xml"
+          format: "junit"
+
   - label: ":buildkite: integration tests"
     key: integration
     depends_on: agent
