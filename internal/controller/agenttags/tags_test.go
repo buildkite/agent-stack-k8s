@@ -130,3 +130,84 @@ func TestToLabels(t *testing.T) {
 		})
 	}
 }
+
+func TestJobTagsMatchAgentTags(t *testing.T) {
+	t.Parallel()
+
+	for i, test := range []struct {
+		jobTags        map[string]string
+		agentTags      map[string]string
+		expectedResult bool
+	}{
+		{
+			jobTags:        map[string]string{},
+			agentTags:      map[string]string{},
+			expectedResult: true,
+		},
+		{
+			jobTags:        map[string]string{"a": "x"},
+			agentTags:      map[string]string{},
+			expectedResult: false,
+		},
+		{
+			jobTags:        map[string]string{},
+			agentTags:      map[string]string{"a": "x"},
+			expectedResult: true,
+		},
+		{
+			jobTags:        map[string]string{"a": "x"},
+			agentTags:      map[string]string{"a": "x"},
+			expectedResult: true,
+		},
+		{
+			jobTags:        map[string]string{"a": "x"},
+			agentTags:      map[string]string{"b": "y"},
+			expectedResult: false,
+		},
+		{
+			jobTags:        map[string]string{"a": "x"},
+			agentTags:      map[string]string{"a": "x", "b": "y"},
+			expectedResult: true,
+		},
+		{
+			jobTags:        map[string]string{"a": "x", "b": "y"},
+			agentTags:      map[string]string{"a": "x"},
+			expectedResult: false,
+		},
+		{
+			jobTags:        map[string]string{"a": "x"},
+			agentTags:      map[string]string{"a": "y"},
+			expectedResult: false,
+		},
+		{
+			jobTags:        map[string]string{"a": "*"},
+			agentTags:      map[string]string{"a": "x"},
+			expectedResult: true,
+		},
+		{
+			jobTags:        map[string]string{"a": "x", "b": "*"},
+			agentTags:      map[string]string{"a": "x"},
+			expectedResult: false,
+		},
+		{
+			jobTags:        map[string]string{"a": "x", "b": "*"},
+			agentTags:      map[string]string{"a": "x", "b": "y"},
+			expectedResult: true,
+		},
+	} {
+		test := test
+
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			t.Parallel()
+			actualResult := agenttags.JobTagsMatchAgentTags(test.jobTags, test.agentTags)
+			assert.Equal(
+				t,
+				test.expectedResult,
+				actualResult,
+				"expected jobTags %+v to match agentTags %+v",
+				test.jobTags,
+				test.agentTags,
+			)
+		})
+	}
+}

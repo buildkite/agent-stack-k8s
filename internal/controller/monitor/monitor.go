@@ -11,7 +11,6 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -100,10 +99,10 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 	logger := m.logger.With(zap.String("org", m.cfg.Org))
 	errs := make(chan error, 1)
 
-	var tagMap map[string]string
+	var agentTags map[string]string
 	{
 		var tagErrs []error
-		if tagMap, tagErrs = agenttags.ToMap(m.cfg.Tags); len(tagErrs) != 0 {
+		if agentTags, tagErrs = agenttags.ToMap(m.cfg.Tags); len(tagErrs) != 0 {
 			logger.Warn("making a map of agent tags", zap.Errors("err", tagErrs))
 		}
 	}
@@ -133,17 +132,17 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 			})
 
 			for _, job := range jobs {
-				// The api returns jobs that match ANY agent tags (the agent query rules)
-				// However, we can only acquire jobs that match ALL agent tags
-				var respTagMap map[string]string
+				var jobTags map[string]string
 				{
 					var tagErrs []error
-					if respTagMap, tagErrs = agenttags.ToMap(job.AgentQueryRules); len(tagErrs) != 0 {
+					if jobTags, tagErrs = agenttags.ToMap(job.AgentQueryRules); len(tagErrs) != 0 {
 						logger.Warn("making a map of agent tag in job response", zap.Errors("err", tagErrs))
 					}
 				}
 
-				if !maps.Equal(tagMap, respTagMap) {
+				// The api returns jobs that match ANY agent tags (the agent query rules)
+				// However, we can only acquire jobs that match ALL agent tags
+				if !agenttags.JobTagsMatchAgentTags(jobTags, agentTags) {
 					logger.Debug("skipping job because it did not match all tags", zap.Any("job", job))
 					continue
 				}
