@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"time"
@@ -10,6 +11,10 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -49,7 +54,7 @@ func Run(
 	})
 	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)
 
-	informerFactory, err := scheduler.NewInformerFactory(k8sClient, cfg.Namespace, cfg.Tags)
+	informerFactory, err := NewInformerFactory(k8sClient, cfg.Namespace, cfg.Tags)
 	if err != nil {
 		logger.Fatal("failed to create informer", zap.Error(err))
 	}
@@ -78,4 +83,29 @@ func Run(
 	case err := <-m.Start(ctx, limiter):
 		logger.Info("monitor failed", zap.Error(err))
 	}
+}
+
+// returns an informer factory configured to watch resources (pods, jobs) created by the scheduler
+func NewInformerFactory(
+	k8s kubernetes.Interface,
+	namespace string,
+	tags []string,
+) (informers.SharedInformerFactory, error) {
+	hasTag, err := labels.NewRequirement(config.TagLabel, selection.In, config.TagsToLabels(tags))
+	if err != nil {
+		return nil, fmt.Errorf("failed to build tag label selector for job manager: %w", err)
+	}
+	hasUUID, err := labels.NewRequirement(config.UUIDLabel, selection.Exists, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build uuid label selector for job manager: %w", err)
+	}
+	factory := informers.NewSharedInformerFactoryWithOptions(
+		k8s,
+		0,
+		informers.WithNamespace(namespace),
+		informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
+			opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUUID).String()
+		}),
+	)
+	return factory, nil
 }
