@@ -49,7 +49,7 @@ func Run(
 	})
 	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)
 
-	informerFactory, err := scheduler.NewInformerFactory(k8sClient, cfg.Tags)
+	informerFactory, err := scheduler.NewInformerFactory(k8sClient, cfg.Namespace, cfg.Tags)
 	if err != nil {
 		logger.Fatal("failed to create informer", zap.Error(err))
 	}

@@ -48,6 +48,7 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 // returns an informer factory configured to watch resources (pods, jobs) created by the scheduler
 func NewInformerFactory(
 	k8s kubernetes.Interface,
+	namespace string,
 	tags []string,
 ) (informers.SharedInformerFactory, error) {
 	hasTag, err := labels.NewRequirement(config.TagLabel, selection.In, config.TagsToLabels(tags))
@@ -61,6 +62,7 @@ func NewInformerFactory(
 	factory := informers.NewSharedInformerFactoryWithOptions(
 		k8s,
 		0,
+		informers.WithNamespace(namespace),
 		informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
 			opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUUID).String()
 		}),
