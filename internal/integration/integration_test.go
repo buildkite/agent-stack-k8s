@@ -38,15 +38,20 @@ var (
 // hacks to make --config work
 func TestMain(m *testing.M) {
 	if branch == "" {
-		log.Fatalf(`You need to run the tests with a flag: -ldflags="-X %s.branch=$BRANCH_NAME"`, reflect.TypeOf(testcase{}).PkgPath())
+		log.Fatalf(
+			`You need to run the tests with a flag: -ldflags="-X %s.branch=$BRANCH_NAME"`,
+			reflect.TypeOf(testcase{}).PkgPath(),
+		)
 	}
 
 	if err := os.Chdir(".."); err != nil {
 		log.Fatal(err)
 	}
 	cmd := controller.New()
-	cmd.Flags().BoolVar(&preservePipelines, "preserve-pipelines", false, "preserve pipelines created by tests")
-	cmd.Flags().BoolVar(&deleteOrphanedPipelines, "delete-orphaned-pipelines", false, "delete all pipelines matching agent-k8s-*")
+	cmd.Flags().
+		BoolVar(&preservePipelines, "preserve-pipelines", false, "preserve pipelines created by tests")
+	cmd.Flags().
+		BoolVar(&deleteOrphanedPipelines, "delete-orphaned-pipelines", false, "delete all pipelines matching agent-k8s-*")
 
 	var err error
 	cfg, err = controller.ParseConfig(cmd, os.Args[1:])
@@ -83,7 +88,11 @@ func TestWalkingSkeleton(t *testing.T) {
 	tc.AssertSuccess(ctx, build)
 	tc.AssertLogsContain(build, "Buildkite Agent Stack for Kubernetes")
 	tc.AssertArtifactsContain(build, "README.md", "CODE_OF_CONDUCT.md")
-	tc.AssertMetadata(ctx, map[string]string{"some-annotation": "cool"}, map[string]string{"some-label": "wow"})
+	tc.AssertMetadata(
+		ctx,
+		map[string]string{"some-annotation": "cool"},
+		map[string]string{"some-label": "wow"},
+	)
 }
 
 func TestSSHRepoClone(t *testing.T) {
@@ -95,7 +104,9 @@ func TestSSHRepoClone(t *testing.T) {
 	}.Init()
 
 	ctx := context.Background()
-	_, err := tc.Kubernetes.CoreV1().Secrets(cfg.Namespace).Get(ctx, "agent-stack-k8s", v1.GetOptions{})
+	_, err := tc.Kubernetes.CoreV1().
+		Secrets(cfg.Namespace).
+		Get(ctx, "agent-stack-k8s", v1.GetOptions{})
 	require.NoError(t, err, "agent-stack-k8s secret must exist")
 
 	pipelineID := tc.CreatePipeline(ctx)
@@ -137,7 +148,12 @@ func TestMaxInFlightLimited(t *testing.T) {
 	buildID := tc.TriggerBuild(ctx, pipelineID).Number
 
 	for {
-		build, _, err := tc.Buildkite.Builds.Get(cfg.Org, tc.PipelineName, fmt.Sprintf("%d", buildID), nil)
+		build, _, err := tc.Buildkite.Builds.Get(
+			cfg.Org,
+			tc.PipelineName,
+			fmt.Sprintf("%d", buildID),
+			nil,
+		)
 		require.NoError(t, err)
 		if *build.State == "running" {
 			require.LessOrEqual(t, *build.Pipeline.RunningJobsCount, cfg.MaxInFlight)
@@ -171,7 +187,12 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 
 	var maxRunningJobs int
 	for {
-		build, _, err := tc.Buildkite.Builds.Get(cfg.Org, tc.PipelineName, fmt.Sprintf("%d", buildID), nil)
+		build, _, err := tc.Buildkite.Builds.Get(
+			cfg.Org,
+			tc.PipelineName,
+			fmt.Sprintf("%d", buildID),
+			nil,
+		)
 		require.NoError(t, err)
 		if *build.State == "running" {
 			var runningJobs int
@@ -220,7 +241,10 @@ func TestInvalidPodSpec(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	tc.AssertLogsContain(build, `is invalid: spec.template.spec.containers[0].volumeMounts[0].name: Not found: "this-doesnt-exist"`)
+	tc.AssertLogsContain(
+		build,
+		`is invalid: spec.template.spec.containers[0].volumeMounts[0].name: Not found: "this-doesnt-exist"`,
+	)
 }
 
 func TestInvalidPodJSON(t *testing.T) {
@@ -271,7 +295,11 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 			)
 			require.NoError(t, err)
 			for _, build := range builds.Pipeline.Builds.Edges {
-				_, err = api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{Id: build.Node.Id})
+				_, err = api.BuildCancel(
+					ctx,
+					graphqlClient,
+					api.BuildCancelInput{Id: build.Node.Id},
+				)
 				assert.NoError(t, err)
 			}
 			tc := testcase{

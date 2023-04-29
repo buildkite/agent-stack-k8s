@@ -39,7 +39,10 @@ func NewImagePullBackOffWatcher(
 }
 
 // Creates a Pods informer and registers the handler on it
-func (w *imagePullBackOffWatcher) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
+func (w *imagePullBackOffWatcher) RegisterInformer(
+	ctx context.Context,
+	factory informers.SharedInformerFactory,
+) error {
 	informer := factory.Core().V1().Pods().Informer()
 	informer.AddEventHandler(w)
 	go factory.Start(ctx.Done())
