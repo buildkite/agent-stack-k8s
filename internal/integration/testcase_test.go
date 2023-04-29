@@ -43,13 +43,12 @@ type testcase struct {
 func (t testcase) Init() testcase {
 	t.Helper()
 
-	queuePrefix := "queue_"
 	namePrefix := "agent-stack-k8s-test-"
 	nameVariable := fmt.Sprintf("%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(nameVariable)))
 
 	// labels are limited to length 63
-	t.PipelineName = fmt.Sprintf("%s%s", namePrefix, hash[:63-len(namePrefix)-len(queuePrefix)])
+	t.PipelineName = fmt.Sprintf("%s%s", namePrefix, hash[:63-len(namePrefix)])
 	t.Logger = zaptest.NewLogger(t).Named(t.Name())
 
 	clientConfig, err := restconfig.GetConfig()
@@ -267,7 +266,7 @@ func (t testcase) deletePipeline(ctx context.Context) {
 	t.Helper()
 
 	EnsureCleanup(t.T, func() {
-		err := roko.NewRetrier(
+		if err := roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Exponential(time.Second, 5*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
@@ -280,8 +279,7 @@ func (t testcase) deletePipeline(ctx context.Context) {
 				return err
 			}
 			return nil
-		})
-		if err != nil {
+		}); err != nil {
 			t.Logf("failed to cleanup pipeline %s: %v", t.PipelineName, err)
 			return
 		}
