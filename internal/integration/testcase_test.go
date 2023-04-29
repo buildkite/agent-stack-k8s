@@ -42,7 +42,6 @@ type testcase struct {
 
 func (t testcase) Init() testcase {
 	t.Helper()
-	t.Parallel()
 
 	queuePrefix := "queue_"
 	namePrefix := "agent-stack-k8s-test-"
