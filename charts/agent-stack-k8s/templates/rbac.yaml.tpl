@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ .Release.Name }}-controller
   namespace: {{ .Release.Namespace }}
 rules:
   - apiGroups:
@@ -30,14 +30,14 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ .Release.Name }}
+  name: {{ .Release.Name }}-controller
 subjects:
   - kind: ServiceAccount
-    name: {{ .Release.Name }}
+    name: {{ .Release.Name }}-controller
     namespace: {{ .Release.Namespace }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ .Release.Name }}-controller
   namespace: {{ .Release.Namespace }}
