@@ -150,7 +150,6 @@ func assertEnvFieldPath(t *testing.T, container corev1.Container, envVarName, fi
 			assert.Equal(t, env.ValueFrom.FieldRef.FieldPath, fieldPath)
 		}
 	}
-
 }
 
 func TestJobWithNoKubernetesPlugin(t *testing.T) {

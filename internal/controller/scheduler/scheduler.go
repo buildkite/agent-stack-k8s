@@ -238,7 +238,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	}
 	for k, v := range w.envMap {
 		switch k {
-		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS": //noop
+		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS": // noop
 		default:
 			env = append(env, corev1.EnvVar{Name: k, Value: v})
 		}
