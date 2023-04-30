@@ -1,12 +1,13 @@
 agents:
   queue: kubernetes
+
 steps:
   - name: ":go::broom: tidy"
     plugins:
     - kubernetes:
         podSpec:
           containers:
-          - image: golang:1.20.2-alpine
+          - image: golang:alpine
             command: [.buildkite/steps/tidy.sh]
 
   - name: ":go::lint-roller: lint"
@@ -14,12 +15,8 @@ steps:
     - kubernetes:
         podSpec:
           containers:
-          - image: golangci/golangci-lint:v1.51.1
-            command:
-            - golangci-lint
-            args:
-            - run
-            - ./...
+          - image: golangci/golangci-lint:v1.52.2
+            command: [golangci-lint, run, ./...]
             resources:
               requests:
                 cpu: 1000m
@@ -28,86 +25,69 @@ steps:
   - name: ":golang::robot_face: check code generation"
     key: check-code-generation
     plugins:
-      - kubernetes:
-          podSpec:
-            containers:
-              - name: docker
-                image: golang:alpine
-                command: [.buildkite/steps/check-code-generation.sh]
-
+    - kubernetes:
+        podSpec:
+          containers:
+          - image: golang:alpine
+            command: [.buildkite/steps/check-code-generation.sh]
 
   - label: ":docker::buildkite: choose agent image"
     key: agent
     plugins:
-      - kubernetes:
-          podSpec:
-            containers:
-              - name: docker
-                image: alpine:latest
-                command: [.buildkite/steps/agent.sh]
+    - kubernetes:
+        podSpec:
+          containers:
+          - image: alpine:latest
+            command: [.buildkite/steps/agent.sh]
 
-  - label: ":buildkite: unit tests"
-    key: unit
-    artifact_paths: junit-*.xml
-    plugins:
-      - kubernetes:
-          podSpec:
-            containers:
-              - name: tests
-                image: golang:latest
-                command: [.buildkite/steps/unit_tests.sh]
-      - test-collector:
-          files: "junit-*.xml"
-          format: "junit"
-
-  - label: ":buildkite: integration tests"
-    key: integration
+  - label: ":test_tube: tests"
+    key: test
     depends_on: agent
     artifact_paths: junit-*.xml
     plugins:
-      - kubernetes:
-          podSpec:
-            serviceAccountName: integration-tests
-            volumes:
-            - name: agent-stack-k8s-config
-              configMap:
-                name: agent-stack-k8s-config
-            containers:
-              - name: tests
-                image: golang:latest
-                command: [.buildkite/steps/tests.sh]
-                env:
-                - name: CONFIG
-                  value: /etc/config.yaml
-                envFrom:
-                - secretRef:
-                    name: test-secrets
-                - secretRef:
-                    name: agent-stack-k8s-secrets
-                volumeMounts:
-                - mountPath: /etc/config.yaml
-                  name: agent-stack-k8s-config
-                  subPath: config.yaml
-                resources:
-                  requests:
-                    cpu: 1000m
-                    memory: 512Mi
-      - test-collector:
-          files: "junit-*.xml"
-          format: "junit"
+    - kubernetes:
+        podSpec:
+          serviceAccountName: integration-tests
+          volumes:
+          - name: agent-stack-k8s-config
+            configMap:
+              name: agent-stack-k8s-config
+          containers:
+          - name: tests
+            image: golang:latest
+            command: [.buildkite/steps/test.sh]
+            env:
+            - name: CONFIG
+              value: /etc/config.yaml
+            envFrom:
+            - secretRef:
+                name: test-secrets
+            - secretRef:
+                name: agent-stack-k8s-secrets
+            volumeMounts:
+            - mountPath: /etc/config.yaml
+              name: agent-stack-k8s-config
+              subPath: config.yaml
+            resources:
+              requests:
+                cpu: 1000m
+                memory: 512Mi
+    - test-collector:
+        files: "junit-*.xml"
+        format: "junit"
 
   - label: ":docker: build controller"
     key: controller
     plugins:
-      - kubernetes:
-          podSpec:
-            containers:
-              - name: ko
-                image: golang:latest
-                command: [.buildkite/steps/controller.sh]
-                envFrom:
-                - secretRef:
-                    name: deploy-secrets
+    - kubernetes:
+        podSpec:
+          containers:
+          - name: ko
+            image: golang:latest
+            command: [.buildkite/steps/controller.sh]
+            envFrom:
+            - secretRef:
+                name: deploy-secrets
 
   - label: ":helm::docker: push helm chart"
     depends_on:
@@ -116,41 +96,33 @@ steps:
     env:
       BUILDKITE_GIT_FETCH_FLAGS: "-v --tags"
     plugins:
-      - kubernetes:
-          podSpec:
-            serviceAccountName: deploy
-            containers:
-              - name: deploy
-                image: alpine:latest
-                command: [.buildkite/steps/build_and_push.sh]
-                env:
-                - name: BUILDKITE_SHELL
-                  value: /bin/sh -ec
-                envFrom:
-                - secretRef:
-                    name: deploy-secrets
+    - kubernetes:
+        podSpec:
+          serviceAccountName: deploy
+          containers:
+          - image: alpine:latest
+            command: [.buildkite/steps/build-and-push.sh]
+            envFrom:
+            - secretRef:
+                name: deploy-secrets
 
   - label: ":shipit: deploy"
     if: "build.branch == pipeline.default_branch"
     depends_on:
     - agent
+    - test
     - controller
-    - integration
     env:
       BUILDKITE_GIT_FETCH_FLAGS: "-v --tags"
     plugins:
-      - kubernetes:
-          podSpec:
-            serviceAccountName: deploy
-            containers:
-              - name: deploy
-                image: alpine:latest
-                command: [.buildkite/steps/deploy.sh]
-                env:
-                - name: BUILDKITE_SHELL
-                  value: /bin/sh -ec
-                envFrom:
-                - secretRef:
-                    name: deploy-secrets
-                - secretRef:
-                    name: agent-stack-k8s-secrets
+    - kubernetes:
+        podSpec:
+          serviceAccountName: deploy
+          containers:
+          - image: alpine:latest
+            command: [.buildkite/steps/deploy.sh]
+            envFrom:
+            - secretRef:
+                name: deploy-secrets
+            - secretRef:
+                name: agent-stack-k8s-secrets

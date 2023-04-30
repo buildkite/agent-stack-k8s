@@ -5,10 +5,7 @@ set -eufo pipefail
 echo "--- Installing gotestsum :golang::test_tube:"
 go install gotest.tools/gotestsum
 
-echo '+++ Running integration tests :test_tube:'
-IMAGE=$(buildkite-agent meta-data get "agent-image")
-export IMAGE
-
+echo '+++ Running tests :test_tube:'
 gotestsum \
     --junitfile "junit-${BUILDKITE_JOB_ID}.xml" \
     -- \
@@ -16,4 +13,6 @@ gotestsum \
     -failfast \
     -ldflags="-X github.com/buildkite/agent-stack-k8s/v2/internal/integration_test.branch=${BUILDKITE_BRANCH:-main}" \
     "$@" \
-    ./...
+    ./... \
+    -- \
+    --image="$(buildkite-agent meta-data get agent-image)"
