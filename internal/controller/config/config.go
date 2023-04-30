@@ -14,7 +14,7 @@ const (
 	BuildURLAnnotation = "buildkite.com/build-url"
 	JobURLAnnotation   = "buildkite.com/job-url"
 	DefaultNamespace   = "default"
-	DefaultAgentImage  = "ghcr.io/buildkite/agent-k8s:latest"
+	DefaultAgentImage  = "ghcr.io/buildkite/agent-stack-k8s/agent:latest"
 )
 
 // a valid label must be an empty string or consist of alphanumeric characters,
