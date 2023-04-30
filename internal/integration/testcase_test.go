@@ -46,15 +46,17 @@ func (t testcase) Init() testcase {
 	namePrefix := "agent-stack-k8s-test-"
 	nameVariable := fmt.Sprintf("%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
 	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(nameVariable)))
-
 	// labels are limited to length 63
 	t.PipelineName = fmt.Sprintf("%s%s", namePrefix, hash[:63-len(namePrefix)])
-	t.Logger = zaptest.NewLogger(t).Named(t.Name())
+
+	t.Logger = zaptest.NewLogger(t).Named(t.Name()).With(zap.String("pipeline", t.PipelineName))
 
 	clientConfig, err := restconfig.GetConfig()
 	require.NoError(t, err)
+
 	clientset, err := kubernetes.NewForConfig(clientConfig)
 	require.NoError(t, err)
+
 	t.Kubernetes = clientset
 	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
 	require.NoError(t, err)
@@ -96,6 +98,8 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config) {
 
 	runCtx, cancel := context.WithCancel(ctx)
 	EnsureCleanup(t.T, cancel)
+
+	t.Logger.Info("starting controller", zap.Object("cfg", cfg))
 
 	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.PipelineName)}
 	cfg.Debug = true

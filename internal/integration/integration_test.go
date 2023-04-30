@@ -92,6 +92,7 @@ func TestWalkingSkeleton(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
+
 	ctx := context.Background()
 	pipelineID := tc.CreatePipeline(ctx)
 	tc.StartController(ctx, cfg)
