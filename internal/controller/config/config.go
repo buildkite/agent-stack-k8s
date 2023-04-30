@@ -62,6 +62,7 @@ func (s stringSlice) MarshalLogArray(enc zapcore.ArrayEncoder) error {
 
 func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("agent-token-secret", c.AgentTokenSecret)
+	enc.AddString("buildkite-token", "---redacted---")
 	enc.AddBool("debug", c.Debug)
 	enc.AddString("image", c.Image)
 	enc.AddDuration("job-ttl", c.JobTTL)
