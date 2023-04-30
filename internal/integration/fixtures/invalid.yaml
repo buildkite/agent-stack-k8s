@@ -2,8 +2,6 @@ steps:
   - label: ":wave:"
     agents:
       queue: {{.queue}}
-    env:
-      BUILDKITE_SHELL: /bin/sh -e -c
     plugins:
       - kubernetes:
           podSpec:
