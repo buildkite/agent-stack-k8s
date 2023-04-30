@@ -11,7 +11,6 @@ test *FLAGS:
 
 integration *FLAGS:
   #!/usr/bin/env bash
-
   set -eufo pipefail
 
   GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -20,6 +19,19 @@ integration *FLAGS:
     -ldflags="-X github.com/buildkite/agent-stack-k8s/v2/internal/integration_test.branch=${GIT_BRANCH}" \
     ./internal/integration/... \
     {{FLAGS}}
+
+cleanup-orphans:
+  #!/usr/bin/env bash
+  set -eufo pipefail
+
+  GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+  go test \
+    -v \
+    -run TestCleanupOrphanedPipelines \
+    -ldflags="-X github.com/buildkite/agent-stack-k8s/v2/internal/integration_test.branch=${GIT_BRANCH}" \
+    ./internal/integration/... \
+    --delete-orphaned-pipelines
 
 lint *FLAGS: gomod
   golangci-lint run {{FLAGS}}
@@ -70,6 +82,3 @@ deploy *FLAGS:
 # version should be a semver version like `0.1.0`
 release version:
   ./scripts/release.sh {{version}}
-
-cleanup-orphans:
-  go test -v -run TestCleanupOrphanedPipelines ./integration --delete-orphaned-pipelines
