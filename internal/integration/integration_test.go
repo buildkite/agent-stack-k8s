@@ -356,3 +356,17 @@ func TestImagePullBackOffCancelled(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	tc.AssertLogsContain(build, "other job has run")
 }
+
+func TestAgentTags(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "agent-tags.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertLogsContain(build, "skipping jobs because it did not match all tags")
+}

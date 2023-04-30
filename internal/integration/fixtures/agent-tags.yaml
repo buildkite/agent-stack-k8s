@@ -1,0 +1,22 @@
+steps:
+  - label: should run
+    agents:
+      queue: {{.queue}}
+    plugins:
+    - kubernetes:
+        podSpec:
+          containers:
+          - image: alpine:latest
+            command: ["echo"]
+            args: ["first job has run"]
+  - label: should not run
+    agents:
+      fake-tag: fake
+      queue: {{.queue}}
+    plugins:
+    - kubernetes:
+        podSpec:
+          containers:
+          - image: alpine:latest
+            command: ["echo"]
+            args: ["second job has run"]
