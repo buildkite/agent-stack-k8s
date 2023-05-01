@@ -1,7 +1,8 @@
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ .Release.Name }}-controller
+  namespace: {{ .Release.Namespace }}
 rules:
   - apiGroups:
       - batch
@@ -23,20 +24,20 @@ rules:
     - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
   name: {{ .Release.Name }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: {{ .Release.Name }}
+  kind: Role
+  name: {{ .Release.Name }}-controller
 subjects:
   - kind: ServiceAccount
-    name: {{ .Release.Name }}
+    name: {{ .Release.Name }}-controller
     namespace: {{ .Release.Namespace }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ .Release.Name }}-controller
   namespace: {{ .Release.Namespace }}

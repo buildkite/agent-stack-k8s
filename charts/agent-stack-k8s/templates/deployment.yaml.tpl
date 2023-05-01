@@ -15,7 +15,7 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml.tpl") . | sha256sum }}
         checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml.tpl") . | sha256sum }}
     spec:
-      serviceAccountName: {{ .Release.Name }}
+      serviceAccountName: {{ .Release.Name }}-controller
       nodeSelector:
 {{ toYaml $.Values.nodeSelector | indent 8 }}
       containers:
