@@ -26,7 +26,9 @@ func TestJobPluginConversion(t *testing.T) {
 					EnvFrom: []corev1.EnvFromSource{
 						{
 							ConfigMapRef: &corev1.ConfigMapEnvSource{
-								LocalObjectReference: corev1.LocalObjectReference{Name: "some-configmap"},
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "some-configmap",
+								},
 							},
 						},
 					},
@@ -46,7 +48,9 @@ func TestJobPluginConversion(t *testing.T) {
 			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": pluginConfig,
 		},
 		{
-			"github.com/buildkite-plugins/some-other-buildkite-plugin": map[string]interface{}{"foo": "bar"},
+			"github.com/buildkite-plugins/some-other-buildkite-plugin": map[string]interface{}{
+				"foo": "bar",
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -58,7 +62,11 @@ func TestJobPluginConversion(t *testing.T) {
 		},
 		Tag: "queue=kubernetes",
 	}
-	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{AgentToken: "token-secret"})
+	wrapper := scheduler.NewJobWrapper(
+		zaptest.NewLogger(t),
+		input,
+		scheduler.Config{AgentToken: "token-secret"},
+	)
 	result, err := wrapper.ParsePlugins().Build()
 	require.NoError(t, err)
 
@@ -86,7 +94,11 @@ func TestJobPluginConversion(t *testing.T) {
 	require.Equal(t, config.TagToLabel(input.Tag), tagLabel)
 
 	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
-	require.Equal(t, pluginsEnv.Value, `[{"github.com/buildkite-plugins/some-other-buildkite-plugin":{"foo":"bar"}}]`)
+	require.Equal(
+		t,
+		pluginsEnv.Value,
+		`[{"github.com/buildkite-plugins/some-other-buildkite-plugin":{"foo":"bar"}}]`,
+	)
 }
 
 func TestTagEnv(t *testing.T) {
@@ -138,7 +150,6 @@ func assertEnvFieldPath(t *testing.T, container corev1.Container, envVarName, fi
 			assert.Equal(t, env.ValueFrom.FieldRef.FieldPath, fieldPath)
 		}
 	}
-
 }
 
 func TestJobWithNoKubernetesPlugin(t *testing.T) {
@@ -187,7 +198,8 @@ func TestFailureJobs(t *testing.T) {
 
 	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
 	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
-	require.Equal(t,
+	require.Equal(
+		t,
 		`echo "failed parsing Kubernetes plugin: json: cannot unmarshal string into Go value of type scheduler.KubernetesPlugin" && exit 1`,
 		commandEnv.Value,
 	)

@@ -46,7 +46,10 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 }
 
 // returns an informer factory configured to watch resources (pods, jobs) created by the scheduler
-func NewInformerFactory(k8s kubernetes.Interface, tags []string) (informers.SharedInformerFactory, error) {
+func NewInformerFactory(
+	k8s kubernetes.Interface,
+	tags []string,
+) (informers.SharedInformerFactory, error) {
 	hasTag, err := labels.NewRequirement(config.TagLabel, selection.In, config.TagsToLabels(tags))
 	if err != nil {
 		return nil, fmt.Errorf("failed to build tag label selector for job manager: %w", err)
@@ -55,9 +58,13 @@ func NewInformerFactory(k8s kubernetes.Interface, tags []string) (informers.Shar
 	if err != nil {
 		return nil, fmt.Errorf("failed to build uuid label selector for job manager: %w", err)
 	}
-	factory := informers.NewSharedInformerFactoryWithOptions(k8s, 0, informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
-		opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUUID).String()
-	}))
+	factory := informers.NewSharedInformerFactoryWithOptions(
+		k8s,
+		0,
+		informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
+			opt.LabelSelector = labels.NewSelector().Add(*hasTag, *hasUUID).String()
+		}),
+	)
 	return factory, nil
 }
 
@@ -97,7 +104,9 @@ func (w *worker) Create(ctx context.Context, job *monitor.Job) error {
 			if err != nil {
 				return fmt.Errorf("failed to create job: %w", err)
 			}
-			_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
+			_, err = w.client.BatchV1().
+				Jobs(w.cfg.Namespace).
+				Create(ctx, kjob, metav1.CreateOptions{})
 			if err != nil {
 				return fmt.Errorf("failed to create job: %w", err)
 			}
@@ -229,7 +238,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	}
 	for k, v := range w.envMap {
 		switch k {
-		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS": //noop
+		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS": // noop
 		default:
 			env = append(env, corev1.EnvVar{Name: k, Value: v})
 		}
@@ -420,7 +429,11 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		Image:           w.cfg.Image,
 		ImagePullPolicy: corev1.PullAlways,
 		Command:         []string{"cp"},
-		Args:            []string{"/usr/local/bin/buildkite-agent", "/usr/local/bin/ssh-env-config.sh", "/workspace"},
+		Args: []string{
+			"/usr/local/bin/buildkite-agent",
+			"/usr/local/bin/ssh-env-config.sh",
+			"/workspace",
+		},
 		VolumeMounts: []corev1.VolumeMount{
 			{
 				Name:      "workspace",
@@ -458,7 +471,10 @@ func (w *jobWrapper) annotateWithJobURL() {
 	buildURL := w.envMap["BUILDKITE_BUILD_URL"]
 	u, err := url.Parse(buildURL)
 	if err != nil {
-		w.logger.Warn("could not parse BuildURL when annotating with JobURL", zap.String("buildURL", buildURL))
+		w.logger.Warn(
+			"could not parse BuildURL when annotating with JobURL",
+			zap.String("buildURL", buildURL),
+		)
 		return
 	}
 	u.Fragment = w.job.Uuid

@@ -23,7 +23,11 @@ type MaxInFlightLimiter struct {
 	completions *sync.Cond
 }
 
-func NewLimiter(logger *zap.Logger, scheduler monitor.JobHandler, maxInFlight int) *MaxInFlightLimiter {
+func NewLimiter(
+	logger *zap.Logger,
+	scheduler monitor.JobHandler,
+	maxInFlight int,
+) *MaxInFlightLimiter {
 	l := &MaxInFlightLimiter{
 		scheduler:   scheduler,
 		MaxInFlight: maxInFlight,
@@ -35,7 +39,10 @@ func NewLimiter(logger *zap.Logger, scheduler monitor.JobHandler, maxInFlight in
 }
 
 // Creates a Jobs informer, registers the handler on it, and waits for cache sync
-func (l *MaxInFlightLimiter) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
+func (l *MaxInFlightLimiter) RegisterInformer(
+	ctx context.Context,
+	factory informers.SharedInformerFactory,
+) error {
 	informer := factory.Batch().V1().Jobs()
 	jobInformer := informer.Informer()
 	jobInformer.AddEventHandler(l)
@@ -85,7 +92,11 @@ func (l *MaxInFlightLimiter) OnAdd(obj interface{}) {
 	if !jobFinished(job) {
 		uuid := job.Labels[config.UUIDLabel]
 		if _, alreadyInFlight := l.inFlight[uuid]; !alreadyInFlight {
-			l.logger.Debug("adding in-flight job", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
+			l.logger.Debug(
+				"adding in-flight job",
+				zap.String("uuid", uuid),
+				zap.Int("in-flight", len(l.inFlight)),
+			)
 			l.inFlight[uuid] = struct{}{}
 		}
 	}
@@ -120,7 +131,11 @@ func (l *MaxInFlightLimiter) markComplete(job *batchv1.Job) {
 	uuid := job.Labels[config.UUIDLabel]
 	if _, alreadyInFlight := l.inFlight[uuid]; alreadyInFlight {
 		delete(l.inFlight, uuid)
-		l.logger.Debug("job complete", zap.String("uuid", uuid), zap.Int("in-flight", len(l.inFlight)))
+		l.logger.Debug(
+			"job complete",
+			zap.String("uuid", uuid),
+			zap.Int("in-flight", len(l.inFlight)),
+		)
 		l.completions.Signal()
 	}
 }

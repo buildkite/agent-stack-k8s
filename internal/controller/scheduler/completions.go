@@ -28,7 +28,10 @@ func NewPodCompletionWatcher(logger *zap.Logger, k8s kubernetes.Interface) *comp
 }
 
 // Creates a Pods informer and registers the handler on it
-func (w *completionsWatcher) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
+func (w *completionsWatcher) RegisterInformer(
+	ctx context.Context,
+	factory informers.SharedInformerFactory,
+) error {
 	informer := factory.Core().V1().Pods().Informer()
 	informer.AddEventHandler(w)
 	go factory.Start(ctx.Done())
@@ -69,7 +72,11 @@ func (w *completionsWatcher) cleanupSidecars(pod *v1.Pod) {
 		}); err != nil {
 			w.logger.Error("failed to update job", zap.Error(err))
 		}
-		w.logger.Debug("agent finished", zap.String("uuid", pod.Labels[config.UUIDLabel]), zap.Int32("exit code", terminated.ExitCode))
+		w.logger.Debug(
+			"agent finished",
+			zap.String("uuid", pod.Labels[config.UUIDLabel]),
+			zap.Int32("exit code", terminated.ExitCode),
+		)
 	}
 }
 

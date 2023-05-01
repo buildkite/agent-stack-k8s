@@ -13,7 +13,12 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func Run(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface, cfg config.Config) {
+func Run(
+	ctx context.Context,
+	logger *zap.Logger,
+	k8sClient kubernetes.Interface,
+	cfg config.Config,
+) {
 	if cfg.ProfilerAddress != "" {
 		logger.Info("profiler listening for requests")
 		go func() {

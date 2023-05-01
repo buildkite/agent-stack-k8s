@@ -89,7 +89,10 @@ func Lint(ctx context.Context, options *Options) error {
 				}
 				var plugin buildkite.Plugin
 				if err := json.Unmarshal(bs, &plugin); err != nil {
-					return fmt.Errorf("failed to unmarshal Kubernetes plugin back to buildkite plugin: %w", err)
+					return fmt.Errorf(
+						"failed to unmarshal Kubernetes plugin back to buildkite plugin: %w",
+						err,
+					)
 				}
 				step.Plugins[name] = plugin
 			}
