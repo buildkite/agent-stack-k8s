@@ -95,17 +95,19 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, tags []string) (j
 	return clusteredJobResp(*resp), err
 }
 
+func toMapAndLogErrors(logger *zap.Logger, tags []string) map[string]string {
+	agentTags, tagErrs := agenttags.ToMap(tags)
+	if len(tagErrs) != 0 {
+		logger.Warn("making a map of agent tags", zap.Errors("err", tagErrs))
+	}
+	return agentTags
+}
+
 func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 	logger := m.logger.With(zap.String("org", m.cfg.Org))
 	errs := make(chan error, 1)
 
-	var agentTags map[string]string
-	{
-		var tagErrs []error
-		if agentTags, tagErrs = agenttags.ToMap(m.cfg.Tags); len(tagErrs) != 0 {
-			logger.Warn("making a map of agent tags", zap.Errors("err", tagErrs))
-		}
-	}
+	agentTags := toMapAndLogErrors(logger, m.cfg.Tags)
 
 	go func() {
 		logger.Info("started")
@@ -132,13 +134,7 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 			})
 
 			for _, job := range jobs {
-				var jobTags map[string]string
-				{
-					var tagErrs []error
-					if jobTags, tagErrs = agenttags.ToMap(job.AgentQueryRules); len(tagErrs) != 0 {
-						logger.Warn("making a map of agent tag in job response", zap.Errors("err", tagErrs))
-					}
-				}
+				jobTags := toMapAndLogErrors(logger, job.AgentQueryRules)
 
 				// The api returns jobs that match ANY agent tags (the agent query rules)
 				// However, we can only acquire jobs that match ALL agent tags
