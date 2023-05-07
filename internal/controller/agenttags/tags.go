@@ -8,6 +8,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
+// ToMap converts a slice of strings of the form `k=v` to a map where the
+// key is `k` and the value is `v`. If any element of the slice does not
+// have that form, it will not be inserted into the map and instead generate
+// an error which will be appended to the second return value.
 func ToMap(tags []string) (map[string]string, []error) {
 	m := map[string]string{}
 	errs := []error{}
@@ -46,6 +50,14 @@ func mapToLabels(m map[string]string) (map[string]string, []error) {
 	return labels, errs
 }
 
+// ToLabels converts a slice of strings of the form `k=v` to a map where the
+// key is `k` and the value is `v`. If any element of the slice does not
+// have that form or if `k` is not a valid kubernetes label name or if `v`
+// is not a valid kubernetes label value, it will not be inserted into the
+// map and instead generate an error which will be appended to the second
+// return value.
+//
+// See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
 func ToLabels(tags []string) (map[string]string, []error) {
 	m, errs1 := ToMap(tags)
 	labels, errs2 := mapToLabels(m)
@@ -66,6 +78,5 @@ func JobTagsMatchAgentTags(jobTags, agentTags map[string]string) bool {
 			return false
 		}
 	}
-
 	return true
 }
