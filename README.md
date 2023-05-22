@@ -101,12 +101,13 @@ The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec
 More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
 
 ### Buildkite Clusters
-If you are using [Buildkite Cluster](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or a entry in a values file.
+If you are using [Buildkite Cluster](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
 ```yaml
 # values.yaml
 config:
   cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 ```
+The cluster's UUID may be obtained from the settings page for the cluster.
 
 ### Sidecars
 
