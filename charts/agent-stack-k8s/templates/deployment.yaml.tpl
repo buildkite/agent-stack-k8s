@@ -33,9 +33,7 @@ spec:
             mountPath: /etc/config.yaml
             subPath: config.yaml
         resources:
-          requests:
-            cpu: 100m
-            memory: 100Mi
+          {{- toYaml .Values.resources | nindent 10 }}
 
         securityContext:
           allowPrivilegeEscalation: false
