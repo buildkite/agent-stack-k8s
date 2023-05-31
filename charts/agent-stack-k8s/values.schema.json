@@ -36,6 +36,50 @@
         }
       ]
     },
+    "resources": {
+      "type": "object",
+      "default": {},
+      "title": "The resources Schema",
+      "properties": {
+        "requests": {
+          "type": "object",
+          "default": {},
+          "title": "The requests Schema",
+          "properties": {
+            "cpu": {
+              "type": ["string", "number"]
+            },
+            "memory": {
+              "type": ["string", "number"]
+            }
+          }
+        },
+        "limits": {
+          "type": "object",
+          "default": {},
+          "title": "The limits Schema",
+          "properties": {
+            "cpu": {
+              "type": ["string", "number"]
+            },
+            "memory": {
+              "type": ["string", "number"]
+            }
+          }
+        }
+      },
+      "examples": [
+        {
+          "requests": {
+            "cpu": "100m",
+            "memory": "100Mi"
+          },
+          "limits": {
+            "memory": "100Mi"
+          }
+        }
+      ]
+    },
     "config": {
       "type": "object",
       "default": {},

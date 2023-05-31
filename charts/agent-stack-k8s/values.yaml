@@ -5,3 +5,8 @@ nodeSelector: {}
 
 config:
   org: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 100Mi
