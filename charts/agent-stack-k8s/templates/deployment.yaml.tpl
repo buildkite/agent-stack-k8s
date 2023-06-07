@@ -27,7 +27,7 @@ spec:
           value: /etc/config.yaml
         envFrom:
           - secretRef:
-              name: {{ .Release.Name }}-secrets
+              name: {{ if .Values.agentStackSecret }}{{.Values.agentStackSecret}}{{ else }}{{ .Release.Name }}-secrets{{ end }}
         volumeMounts:
           - name: config
             mountPath: /etc/config.yaml
