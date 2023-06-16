@@ -44,18 +44,14 @@
       "properties": {
         "app":{
           "type": ["string", "number"]
-        },
-        "user": {
-          "type": "object",
-          "default": {}
-        },
-        "project": {
-          "type": "object",
-          "default": {}
         }
       },
+      "additionalProperties": {
+        "type": "object",
+        "default": {}
+      },
       "example": [
-        "labels": {
+        { 
           "app": "my-app1",
           "user": {
             "user": "name"
