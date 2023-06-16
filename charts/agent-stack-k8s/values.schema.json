@@ -178,9 +178,7 @@
       "image": "ghcr.io/buildkite/agent-stack-k8s:latest",
       "nodeSelector": {},
       "labels": {
-        "app": "",
-        "user": {},
-        "project": {}
+        "app": ""
       },
       "config": {
         "agentImage": "",
