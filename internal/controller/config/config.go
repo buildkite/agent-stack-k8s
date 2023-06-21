@@ -22,7 +22,11 @@ const (
 // 'MyValue',  or 'my_value',  or '12345', regex used for validation is
 // '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')
 func TagToLabel(tag string) string {
-	return strings.ReplaceAll(tag, "=", "_")
+	out := strings.ReplaceAll(tag, "=", "_")
+	if len(out) > 63 {
+		out = out[:63]
+	}
+	return out
 }
 
 func TagsToLabels(tags []string) []string {
