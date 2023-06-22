@@ -4,7 +4,7 @@
   "type": "object",
   "default": {},
   "title": "Root Schema",
-  "required": ["agentToken", "graphqlToken", "image", "config"],
+  "required": ["agentToken", "graphqlToken", "image","labels", "config"],
   "properties": {
     "agentToken": {
       "type": "string",
@@ -33,6 +33,32 @@
       "examples": [
         {
           "kubernetes.io/arch": "amd64"
+        }
+      ]
+    },
+    "labels": {
+      "type": "object",
+      "default": {},
+      "title": "The labels Schema",
+      "required": ["app"],
+      "properties": {
+        "app":{
+          "type": ["string", "number"]
+        }
+      },
+      "additionalProperties": {
+        "type": "object",
+        "default": {}
+      },
+      "example": [
+        { 
+          "app": "my-app1",
+          "user": {
+            "user": "name"
+          },
+          "project": {
+            "project": "project"
+          }
         }
       ]
     },
@@ -151,6 +177,9 @@
       "graphqlToken": "",
       "image": "ghcr.io/buildkite/agent-stack-k8s:latest",
       "nodeSelector": {},
+      "labels": {
+        "app": ""
+      },
       "config": {
         "agentImage": "",
         "debug": false,
