@@ -13,25 +13,28 @@ integration *FLAGS:
   #!/usr/bin/env bash
   set -eufo pipefail
 
-  GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
   go test \
-    -ldflags="-X github.com/buildkite/agent-stack-k8s/v2/internal/integration_test.branch=${GIT_BRANCH}" \
+    -ldflags="-X github.com/buildkite/agent-stack-k8s/v2/internal/integration_test.branch=${BRANCH}" \
     ./internal/integration/... \
     {{FLAGS}}
 
-cleanup-orphans:
+cleanup-orphans *FLAGS:
   #!/usr/bin/env bash
   set -eufo pipefail
 
-  GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+  BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
   go test \
     -v \
-    -run TestCleanupOrphanedPipelines \
-    -ldflags="-X github.com/buildkite/agent-stack-k8s/v2/internal/integration_test.branch=${GIT_BRANCH}" \
+    -ldflags="-X github.com/buildkite/agent-stack-k8s/v2/internal/integration_test.branch=${BRANCH}" \
+    -run '^TestCleanupOrphanedPipelines$' \
     ./internal/integration/... \
-    --delete-orphaned-pipelines
+    -- \
+    --org=buildkite-kubernetes-stack \
+    --delete-orphaned-pipelines \
+    {{FLAGS}}
 
 lint *FLAGS: gomod
   golangci-lint run {{FLAGS}}
