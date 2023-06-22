@@ -291,8 +291,11 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 	ctx := context.Background()
 	graphqlClient := api.NewClient(cfg.BuildkiteToken)
 
-	pipelines, err := api.SearchPipelines(ctx, graphqlClient, cfg.Org, "agent-k8s-", 100)
+	pipelines, err := api.SearchPipelines(ctx, graphqlClient, cfg.Org, "agent-stack-k8s-", 100)
 	require.NoError(t, err)
+
+	t.Logf("found %d pipelines", len(pipelines.Organization.Pipelines.Edges))
+
 	var wg sync.WaitGroup
 	wg.Add(len(pipelines.Organization.Pipelines.Edges))
 	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
@@ -319,6 +322,7 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 				GraphQL: api.NewClient(cfg.BuildkiteToken),
 			}.Init()
 			tc.PipelineName = pipeline.Node.Name
+			t.Logf("deleting pipeline %s", tc.PipelineName)
 			tc.deletePipeline(context.Background())
 		})
 	}
