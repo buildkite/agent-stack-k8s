@@ -107,7 +107,7 @@ If you are using [Buildkite Cluster](https://buildkite.com/docs/agent/clusters) 
 config:
   cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 ```
-The cluster's UUID may be obtained from the settings page for the cluster.
+The cluster's UUID may be obtained by navigating to the [clusters page](https://buildkite.com/organizations/-/clusters), clicking on the relevant cluster and then clicking on "Settings". It will be in a section titled "GraphQL API Integration".
 
 ### Sidecars
 
