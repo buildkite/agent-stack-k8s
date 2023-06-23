@@ -6,9 +6,6 @@ nodeSelector: {}
 config:
   org: ""
 
-labels:
-  app: ""
-
 resources:
   requests:
     cpu: 100m
