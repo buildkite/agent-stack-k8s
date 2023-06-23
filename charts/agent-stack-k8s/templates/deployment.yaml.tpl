@@ -10,7 +10,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- toYaml $.Values.labels | nindent 8 }}
+        app: {{ .Release.Name }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml.tpl") . | sha256sum }}
         checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml.tpl") . | sha256sum }}
