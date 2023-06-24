@@ -6,6 +6,9 @@ job-ttl: 5m
 max-in-flight: 100
 namespace: my-buildkite-ns
 org: my-buildkite-org
+# only set if the pipelines are in a cluster
+# the UUID may be found in the cluster settings
+cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 tags:
 - queue=my-queue
 - priority=high

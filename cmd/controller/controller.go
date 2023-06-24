@@ -48,7 +48,7 @@ func addFlags(cmd *cobra.Command) {
 	cmd.Flags().
 		Duration("job-ttl", 10*time.Minute, "time to retain kubernetes jobs after completion")
 	cmd.Flags().String(
-		"cluster-uuid", "", "UUID of the Cluster. The agent token must be for the Cluster.",
+		"cluster-uuid", "", "UUID of the Buildkite Cluster. The agent token must be for the Buildkite Cluster.",
 	)
 	cmd.Flags().
 		String("profiler-address", "", "Bind address to expose the pprof profiler (e.g. localhost:6060)")

@@ -51,16 +51,29 @@ Available versions and their digests can be found on [the releases page](https:/
 
 ```text
 $ agent-stack-k8s --help
-Usage of agent-stack-k8s:
+Usage:
+  agent-stack-k8s [flags]
+  agent-stack-k8s [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  lint        A tool for linting Buildkite pipelines
+  version     Prints the version
+
+Flags:
       --agent-token-secret string   name of the Buildkite agent token secret (default "buildkite-agent-token")
       --buildkite-token string      Buildkite API token with GraphQL scopes
+      --cluster-uuid string         UUID of the Buildkite Cluster. The agent token must be for the Buildkite Cluster.
   -f, --config string               config file path
       --debug                       debug logs
+  -h, --help                        help for agent-stack-k8s
       --image string                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent-k8s:latest")
       --job-ttl duration            time to retain kubernetes jobs after completion (default 10m0s)
-      --max-in-flight int           max jobs in flight, 0 means no max (default 1)
+      --max-in-flight int           max jobs in flight, 0 means no max (default 25)
       --namespace string            kubernetes namespace to create resources in (default "default")
       --org string                  Buildkite organization name to watch
+      --profiler-address string     Bind address to expose the pprof profiler (e.g. localhost:6060)
       --tags strings                A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8") (default [queue=kubernetes])
 ```
 
@@ -86,6 +99,15 @@ steps:
 The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec` resource [in the Kubernetes API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#podspec-v1-core).
 
 More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
+
+### Buildkite Clusters
+If you are using [Buildkite Cluster](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
+```yaml
+# values.yaml
+config:
+  cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
+```
+The cluster's UUID may be obtained by navigating to the [clusters page](https://buildkite.com/organizations/-/clusters), clicking on the relevant cluster and then clicking on "Settings". It will be in a section titled "GraphQL API Integration".
 
 ### Sidecars
 
