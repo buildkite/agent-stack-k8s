@@ -36,6 +36,25 @@
         }
       ]
     },
+    "labels": {
+      "type": "object",
+      "default": {},
+      "title": "The labels Schema",
+      "additionalProperties": {
+        "type": "object",
+        "default": {}
+      },
+      "example": [
+        { 
+          "user": {
+            "user": "name"
+          },
+          "project": {
+            "project": "project"
+          }
+        }
+      ]
+    },
     "resources": {
       "type": "object",
       "default": {},
