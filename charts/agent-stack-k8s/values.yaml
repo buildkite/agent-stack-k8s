@@ -11,5 +11,5 @@ resources:
     cpu: 100m
     memory: 100Mi
 
-labels:
-  user: "user"
+labels: {}
+  

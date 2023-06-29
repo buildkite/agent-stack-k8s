@@ -41,17 +41,13 @@
       "default": {},
       "title": "The labels Schema",
       "additionalProperties": {
-        "type": "object",
-        "default": {}
+        "type": "string",
+        "default": ""
       },
       "example": [
         { 
-          "user": {
-            "user": "name"
-          },
-          "project": {
-            "project": "project"
-          }
+          "user": "name",
+          "project": "project"
         }
       ]
     },
