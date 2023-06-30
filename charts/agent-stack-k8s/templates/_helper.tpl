@@ -1,6 +1,6 @@
 {{/* Generate basic labels */}}
-{{- define "mychart.labels" }}
-  labels:
+{{- define "agent-stack-k8s.labels" }}
+  labels:  
+    {{- toYaml $.Values.labels }}
     app: {{ .Release.Name }}
-    {{- toYaml $.Values.labels | nindent 8 }}
 {{- end }}

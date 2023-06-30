@@ -40,6 +40,8 @@
       "type": "object",
       "default": {},
       "title": "The labels Schema",
+      "description": "label app is reserved, user input lable app is not allowed",
+      "not": { "required": [ "app" ] },
       "additionalProperties": {
         "type": "string",
         "default": ""
