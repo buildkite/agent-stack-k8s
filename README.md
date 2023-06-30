@@ -30,6 +30,18 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
 We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
 which means you'll need Helm version 3.8.0 or newer.
 
+#### Externalize Secrets
+
+You can also have an external provider create a secret for you in the namespace before deploying the chart with helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
+
+```bash
+--set agentStackSecret=<secret-name>
+```
+
+The format of the required secret can be found in [this file](./charts/agent-stack-k8s/templates/secrets.yaml.tpl).
+
+#### Other Installation Methods
+
 You can also use this chart as a dependency:
 
 ```yaml

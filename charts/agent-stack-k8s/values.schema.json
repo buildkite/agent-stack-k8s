@@ -9,20 +9,27 @@
     "agentToken": {
       "type": "string",
       "default": "",
-      "minLength": 1,
+      "minLength": 0,
       "title": "The agentToken Schema",
       "examples": [""]
     },
     "graphqlToken": {
       "type": "string",
       "default": "",
-      "minLength": 1,
+      "minLength": 0,
       "title": "The graphqlToken Schema",
       "examples": [""]
     },
-    "image": {
+    "agentStackSecret": {
       "type": "string",
       "default": "",
+      "minLength": 0,
+      "title": "If an external secret is provided for the agent stack, set its name here",
+      "examples": ["agent-stack-secret"]
+    },
+    "image": {
+      "type": "string",
+      "default": "ghcr.io/buildkite/agent-stack-k8s:latest",
       "title": "The image Schema",
       "examples": ["ghcr.io/buildkite/agent-stack-k8s:latest"]
     },
