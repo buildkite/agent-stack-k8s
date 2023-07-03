@@ -95,7 +95,8 @@ steps:
                 - secretRef:
                     name: deploy-secrets
 
-  - label: ":helm::docker: push helm chart"
+  - label: ":helm::docker: push controller image and helm chart"
+    key: push
     depends_on:
     - agent
     - controller
@@ -119,8 +120,7 @@ steps:
   - label: ":shipit: deploy"
     if: "build.branch == pipeline.default_branch"
     depends_on:
-    - agent
-    - controller
+    - push
     - integration
     env:
       BUILDKITE_GIT_FETCH_FLAGS: "-v --tags"
