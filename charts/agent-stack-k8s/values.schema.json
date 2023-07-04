@@ -43,6 +43,23 @@
         }
       ]
     },
+    "labels": {
+      "type": "object",
+      "default": {},
+      "title": "The labels Schema",
+      "description": "label app is reserved, user input label app is not allowed",
+      "not": { "required": [ "app" ] },
+      "additionalProperties": {
+        "type": "string",
+        "default": ""
+      },
+      "example": [
+        { 
+          "user": "name",
+          "project": "project"
+        }
+      ]
+    },
     "resources": {
       "type": "object",
       "default": {},
