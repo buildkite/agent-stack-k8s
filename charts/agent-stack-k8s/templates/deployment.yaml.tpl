@@ -6,7 +6,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: {{ .Release.Name }}
+      {{- include "agent-stack-k8s.mandatoryLabels" . | nindent 8 }}
   template:
     metadata:
       labels:
