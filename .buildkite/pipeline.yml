@@ -96,6 +96,9 @@ steps:
   - label: ":helm::docker: push controller image and helm chart"
     key: push
     depends_on:
+    - tidy
+    - lint
+    - check-code-generation
     - agent
     - controller
     env:
