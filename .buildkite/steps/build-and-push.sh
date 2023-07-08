@@ -8,10 +8,16 @@ apk add --update-cache --no-progress helm yq skopeo git
 source .buildkite/steps/repo_info.sh
 
 echo --- :docker: Logging into ghcr.io
-skopeo login ghcr.io -u "$REGISTRY_USERNAME" --password "$REGISTRY_PASSWORD" --authfile ~/.docker/config.json
+skopeo login ghcr.io \
+  -u "$REGISTRY_USERNAME" \
+  --password "$REGISTRY_PASSWORD" \
+  --authfile ~/.docker/config.json
 
 echo --- :docker: Copying image to ghcr.io
-skopeo copy --multi-arch=all "docker://${temp_agent_image}" "docker://${agent_image}" --authfile ~/.docker/config.json
+skopeo copy \
+  --authfile ~/.docker/config.json \
+  --multi-arch=all \
+  "docker://${temp_agent_image}" "docker://${agent_image}"
 
 buildkite-agent annotate --style success --append <<EOF
 ### Agent
