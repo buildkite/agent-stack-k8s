@@ -118,6 +118,25 @@ steps:
             - secretRef:
                 name: deploy-secrets
 
+  - label: ":docker::label: tag latest"
+    if: build.branch == pipeline.default_branch
+    depends_on:
+    - push
+    - integration
+    env:
+      BUILDKITE_GIT_FETCH_FLAGS: -v --tags
+    plugins:
+    - kubernetes:
+        podSpec:
+          serviceAccountName: deploy
+          containers:
+          - name: deploy
+            image: alpine:latest
+            command: [.buildkite/steps/tag-latest.sh]
+            envFrom:
+            - secretRef:
+                name: deploy-secrets
+
   - label: ":shipit: deploy"
     if: build.branch == pipeline.default_branch
     depends_on:

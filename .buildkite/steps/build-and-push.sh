@@ -41,6 +41,6 @@ buildkite-agent annotate --style success --append <<EOF
 --------------------------------------------------
 | Version  | Image                               |
 |----------|-------------------------------------|
-| $version | $helm_repo/agent-stack-k8s:$version |
+| $version | $helm_image                         |
 --------------------------------------------------
 EOF
