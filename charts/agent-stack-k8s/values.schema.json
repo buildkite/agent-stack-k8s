@@ -29,9 +29,9 @@
     },
     "image": {
       "type": "string",
-      "default": "ghcr.io/buildkite/agent-stack-k8s:latest",
-      "title": "The image Schema",
-      "examples": ["ghcr.io/buildkite/agent-stack-k8s:latest"]
+      "default": "ghcr.io/buildkite/agent-stack-k8s/controller:latest",
+      "title": "The image for the agent-stack-k8s controller",
+      "examples": ["ghcr.io/buildkite/agent-stack-k8s/controller:latest"]
     },
     "nodeSelector": {
       "type": "object",
@@ -48,13 +48,13 @@
       "default": {},
       "title": "The labels Schema",
       "description": "label app is reserved, user input label app is not allowed",
-      "not": { "required": [ "app" ] },
+      "not": { "required": ["app"] },
       "additionalProperties": {
         "type": "string",
         "default": ""
       },
       "example": [
-        { 
+        {
           "user": "name",
           "project": "project"
         }
@@ -173,7 +173,7 @@
     {
       "agentToken": "",
       "graphqlToken": "",
-      "image": "ghcr.io/buildkite/agent-stack-k8s:latest",
+      "image": "ghcr.io/buildkite/agent-stack-k8s/controller:latest",
       "nodeSelector": {},
       "config": {
         "agentImage": "",
