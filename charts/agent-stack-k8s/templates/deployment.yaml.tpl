@@ -6,18 +6,18 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: {{ .Release.Name }}
+      {{- include "agent-stack-k8s.mandatoryLabels" . | nindent 8 }}
   template:
     metadata:
       labels:
-{{- include "agent-stack-k8s.labels" . | nindent 8 }}
+        {{- include "agent-stack-k8s.labels" . | nindent 8 }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml.tpl") . | sha256sum }}
         checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml.tpl") . | sha256sum }}
     spec:
       serviceAccountName: {{ .Release.Name }}-controller
       nodeSelector:
-{{ toYaml $.Values.nodeSelector | indent 8 }}
+        {{- toYaml $.Values.nodeSelector | nindent 8 }}
       containers:
       - name: controller
         terminationMessagePolicy: FallbackToLogsOnError
@@ -34,7 +34,6 @@ spec:
             subPath: config.yaml
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
-
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
