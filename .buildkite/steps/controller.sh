@@ -19,9 +19,9 @@ version=${tag#v}
 
 echo --- Building with ko
 controller_image=$(
-    VERSION="$tag" \
-    KO_DOCKER_REPO=ghcr.io/buildkite/agent-stack-k8s/controller \
-        ko build --bare --tags "$version" --platform linux/amd64,linux/arm64 \
+  VERSION="$tag" \
+  KO_DOCKER_REPO=ghcr.io/buildkite/agent-stack-k8s/controller \
+    ko build --bare --tags "$version" --platform linux/amd64,linux/arm64 \
 )
 
 buildkite-agent meta-data set controller-image "$controller_image"
