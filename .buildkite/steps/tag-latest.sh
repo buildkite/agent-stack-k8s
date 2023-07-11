@@ -16,4 +16,4 @@ crane auth login ghcr.io \
 echo --- :crane: tagging images latest on ghcr.io
 crane tag "$controller_image" latest
 crane tag "$agent_image" latest
-crane tag "$helm_image" latest
+crane tag "${helm_image#oci://}" latest
