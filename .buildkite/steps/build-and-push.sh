@@ -5,6 +5,7 @@ set -eufo pipefail
 echo --- :hammer: Installing tools
 apk add --update-cache --no-progress helm yq skopeo git
 
+echo --- :git::docker: determining version and tags
 source .buildkite/steps/repo_info.sh
 
 echo --- :docker: Logging into ghcr.io
