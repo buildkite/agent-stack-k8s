@@ -2,10 +2,11 @@
 
 set -eufo pipefail
 
-source .buildkite/steps/repo_info.sh
-
 echo --- :hammer: Installing tools
-apk add --update-cache --no-progress crane
+apk add --update-cache --no-progress crane git
+
+echo --- :git::docker: determining version and tags
+source .buildkite/steps/repo_info.sh
 
 echo --- :doker: Logging into ghcr.io
 crane auth login ghcr.io \
