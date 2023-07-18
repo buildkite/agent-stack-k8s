@@ -61,10 +61,5 @@ deploy *FLAGS:
     --wait \
     {{FLAGS}}
 
-
-# version should be a semver version like `0.1.0`
-release version:
-  ./scripts/release.sh {{version}}
-
 cleanup-orphans:
   go test -v -run TestCleanupOrphanedPipelines ./integration --delete-orphaned-pipelines
