@@ -138,7 +138,7 @@ steps:
                 name: deploy-secrets
 
   - label: ":shipit: deploy"
-    if: build.branch == pipeline.default_branch || build.tag =~ /^.+$/
+    if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
     depends_on:
     - push
     - integration
@@ -159,7 +159,7 @@ steps:
                 name: agent-stack-k8s-secrets
 
   - label: ":rocket: release"
-    if: build.tag =~ /^.+$/
+    if: build.tag =~ /^.+\$/
     depends_on:
     - deploy
     env:
