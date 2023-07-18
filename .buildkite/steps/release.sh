@@ -12,21 +12,26 @@ ARCH=$(uname -m)
 GORELEASER_VERSION=1.19.2
 GORELEASER_URL=https://github.com/goreleaser/goreleaser/releases/download
 GORELEASER_PATH="goreleaser_${GORELEASER_VERSION}_${ARCH}.apk"
+GHCH_VERSION=0.11.0
+GHCH_URL="https://github.com/buildkite/ghch/releases/download/v${GHCH_VERSION}/ghch-$(go env GOARCH)"
 
 echo --- :hammer: Installing packages
-apk add --no-progress github-cli crane
+apk add --no-progress crane git github-cli
 wget -q "${GORELEASER_URL}/v${GORELEASER_VERSION}/${GORELEASER_PATH}"
 apk add --no-progress --allow-untrusted "$GORELEASER_PATH"
+wget -qO- "$GHCH_URL" > /usr/bin/ghch
+chmod +x /usr/bin/ghch
 
 echo --- :git: Determining release version from tags
 # ensure we remove leading `v`
 version="${BUILDKITE_TAG#v}"
 # put it back
 tag="v$version"
+previous_tag=$(git describe --abbrev=0 --exclude "$tag")
 
 # tags for release candidate images
 build_tag=$(git describe --exclude "$tag")
-build_version=${build_tag#v}
+build_version="${build_tag#v}"
 
 tag_image() {
   if ! crane tag "$1" "$2"; then
@@ -64,6 +69,8 @@ goreleaser release --rm-dist
 
 echo -- :github: Creating draft release
 gh release view "$tag" --json body -q .body >dist/body.txt
+
+ghch --format=markdown --from="$previous_tag" --next-version="$tag" >>dist/body.txt
 
 cat <<EOF >>dist/body.txt
 ## Images
