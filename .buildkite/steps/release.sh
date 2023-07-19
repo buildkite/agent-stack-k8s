@@ -50,6 +50,13 @@ tag_image "ghcr.io/buildkite/agent-stack-k8s/controller:${build_version}" "$vers
 ((tag_failures+=$?))
 tag_image "ghcr.io/buildkite/agent-stack-k8s/agent:${build_version}" "$version"
 ((tag_failures+=$?))
+
+tag_image "ghcr.io/buildkite/helm/agent-stack-k8s:${build_version}" latest
+((tag_failures+=$?))
+tag_image "ghcr.io/buildkite/agent-stack-k8s/controller:${build_version}" latest
+((tag_failures+=$?))
+tag_image "ghcr.io/buildkite/agent-stack-k8s/agent:${build_version}" latest
+((tag_failures+=$?))
 set -e
 
 if [[ $tag_failures != 0 ]]; then
