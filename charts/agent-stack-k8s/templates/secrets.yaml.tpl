@@ -5,6 +5,8 @@ kind: Secret
 metadata:
   name: {{ .Release.Name }}-secrets
   namespace: {{ .Release.Namespace }}
+  annotations:
+    strategy.spinnaker.io/versioned: false
 data:
   BUILDKITE_AGENT_TOKEN: {{ required "agentToken must be set" .Values.agentToken | b64enc | quote }}
   BUILDKITE_TOKEN: {{ required "graphqlToken must be set" .Values.graphqlToken | b64enc | quote }}
