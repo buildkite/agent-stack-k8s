@@ -90,21 +90,21 @@ func TestToLabels(t *testing.T) {
 		{
 			agentTags: []string{"queue=kubernetes"},
 			expectedLabels: map[string]string{
-				"buildkite.com/queue": "kubernetes",
+				"tag.buildkite.com/queue": "kubernetes",
 			},
 		},
 		{
 			agentTags: []string{"queue=kubernetes", "arch=arm64"},
 			expectedLabels: map[string]string{
-				"buildkite.com/queue": "kubernetes",
-				"buildkite.com/arch":  "arm64",
+				"tag.buildkite.com/queue": "kubernetes",
+				"tag.buildkite.com/arch":  "arm64",
 			},
 		},
 		{
 			agentTags: []string{"arch=arm64", "queue=kubernetes"},
 			expectedLabels: map[string]string{
-				"buildkite.com/queue": "kubernetes",
-				"buildkite.com/arch":  "arm64",
+				"tag.buildkite.com/queue": "kubernetes",
+				"tag.buildkite.com/arch":  "arm64",
 			},
 		},
 		{
@@ -115,7 +115,7 @@ func TestToLabels(t *testing.T) {
 		{
 			agentTags: []string{"queue="},
 			expectedLabels: map[string]string{
-				"buildkite.com/queue": "",
+				"tag.buildkite.com/queue": "",
 			},
 		},
 	} {

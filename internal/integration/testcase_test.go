@@ -222,7 +222,7 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[string]string) {
 	t.Helper()
 
-	tagReq, err := labels.NewRequirement("buildkite.com/queue", selection.Equals, []string{t.PipelineName})
+	tagReq, err := labels.NewRequirement("tag.buildkite.com/queue", selection.Equals, []string{t.PipelineName})
 	require.NoError(t, err)
 
 	selector := labels.NewSelector().Add(*tagReq)

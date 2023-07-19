@@ -30,7 +30,7 @@ func mapToLabels(m map[string]string) (map[string]string, []error) {
 	labels := map[string]string{}
 	errs := []error{}
 	for k, v := range m {
-		namespacedKey := "buildkite.com/" + k
+		namespacedKey := "tag.buildkite.com/" + k
 		if errMsgs := validation.IsQualifiedName(namespacedKey); len(errMsgs) > 0 {
 			for _, errMsg := range errMsgs {
 				errs = append(errs, errors.New(errMsg))

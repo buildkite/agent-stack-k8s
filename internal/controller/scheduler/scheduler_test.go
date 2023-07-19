@@ -86,7 +86,7 @@ func TestJobPluginConversion(t *testing.T) {
 	tokenEnv := findEnv(t, commandContainer.Env, "BUILDKITE_AGENT_TOKEN")
 	assert.Equal(t, "token-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
 
-	tagLabel := result.Labels["buildkite.com/queue"]
+	tagLabel := result.Labels["tag.buildkite.com/queue"]
 	assert.Equal(t, tagLabel, "kubernetes")
 
 	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
