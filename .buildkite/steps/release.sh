@@ -60,19 +60,15 @@ if [[ $tag_failures != 0 ]]; then
   exit 1
 fi
 
-echo --- :golang: Creating release assets with goreleaser
+echo --- :golang: Creating draft release with goreleaser
 chart_digest=$(crane digest "ghcr.io/buildkite/helm/agent-stack-k8s:$version")
 controller_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/controller:$version")
 agent_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/agent:$version")
 
-goreleaser release --rm-dist
-
-echo -- :github: Creating draft release
-gh release view "$tag" --json body -q .body >dist/body.txt
-
-ghch --format=markdown --from="$previous_tag" --next-version="$tag" >>dist/body.txt
-
-cat <<EOF >>dist/body.txt
+goreleaser release \
+  --rm-dist \
+  --release-notes <(ghch --format=markdown --from="$previous_tag" --next-version="$tag") \
+  --release-footer <(cat <<EOF
 ## Images
 ### Helm chart
 Image: \`ghcr.io/buildkite/helm/agent-stack-k8s:${version}\`
@@ -85,6 +81,4 @@ Digest: \`$controller_digest\`
 ### Agent
 Image: \`ghcr.io/buildkite/agent-stack-k8s/agent:${version}\`
 Digest: \`$agent_digest\`
-EOF
-
-gh release edit "$tag" -F dist/body.txt
+EOF)

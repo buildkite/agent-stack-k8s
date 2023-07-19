@@ -32,4 +32,4 @@ changelog:
     - '^docs:'
     - '^test:'
 release:
-  prerelease: "true"
+  draft: true
