@@ -77,7 +77,7 @@ func (t testcase) deletePipeline(ctx context.Context) {
 			}
 			return nil
 		}); err != nil {
-			t.Logf("failed to cleanup pipeline %s: %v", t.PipelineName, err)
+			t.Errorf("failed to cleanup pipeline %s: %v", t.PipelineName, err)
 			return
 		}
 
