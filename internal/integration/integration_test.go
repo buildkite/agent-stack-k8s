@@ -3,12 +3,10 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -209,51 +207,6 @@ func maxOf(x, y int) int {
 		return y
 	}
 	return x
-}
-
-func TestCleanupOrphanedPipelines(t *testing.T) {
-	if !deleteOrphanedPipelines {
-		t.Skip("not cleaning orphaned pipelines")
-	}
-
-	ctx := context.Background()
-	graphqlClient := api.NewClient(cfg.BuildkiteToken)
-
-	pipelines, err := api.SearchPipelines(ctx, graphqlClient, cfg.Org, "agent-stack-k8s-", 100)
-	require.NoError(t, err)
-
-	numPipelines := len(pipelines.Organization.Pipelines.Edges)
-	t.Logf("found %d pipelines to delete", numPipelines)
-
-	var wg sync.WaitGroup
-	wg.Add(numPipelines)
-	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
-		pipeline := pipeline // prevent loop variable capture
-		t.Run(pipeline.Node.Name, func(t *testing.T) {
-			builds, err := api.GetBuilds(
-				ctx,
-				graphqlClient,
-				fmt.Sprintf("%s/%s", cfg.Org, pipeline.Node.Name),
-				[]api.BuildStates{api.BuildStatesRunning},
-				100,
-			)
-			require.NoError(t, err)
-			for _, build := range builds.Pipeline.Builds.Edges {
-				_, err = api.BuildCancel(
-					ctx,
-					graphqlClient,
-					api.BuildCancelInput{Id: build.Node.Id},
-				)
-				assert.NoError(t, err)
-			}
-			tc := testcase{
-				T:       t,
-				GraphQL: api.NewClient(cfg.BuildkiteToken),
-			}.Init()
-			tc.PipelineName = pipeline.Node.Name
-			tc.deletePipeline(ctx)
-		})
-	}
 }
 
 func TestEnvVariables(t *testing.T) {

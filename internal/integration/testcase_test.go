@@ -262,29 +262,3 @@ func ignorableError(err error) bool {
 	}
 	return false
 }
-
-func (t testcase) deletePipeline(ctx context.Context) {
-	t.Helper()
-
-	EnsureCleanup(t.T, func() {
-		if err := roko.NewRetrier(
-			roko.WithMaxAttempts(10),
-			roko.WithStrategy(roko.Exponential(time.Second, 5*time.Second)),
-		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			resp, err := t.Buildkite.Pipelines.Delete(cfg.Org, t.PipelineName)
-			if err != nil {
-				if resp.StatusCode == http.StatusNotFound {
-					return nil
-				}
-				t.Logf("waiting for build to be canceled on pipeline %s", t.PipelineName)
-				return err
-			}
-			return nil
-		}); err != nil {
-			t.Logf("failed to cleanup pipeline %s: %v", t.PipelineName, err)
-			return
-		}
-
-		t.Logf("deleted pipeline! %s", t.PipelineName)
-	})
-}
