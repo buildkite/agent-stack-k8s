@@ -41,6 +41,7 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 				100,
 			)
 			require.NoError(t, err)
+
 			for _, build := range builds.Pipeline.Builds.Edges {
 				_, err = api.BuildCancel(
 					ctx,
@@ -49,11 +50,12 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 				)
 				assert.NoError(t, err)
 			}
+
 			tc := testcase{
-				T:       t,
-				GraphQL: api.NewClient(cfg.BuildkiteToken),
+				T:            t,
+				GraphQL:      api.NewClient(cfg.BuildkiteToken),
+				PipelineName: pipeline.Node.Name,
 			}.Init()
-			tc.PipelineName = pipeline.Node.Name
 			tc.deletePipeline(ctx)
 		})
 	}
