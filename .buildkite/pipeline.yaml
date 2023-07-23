@@ -11,9 +11,6 @@ x-anchors:
           - name: deploy
             image: alpine:latest
             command: [.buildkite/steps/build-and-push.sh]
-            env:
-            - name: BUILDKITE_SHELL
-              value: /bin/sh -ec
             envFrom:
             - secretRef:
                 name: deploy-secrets
