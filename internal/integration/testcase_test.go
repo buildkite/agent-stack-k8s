@@ -141,6 +141,7 @@ func (t testcase) AssertSuccess(ctx context.Context, build api.Build) {
 
 func (t testcase) AssertLogsContain(build api.Build, content string) {
 	t.Helper()
+
 	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
 	require.NoError(t, err)
 
@@ -266,7 +267,7 @@ func (t testcase) deletePipeline(ctx context.Context) {
 	t.Helper()
 
 	EnsureCleanup(t.T, func() {
-		err := roko.NewRetrier(
+		if err := roko.NewRetrier(
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Exponential(time.Second, 5*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
@@ -279,11 +280,11 @@ func (t testcase) deletePipeline(ctx context.Context) {
 				return err
 			}
 			return nil
-		})
-		if err != nil {
+		}); err != nil {
 			t.Logf("failed to cleanup pipeline %s: %v", t.PipelineName, err)
 			return
 		}
+
 		t.Logf("deleted pipeline! %s", t.PipelineName)
 	})
 }
