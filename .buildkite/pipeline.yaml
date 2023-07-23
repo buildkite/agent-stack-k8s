@@ -1,3 +1,23 @@
+x-anchors:
+  push: &push
+    label: ":helm::docker: push controller image and helm chart"
+    env:
+      BUILDKITE_GIT_FETCH_FLAGS: -v --tags
+    plugins:
+    - kubernetes:
+        podSpec:
+          serviceAccountName: deploy
+          containers:
+          - name: deploy
+            image: alpine:latest
+            command: [.buildkite/steps/build-and-push.sh]
+            env:
+            - name: BUILDKITE_SHELL
+              value: /bin/sh -ec
+            envFrom:
+            - secretRef:
+                name: deploy-secrets
+
 agents:
   queue: kubernetes
 
@@ -93,35 +113,35 @@ steps:
             - secretRef:
                 name: deploy-secrets
 
-  - label: ":helm::docker: push controller image and helm chart"
-    key: push
+  # On feature branches, don't wait for integration tests. We may want to deploy
+  # to a test cluster to debug the feature branch.
+  - if: build.branch != pipeline.default_branch && build.tag !~ /^.+\$/
+    <<: *push
+    key: push-feature-branch
     depends_on:
     - tidy
     - lint
     - check-code-generation
     - agent
     - controller
-    env:
-      BUILDKITE_GIT_FETCH_FLAGS: -v --tags
-    plugins:
-    - kubernetes:
-        podSpec:
-          serviceAccountName: deploy
-          containers:
-          - name: deploy
-            image: alpine:latest
-            command: [.buildkite/steps/build-and-push.sh]
-            env:
-            - name: BUILDKITE_SHELL
-              value: /bin/sh -ec
-            envFrom:
-            - secretRef:
-                name: deploy-secrets
 
-  - label: ":shipit: deploy"
-    if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
+  # On the main branch or tags, wait for integration tests. We don't want to
+  # push a new image or chart unless the integration tests pass.
+  - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
+    <<: *push
+    key: push-main-or-tag
     depends_on:
-    - push
+    - tidy
+    - lint
+    - check-code-generation
+    - agent
+    - controller
+    - integration
+
+  - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
+    label: ":shipit: deploy"
+    depends_on:
+    - push-main-or-tag
     - integration
     env:
       BUILDKITE_GIT_FETCH_FLAGS: -v --tags
@@ -139,10 +159,10 @@ steps:
             - secretRef:
                 name: agent-stack-k8s-secrets
 
-  - label: ":rocket: release"
-    if: build.tag =~ /^.+\$/
+  - if: build.tag =~ /^.+\$/
+    label: ":rocket: release"
     depends_on:
-    - deploy
+    - deploy-main-or-tag
     env:
       BUILDKITE_GIT_FETCH_FLAGS: -v --tags
     plugins:
