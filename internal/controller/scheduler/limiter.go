@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"go.uber.org/zap"
@@ -55,7 +56,7 @@ func (l *MaxInFlightLimiter) RegisterInformer(
 	return nil
 }
 
-func (l *MaxInFlightLimiter) Create(ctx context.Context, job *monitor.Job) error {
+func (l *MaxInFlightLimiter) Create(ctx context.Context, job *api.CommandJob) error {
 	select {
 	case <-ctx.Done():
 		return nil
@@ -64,7 +65,7 @@ func (l *MaxInFlightLimiter) Create(ctx context.Context, job *monitor.Job) error
 	}
 }
 
-func (l *MaxInFlightLimiter) add(ctx context.Context, job *monitor.Job) error {
+func (l *MaxInFlightLimiter) add(ctx context.Context, job *api.CommandJob) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 )
@@ -28,13 +29,8 @@ type Config struct {
 	Tags        []string
 }
 
-type Job struct {
-	api.CommandJob
-	Tag string
-}
-
 type JobHandler interface {
-	Create(context.Context, *Job) error
+	Create(context.Context, *api.CommandJob) error
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
@@ -87,21 +83,31 @@ func (r clusteredJobResp) CommandJobs() []*api.JobJobTypeCommand {
 
 // getScheduledCommandJobs calls either the clustered or unclustered GraphQL API
 // methods, depending on if a cluster uuid was provided in the config
-func (m *Monitor) getScheduledCommandJobs(ctx context.Context, tag string) (jobResp, error) {
+func (m *Monitor) getScheduledCommandJobs(ctx context.Context, tags []string) (jobResp, error) {
 	if m.cfg.ClusterUUID == "" {
-		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{tag})
+		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, tags)
 		return unclusteredJobResp(*resp), err
 	}
 
 	resp, err := api.GetScheduledJobsClustered(
-		ctx, m.gql, m.cfg.Org, []string{tag}, encodeClusterGraphQLID(m.cfg.ClusterUUID),
+		ctx, m.gql, m.cfg.Org, tags, encodeClusterGraphQLID(m.cfg.ClusterUUID),
 	)
 	return clusteredJobResp(*resp), err
+}
+
+func toMapAndLogErrors(logger *zap.Logger, tags []string) map[string]string {
+	agentTags, tagErrs := agenttags.ToMap(tags)
+	if len(tagErrs) != 0 {
+		logger.Warn("making a map of agent tags", zap.Errors("err", tagErrs))
+	}
+	return agentTags
 }
 
 func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 	logger := m.logger.With(zap.String("org", m.cfg.Org))
 	errs := make(chan error, 1)
+
+	agentTags := toMapAndLogErrors(logger, m.cfg.Tags)
 
 	go func() {
 		logger.Info("started")
@@ -109,33 +115,37 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 		defer ticker.Stop()
 
 		for {
-			for _, tag := range m.cfg.Tags {
-				resp, err := m.getScheduledCommandJobs(ctx, tag)
-				if err != nil {
-					logger.Warn("failed to get scheduled command jobs", zap.Error(err))
+			resp, err := m.getScheduledCommandJobs(ctx, m.cfg.Tags)
+			if err != nil {
+				logger.Warn("failed to get scheduled command jobs", zap.Error(err))
+				continue
+			}
+
+			if !resp.OrganizationExists() {
+				errs <- fmt.Errorf("invalid organization: %q", m.cfg.Org)
+				return
+			}
+
+			jobs := resp.CommandJobs()
+
+			// TODO: sort by ScheduledAt in the API
+			sort.Slice(jobs, func(i, j int) bool {
+				return jobs[i].ScheduledAt.Before(jobs[j].ScheduledAt)
+			})
+
+			for _, job := range jobs {
+				jobTags := toMapAndLogErrors(logger, job.AgentQueryRules)
+
+				// The api returns jobs that match ANY agent tags (the agent query rules)
+				// However, we can only acquire jobs that match ALL agent tags
+				if !agenttags.JobTagsMatchAgentTags(jobTags, agentTags) {
+					logger.Debug("skipping job because it did not match all tags", zap.Any("job", job))
 					continue
 				}
 
-				if !resp.OrganizationExists() {
-					errs <- fmt.Errorf("invalid organization: %q", m.cfg.Org)
-					return
-				}
-
-				jobs := resp.CommandJobs()
-
-				// TODO: sort by ScheduledAt in the API
-				sort.Slice(jobs, func(i, j int) bool {
-					return jobs[i].ScheduledAt.Before(jobs[j].ScheduledAt)
-				})
-
-				for _, job := range jobs {
-					logger.Debug("creating job", zap.String("uuid", job.Uuid))
-					if err := handler.Create(ctx, &Job{
-						CommandJob: job.CommandJob,
-						Tag:        tag,
-					}); err != nil {
-						logger.Error("failed to create job", zap.Error(err))
-					}
+				logger.Debug("creating job", zap.String("uuid", job.Uuid))
+				if err := handler.Create(ctx, &job.CommandJob); err != nil {
+					logger.Error("failed to create job", zap.Error(err))
 				}
 			}
 

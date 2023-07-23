@@ -9,7 +9,6 @@ import (
 	reflect "reflect"
 
 	api "github.com/buildkite/agent-stack-k8s/v2/api"
-	monitor "github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -37,7 +36,7 @@ func (m *MockJobHandler) EXPECT() *MockJobHandlerMockRecorder {
 }
 
 // Create mocks base method.
-func (m *MockJobHandler) Create(arg0 context.Context, arg1 *monitor.Job) error {
+func (m *MockJobHandler) Create(arg0 context.Context, arg1 *api.CommandJob) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Create", arg0, arg1)
 	ret0, _ := ret[0].(error)
