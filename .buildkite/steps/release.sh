@@ -30,25 +30,15 @@ version="${BUILDKITE_TAG#v}"
 tag="v$version"
 previous_tag=$(git describe --abbrev=0 --exclude "$tag")
 
-# tags for release candidate images
-build_tag=$(git describe --exclude "$tag")
-build_version="${build_tag#v}"
+echo --- :docker: Logging into ghcr.io
+crane auth login ghcr.io \
+  --username "$REGISTRY_USERNAME" \
+  --password "$REGISTRY_PASSWORD"
 
-tag_image() {
-  if ! crane tag "$1" "$2"; then
-    echo "Failed to tag image $1 with $2, maybe the build has not completed yet?" >&2
-    return 1
-  fi
-}
-
-echo --- :docker: Tagging images
-tag_image "ghcr.io/buildkite/helm/agent-stack-k8s:${build_version}" "$version"
-tag_image "ghcr.io/buildkite/agent-stack-k8s/controller:${build_version}" "$version"
-tag_image "ghcr.io/buildkite/agent-stack-k8s/agent:${build_version}" "$version"
-
-tag_image "ghcr.io/buildkite/helm/agent-stack-k8s:${build_version}" latest
-tag_image "ghcr.io/buildkite/agent-stack-k8s/controller:${build_version}" latest
-tag_image "ghcr.io/buildkite/agent-stack-k8s/agent:${build_version}" latest
+echo --- :docker: Tagging latest images
+crane tag "ghcr.io/buildkite/helm/agent-stack-k8s:${version}" latest
+crane tag "ghcr.io/buildkite/agent-stack-k8s/controller:${version}" latest
+crane tag "ghcr.io/buildkite/agent-stack-k8s/agent:${version}" latest
 
 echo --- :golang: Creating draft release with goreleaser
 chart_digest=$(crane digest "ghcr.io/buildkite/helm/agent-stack-k8s:$version")
