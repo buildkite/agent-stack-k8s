@@ -48,6 +48,7 @@ chart_digest=$(crane digest "ghcr.io/buildkite/helm/agent-stack-k8s:$version")
 controller_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/controller:$version")
 agent_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/agent:$version")
 
+# TODO: remove once world write issues is fixed
 git stash -uk
 
 goreleaser release \
