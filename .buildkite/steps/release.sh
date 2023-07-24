@@ -11,14 +11,15 @@ fi
 ARCH=$(uname -m)
 GORELEASER_VERSION=1.19.2
 GORELEASER_URL=https://github.com/goreleaser/goreleaser/releases/download
-GORELEASER_PATH="goreleaser_${GORELEASER_VERSION}_${ARCH}.apk"
+GORELEASER_FILE="goreleaser_${GORELEASER_VERSION}_${ARCH}.apk"
 GHCH_VERSION=0.11.0
 GHCH_URL="https://github.com/buildkite/ghch/releases/download/v${GHCH_VERSION}/ghch-$(go env GOARCH)"
 
 echo --- :hammer: Installing packages
-apk add --no-progress crane git github-cli
-wget -q "${GORELEASER_URL}/v${GORELEASER_VERSION}/${GORELEASER_PATH}"
-apk add --no-progress --allow-untrusted "$GORELEASER_PATH"
+apk add --no-progress crane git
+wget -q "${GORELEASER_URL}/v${GORELEASER_VERSION}/${GORELEASER_FILE}"
+apk add --no-progress --allow-untrusted "$GORELEASER_FILE"
+rm "$GORELEASER_FILE"
 wget -qO- "$GHCH_URL" > /usr/bin/ghch
 chmod +x /usr/bin/ghch
 
@@ -71,6 +72,8 @@ echo --- :golang: Creating draft release with goreleaser
 chart_digest=$(crane digest "ghcr.io/buildkite/helm/agent-stack-k8s:$version")
 controller_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/controller:$version")
 agent_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/agent:$version")
+
+git stash -uk
 
 goreleaser release \
   --rm-dist \
