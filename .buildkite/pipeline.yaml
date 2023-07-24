@@ -137,9 +137,9 @@ steps:
 
   - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
     label: ":shipit: deploy"
+    key: deploy
     depends_on:
     - push-main-or-tag
-    - integration
     env:
       BUILDKITE_GIT_FETCH_FLAGS: -v --tags
     plugins:
@@ -158,8 +158,9 @@ steps:
 
   - if: build.tag =~ /^.+\$/
     label: ":rocket: release"
+    key: release
     depends_on:
-    - deploy-main-or-tag
+    - deploy
     env:
       BUILDKITE_GIT_FETCH_FLAGS: -v --tags
     plugins:
