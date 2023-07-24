@@ -29,6 +29,9 @@ version="${BUILDKITE_TAG#v}"
 # put it back
 tag="v$version"
 previous_tag=$(git describe --abbrev=0 --exclude "$tag")
+echo "Version: $version"
+echo "Tag: $tag"
+echo "Previous tag: $previous_tag"
 
 echo --- :docker: Logging into ghcr.io
 crane auth login ghcr.io \
