@@ -88,4 +88,5 @@ Digest: \`$controller_digest\`
 ### Agent
 Image: \`ghcr.io/buildkite/agent-stack-k8s/agent:${version}\`
 Digest: \`$agent_digest\`
-EOF)
+EOF
+)
