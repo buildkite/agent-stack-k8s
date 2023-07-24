@@ -42,31 +42,13 @@ tag_image() {
 }
 
 echo --- :docker: Tagging images
-# NB: these will fail if the commit hasn't gone through CI and produced release-candidate images yet
-tag_failures=0
-set +e
 tag_image "ghcr.io/buildkite/helm/agent-stack-k8s:${build_version}" "$version"
-((tag_failures+=$?))
 tag_image "ghcr.io/buildkite/agent-stack-k8s/controller:${build_version}" "$version"
-((tag_failures+=$?))
 tag_image "ghcr.io/buildkite/agent-stack-k8s/agent:${build_version}" "$version"
-((tag_failures+=$?))
 
 tag_image "ghcr.io/buildkite/helm/agent-stack-k8s:${build_version}" latest
-((tag_failures+=$?))
 tag_image "ghcr.io/buildkite/agent-stack-k8s/controller:${build_version}" latest
-((tag_failures+=$?))
 tag_image "ghcr.io/buildkite/agent-stack-k8s/agent:${build_version}" latest
-((tag_failures+=$?))
-set -e
-
-if [[ $tag_failures != 0 ]]; then
-  echo "^^^ +++"
-  echo "Failed to tag images. The build on the default branch needs to" >&2
-  echo "push images to the container image registry first." >&2
-  echo "Aborting release." >&2
-  exit 1
-fi
 
 echo --- :golang: Creating draft release with goreleaser
 chart_digest=$(crane digest "ghcr.io/buildkite/helm/agent-stack-k8s:$version")
