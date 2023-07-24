@@ -52,7 +52,7 @@ agent_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/agent:$version")
 git stash -uk
 
 goreleaser release \
-  --rm-dist \
+  --clean \
   --release-notes <(ghch --format=markdown --from="$previous_tag" --next-version="$tag") \
   --release-footer <(cat <<EOF
 ## Images
