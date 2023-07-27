@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"net/http"
 	"strconv"
 	"strings"
 	"testing"
@@ -17,7 +16,6 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
-	"github.com/buildkite/roko"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -44,23 +42,28 @@ func (t testcase) Init() testcase {
 	t.Helper()
 	t.Parallel()
 
-	queuePrefix := "queue_"
-	namePrefix := "agent-stack-k8s-test-"
-	nameVariable := fmt.Sprintf("%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
-	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(nameVariable)))
+	if t.PipelineName == "" {
+		queuePrefix := "queue_"
+		namePrefix := "agent-stack-k8s-test-"
+		nameVariable := fmt.Sprintf("%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(nameVariable)))
 
-	// labels are limited to length 63
-	t.PipelineName = fmt.Sprintf("%s%s", namePrefix, hash[:63-len(namePrefix)-len(queuePrefix)])
+		// k8s labels are limited to length 63, we use the pipeline name as a label.
+		// So we need to limit the length of the pipeline name too.
+		t.PipelineName = fmt.Sprintf("%s%s", namePrefix, hash[:63-len(namePrefix)-len(queuePrefix)])
+	}
+
 	t.Logger = zaptest.NewLogger(t).Named(t.Name())
 
 	clientConfig, err := restconfig.GetConfig()
 	require.NoError(t, err)
+
 	clientset, err := kubernetes.NewForConfig(clientConfig)
 	require.NoError(t, err)
 	t.Kubernetes = clientset
+
 	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
 	require.NoError(t, err)
-
 	t.Buildkite = buildkite.NewClient(config.Client())
 
 	return t
@@ -141,6 +144,7 @@ func (t testcase) AssertSuccess(ctx context.Context, build api.Build) {
 
 func (t testcase) AssertLogsContain(build api.Build, content string) {
 	t.Helper()
+
 	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
 	require.NoError(t, err)
 
@@ -260,30 +264,4 @@ func ignorableError(err error) bool {
 		}
 	}
 	return false
-}
-
-func (t testcase) deletePipeline(ctx context.Context) {
-	t.Helper()
-
-	EnsureCleanup(t.T, func() {
-		err := roko.NewRetrier(
-			roko.WithMaxAttempts(10),
-			roko.WithStrategy(roko.Exponential(time.Second, 5*time.Second)),
-		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			resp, err := t.Buildkite.Pipelines.Delete(cfg.Org, t.PipelineName)
-			if err != nil {
-				if resp.StatusCode == http.StatusNotFound {
-					return nil
-				}
-				t.Logf("waiting for build to be canceled on pipeline %s", t.PipelineName)
-				return err
-			}
-			return nil
-		})
-		if err != nil {
-			t.Logf("failed to cleanup pipeline %s: %v", t.PipelineName, err)
-			return
-		}
-		t.Logf("deleted pipeline! %s", t.PipelineName)
-	})
 }
