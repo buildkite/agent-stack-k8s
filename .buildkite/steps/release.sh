@@ -29,6 +29,9 @@ version="${BUILDKITE_TAG#v}"
 # put it back
 tag="v$version"
 previous_tag=$(git describe --abbrev=0 --exclude "$tag")
+echo "Version: $version"
+echo "Tag: $tag"
+echo "Previous tag: $previous_tag"
 
 echo --- :docker: Logging into ghcr.io
 crane auth login ghcr.io \
@@ -45,10 +48,11 @@ chart_digest=$(crane digest "ghcr.io/buildkite/helm/agent-stack-k8s:$version")
 controller_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/controller:$version")
 agent_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/agent:$version")
 
+# TODO: remove once world write issues is fixed
 git stash -uk
 
 goreleaser release \
-  --rm-dist \
+  --clean \
   --release-notes <(ghch --format=markdown --from="$previous_tag" --next-version="$tag") \
   --release-footer <(cat <<EOF
 ## Images
