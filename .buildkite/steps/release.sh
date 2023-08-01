@@ -51,10 +51,8 @@ agent_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/agent:$version")
 # TODO: remove once world write issues is fixed
 git stash -uk
 
-goreleaser release \
-  --clean \
-  --release-notes <(ghch --format=markdown --from="$previous_tag" --next-version="$tag") \
-  --release-footer <(cat <<EOF
+changelog=$(ghch --format=markdown --from="$previous_tag" --next-version="$tag")
+footer="
 ## Images
 ### Helm chart
 Image: \`ghcr.io/buildkite/helm/agent-stack-k8s:${version}\`
@@ -67,5 +65,6 @@ Digest: \`$controller_digest\`
 ### Agent
 Image: \`ghcr.io/buildkite/agent-stack-k8s/agent:${version}\`
 Digest: \`$agent_digest\`
-EOF
-)
+"
+
+goreleaser release --clean --release-notes <(printf "%s\n\n\n%s" "$changelog" "$footer")
