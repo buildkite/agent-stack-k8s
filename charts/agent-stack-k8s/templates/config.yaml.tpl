@@ -5,6 +5,6 @@ metadata:
   namespace: {{ .Release.Namespace }}
 data:
   config.yaml: |
-    agent-token-secret: {{ .Release.Name }}-secrets
+    agent-token-secret: {{ if .Values.agentStackSecret }}{{ .Values.agentStackSecret }}{{ else }}{{ .Release.Name }}-secrets{{ end }}
     namespace: {{ .Release.Namespace }}
     {{- .Values.config | toYaml | nindent 4 }}
