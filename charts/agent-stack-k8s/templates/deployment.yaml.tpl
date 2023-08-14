@@ -18,6 +18,8 @@ spec:
       serviceAccountName: {{ .Release.Name }}-controller
       nodeSelector:
         {{- toYaml $.Values.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml $.Values.tolerations | nindent 8 }}
       containers:
       - name: controller
         terminationMessagePolicy: FallbackToLogsOnError
