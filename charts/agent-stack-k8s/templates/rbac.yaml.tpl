@@ -1,8 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: {{ .Release.Name }}-controller
-  namespace: {{ .Release.Namespace }}
+  {{- include "agent-stack-k8s.serviceaccountmetadata" . | nindent 2 }}
 rules:
   - apiGroups:
       - batch
@@ -33,11 +32,9 @@ roleRef:
   name: {{ .Release.Name }}-controller
 subjects:
   - kind: ServiceAccount
-    name: {{ .Release.Name }}-controller
-    namespace: {{ .Release.Namespace }}
+    {{- include "agent-stack-k8s.serviceaccountmetadata" . | nindent 4 }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ .Release.Name }}-controller
-  namespace: {{ .Release.Namespace }}
+  {{- include "agent-stack-k8s.serviceaccountmetadata" . | nindent 2 }}

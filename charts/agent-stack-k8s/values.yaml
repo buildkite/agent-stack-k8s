@@ -13,3 +13,7 @@ resources:
     memory: 100Mi
 
 labels: {}
+
+secretsmetadata: {}
+
+serviceaccountmetadata: {}

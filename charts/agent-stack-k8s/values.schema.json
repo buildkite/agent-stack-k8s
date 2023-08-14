@@ -73,6 +73,42 @@
         }
       ]
     },
+    "secretsmetadata": {
+      "type": "object",
+      "default": {},
+      "title": "The secretsmetadata Schema",
+      "description": "secret name and namespace are reserved, user input secret name and namespace are not allowed",
+      "not": { "required": ["name", "namespace"] },
+      "additionalProperties": {
+        "type": "object",
+        "default": {}
+      },
+      "example": [
+        {
+          "annotations": {
+            "strategy.spinnaker.io/versioned": ""
+          }
+        }
+      ]
+    },
+    "serviceaccountmetadata": {
+      "type": "object",
+      "default": {},
+      "title": "The serviceaccountmetadata Schema",
+      "description": "serviceaccount name and namespace are reserved, user input serviceaccount name and namespace are not allowed",
+      "not": { "required": ["name", "namespace"] },
+      "additionalProperties": {
+        "type": "object",
+        "default": {}
+      },
+      "example": [
+        {
+          "annotations": {
+            "eks.amazonaws.com/role-arn": "my-service-role"
+          }
+        }
+      ]
+    },
     "resources": {
       "type": "object",
       "default": {},
