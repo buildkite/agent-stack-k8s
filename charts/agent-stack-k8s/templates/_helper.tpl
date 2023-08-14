@@ -7,7 +7,6 @@ app: {{ .Release.Name }}
 {{- toYaml (mustMerge (fromYaml (include "agent-stack-k8s.mandatoryLabels" .)) .Values.labels) }}
 {{- end }}
 
-
 {{/* Generate basic secrets metadata */}}
 {{- define "agent-stack-k8s.mandatorySecretsmetadata" }}
 name: {{ .Release.Name }}-secrets
