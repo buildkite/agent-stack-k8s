@@ -8,21 +8,21 @@ app: {{ .Release.Name }}
 {{- end }}
 
 {{/* Generate basic secrets metadata */}}
-{{- define "agent-stack-k8s.mandatorySecretsmetadata" }}
+{{- define "agent-stack-k8s.mandatorySecretsMetadata" }}
 name: {{ .Release.Name }}-secrets
 namespace: {{ .Release.Namespace }}
 {{- end }}
 
-{{- define "agent-stack-k8s.secretsmetadata" }}
-{{- toYaml (mustMerge (fromYaml (include "agent-stack-k8s.mandatorySecretsmetadata" .)) .Values.secretsmetadata) }}
+{{- define "agent-stack-k8s.secretsMetadata" }}
+{{- toYaml (mustMerge (fromYaml (include "agent-stack-k8s.mandatorySecretsMetadata" .)) .Values.secretsMetadata) }}
 {{- end }}
 
 {{/* Generate basic serviceaccount metadata */}}
-{{- define "agent-stack-k8s.mandatoryServiceaccountmetadata" }}
+{{- define "agent-stack-k8s.mandatoryServiceAccountMetadata" }}
 name: {{ .Release.Name }}-controller
 namespace: {{ .Release.Namespace }}
 {{- end }}
 
-{{- define "agent-stack-k8s.serviceaccountmetadata" }}
-{{- toYaml (mustMerge (fromYaml (include "agent-stack-k8s.mandatoryServiceaccountmetadata" .)) .Values.serviceaccountmetadata) }}
+{{- define "agent-stack-k8s.serviceAccountMetadata" }}
+{{- toYaml (mustMerge (fromYaml (include "agent-stack-k8s.mandatoryServiceAccountMetadata" .)) .Values.serviceAccountMetadata) }}
 {{- end }}

@@ -73,7 +73,7 @@
         }
       ]
     },
-    "secretsmetadata": {
+    "secretsMetadata": {
       "type": "object",
       "default": {},
       "title": "The secretsmetadata Schema",
@@ -91,7 +91,7 @@
         }
       ]
     },
-    "serviceaccountmetadata": {
+    "serviceAccountMetadata": {
       "type": "object",
       "default": {},
       "title": "The serviceaccountmetadata Schema",

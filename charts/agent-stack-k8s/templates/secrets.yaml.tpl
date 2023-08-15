@@ -3,7 +3,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  {{- include "agent-stack-k8s.secretsmetadata" . | nindent 2 }}
+  {{- include "agent-stack-k8s.secretsMetadata" . | nindent 2 }}
 data:
   BUILDKITE_AGENT_TOKEN: {{ required "agentToken must be set" .Values.agentToken | b64enc | quote }}
   BUILDKITE_TOKEN: {{ required "graphqlToken must be set" .Values.graphqlToken | b64enc | quote }}
