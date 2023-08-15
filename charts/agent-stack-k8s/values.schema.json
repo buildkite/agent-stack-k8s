@@ -43,6 +43,19 @@
         }
       ]
     },
+    "tolerations": {
+      "type": "array",
+      "default": [],
+      "title": "The tolerations Schema",
+      "examples": [
+        {
+          "key": "buildkite",
+          "operator": "Equal",
+          "value": "true",
+          "effect": "NoSchedule"
+        }
+      ]
+    },
     "labels": {
       "type": "object",
       "default": {},

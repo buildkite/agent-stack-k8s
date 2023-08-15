@@ -2,6 +2,7 @@ agentToken: ""
 graphqlToken: ""
 
 nodeSelector: {}
+tolerations: []
 
 config:
   org: ""
