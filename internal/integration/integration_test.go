@@ -166,6 +166,21 @@ func TestSidecars(t *testing.T) {
 	tc.AssertLogsContain(build, "Welcome to nginx!")
 }
 
+func TestExtraVolumeMounts(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "extra-volume-mounts.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.CreatePipeline(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "volume mounted")
+}
+
 func TestInvalidPodSpec(t *testing.T) {
 	tc := testcase{
 		T:       t,

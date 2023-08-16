@@ -11,11 +11,15 @@ steps:
           podSpec:
             containers:
               - image: alpine:latest
-                command: [touch]
-                args: [/tmp/buildkite-git-mirrors/somefile.txt]
+                command: [bash]
+                args: [-c "echo 'volume mounted' > /tmp/buildkite-git-mirrors/foo.txt"]
+              - image: alpine:latest
+                command: [bash]
+                args: ["sleep 2; cat /tmp/buildkite-git-mirrors/foo.txt"]
+            volumes:
               - name: host-volume
                 hostPath:
-                  path: /host/shared/folder
+                  path: /tmp
                   type: ''
           extraVolumeMounts:
               - name: host-volume
