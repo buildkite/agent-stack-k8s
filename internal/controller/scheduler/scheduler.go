@@ -44,10 +44,11 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 }
 
 type KubernetesPlugin struct {
-	PodSpec    *corev1.PodSpec
-	GitEnvFrom []corev1.EnvFromSource
-	Sidecars   []corev1.Container `json:"sidecars,omitempty"`
-	Metadata   Metadata
+	PodSpec           *corev1.PodSpec
+	GitEnvFrom        []corev1.EnvFromSource
+	Sidecars          []corev1.Container `json:"sidecars,omitempty"`
+	Metadata          Metadata
+	ExtraVolumeMounts []corev1.VolumeMount
 }
 
 type Metadata struct {
@@ -218,7 +219,10 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			env = append(env, corev1.EnvVar{Name: k, Value: v})
 		}
 	}
+
 	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
+	volumeMounts = append(volumeMounts, w.k8sPlugin.ExtraVolumeMounts...)
+
 	const systemContainers = 1
 	ttl := int32(w.cfg.JobTTL.Seconds())
 	kjob.Spec.TTLSecondsAfterFinished = &ttl

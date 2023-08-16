@@ -19,6 +19,12 @@
             "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Container"
           }
         },
+        "extraVolumeMounts": {
+          "type": "array",
+          "items": {
+            "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
+          }
+        },
         "metadata": {
           "type": "object",
           "properties": {
