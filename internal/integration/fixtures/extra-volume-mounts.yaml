@@ -3,7 +3,6 @@ steps:
     agents:
       queue: {{.queue}}
     env:
-      BUILDKITE_SHELL: /bin/sh -e -c
       BUILDKITE_GIT_CLONE_MIRROR_FLAGS: --mirror
       BUILDKITE_GIT_MIRRORS_PATH: /tmp/buildkite-git-mirrors
     plugins:
@@ -11,11 +10,15 @@ steps:
           podSpec:
             containers:
               - image: alpine:latest
-                command: [bash]
-                args: [-c "echo 'volume mounted' > /tmp/buildkite-git-mirrors/foo.txt"]
+                command: [ash]
+                args:
+                  -  -c
+                  - "echo 'volume mounted' > /tmp/buildkite-git-mirrors/foo.txt"
               - image: alpine:latest
-                command: [bash]
-                args: ["sleep 2; cat /tmp/buildkite-git-mirrors/foo.txt"]
+                command: [ash]
+                args:
+                  - -c
+                  - "sleep 2; cat /tmp/buildkite-git-mirrors/foo.txt"
             volumes:
               - name: host-volume
                 hostPath:
