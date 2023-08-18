@@ -32,7 +32,8 @@ roleRef:
   name: {{ .Release.Name }}-controller
 subjects:
   - kind: ServiceAccount
-    {{- include "agent-stack-k8s.serviceAccountMetadata" . | nindent 4 }}
+    name: {{ .Release.Name }}-controller
+    namespace: {{ .Release.Namespace }}
 ---
 apiVersion: v1
 kind: ServiceAccount
