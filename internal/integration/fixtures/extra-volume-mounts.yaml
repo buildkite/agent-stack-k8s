@@ -13,12 +13,12 @@ steps:
                 command: [ash]
                 args:
                   -  -c
-                  - "echo 'volume mounted' > /tmp/buildkite-git-mirrors/foo.txt"
+                  - '"echo volume mounted > /tmp/buildkite-git-mirrors/foo.txt"'
               - image: alpine:latest
                 command: [ash]
                 args:
                   - -c
-                  - "sleep 2; cat /tmp/buildkite-git-mirrors/foo.txt"
+                  - '"sleep 2; cat /tmp/buildkite-git-mirrors/foo.txt"'
             volumes:
               - name: host-volume
                 hostPath:
