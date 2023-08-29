@@ -18,7 +18,7 @@ read -r -p "Enter job ID: " job_id
 
 # Create a temporary directory to store our logs
 now=$(date +"%F")
-dir=$(mktemp -d agent-k8s-stack-logs-"$now"-XXXX)
+dir=$(mktemp -d agent-stack-k8s-logs-"$now"-XXXX)
 
 job_exists=$(kubectl get job -l buildkite.com/job-uuid="$job_id" -n "$namespace" --ignore-not-found=true)
 if [ -z "$job_exists" ]; then
@@ -30,14 +30,14 @@ else
     echo "Describing pod with label buildkite.com/job-uuid=$job_id in namespace $namespace"
     kubectl describe pod -n "${namespace}" -l "buildkite.com/job-uuid=$job_id" > "$dir"/describe_pod.log
 
-    echo "Describing pod with label agent-k8s-stack in namespace $namespace"
-    kubectl describe pod -n "${namespace}" -l "app=agent-k8s-stack" > "$dir"/describe_controller_pod.log
+    echo "Describing pod with label agent-stack-k8s in namespace $namespace"
+    kubectl describe pod -n "${namespace}" -l "app=agent-stack-k8s" > "$dir"/describe_controller_pod.log
 
     echo "Getting logs for pod with label job=$job_id in namespace $namespace"
     get_logs_by_label "${namespace}" "buildkite.com/job-uuid=$job_id"
 
-    echo "Getting logs for pod with label agent-k8s-stack in namespace $namespace"
-    get_logs_by_label "${namespace}" "app=agent-k8s-stack"
+    echo "Getting logs for pod with label agent-stack-k8s in namespace $namespace"
+    get_logs_by_label "${namespace}" "app=agent-stack-k8s"
 fi
 
 # Compress logs
