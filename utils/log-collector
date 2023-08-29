@@ -1,0 +1,45 @@
+#!/bin/bash
+
+# Function to get logs for pods with a specific label
+get_logs_by_label() {
+    local namespace=$1
+    local label_selector=$2
+    local pod_names=$(kubectl get pods -n $namespace -l $label_selector --output=jsonpath='{.items[*].metadata.name}')
+
+    for pod in $pod_names; do
+        kubectl logs -n $namespace $pod --all-containers=true > $pod.log
+    done
+}
+
+# Main script
+read -p "Enter namespace: " namespace
+read -p "Enter job ID: " job_id
+
+job_exists=$(kubectl get job -l buildkite.com/job-uuid=$job_id -n $namespace --ignore-not-found=true)
+if [ -z "$job_exists" ]; then
+    echo "Job $job_id not found in namespace $namespace."
+else
+    echo "Describing job with label buildkite.com/job-uuid=$job_id in namespace $namespace:"
+    kubectl describe job -n $namespace -l "buildkite.com/job-uuid=$job_id" -o yaml > describe_job.log
+
+    echo "Describing pod with label buildkite.com/job-uuid=$job_id in namespace $namespace:"
+    kubectl describe pod -n $namespace -l "buildkite.com/job-uuid=$job_id" -o yaml > describe_pod.log
+
+    echo "Describing pod with label agent-k8s-stack in namespace $namespace:"
+    kubectl describe pod -n $namespace -l "app=agent-k8s-stack" -o yaml > describe_controller_pod.log
+
+    echo "Getting logs for pod with label job=$job_id in namespace $namespace:"
+    get_logs_by_label $namespace "buildkite.com/job-uuid=$job_id"
+
+    echo "Getting logs for pod with label agent-k8s-stack in namespace $namespace:"
+    get_logs_by_label $namespace "app=agent-k8s-stack"
+fi
+
+# Compress logs
+tar -czvf logs.tar.gz *.log
+echo "Logs compressed as logs.tar.gz"
+
+# Clean up log files
+rm -rf *.log
+
+echo "Script execution completed."
