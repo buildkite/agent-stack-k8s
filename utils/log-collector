@@ -30,15 +30,15 @@ else
     echo "Describing pod with label buildkite.com/job-uuid=$job_id in namespace $namespace"
     kubectl describe pod -n "${namespace}" -l "buildkite.com/job-uuid=$job_id" > "$dir"/describe_pod.log
 
-    echo "Describing pod with label agent-stack-k8s in namespace $namespace"
-    kubectl describe pod -n "${namespace}" -l "app=agent-stack-k8s" > "$dir"/describe_controller_pod.log
-
     echo "Getting logs for pod with label job=$job_id in namespace $namespace"
     get_logs_by_label "${namespace}" "buildkite.com/job-uuid=$job_id"
-
-    echo "Getting logs for pod with label agent-stack-k8s in namespace $namespace"
-    get_logs_by_label "${namespace}" "app=agent-stack-k8s"
 fi
+
+echo "Describing pod with label agent-stack-k8s in namespace $namespace"
+kubectl describe pod -n "${namespace}" -l "app=agent-stack-k8s" > "$dir"/describe_controller_pod.log
+
+echo "Getting logs for pod with label agent-stack-k8s in namespace $namespace"
+get_logs_by_label "${namespace}" "app=agent-stack-k8s"
 
 # Compress logs
 tar -czvf logs.tar.gz "$dir"/*.log
