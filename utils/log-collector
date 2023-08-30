@@ -45,7 +45,7 @@ tar -czvf logs.tar.gz "$dir"/*.log
 echo "Logs compressed as logs.tar.gz"
 
 # Clean up log files
-rm -rf "$dir"/*.log
+rm -rf "$dir"
 
 echo "Script execution completed."
 
