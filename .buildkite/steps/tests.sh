@@ -11,11 +11,18 @@ branch="${BUILDKITE_BRANCH:-main}"
 IMAGE=$(buildkite-agent meta-data get "agent-image")
 export IMAGE
 
-gotestsum \
-  --junitfile "junit-${BUILDKITE_JOB_ID}.xml" \
+args=(
+  --junitfile "junit-${BUILDKITE_JOB_ID}.xml"
   -- \
   -count=1 \
   -failfast \
   -ldflags="-X ${package}.branch=${branch}" \
-  "$@" \
   ./...
+)
+
+if [[ "${TEST_PRESERVE_PIPELINES:-false}" == "true" ]]; then
+  echo Preserving pipelines for debugging
+  args+=(--preserve-pipelines)
+fi
+
+gotestsum "${args[@]}"
