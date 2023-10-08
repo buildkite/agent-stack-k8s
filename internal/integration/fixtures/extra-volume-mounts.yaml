@@ -1,9 +1,10 @@
+agents:
+  queue: {{.queue}}
+env:
+  BUILDKITE_GIT_MIRRORS_PATH: /tmp/buildkite-git-mirrors
 steps:
-- label: ":wave:"
-  agents:
-    queue: {{.queue}}
-  env:
-    BUILDKITE_GIT_MIRRORS_PATH: /tmp/buildkite-git-mirrors
+- label: ":git: Write File to Git Mirror Dir"
+  key: write-file-to-git-mirror-dir
   plugins:
   - kubernetes:
       podSpec:
@@ -12,12 +13,29 @@ steps:
           command: [ash]
           args:
           -  -c
-          - '"echo volume mounted > /tmp/buildkite-git-mirrors/foo.txt"'
+          - '"echo volume_mounted > /tmp/buildkite-git-mirrors/foo.txt"'
+        volumes:
+        - name: host-volume
+          hostPath:
+            path: /tmp/volumes/git-mirrors/{{.queue}}
+            type: DirectoryOrCreate
+      extraVolumeMounts:
+      - name: host-volume
+        mountPath: /tmp/buildkite-git-mirrors
+        subPath: buildkite-git-mirrors
+- label: ":git: Check File in Git Mirror Dir"
+  key: check-file-in-git-mirror-dir
+  depends_on:
+  - write-file-to-git-mirror-dir
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
         - image: alpine:latest
           command: [ash]
           args:
           - -c
-          - '"sleep 2; cat /tmp/buildkite-git-mirrors/foo.txt"'
+          - '"grep -Fx volume_mounted /tmp/buildkite-git-mirrors/foo.txt"'
         volumes:
         - name: host-volume
           hostPath:
