@@ -21,7 +21,7 @@ steps:
         volumes:
         - name: host-volume
           hostPath:
-            path: /tmp/volumes/git-mirrors
+            path: /tmp/volumes/git-mirrors/{{.queue}}
             type: DirectoryOrCreate
       extraVolumeMounts:
       - name: host-volume
