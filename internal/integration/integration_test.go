@@ -185,7 +185,7 @@ func TestExtraVolumeMounts(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	tc.AssertLogsContain(build, "volume mounted")
+	tc.AssertLogsContain(build, "volume_mounted")
 }
 
 func TestInvalidPodSpec(t *testing.T) {
