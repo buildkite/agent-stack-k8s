@@ -1,30 +1,29 @@
 steps:
-  - label: ":wave:"
-    agents:
-      queue: {{.queue}}
-    env:
-      BUILDKITE_GIT_CLONE_MIRROR_FLAGS: --mirror
-      BUILDKITE_GIT_MIRRORS_PATH: /tmp/buildkite-git-mirrors
-    plugins:
-      - kubernetes:
-          podSpec:
-            containers:
-              - image: alpine:latest
-                command: [ash]
-                args:
-                  -  -c
-                  - '"echo volume mounted > /tmp/buildkite-git-mirrors/foo.txt"'
-              - image: alpine:latest
-                command: [ash]
-                args:
-                  - -c
-                  - '"sleep 2; cat /tmp/buildkite-git-mirrors/foo.txt"'
-            volumes:
-              - name: host-volume
-                hostPath:
-                  path: /tmp
-                  type: ''
-          extraVolumeMounts:
-              - name: host-volume
-                mountPath: /tmp/buildkite-git-mirrors
-                subPath: buildkite-git-mirrors
+- label: ":wave:"
+  agents:
+    queue: {{.queue}}
+  env:
+    BUILDKITE_GIT_MIRRORS_PATH: /tmp/buildkite-git-mirrors
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - image: alpine:latest
+          command: [ash]
+          args:
+          -  -c
+          - '"echo volume mounted > /tmp/buildkite-git-mirrors/foo.txt"'
+        - image: alpine:latest
+          command: [ash]
+          args:
+          - -c
+          - '"sleep 2; cat /tmp/buildkite-git-mirrors/foo.txt"'
+        volumes:
+        - name: host-volume
+          hostPath:
+            path: /tmp/volumes/{{.queue}}
+            type: ''
+      extraVolumeMounts:
+      - name: host-volume
+        mountPath: /tmp/buildkite-git-mirrors
+        subPath: buildkite-git-mirrors
