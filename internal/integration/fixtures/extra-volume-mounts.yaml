@@ -22,7 +22,7 @@ steps:
         - name: host-volume
           hostPath:
             path: /tmp/volumes/git-mirrors
-            type: ''
+            type: DirectoryOrCreate
       extraVolumeMounts:
       - name: host-volume
         mountPath: /tmp/buildkite-git-mirrors
