@@ -116,6 +116,7 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 		PipelineID: pipelineID,
 		Commit:     "HEAD",
 		Branch:     branch,
+		Message:    t.Name(),
 	})
 	require.NoError(t, err)
 	EnsureCleanup(t.T, func() {
