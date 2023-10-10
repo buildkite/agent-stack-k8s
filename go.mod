@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/Khan/genqlient v0.5.0
 	github.com/buildkite/go-buildkite/v3 v3.1.0
-	github.com/buildkite/roko v1.0.3-0.20221121010703-599521c80157
+	github.com/buildkite/roko v1.1.1
 	github.com/go-playground/locales v0.14.0
 	github.com/go-playground/universal-translator v0.18.0
 	github.com/go-playground/validator/v10 v10.11.1
