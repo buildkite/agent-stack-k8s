@@ -69,7 +69,7 @@ func (t testcase) Init() testcase {
 	return t
 }
 
-func (t testcase) CreatePipeline(ctx context.Context) string {
+func (t testcase) CreatePipeline(ctx context.Context) (string, func()) {
 	t.Helper()
 
 	tpl, err := template.ParseFS(fixtures, fmt.Sprintf("fixtures/%s", t.Fixture))
@@ -89,11 +89,11 @@ func (t testcase) CreatePipeline(ctx context.Context) string {
 	})
 	require.NoError(t, err)
 
-	if !preservePipelines {
-		t.deletePipeline(ctx)
+	return *pipeline.GraphQLID, func() {
+		if !preservePipelines {
+			t.deletePipeline(ctx)
+		}
 	}
-
-	return *pipeline.GraphQLID
 }
 
 func (t testcase) StartController(ctx context.Context, cfg config.Config) {
@@ -116,6 +116,7 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 		PipelineID: pipelineID,
 		Commit:     "HEAD",
 		Branch:     branch,
+		Message:    t.Name(),
 	})
 	require.NoError(t, err)
 	EnsureCleanup(t.T, func() {

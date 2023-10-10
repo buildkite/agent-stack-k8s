@@ -19,7 +19,8 @@ func TestWalkingSkeleton(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID := tc.CreatePipeline(ctx)
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
@@ -46,7 +47,8 @@ func TestSSHRepoClone(t *testing.T) {
 		Get(ctx, "agent-stack-k8s", v1.GetOptions{})
 	require.NoError(t, err, "agent-stack-k8s secret must exist")
 
-	pipelineID := tc.CreatePipeline(ctx)
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
@@ -62,7 +64,8 @@ func TestPluginCloneFailsTests(t *testing.T) {
 
 	ctx := context.Background()
 
-	pipelineID := tc.CreatePipeline(ctx)
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
@@ -78,7 +81,8 @@ func TestMaxInFlightLimited(t *testing.T) {
 
 	ctx := context.Background()
 
-	pipelineID := tc.CreatePipeline(ctx)
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
 	cfg := cfg
 	cfg.MaxInFlight = 1
 	tc.StartController(ctx, cfg)
@@ -116,7 +120,8 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 
 	ctx := context.Background()
 
-	pipelineID := tc.CreatePipeline(ctx)
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
 	cfg := cfg
 	cfg.MaxInFlight = 0
 	tc.StartController(ctx, cfg)
@@ -159,7 +164,8 @@ func TestSidecars(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID := tc.CreatePipeline(ctx)
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
@@ -174,11 +180,12 @@ func TestExtraVolumeMounts(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID := tc.CreatePipeline(ctx)
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	tc.AssertLogsContain(build, "volume mounted")
+	tc.AssertLogsContain(build, "volume_mounted")
 }
 
 func TestInvalidPodSpec(t *testing.T) {
@@ -189,7 +196,8 @@ func TestInvalidPodSpec(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID := tc.CreatePipeline(ctx)
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
@@ -207,7 +215,8 @@ func TestInvalidPodJSON(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID := tc.CreatePipeline(ctx)
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
@@ -232,7 +241,8 @@ func TestEnvVariables(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID := tc.CreatePipeline(ctx)
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
@@ -247,7 +257,8 @@ func TestImagePullBackOffCancelled(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID := tc.CreatePipeline(ctx)
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
