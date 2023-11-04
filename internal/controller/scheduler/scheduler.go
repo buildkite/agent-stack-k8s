@@ -227,6 +227,8 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	ttl := int32(w.cfg.JobTTL.Seconds())
 	kjob.Spec.TTLSecondsAfterFinished = &ttl
 
+	podFailurePolicyRules := []batchv1.PodFailurePolicyRule{}
+
 	podSpec := &kjob.Spec.Template.Spec
 	for i, c := range podSpec.Containers {
 		command := strings.Join(append(c.Command, c.Args...), " ")
@@ -268,6 +270,14 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
 		podSpec.Containers[i] = c
+		podFailurePolicyRules = append(podFailurePolicyRules, batchv1.PodFailurePolicyRule{
+			Action: batchv1.PodFailurePolicyActionIgnore,
+			OnExitCodes: &batchv1.PodFailurePolicyOnExitCodesRequirement{
+				ContainerName: &c.Name,
+				Operator:      batchv1.PodFailurePolicyOnExitCodesOpNotIn,
+				Values:        []int32{0},
+			},
+		})
 	}
 
 	containerCount := len(podSpec.Containers) + systemContainers
@@ -279,6 +289,18 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
 		podSpec.Containers = append(podSpec.Containers, c)
+		podFailurePolicyRules = append(podFailurePolicyRules, batchv1.PodFailurePolicyRule{
+			Action: batchv1.PodFailurePolicyActionIgnore,
+			OnExitCodes: &batchv1.PodFailurePolicyOnExitCodesRequirement{
+				ContainerName: &c.Name,
+				Operator:      batchv1.PodFailurePolicyOnExitCodesOpNotIn,
+				Values:        []int32{0},
+			},
+		})
+	}
+
+	kjob.Spec.PodFailurePolicy = &batchv1.PodFailurePolicy{
+		Rules: podFailurePolicyRules,
 	}
 
 	if artifactPaths, found := w.envMap["BUILDKITE_ARTIFACT_PATHS"]; found && artifactPaths != "" {
