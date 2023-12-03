@@ -25,8 +25,27 @@ steps:
     - kubernetes:
         podSpec:
           containers:
-          - image: golang:1.20-alpine
+          - image: golang:1.21-alpine
             command: [.buildkite/steps/tidy.sh]
+            env:
+            - name: GOCACHE
+              value: /tmp/cache/go-build
+            - name: GOMODCACHE
+              value: /tmp/cache/go-mod
+            volumeMounts:
+            - name: go-build
+              mountPath: /tmp/cache/go-build
+            - name: go-mod
+              mountPath: /tmp/cache/go-mod
+          volumes:
+          - name: go-build
+            hostPath:
+              path: /tmp/cache/go-build
+              type: ''
+          - name: go-mod
+            hostPath:
+              path: /tmp/cache/go-mod
+              type: ''
 
   - label: ":go::lint-roller: lint"
     key: lint
@@ -34,12 +53,23 @@ steps:
     - kubernetes:
         podSpec:
           containers:
-          - image: golangci/golangci-lint:v1.53.3
+          - image: golangci/golangci-lint:v1.55.2
             command: [golangci-lint, run, ./...]
             resources:
               requests:
                 cpu: 1000m
                 memory: 1Gi
+            env:
+            - name: GOLANGCI_LINT_CACHE
+              value: /tmp/cache/golangci-lint
+            volumeMounts:
+            - name: golangci-lint-cache
+              mountPath: /tmp/cache/golangci-lint
+          volumes:
+          - name: golangci-lint-cache
+            hostPath:
+              path: /tmp/cache/golangci-lint
+              type: ''
 
   - label: ":golang::robot_face: check code generation"
     key: check-code-generation
@@ -48,8 +78,27 @@ steps:
         podSpec:
           containers:
           - name: docker
-            image: golang:alpine
+            image: golang:1.21-alpine
             command: [.buildkite/steps/check-code-generation.sh]
+            env:
+            - name: GOCACHE
+              value: /tmp/cache/go-build
+            - name: GOMODCACHE
+              value: /tmp/cache/go-mod
+            volumeMounts:
+            - name: go-build
+              mountPath: /tmp/cache/go-build
+            - name: go-mod
+              mountPath: /tmp/cache/go-mod
+          volumes:
+          - name: go-build
+            hostPath:
+              path: /tmp/cache/go-build
+              type: ''
+          - name: go-mod
+            hostPath:
+              path: /tmp/cache/go-mod
+              type: ''
 
   - label: ":docker::buildkite: choose agent image"
     key: agent
@@ -73,6 +122,14 @@ steps:
           - name: agent-stack-k8s-config
             configMap:
               name: agent-stack-k8s-config
+          - name: go-build
+            hostPath:
+              path: /tmp/cache/go-build
+              type: ''
+          - name: go-mod
+            hostPath:
+              path: /tmp/cache/go-mod
+              type: ''
           containers:
           - name: tests
             image: golang:latest
@@ -80,6 +137,10 @@ steps:
             env:
             - name: CONFIG
               value: /etc/config.yaml
+            - name: GOCACHE
+              value: /tmp/cache/go-build
+            - name: GOMODCACHE
+              value: /tmp/cache/go-mod
             envFrom:
             - secretRef:
                 name: test-secrets
@@ -89,6 +150,10 @@ steps:
             - mountPath: /etc/config.yaml
               name: agent-stack-k8s-config
               subPath: config.yaml
+            - name: go-build
+              mountPath: /tmp/cache/go-build
+            - name: go-mod
+              mountPath: /tmp/cache/go-mod
             resources:
               requests:
                 cpu: 1000m
@@ -104,11 +169,30 @@ steps:
         podSpec:
           containers:
           - name: ko
-            image: golang:latest
+            image: golang:1.21
             command: [.buildkite/steps/controller.sh]
             envFrom:
             - secretRef:
                 name: deploy-secrets
+            env:
+            - name: GOCACHE
+              value: /tmp/cache/go-build
+            - name: GOMODCACHE
+              value: /tmp/cache/go-mod
+            volumeMounts:
+            - name: go-build
+              mountPath: /tmp/cache/go-build
+            - name: go-mod
+              mountPath: /tmp/cache/go-mod
+          volumes:
+          - name: go-build
+            hostPath:
+              path: /tmp/cache/go-build
+              type: ''
+          - name: go-mod
+            hostPath:
+              path: /tmp/cache/go-mod
+              type: ''
 
   # On feature branches, don't wait for integration tests. We may want to deploy
   # to a test cluster to debug the feature branch.
@@ -169,7 +253,7 @@ steps:
           serviceAccountName: release
           containers:
           - name: release
-            image: golang:1.20-alpine
+            image: alpine:latest
             command: [.buildkite/steps/release.sh]
             envFrom:
             - secretRef:
