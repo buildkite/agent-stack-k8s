@@ -1,0 +1,21 @@
+version: 2
+updates:
+- package-ecosystem: gomod
+  directory: /
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 10
+  groups:
+    k8s:
+      patterns:
+      - k8s.io/*
+      - sigs.k8s.io/*
+    otel:
+      patterns:
+      - go.opentelemetry.io/*
+    golang-x:
+      patterns:
+      - golang.org/x/*
+    google-cloud:
+      patterns:
+      - google.golang.org/*
