@@ -282,7 +282,7 @@ func (v *BuildJobsJobConnectionEdgesJobEdge) UnmarshalJSON(b []byte) error {
 				src, dst)
 			if err != nil {
 				return fmt.Errorf(
-					"Unable to unmarshal BuildJobsJobConnectionEdgesJobEdge.Node: %w", err)
+					"unable to unmarshal BuildJobsJobConnectionEdgesJobEdge.Node: %w", err)
 			}
 		}
 	}
@@ -313,7 +313,7 @@ func (v *BuildJobsJobConnectionEdgesJobEdge) __premarshalJSON() (*__premarshalBu
 			&src)
 		if err != nil {
 			return nil, fmt.Errorf(
-				"Unable to marshal BuildJobsJobConnectionEdgesJobEdge.Node: %w", err)
+				"unable to marshal BuildJobsJobConnectionEdgesJobEdge.Node: %w", err)
 		}
 	}
 	return &retval, nil
@@ -824,7 +824,7 @@ func (v *GetCommandJobResponse) UnmarshalJSON(b []byte) error {
 				src, dst)
 			if err != nil {
 				return fmt.Errorf(
-					"Unable to unmarshal GetCommandJobResponse.Job: %w", err)
+					"unable to unmarshal GetCommandJobResponse.Job: %w", err)
 			}
 		}
 	}
@@ -855,7 +855,7 @@ func (v *GetCommandJobResponse) __premarshalJSON() (*__premarshalGetCommandJobRe
 			&src)
 		if err != nil {
 			return nil, fmt.Errorf(
-				"Unable to marshal GetCommandJobResponse.Job: %w", err)
+				"unable to marshal GetCommandJobResponse.Job: %w", err)
 		}
 	}
 	return &retval, nil
@@ -950,7 +950,7 @@ func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge) Unm
 				src, dst)
 			if err != nil {
 				return fmt.Errorf(
-					"Unable to unmarshal GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge.Node: %w", err)
+					"unable to unmarshal GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge.Node: %w", err)
 			}
 		}
 	}
@@ -981,7 +981,7 @@ func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge) __p
 			&src)
 		if err != nil {
 			return nil, fmt.Errorf(
-				"Unable to marshal GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge.Node: %w", err)
+				"unable to marshal GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge.Node: %w", err)
 		}
 	}
 	return &retval, nil
@@ -1063,7 +1063,7 @@ func (v *GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge) UnmarshalJSO
 				src, dst)
 			if err != nil {
 				return fmt.Errorf(
-					"Unable to unmarshal GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge.Node: %w", err)
+					"unable to unmarshal GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge.Node: %w", err)
 			}
 		}
 	}
@@ -1094,7 +1094,7 @@ func (v *GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge) __premarshal
 			&src)
 		if err != nil {
 			return nil, fmt.Errorf(
-				"Unable to marshal GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge.Node: %w", err)
+				"unable to marshal GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge.Node: %w", err)
 		}
 	}
 	return &retval, nil
@@ -1593,6 +1593,15 @@ func (v *__SearchPipelinesInput) GetSearch() string { return v.Search }
 // GetFirst returns __SearchPipelinesInput.First, and is useful for accessing the field via an interface.
 func (v *__SearchPipelinesInput) GetFirst() int { return v.First }
 
+// The query or mutation executed by BuildCancel.
+const BuildCancel_Operation = `
+mutation BuildCancel ($input: BuildCancelInput!) {
+	buildCancel(input: $input) {
+		clientMutationId
+	}
+}
+`
+
 func BuildCancel(
 	ctx context.Context,
 	client graphql.Client,
@@ -1600,13 +1609,7 @@ func BuildCancel(
 ) (*BuildCancelResponse, error) {
 	req := &graphql.Request{
 		OpName: "BuildCancel",
-		Query: `
-mutation BuildCancel ($input: BuildCancelInput!) {
-	buildCancel(input: $input) {
-		clientMutationId
-	}
-}
-`,
+		Query:  BuildCancel_Operation,
 		Variables: &__BuildCancelInput{
 			Input: input,
 		},
@@ -1625,14 +1628,8 @@ mutation BuildCancel ($input: BuildCancelInput!) {
 	return &data, err
 }
 
-func BuildCreate(
-	ctx context.Context,
-	client graphql.Client,
-	input BuildCreateInput,
-) (*BuildCreateResponse, error) {
-	req := &graphql.Request{
-		OpName: "BuildCreate",
-		Query: `
+// The query or mutation executed by BuildCreate.
+const BuildCreate_Operation = `
 mutation BuildCreate ($input: BuildCreateInput!) {
 	buildCreate(input: $input) {
 		build {
@@ -1666,7 +1663,16 @@ fragment CommandJob on JobTypeCommand {
 	agentQueryRules
 	command
 }
-`,
+`
+
+func BuildCreate(
+	ctx context.Context,
+	client graphql.Client,
+	input BuildCreateInput,
+) (*BuildCreateResponse, error) {
+	req := &graphql.Request{
+		OpName: "BuildCreate",
+		Query:  BuildCreate_Operation,
 		Variables: &__BuildCreateInput{
 			Input: input,
 		},
@@ -1685,6 +1691,15 @@ fragment CommandJob on JobTypeCommand {
 	return &data, err
 }
 
+// The query or mutation executed by CancelCommandJob.
+const CancelCommandJob_Operation = `
+mutation CancelCommandJob ($input: JobTypeCommandCancelInput!) {
+	jobTypeCommandCancel(input: $input) {
+		clientMutationId
+	}
+}
+`
+
 func CancelCommandJob(
 	ctx context.Context,
 	client graphql.Client,
@@ -1692,13 +1707,7 @@ func CancelCommandJob(
 ) (*CancelCommandJobResponse, error) {
 	req := &graphql.Request{
 		OpName: "CancelCommandJob",
-		Query: `
-mutation CancelCommandJob ($input: JobTypeCommandCancelInput!) {
-	jobTypeCommandCancel(input: $input) {
-		clientMutationId
-	}
-}
-`,
+		Query:  CancelCommandJob_Operation,
 		Variables: &__CancelCommandJobInput{
 			Input: input,
 		},
@@ -1717,14 +1726,8 @@ mutation CancelCommandJob ($input: JobTypeCommandCancelInput!) {
 	return &data, err
 }
 
-func GetBuild(
-	ctx context.Context,
-	client graphql.Client,
-	uuid string,
-) (*GetBuildResponse, error) {
-	req := &graphql.Request{
-		OpName: "GetBuild",
-		Query: `
+// The query or mutation executed by GetBuild.
+const GetBuild_Operation = `
 query GetBuild ($uuid: ID!) {
 	build(uuid: $uuid) {
 		... Build
@@ -1756,7 +1759,16 @@ fragment CommandJob on JobTypeCommand {
 	agentQueryRules
 	command
 }
-`,
+`
+
+func GetBuild(
+	ctx context.Context,
+	client graphql.Client,
+	uuid string,
+) (*GetBuildResponse, error) {
+	req := &graphql.Request{
+		OpName: "GetBuild",
+		Query:  GetBuild_Operation,
 		Variables: &__GetBuildInput{
 			Uuid: uuid,
 		},
@@ -1775,16 +1787,8 @@ fragment CommandJob on JobTypeCommand {
 	return &data, err
 }
 
-func GetBuilds(
-	ctx context.Context,
-	client graphql.Client,
-	slug string,
-	state []BuildStates,
-	first int,
-) (*GetBuildsResponse, error) {
-	req := &graphql.Request{
-		OpName: "GetBuilds",
-		Query: `
+// The query or mutation executed by GetBuilds.
+const GetBuilds_Operation = `
 query GetBuilds ($slug: ID!, $state: [BuildStates!], $first: Int) {
 	pipeline(slug: $slug) {
 		builds(state: $state, first: $first) {
@@ -1822,7 +1826,18 @@ fragment CommandJob on JobTypeCommand {
 	agentQueryRules
 	command
 }
-`,
+`
+
+func GetBuilds(
+	ctx context.Context,
+	client graphql.Client,
+	slug string,
+	state []BuildStates,
+	first int,
+) (*GetBuildsResponse, error) {
+	req := &graphql.Request{
+		OpName: "GetBuilds",
+		Query:  GetBuilds_Operation,
 		Variables: &__GetBuildsInput{
 			Slug:  slug,
 			State: state,
@@ -1843,14 +1858,8 @@ fragment CommandJob on JobTypeCommand {
 	return &data, err
 }
 
-func GetCommandJob(
-	ctx context.Context,
-	client graphql.Client,
-	uuid string,
-) (*GetCommandJobResponse, error) {
-	req := &graphql.Request{
-		OpName: "GetCommandJob",
-		Query: `
+// The query or mutation executed by GetCommandJob.
+const GetCommandJob_Operation = `
 query GetCommandJob ($uuid: ID!) {
 	job(uuid: $uuid) {
 		__typename
@@ -1860,7 +1869,16 @@ query GetCommandJob ($uuid: ID!) {
 		}
 	}
 }
-`,
+`
+
+func GetCommandJob(
+	ctx context.Context,
+	client graphql.Client,
+	uuid string,
+) (*GetCommandJobResponse, error) {
+	req := &graphql.Request{
+		OpName: "GetCommandJob",
+		Query:  GetCommandJob_Operation,
 		Variables: &__GetCommandJobInput{
 			Uuid: uuid,
 		},
@@ -1879,6 +1897,15 @@ query GetCommandJob ($uuid: ID!) {
 	return &data, err
 }
 
+// The query or mutation executed by GetOrganization.
+const GetOrganization_Operation = `
+query GetOrganization ($slug: ID!) {
+	organization(slug: $slug) {
+		id
+	}
+}
+`
+
 func GetOrganization(
 	ctx context.Context,
 	client graphql.Client,
@@ -1886,13 +1913,7 @@ func GetOrganization(
 ) (*GetOrganizationResponse, error) {
 	req := &graphql.Request{
 		OpName: "GetOrganization",
-		Query: `
-query GetOrganization ($slug: ID!) {
-	organization(slug: $slug) {
-		id
-	}
-}
-`,
+		Query:  GetOrganization_Operation,
 		Variables: &__GetOrganizationInput{
 			Slug: slug,
 		},
@@ -1911,15 +1932,8 @@ query GetOrganization ($slug: ID!) {
 	return &data, err
 }
 
-func GetScheduledJobs(
-	ctx context.Context,
-	client graphql.Client,
-	slug string,
-	agentQueryRules []string,
-) (*GetScheduledJobsResponse, error) {
-	req := &graphql.Request{
-		OpName: "GetScheduledJobs",
-		Query: `
+// The query or mutation executed by GetScheduledJobs.
+const GetScheduledJobs_Operation = `
 query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!]) {
 	organization(slug: $slug) {
 		id
@@ -1946,7 +1960,17 @@ fragment CommandJob on JobTypeCommand {
 	agentQueryRules
 	command
 }
-`,
+`
+
+func GetScheduledJobs(
+	ctx context.Context,
+	client graphql.Client,
+	slug string,
+	agentQueryRules []string,
+) (*GetScheduledJobsResponse, error) {
+	req := &graphql.Request{
+		OpName: "GetScheduledJobs",
+		Query:  GetScheduledJobs_Operation,
 		Variables: &__GetScheduledJobsInput{
 			Slug:            slug,
 			AgentQueryRules: agentQueryRules,
@@ -1966,16 +1990,8 @@ fragment CommandJob on JobTypeCommand {
 	return &data, err
 }
 
-func GetScheduledJobsClustered(
-	ctx context.Context,
-	client graphql.Client,
-	slug string,
-	agentQueryRules []string,
-	cluster string,
-) (*GetScheduledJobsClusteredResponse, error) {
-	req := &graphql.Request{
-		OpName: "GetScheduledJobsClustered",
-		Query: `
+// The query or mutation executed by GetScheduledJobsClustered.
+const GetScheduledJobsClustered_Operation = `
 query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!) {
 	organization(slug: $slug) {
 		id
@@ -2002,7 +2018,18 @@ fragment CommandJob on JobTypeCommand {
 	agentQueryRules
 	command
 }
-`,
+`
+
+func GetScheduledJobsClustered(
+	ctx context.Context,
+	client graphql.Client,
+	slug string,
+	agentQueryRules []string,
+	cluster string,
+) (*GetScheduledJobsClusteredResponse, error) {
+	req := &graphql.Request{
+		OpName: "GetScheduledJobsClustered",
+		Query:  GetScheduledJobsClustered_Operation,
 		Variables: &__GetScheduledJobsClusteredInput{
 			Slug:            slug,
 			AgentQueryRules: agentQueryRules,
@@ -2023,6 +2050,15 @@ fragment CommandJob on JobTypeCommand {
 	return &data, err
 }
 
+// The query or mutation executed by PipelineDelete.
+const PipelineDelete_Operation = `
+mutation PipelineDelete ($input: PipelineDeleteInput!) {
+	pipelineDelete(input: $input) {
+		clientMutationId
+	}
+}
+`
+
 // ## The following are used in the cleanup integration "test"
 func PipelineDelete(
 	ctx context.Context,
@@ -2031,13 +2067,7 @@ func PipelineDelete(
 ) (*PipelineDeleteResponse, error) {
 	req := &graphql.Request{
 		OpName: "PipelineDelete",
-		Query: `
-mutation PipelineDelete ($input: PipelineDeleteInput!) {
-	pipelineDelete(input: $input) {
-		clientMutationId
-	}
-}
-`,
+		Query:  PipelineDelete_Operation,
 		Variables: &__PipelineDeleteInput{
 			Input: input,
 		},
@@ -2056,16 +2086,8 @@ mutation PipelineDelete ($input: PipelineDeleteInput!) {
 	return &data, err
 }
 
-func SearchPipelines(
-	ctx context.Context,
-	client graphql.Client,
-	slug string,
-	search string,
-	first int,
-) (*SearchPipelinesResponse, error) {
-	req := &graphql.Request{
-		OpName: "SearchPipelines",
-		Query: `
+// The query or mutation executed by SearchPipelines.
+const SearchPipelines_Operation = `
 query SearchPipelines ($slug: ID!, $search: String!, $first: Int!) {
 	organization(slug: $slug) {
 		pipelines(search: $search, first: $first) {
@@ -2078,7 +2100,18 @@ query SearchPipelines ($slug: ID!, $search: String!, $first: Int!) {
 		}
 	}
 }
-`,
+`
+
+func SearchPipelines(
+	ctx context.Context,
+	client graphql.Client,
+	slug string,
+	search string,
+	first int,
+) (*SearchPipelinesResponse, error) {
+	req := &graphql.Request{
+		OpName: "SearchPipelines",
+		Query:  SearchPipelines_Operation,
 		Variables: &__SearchPipelinesInput{
 			Slug:   slug,
 			Search: search,
