@@ -16,7 +16,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.14.0
 	github.com/xeipuuv/gojsonschema v1.2.0
-	go.uber.org/zap v1.24.0
+	go.uber.org/zap v1.26.0
 	gotest.tools/gotestsum v1.11.0
 	k8s.io/api v0.26.0
 	k8s.io/apimachinery v0.26.0
@@ -52,7 +52,6 @@ require (
 	github.com/DataDog/sketches-go v1.2.1 // indirect
 	github.com/Microsoft/go-winio v0.5.1 // indirect
 	github.com/aws/aws-sdk-go v1.44.181 // indirect
-	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf // indirect
 	github.com/buildkite/agent/v3 v3.45.0
 	github.com/buildkite/interpolate v0.0.0-20200526001904-07f35b4ae251 // indirect
@@ -139,8 +138,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.14.0 // indirect
 	go.opentelemetry.io/otel/trace v1.14.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
-	go.uber.org/multierr v1.9.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
 	go4.org/intern v0.0.0-20211027215823-ae77deb06f29 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20220617031537-928513b29760 // indirect
 	golang.org/x/crypto v0.11.0 // indirect
