@@ -53,13 +53,13 @@ func TestMain(m *testing.M) {
 	}
 
 	// remove flags parsed by controller.ParseConfig
-	for i, v := range os.Args {
-		if strings.Contains(v, "test") {
-			os.Args[i] = v
-		} else {
-			os.Args[i] = ""
+	newArgs := []string{}
+	for _, v := range os.Args {
+		if strings.HasPrefix(v, "-test") {
+			newArgs = append(newArgs, v)
 		}
 	}
+	os.Args = newArgs
 
 	os.Exit(m.Run())
 }
