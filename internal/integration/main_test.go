@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -18,10 +19,10 @@ const (
 )
 
 var (
-	branch                  string
-	preservePipelines       bool
-	deleteOrphanedPipelines bool
-	cfg                     config.Config
+	branch            string
+	cfg               config.Config
+	cleanupPipelines  bool
+	preservePipelines bool
 
 	//go:embed fixtures/*
 	fixtures embed.FS
@@ -31,37 +32,27 @@ func TestMain(m *testing.M) {
 	var err error
 
 	cmd := controller.New()
-	cmd.Flags().BoolVar(
-		&preservePipelines,
-		"preserve-pipelines",
-		false,
-		"preserve pipelines created by tests",
-	)
-	cmd.Flags().BoolVar(
-		&deleteOrphanedPipelines,
-		"delete-orphaned-pipelines",
-		false,
-		"delete all pipelines matching agent-k8s-*",
-	)
-
-	if err = os.Chdir(".."); err != nil {
-		log.Fatal(err)
+	if err = os.Chdir("../.."); err != nil {
+		log.Fatalf("Error changing dir: %s", err)
 	}
 	if cfg, err = controller.ParseConfig(cmd, os.Args[1:]); err != nil {
-		log.Fatal(err)
+		log.Fatalf("Error parsing config: %s", err)
 	}
-	if err = os.Chdir("integration"); err != nil {
-		log.Fatal(err)
+	if err = os.Chdir("internal/integration"); err != nil {
+		log.Fatalf("Error changing dir: %s", err)
 	}
 
-	if !deleteOrphanedPipelines && branch == "" {
-		log.Printf("%t", deleteOrphanedPipelines)
+	cleanupPipelines = parseBoolEnvVar("CLEANUP_PIPELINES")
+	preservePipelines = parseBoolEnvVar("PRESERVE_PIPELINES")
+
+	if !cleanupPipelines && branch == "" {
 		log.Fatalf(
-			`You need to run the tests with a flag: -ldflags="-X %s.branch=$BRANCH_NAME"`,
+			`The tests need to be run with the flag: -ldflags="-X %s.branch=$BRANCH_NAME"`,
 			reflect.TypeOf(testcase{}).PkgPath(),
 		)
 	}
 
+	// remove flags parsed by controller.ParseConfig
 	for i, v := range os.Args {
 		if strings.Contains(v, "test") {
 			os.Args[i] = v
@@ -71,4 +62,16 @@ func TestMain(m *testing.M) {
 	}
 
 	os.Exit(m.Run())
+}
+
+func parseBoolEnvVar(name string) bool {
+	e := os.Getenv(name)
+	if e == "" {
+		return false
+	}
+	b, err := strconv.ParseBool(e)
+	if err != nil {
+		log.Fatalf("Error parsing %s: %s", name, err)
+	}
+	return b
 }
