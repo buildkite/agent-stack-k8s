@@ -61,6 +61,7 @@ deploy *FLAGS:
     --wait \
     {{FLAGS}}
 
+# Invoke with CLEAN_PIPELINES=true
 # pass in --org=<org slug of k8s pipeline> --buildkite-token=<graphql-token>
 cleanup-orphans *FLAGS:
-  @go test -v -run TestCleanupOrphanedPipelines ./internal/integration --delete-orphaned-pipelines {{FLAGS}}
+  @go test -v -run TestCleanupOrphanedPipelines ./internal/integration {{FLAGS}}

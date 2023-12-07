@@ -110,8 +110,8 @@ steps:
             image: alpine:latest
             command: [.buildkite/steps/agent.sh]
 
-  - label: ":buildkite: integration tests"
-    key: integration
+  - label: ":buildkite::test_tube: tests"
+    key: tests
     depends_on: agent
     artifact_paths: junit-*.xml
     plugins:
@@ -194,7 +194,7 @@ steps:
               path: /tmp/cache/go-mod
               type: ''
 
-  # On feature branches, don't wait for integration tests. We may want to deploy
+  # On feature branches, don't wait for tests. We may want to deploy
   # to a test cluster to debug the feature branch.
   - if: build.branch != pipeline.default_branch && build.tag !~ /^.+\$/
     <<: *push
@@ -206,8 +206,8 @@ steps:
     - agent
     - controller
 
-  # On the main branch or tags, wait for integration tests. We don't want to
-  # push a new image or chart unless the integration tests pass.
+  # On the main branch or tags, wait for tests. We don't want to
+  # push a new image or chart unless the tests pass.
   - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
     <<: *push
     key: push-main-or-tag
@@ -217,7 +217,7 @@ steps:
     - check-code-generation
     - agent
     - controller
-    - integration
+    - tests
 
   - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
     label: ":shipit: deploy"

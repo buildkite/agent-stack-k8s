@@ -15,7 +15,7 @@ import (
 )
 
 func TestCleanupOrphanedPipelines(t *testing.T) {
-	if !deleteOrphanedPipelines {
+	if !cleanupPipelines {
 		t.Skip("not cleaning orphaned pipelines")
 	}
 
