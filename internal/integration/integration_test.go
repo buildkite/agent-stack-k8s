@@ -33,6 +33,22 @@ func TestWalkingSkeleton(t *testing.T) {
 	)
 }
 
+func TestChown(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "chown.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	tc.AssertArtifactsContain(build, "some-file")
+}
+
 func TestSSHRepoClone(t *testing.T) {
 	tc := testcase{
 		T:       t,
@@ -144,7 +160,7 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 				}
 			}
 			t.Logf("running, runningJobs: %d", runningJobs)
-			maxRunningJobs = maxOf(maxRunningJobs, runningJobs)
+			maxRunningJobs = max(maxRunningJobs, runningJobs)
 		} else if *build.State == "passed" {
 			require.Equal(t, 4, maxRunningJobs) // all jobs should have run at once
 			break
@@ -224,13 +240,6 @@ func TestInvalidPodJSON(t *testing.T) {
 		build,
 		"failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.PodSpec.containers.env.value of type string",
 	)
-}
-
-func maxOf(x, y int) int {
-	if x < y {
-		return y
-	}
-	return x
 }
 
 func TestEnvVariables(t *testing.T) {

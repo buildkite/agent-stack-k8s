@@ -1,0 +1,43 @@
+agents:
+  queue: {{.queue}}
+steps:
+- label: Write some file
+  key: write-some-file
+  artifact_paths: some-file
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - image: alpine:latest
+          command:
+          - touch
+          - some-file
+- label: Write some file as non-root
+  key: write-some-file-non-root
+  artifact_paths: some-file
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - image: alpine:latest
+          command:
+          - pwd
+        - image: alpine:latest
+          command:
+          - ls
+          - -la
+        - image: alpine:latest
+          command:
+          - ash
+          - -c
+          args:
+          - |-
+            echo "some contents" > some-file
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1001
+      workspace:
+        security:
+          user: 1000
+          group: 1001
