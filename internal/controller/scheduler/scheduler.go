@@ -43,12 +43,22 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 	}
 }
 
+type WorkspaceSecurity struct {
+	User  int64 `json:"user,omitempty"`
+	Group int64 `json:"group,omitempty"`
+}
+
+type Workspace struct {
+	Security *WorkspaceSecurity `json:"security,omitempty"`
+}
+
 type KubernetesPlugin struct {
 	PodSpec           *corev1.PodSpec
 	GitEnvFrom        []corev1.EnvFromSource
 	Sidecars          []corev1.Container `json:"sidecars,omitempty"`
 	Metadata          Metadata
 	ExtraVolumeMounts []corev1.VolumeMount
+	Workspace         Workspace `json:"workspace,omitempty"`
 }
 
 type Metadata struct {
@@ -386,43 +396,65 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
 		ImagePullPolicy: corev1.PullAlways,
-		Env: []corev1.EnvVar{{
-			Name:  "BUILDKITE_AGENT_EXPERIMENT",
-			Value: "kubernetes-exec",
-		}, {
-			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-			Value: "checkout,command",
-		}, {
-			Name:  "BUILDKITE_AGENT_NAME",
-			Value: "buildkite",
-		}, {
-			Name:  "BUILDKITE_CONTAINER_ID",
-			Value: "0",
-		}, {
-			Name:  "BUILDKITE_COMMAND",
-			Value: "cp -r ~/.ssh /workspace/.ssh && chmod -R 777 /workspace",
-		}},
-		EnvFrom: w.k8sPlugin.GitEnvFrom,
-	}
-	checkoutContainer.Env = append(checkoutContainer.Env, env...)
-	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
-	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
-		Name:            "copy-agent",
-		Image:           w.cfg.Image,
-		ImagePullPolicy: corev1.PullAlways,
-		Command:         []string{"cp"},
-		Args: []string{
-			"/usr/local/bin/buildkite-agent",
-			"/usr/local/bin/ssh-env-config.sh",
-			"/workspace",
-		},
-		VolumeMounts: []corev1.VolumeMount{
+		Env: []corev1.EnvVar{
 			{
-				Name:      "workspace",
-				MountPath: "/workspace",
+				Name:  "BUILDKITE_AGENT_EXPERIMENT",
+				Value: "kubernetes-exec",
+			},
+			{
+				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+				Value: "checkout",
+			},
+			{
+				Name:  "BUILDKITE_AGENT_NAME",
+				Value: "buildkite",
+			},
+			{
+				Name:  "BUILDKITE_CONTAINER_ID",
+				Value: "0",
 			},
 		},
-	})
+		EnvFrom: w.k8sPlugin.GitEnvFrom,
+	}
+
+	checkoutContainer.Env = append(checkoutContainer.Env, env...)
+	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
+	podSpec.InitContainers = append(
+		podSpec.InitContainers,
+		corev1.Container{
+			Name:            "copy-agent",
+			Image:           w.cfg.Image,
+			ImagePullPolicy: corev1.PullAlways,
+			Command:         []string{"cp"},
+			Args: []string{
+				"/usr/local/bin/buildkite-agent",
+				"/usr/local/bin/ssh-env-config.sh",
+				"/workspace",
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "workspace",
+					MountPath: "/workspace",
+				},
+			},
+		},
+		corev1.Container{
+			Name:            "ls",
+			Image:           w.cfg.Image,
+			ImagePullPolicy: corev1.PullAlways,
+			Command:         []string{"ls"},
+			Args: []string{
+				"-la",
+				"/workspace",
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "workspace",
+					MountPath: "/workspace",
+				},
+			},
+		},
+	)
 	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
 		Name: "workspace",
 		VolumeSource: corev1.VolumeSource{
@@ -430,6 +462,16 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		},
 	})
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
+
+	if w.k8sPlugin.Workspace.Security != nil && (w.k8sPlugin.Workspace.Security.User != 0 || w.k8sPlugin.Workspace.Security.Group != 0) {
+		kjob.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{
+			RunAsNonRoot: pointer.Bool(true),
+			RunAsUser:    pointer.Int64(w.k8sPlugin.Workspace.Security.User),
+			RunAsGroup:   pointer.Int64(w.k8sPlugin.Workspace.Security.Group),
+			FSGroup:      pointer.Int64(w.k8sPlugin.Workspace.Security.Group),
+		}
+	}
+
 	return kjob, nil
 }
 
