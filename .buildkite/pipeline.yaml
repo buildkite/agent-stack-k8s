@@ -62,13 +62,29 @@ steps:
             env:
             - name: GOLANGCI_LINT_CACHE
               value: /tmp/cache/golangci-lint
+            - name: GOCACHE
+              value: /tmp/cache/go-build
+            - name: GOMODCACHE
+              value: /tmp/cache/go-mod
             volumeMounts:
             - name: golangci-lint-cache
               mountPath: /tmp/cache/golangci-lint
+            - name: go-build
+              mountPath: /tmp/cache/go-build
+            - name: go-mod
+              mountPath: /tmp/cache/go-mod
           volumes:
           - name: golangci-lint-cache
             hostPath:
               path: /tmp/cache/golangci-lint
+              type: ''
+          - name: go-build
+            hostPath:
+              path: /tmp/cache/go-build
+              type: ''
+          - name: go-mod
+            hostPath:
+              path: /tmp/cache/go-mod
               type: ''
 
   - label: ":golang::robot_face: check code generation"
