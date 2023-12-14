@@ -1,0 +1,26 @@
+#!/bin/bash
+set -euo pipefail
+
+if [[ "$BUILDKITE_PIPELINE_SLUG" == "your_repo" ]]; then
+  export BUILDKITE_ANALYTICS_TOKEN="example"
+  # additional env variables here...
+
+  echo '--- :house_with_garden: Setting BUILDKITE_BRANCH_SLUG'
+  export BUILDKITE_BRANCH_SLUG=$(echo $BUILDKITE_BRANCH | sed 's|/|--|g')
+
+  export PULL_REQUEST_LABELS=""
+
+  if [[ "${BUILDKITE_PULL_REQUEST:-false}" != "false"  ]] ; then
+    labels="$(buildkite-agent meta-data get 'gh_labels' --default '')"
+
+    if [ -z "$labels" ]; then
+      labels="$(curl -f -Ss -H @- "https://api.github.com/repos/${GITHUB_REPO}/pulls/${BUILDKITE_PULL_REQUEST}" <<<"Authorization: Bearer ${GITHUB_TOKEN}" | jq -r '[.labels[].name] | join(",")')"
+
+      if [ ! -z "$labels" ]; then
+        buildkite-agent meta-data set "gh_labels" "$labels"
+      fi
+    fi
+
+    export PULL_REQUEST_LABELS="$labels"
+  fi
+fi
