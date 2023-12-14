@@ -11,9 +11,21 @@ You'll need to create your own overlay to add:
 2. Private repository access using either
    1. Git credentials
    2. SSH key
+3. Env Vars
 
 ```
 cp -R k8s/overlays/example k8s/overlays/my-stackname
+```
+
+After creating your overlay, you will need to build the overlay and apply it to your kubernetes cluster:
+```
+kustomize build k8s/overlays/my-stackname | kubectl apply -f -
+```
+
+You can inspect the updated secrets by listing the namepspace secrets and displaying details for the most recent secret:
+```
+kubectl get secrets --namespace namespace
+kubectl get secret name --namespace namespace -o yaml
 ```
 
 ### Agent token
@@ -34,6 +46,14 @@ You can create a set of git credentials for testing on GitHub [here](https://git
 We would recommend [making the agent its own ssh key](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent) and [adding it as a deploy key to the repository you want to test](https://docs.github.com/en/developers/overview/managing-deploy-keys), or using [a machine user with a dedicated ssh key](https://docs.github.com/en/developers/overview/managing-deploy-keys#machine-users). But for simplicity during local testing you can also use your own ssh key.
 
 Paste the private into `./k8s/overlays/my-stackname/private-ssh-key`
+
+### Env Vars
+
+The Env Vars file contains a shell script that loads the appropriate env variables into the container as well as github meta data like pull request labels.
+
+The following variables must be set in the script:
+* `$GITHUB_REPO` - i.e. yourorg/repo name
+* `$GITHUB_TOKEN` - github oauth token with `repo` permission
 
 ## Viewing the generated manifests
 
