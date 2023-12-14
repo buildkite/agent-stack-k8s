@@ -1,4 +1,5 @@
 Brewfile.lock.json
+*.sw*
 
 k8s/overlays
 .DS_Store
