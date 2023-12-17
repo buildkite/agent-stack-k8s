@@ -419,23 +419,19 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
 	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
-	podSpec.InitContainers = append(
-		podSpec.InitContainers,
-		corev1.Container{
-			Name:            "copy-agent",
-			Image:           w.cfg.Image,
-			ImagePullPolicy: corev1.PullAlways,
-			Command:         []string{"cp"},
-			Args: []string{
-				"/usr/local/bin/buildkite-agent",
-				"/usr/local/bin/ssh-env-config.sh",
-				"/workspace",
-			},
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "workspace",
-					MountPath: "/workspace",
-				},
+	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
+		Name:            "copy-agent",
+		Image:           w.cfg.Image,
+		ImagePullPolicy: corev1.PullAlways,
+		Command:         []string{"cp"},
+		Args: []string{
+			"/usr/local/bin/buildkite-agent",
+			"/workspace",
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "workspace",
+				MountPath: "/workspace",
 			},
 		},
 	})
