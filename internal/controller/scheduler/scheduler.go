@@ -438,23 +438,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 				},
 			},
 		},
-		corev1.Container{
-			Name:            "ls",
-			Image:           w.cfg.Image,
-			ImagePullPolicy: corev1.PullAlways,
-			Command:         []string{"ls"},
-			Args: []string{
-				"-la",
-				"/workspace",
-			},
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "workspace",
-					MountPath: "/workspace",
-				},
-			},
-		},
-	)
+	})
 	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
 		Name: "workspace",
 		VolumeSource: corev1.VolumeSource{
