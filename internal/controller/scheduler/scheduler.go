@@ -428,7 +428,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
 addgroup -g %d buildkite-agent
 adduser -D -u %d -G buildkite-agent -h /workspace buildkite-agent
-su buildkite-agent -p -c "ssh-env-config.sh bootstrap"`,
+su buildkite-agent -p -c "buildkite-agent-entrypoint bootstrap"`,
 			w.k8sPlugin.Workspace.Security.Group,
 			w.k8sPlugin.Workspace.Security.User,
 		)}
