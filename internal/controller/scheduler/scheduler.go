@@ -416,8 +416,24 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		},
 		EnvFrom: w.k8sPlugin.GitEnvFrom,
 	}
-
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
+	if w.k8sPlugin.Workspace.Security != nil && (w.k8sPlugin.Workspace.Security.User != 0 || w.k8sPlugin.Workspace.Security.Group != 0) {
+		checkoutContainer.SecurityContext = &corev1.SecurityContext{
+			RunAsUser:    pointer.Int64(0),
+			RunAsGroup:   pointer.Int64(0),
+			RunAsNonRoot: pointer.Bool(false),
+		}
+
+		checkoutContainer.Command = []string{"ash", "-c"}
+		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
+addgroup -g %d buildkite-agent
+adduser -D -u %d -G buildkite-agent -h /workspace buildkite-agent
+su buildkite-agent -p -c "ssh-env-config.sh bootstrap"`,
+			w.k8sPlugin.Workspace.Security.Group,
+			w.k8sPlugin.Workspace.Security.User,
+		)}
+	}
+
 	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
 	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
 		Name:            "copy-agent",
