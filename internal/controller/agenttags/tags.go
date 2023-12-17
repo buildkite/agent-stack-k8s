@@ -68,7 +68,7 @@ func ToLabels(tags []string) (map[string]string, []error) {
 // `jobTags`: either the tag key is also present in `agentTags`, and the tag
 // value in `jobTags` is "*" or the same as the tag value in `agentTags`
 //
-// In the future, this may be expaned to if the tag value `agentTags` is in some
+// In the future, this may be expanded to: if the tag value `agentTags` is in some
 // set of strings defined by the tag value in `jobTags` (eg a glob or regex)
 // See https://buildkite.com/docs/agent/v3/cli-start#agent-targeting
 func JobTagsMatchAgentTags(jobTags, agentTags map[string]string) bool {
