@@ -418,6 +418,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	}
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
 	if w.k8sPlugin.Workspace.Security != nil && (w.k8sPlugin.Workspace.Security.User != 0 || w.k8sPlugin.Workspace.Security.Group != 0) {
+		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
 		checkoutContainer.SecurityContext = &corev1.SecurityContext{
 			RunAsUser:    pointer.Int64(0),
 			RunAsGroup:   pointer.Int64(0),
