@@ -417,7 +417,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		EnvFrom: w.k8sPlugin.GitEnvFrom,
 	}
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
-	if podUser != 0 || podGroup != 0 {
+	if podUser != 0 {
 		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
 		checkoutContainer.SecurityContext = &corev1.SecurityContext{
 			RunAsUser:    pointer.Int64(0),
@@ -426,13 +426,21 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		}
 
 		checkoutContainer.Command = []string{"ash", "-c"}
-		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
+		if podGroup != 0 {
+			checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
 addgroup -g %d buildkite-agent
 adduser -D -u %d -G buildkite-agent -h /workspace buildkite-agent
 su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
-			podUser,
-			podGroup,
-		)}
+				podGroup,
+				podUser,
+			)}
+		} else {
+			checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
+adduser -D -u %d -G root -h /workspace buildkite-agent
+su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
+				podUser,
+			)}
+		}
 	}
 
 	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
