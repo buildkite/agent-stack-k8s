@@ -1,17 +1,6 @@
 agents:
   queue: {{.queue}}
 steps:
-- label: Write some file
-  key: write-some-file
-  artifact_paths: some-file
-  plugins:
-  - kubernetes:
-      podSpec:
-        containers:
-        - image: alpine:latest
-          command:
-          - touch
-          - some-file
 - label: Write some file as non-root
   key: write-some-file-non-root
   artifact_paths: some-file
