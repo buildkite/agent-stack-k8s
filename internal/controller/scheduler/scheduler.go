@@ -43,22 +43,12 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 	}
 }
 
-type WorkspaceSecurity struct {
-	User  int64 `json:"user,omitempty"`
-	Group int64 `json:"group,omitempty"`
-}
-
-type Workspace struct {
-	Security *WorkspaceSecurity `json:"security,omitempty"`
-}
-
 type KubernetesPlugin struct {
 	PodSpec           *corev1.PodSpec
 	GitEnvFrom        []corev1.EnvFromSource
 	Sidecars          []corev1.Container `json:"sidecars,omitempty"`
 	Metadata          Metadata
 	ExtraVolumeMounts []corev1.VolumeMount
-	Workspace         Workspace `json:"workspace,omitempty"`
 }
 
 type Metadata struct {
@@ -163,8 +153,18 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 
 	kjob := &batchv1.Job{}
 	kjob.Name = kjobName(w.job)
+	podUser, podGroup := int64(0), int64(0)
+
 	if w.k8sPlugin.PodSpec != nil {
 		kjob.Spec.Template.Spec = *w.k8sPlugin.PodSpec
+		if w.k8sPlugin.PodSpec.SecurityContext != nil {
+			if w.k8sPlugin.PodSpec.SecurityContext.RunAsUser != nil {
+				podUser = *(w.k8sPlugin.PodSpec.SecurityContext.RunAsUser)
+			}
+			if w.k8sPlugin.PodSpec.SecurityContext.RunAsGroup != nil {
+				podGroup = *(w.k8sPlugin.PodSpec.SecurityContext.RunAsGroup)
+			}
+		}
 	} else {
 		kjob.Spec.Template.Spec.Containers = []corev1.Container{
 			{
@@ -417,7 +417,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		EnvFrom: w.k8sPlugin.GitEnvFrom,
 	}
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
-	if w.k8sPlugin.Workspace.Security != nil && (w.k8sPlugin.Workspace.Security.User != 0 || w.k8sPlugin.Workspace.Security.Group != 0) {
+	if podUser != 0 || podGroup != 0 {
 		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
 		checkoutContainer.SecurityContext = &corev1.SecurityContext{
 			RunAsUser:    pointer.Int64(0),
@@ -430,8 +430,8 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 addgroup -g %d buildkite-agent
 adduser -D -u %d -G buildkite-agent -h /workspace buildkite-agent
 su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
-			w.k8sPlugin.Workspace.Security.Group,
-			w.k8sPlugin.Workspace.Security.User,
+			podUser,
+			podGroup,
 		)}
 	}
 
@@ -459,15 +459,6 @@ su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
 		},
 	})
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
-
-	if w.k8sPlugin.Workspace.Security != nil && (w.k8sPlugin.Workspace.Security.User != 0 || w.k8sPlugin.Workspace.Security.Group != 0) {
-		kjob.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{
-			RunAsNonRoot: pointer.Bool(true),
-			RunAsUser:    pointer.Int64(w.k8sPlugin.Workspace.Security.User),
-			RunAsGroup:   pointer.Int64(w.k8sPlugin.Workspace.Security.Group),
-			FSGroup:      pointer.Int64(w.k8sPlugin.Workspace.Security.Group),
-		}
-	}
 
 	return kjob, nil
 }
