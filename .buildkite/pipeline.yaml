@@ -19,258 +19,258 @@ agents:
   queue: kubernetes
 
 steps:
-  - label: ":go::broom: tidy"
-    key: tidy
-    plugins:
-    - kubernetes:
-        podSpec:
-          containers:
-          - image: golang:1.21-alpine
-            command: [.buildkite/steps/tidy.sh]
-            env:
-            - name: GOCACHE
-              value: /tmp/cache/go-build
-            - name: GOMODCACHE
-              value: /tmp/cache/go-mod
-            volumeMounts:
-            - name: go-build
-              mountPath: /tmp/cache/go-build
-            - name: go-mod
-              mountPath: /tmp/cache/go-mod
-          volumes:
+- label: ":go::broom: tidy"
+  key: tidy
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - image: golang:1.21-alpine
+          command: [.buildkite/steps/tidy.sh]
+          env:
+          - name: GOCACHE
+            value: /tmp/cache/go-build
+          - name: GOMODCACHE
+            value: /tmp/cache/go-mod
+          volumeMounts:
           - name: go-build
-            hostPath:
-              path: /tmp/cache/go-build
-              type: ''
+            mountPath: /tmp/cache/go-build
           - name: go-mod
-            hostPath:
-              path: /tmp/cache/go-mod
-              type: ''
+            mountPath: /tmp/cache/go-mod
+        volumes:
+        - name: go-build
+          hostPath:
+            path: /tmp/cache/go-build
+            type: DirectoryOrCreate
+        - name: go-mod
+          hostPath:
+            path: /tmp/cache/go-mod
+            type: DirectoryOrCreate
 
-  - label: ":go::lint-roller: lint"
-    key: lint
-    plugins:
-    - kubernetes:
-        podSpec:
-          containers:
-          - image: golangci/golangci-lint:v1.55.2
-            command: [golangci-lint, run, ./...]
-            resources:
-              requests:
-                cpu: 1000m
-                memory: 1Gi
-            env:
-            - name: GOLANGCI_LINT_CACHE
-              value: /tmp/cache/golangci-lint
-            - name: GOCACHE
-              value: /tmp/cache/go-build
-            - name: GOMODCACHE
-              value: /tmp/cache/go-mod
-            volumeMounts:
-            - name: golangci-lint-cache
-              mountPath: /tmp/cache/golangci-lint
-            - name: go-build
-              mountPath: /tmp/cache/go-build
-            - name: go-mod
-              mountPath: /tmp/cache/go-mod
-          volumes:
+- label: ":go::lint-roller: lint"
+  key: lint
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - image: golangci/golangci-lint:v1.55.2
+          command: [golangci-lint, run, ./...]
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 1Gi
+          env:
+          - name: GOLANGCI_LINT_CACHE
+            value: /tmp/cache/golangci-lint
+          - name: GOCACHE
+            value: /tmp/cache/go-build
+          - name: GOMODCACHE
+            value: /tmp/cache/go-mod
+          volumeMounts:
           - name: golangci-lint-cache
-            hostPath:
-              path: /tmp/cache/golangci-lint
-              type: ''
+            mountPath: /tmp/cache/golangci-lint
           - name: go-build
-            hostPath:
-              path: /tmp/cache/go-build
-              type: ''
+            mountPath: /tmp/cache/go-build
           - name: go-mod
-            hostPath:
-              path: /tmp/cache/go-mod
-              type: ''
+            mountPath: /tmp/cache/go-mod
+        volumes:
+        - name: golangci-lint-cache
+          hostPath:
+            path: /tmp/cache/golangci-lint
+            type: DirectoryOrCreate
+        - name: go-build
+          hostPath:
+            path: /tmp/cache/go-build
+            type: DirectoryOrCreate
+        - name: go-mod
+          hostPath:
+            path: /tmp/cache/go-mod
+            type: DirectoryOrCreate
 
-  - label: ":golang::robot_face: check code generation"
-    key: check-code-generation
-    plugins:
-    - kubernetes:
-        podSpec:
-          containers:
-          - name: docker
-            image: golang:1.21-alpine
-            command: [.buildkite/steps/check-code-generation.sh]
-            env:
-            - name: GOCACHE
-              value: /tmp/cache/go-build
-            - name: GOMODCACHE
-              value: /tmp/cache/go-mod
-            volumeMounts:
-            - name: go-build
-              mountPath: /tmp/cache/go-build
-            - name: go-mod
-              mountPath: /tmp/cache/go-mod
-          volumes:
+- label: ":golang::robot_face: check code generation"
+  key: check-code-generation
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - name: docker
+          image: golang:1.21-alpine
+          command: [.buildkite/steps/check-code-generation.sh]
+          env:
+          - name: GOCACHE
+            value: /tmp/cache/go-build
+          - name: GOMODCACHE
+            value: /tmp/cache/go-mod
+          volumeMounts:
           - name: go-build
-            hostPath:
-              path: /tmp/cache/go-build
-              type: ''
+            mountPath: /tmp/cache/go-build
           - name: go-mod
-            hostPath:
-              path: /tmp/cache/go-mod
-              type: ''
+            mountPath: /tmp/cache/go-mod
+        volumes:
+        - name: go-build
+          hostPath:
+            path: /tmp/cache/go-build
+            type: DirectoryOrCreate
+        - name: go-mod
+          hostPath:
+            path: /tmp/cache/go-mod
+            type: DirectoryOrCreate
 
-  - label: ":docker::buildkite: choose agent image"
-    key: agent
-    plugins:
-    - kubernetes:
-        podSpec:
-          containers:
-          - name: docker
-            image: alpine:latest
-            command: [.buildkite/steps/agent.sh]
+- label: ":docker::buildkite: choose agent image"
+  key: agent
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - name: docker
+          image: alpine:latest
+          command: [.buildkite/steps/agent.sh]
 
-  - label: ":buildkite::test_tube: tests"
-    key: tests
-    depends_on: agent
-    artifact_paths: junit-*.xml
-    plugins:
-    - kubernetes:
-        podSpec:
-          serviceAccountName: integration-tests
-          volumes:
-          - name: agent-stack-k8s-config
-            configMap:
-              name: agent-stack-k8s-config
+- label: ":buildkite::test_tube: tests"
+  key: tests
+  depends_on: agent
+  artifact_paths: junit-*.xml
+  plugins:
+  - kubernetes:
+      podSpec:
+        serviceAccountName: integration-tests
+        volumes:
+        - name: agent-stack-k8s-config
+          configMap:
+            name: agent-stack-k8s-config
+        - name: go-build
+          hostPath:
+            path: /tmp/cache/go-build
+            type: DirectoryOrCreate
+        - name: go-mod
+          hostPath:
+            path: /tmp/cache/go-mod
+            type: DirectoryOrCreate
+        containers:
+        - name: tests
+          image: golang:latest
+          command: [.buildkite/steps/tests.sh]
+          env:
+          - name: CONFIG
+            value: /etc/config.yaml
+          - name: GOCACHE
+            value: /tmp/cache/go-build
+          - name: GOMODCACHE
+            value: /tmp/cache/go-mod
+          envFrom:
+          - secretRef:
+              name: test-secrets
+          - secretRef:
+              name: agent-stack-k8s-secrets
+          volumeMounts:
+          - mountPath: /etc/config.yaml
+            name: agent-stack-k8s-config
+            subPath: config.yaml
           - name: go-build
-            hostPath:
-              path: /tmp/cache/go-build
-              type: ''
+            mountPath: /tmp/cache/go-build
           - name: go-mod
-            hostPath:
-              path: /tmp/cache/go-mod
-              type: ''
-          containers:
-          - name: tests
-            image: golang:latest
-            command: [.buildkite/steps/tests.sh]
-            env:
-            - name: CONFIG
-              value: /etc/config.yaml
-            - name: GOCACHE
-              value: /tmp/cache/go-build
-            - name: GOMODCACHE
-              value: /tmp/cache/go-mod
-            envFrom:
-            - secretRef:
-                name: test-secrets
-            - secretRef:
-                name: agent-stack-k8s-secrets
-            volumeMounts:
-            - mountPath: /etc/config.yaml
-              name: agent-stack-k8s-config
-              subPath: config.yaml
-            - name: go-build
-              mountPath: /tmp/cache/go-build
-            - name: go-mod
-              mountPath: /tmp/cache/go-mod
-            resources:
-              requests:
-                cpu: 1000m
-                memory: 512Mi
-    - test-collector:
-        files: junit-*.xml
-        format: junit
+            mountPath: /tmp/cache/go-mod
+          resources:
+            requests:
+              cpu: 1000m
+              memory: 512Mi
+  - test-collector:
+      files: junit-*.xml
+      format: junit
 
-  - label: ":docker: build controller"
-    key: controller
-    plugins:
-    - kubernetes:
-        podSpec:
-          containers:
-          - name: ko
-            image: golang:1.21
-            command: [.buildkite/steps/controller.sh]
-            envFrom:
-            - secretRef:
-                name: deploy-secrets
-            env:
-            - name: GOCACHE
-              value: /tmp/cache/go-build
-            - name: GOMODCACHE
-              value: /tmp/cache/go-mod
-            volumeMounts:
-            - name: go-build
-              mountPath: /tmp/cache/go-build
-            - name: go-mod
-              mountPath: /tmp/cache/go-mod
-          volumes:
+- label: ":docker: build controller"
+  key: controller
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - name: ko
+          image: golang:1.21
+          command: [.buildkite/steps/controller.sh]
+          envFrom:
+          - secretRef:
+              name: deploy-secrets
+          env:
+          - name: GOCACHE
+            value: /tmp/cache/go-build
+          - name: GOMODCACHE
+            value: /tmp/cache/go-mod
+          volumeMounts:
           - name: go-build
-            hostPath:
-              path: /tmp/cache/go-build
-              type: ''
+            mountPath: /tmp/cache/go-build
           - name: go-mod
-            hostPath:
-              path: /tmp/cache/go-mod
-              type: ''
+            mountPath: /tmp/cache/go-mod
+        volumes:
+        - name: go-build
+          hostPath:
+            path: /tmp/cache/go-build
+            type: DirectoryOrCreate
+        - name: go-mod
+          hostPath:
+            path: /tmp/cache/go-mod
+            type: DirectoryOrCreate
 
-  # On feature branches, don't wait for tests. We may want to deploy
-  # to a test cluster to debug the feature branch.
-  - if: build.branch != pipeline.default_branch && build.tag !~ /^.+\$/
-    <<: *push
-    key: push-feature-branch
-    depends_on:
-    - tidy
-    - lint
-    - check-code-generation
-    - agent
-    - controller
+# On feature branches, don't wait for tests. We may want to deploy
+# to a test cluster to debug the feature branch.
+- if: build.branch != pipeline.default_branch && build.tag !~ /^.+\$/
+  <<: *push
+  key: push-feature-branch
+  depends_on:
+  - tidy
+  - lint
+  - check-code-generation
+  - agent
+  - controller
 
-  # On the main branch or tags, wait for tests. We don't want to
-  # push a new image or chart unless the tests pass.
-  - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
-    <<: *push
-    key: push-main-or-tag
-    depends_on:
-    - tidy
-    - lint
-    - check-code-generation
-    - agent
-    - controller
-    - tests
+# On the main branch or tags, wait for tests. We don't want to
+# push a new image or chart unless the tests pass.
+- if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
+  <<: *push
+  key: push-main-or-tag
+  depends_on:
+  - tidy
+  - lint
+  - check-code-generation
+  - agent
+  - controller
+  - tests
 
-  - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
-    label: ":shipit: deploy"
-    key: deploy
-    depends_on:
-    - push-main-or-tag
-    env:
-      BUILDKITE_GIT_FETCH_FLAGS: -v --tags
-    plugins:
-    - kubernetes:
-        podSpec:
-          serviceAccountName: deploy
-          containers:
-          - name: deploy
-            image: alpine:latest
-            command: [.buildkite/steps/deploy.sh]
-            envFrom:
-            - secretRef:
-                name: deploy-secrets
-            - secretRef:
-                name: agent-stack-k8s-secrets
+- if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
+  label: ":shipit: deploy"
+  key: deploy
+  depends_on:
+  - push-main-or-tag
+  env:
+    BUILDKITE_GIT_FETCH_FLAGS: -v --tags
+  plugins:
+  - kubernetes:
+      podSpec:
+        serviceAccountName: deploy
+        containers:
+        - name: deploy
+          image: alpine:latest
+          command: [.buildkite/steps/deploy.sh]
+          envFrom:
+          - secretRef:
+              name: deploy-secrets
+          - secretRef:
+              name: agent-stack-k8s-secrets
 
-  - if: build.tag =~ /^.+\$/
-    label: ":rocket: release"
-    key: release
-    depends_on:
-    - deploy
-    env:
-      BUILDKITE_GIT_FETCH_FLAGS: -v --tags
-    plugins:
-    - kubernetes:
-        podSpec:
-          serviceAccountName: release
-          containers:
-          - name: release
-            image: alpine:latest
-            command: [.buildkite/steps/release.sh]
-            envFrom:
-            - secretRef:
-                name: release-secrets
+- if: build.tag =~ /^.+\$/
+  label: ":rocket: release"
+  key: release
+  depends_on:
+  - deploy
+  env:
+    BUILDKITE_GIT_FETCH_FLAGS: -v --tags
+  plugins:
+  - kubernetes:
+      podSpec:
+        serviceAccountName: release
+        containers:
+        - name: release
+          image: alpine:latest
+          command: [.buildkite/steps/release.sh]
+          envFrom:
+          - secretRef:
+              name: release-secrets
