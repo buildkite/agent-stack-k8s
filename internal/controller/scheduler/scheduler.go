@@ -177,6 +177,9 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	w.k8sPlugin.Metadata.Annotations[config.BuildURLAnnotation] = w.envMap["BUILDKITE_BUILD_URL"]
 	w.annotateWithJobURL()
 
+	// Prevent k8s cluster autoscaler from terminating the job before it finishes to scale down cluster
+	w.k8sPlugin.Metadata.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
+
 	kjob.Labels = w.k8sPlugin.Metadata.Labels
 	kjob.Spec.Template.Labels = w.k8sPlugin.Metadata.Labels
 	kjob.Annotations = w.k8sPlugin.Metadata.Annotations
