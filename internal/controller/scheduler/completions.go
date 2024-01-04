@@ -65,7 +65,7 @@ func (w *completionsWatcher) cleanupSidecars(pod *v1.Pod) {
 			if err != nil {
 				return err
 			} else {
-				job.Spec.ActiveDeadlineSeconds = pointer.Int64(1)
+				job.Spec.ActiveDeadlineSeconds = pointer.Int64(60)
 				_, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(context.TODO(), job, metav1.UpdateOptions{})
 				return err
 			}

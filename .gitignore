@@ -4,3 +4,4 @@ Brewfile.lock.json
 .vscode
 
 dist/
+config.yaml

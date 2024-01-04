@@ -62,6 +62,16 @@ type worker struct {
 	logger *zap.Logger
 }
 
+// hasEnvVar checks if a slice of corev1.EnvVar contains an env var with a specific name.
+func hasEnvVar(envs []corev1.EnvVar, name string) bool {
+	for _, env := range envs {
+		if env.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 	logger := w.logger.With(zap.String("uuid", job.Uuid))
 	logger.Info("creating job")
@@ -182,6 +192,16 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	kjob.Annotations = w.k8sPlugin.Metadata.Annotations
 	kjob.Spec.Template.Annotations = w.k8sPlugin.Metadata.Annotations
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
+	kjob.Spec.Template.Spec.TerminationGracePeriodSeconds = pointer.Int64(60)
+	kjob.Spec.PodFailurePolicy = &batchv1.PodFailurePolicy{
+		Rules: []batchv1.PodFailurePolicyRule{{
+			Action: batchv1.PodFailurePolicyActionIgnore,
+			OnExitCodes: &batchv1.PodFailurePolicyOnExitCodesRequirement{
+				Operator: batchv1.PodFailurePolicyOnExitCodesOpNotIn,
+				Values:   []int32{0},
+			},
+		}},
+	}
 	env := []corev1.EnvVar{
 		{
 			Name:  "BUILDKITE_BUILD_PATH",
@@ -230,8 +250,8 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	podSpec := &kjob.Spec.Template.Spec
 	for i, c := range podSpec.Containers {
 		command := strings.Join(append(c.Command, c.Args...), " ")
-		c.Command = []string{"/workspace/buildkite-agent"}
-		c.Args = []string{"bootstrap"}
+		c.Command = []string{"/bin/sh", "-c"}
+		c.Args = []string{"/workspace/buildkite-agent bootstrap"}
 		c.ImagePullPolicy = corev1.PullAlways
 		c.Env = append(c.Env, env...)
 		c.Env = append(c.Env, corev1.EnvVar{
@@ -259,6 +279,58 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			Name:  "BUILDKITE_SHELL",
 			Value: "/bin/sh -ec",
 		})
+		if artifactPaths, found := w.envMap["BUILDKITE_ARTIFACT_PATHS"]; found && artifactPaths != "" {
+			artifactEnv := []corev1.EnvVar{{
+				Name:  "BUILDKITE_MANUAL_ARTIFACT_PATHS",
+				Value: artifactPaths,
+			}}
+			c.Env = append(c.Env, artifactEnv...)
+			c.Args = []string{`if [ -z "$BUILDKITE_HOOKS_PATH" ]; then 
+				echo "Error: BUILDKITE_HOOKS_PATH is not set."
+				exit 1
+			fi
+
+			if [ ! -d "$BUILDKITE_HOOKS_PATH" ]; then
+				mkdir -p "$BUILDKITE_HOOKS_PATH"
+			fi
+
+			FILE="$BUILDKITE_HOOKS_PATH/pre-exit"
+			TEMP_FILE="$(mktemp)"
+			LINE_1="echo '~~~ Uploading artifacts'"
+			LINE_2="buildkite-agent artifact upload $BUILDKITE_MANUAL_ARTIFACT_PATHS"
+			LINE_3="echo '~~~ Running global pre-exit hook'"
+
+			# Prepend lines to temporary file
+			echo "$LINE_1" > "$TEMP_FILE"
+			echo "$LINE_2" >> "$TEMP_FILE"
+			echo "$LINE_3" >> "$TEMP_FILE"
+
+			if [ -f "$FILE" ]; then
+				# Check if FILE already contains LINE
+				if ! grep -Fxq "$LINE_2" "$FILE"; then
+					# Append original file content to temporary file
+					cat "$FILE" >> "$TEMP_FILE"
+					# Replace original file with temporary file
+					mv "$TEMP_FILE" "$FILE"
+					chmod +x $FILE
+				fi
+			else
+				# Replace original file with temporary file
+				mv "$TEMP_FILE" "$FILE"
+				chmod +x $FILE
+			fi
+
+			# Run Buildkite step
+			/workspace/buildkite-agent bootstrap
+			`}
+		}
+		hasUserDefinedHooksPath := hasEnvVar(c.Env, "BUILDKITE_HOOKS_PATH")
+		if !hasUserDefinedHooksPath {
+			c.Env = append(c.Env, corev1.EnvVar{
+				Name:  "BUILDKITE_HOOKS_PATH",
+				Value: "/buildkite/hooks",
+			})
+		}
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
 		}
@@ -279,39 +351,6 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
 		podSpec.Containers = append(podSpec.Containers, c)
-	}
-
-	if artifactPaths, found := w.envMap["BUILDKITE_ARTIFACT_PATHS"]; found && artifactPaths != "" {
-		artifactsContainer := corev1.Container{
-			Name:            "upload-artifacts",
-			Image:           w.cfg.Image,
-			Args:            []string{"bootstrap"},
-			WorkingDir:      "/workspace",
-			VolumeMounts:    volumeMounts,
-			ImagePullPolicy: corev1.PullAlways,
-			Env: []corev1.EnvVar{{
-				Name:  "BUILDKITE_AGENT_EXPERIMENT",
-				Value: "kubernetes-exec",
-			}, {
-				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-				Value: "command",
-			}, {
-				Name:  "BUILDKITE_COMMAND",
-				Value: "true",
-			}, {
-				Name:  "BUILDKITE_AGENT_NAME",
-				Value: "buildkite",
-			}, {
-				Name:  "BUILDKITE_CONTAINER_ID",
-				Value: strconv.Itoa(containerCount),
-			}, {
-				Name:  "BUILDKITE_ARTIFACT_PATHS",
-				Value: artifactPaths,
-			}},
-		}
-		artifactsContainer.Env = append(artifactsContainer.Env, env...)
-		containerCount++
-		podSpec.Containers = append(podSpec.Containers, artifactsContainer)
 	}
 
 	agentTags := []agentTag{
