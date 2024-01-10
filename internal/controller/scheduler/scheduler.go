@@ -220,6 +220,9 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		}, {
 			Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
 			Value: w.job.Uuid,
+		}, {
+			Name:  "BUILDKITE_AGENT_ID",
+			Value: w.job.Uuid,
 		},
 	}
 	if w.otherPlugins != nil {
