@@ -110,6 +110,12 @@ steps:
 
 The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec` resource [in the Kubernetes API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#podspec-v1-core).
 
+If however no `podSpec` is specified then behaviour will default to the command step.
+```yaml
+steps:
+  - command: "blah.sh"
+```
+
 More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
 
 ### Buildkite Clusters
