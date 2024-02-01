@@ -153,18 +153,10 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 
 	kjob := &batchv1.Job{}
 	kjob.Name = kjobName(w.job)
-	podUser, podGroup := int64(0), int64(0)
 
+	// Populate the job's podSpec from the step's k8s plugin, or use the command in the step
 	if w.k8sPlugin.PodSpec != nil {
 		kjob.Spec.Template.Spec = *w.k8sPlugin.PodSpec
-		if w.k8sPlugin.PodSpec.SecurityContext != nil {
-			if w.k8sPlugin.PodSpec.SecurityContext.RunAsUser != nil {
-				podUser = *(w.k8sPlugin.PodSpec.SecurityContext.RunAsUser)
-			}
-			if w.k8sPlugin.PodSpec.SecurityContext.RunAsGroup != nil {
-				podGroup = *(w.k8sPlugin.PodSpec.SecurityContext.RunAsGroup)
-			}
-		}
 	} else {
 		kjob.Spec.Template.Spec.Containers = []corev1.Container{
 			{
@@ -388,60 +380,8 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		},
 	}
 	agentContainer.Env = append(agentContainer.Env, env...)
-	// system client container(s)
-	checkoutContainer := corev1.Container{
-		Name:            "checkout",
-		Image:           w.cfg.Image,
-		Args:            []string{"bootstrap"},
-		WorkingDir:      "/workspace",
-		VolumeMounts:    volumeMounts,
-		ImagePullPolicy: corev1.PullAlways,
-		Env: []corev1.EnvVar{
-			{
-				Name:  "BUILDKITE_AGENT_EXPERIMENT",
-				Value: "kubernetes-exec",
-			},
-			{
-				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-				Value: "checkout",
-			},
-			{
-				Name:  "BUILDKITE_AGENT_NAME",
-				Value: "buildkite",
-			},
-			{
-				Name:  "BUILDKITE_CONTAINER_ID",
-				Value: "0",
-			},
-		},
-		EnvFrom: w.k8sPlugin.GitEnvFrom,
-	}
-	checkoutContainer.Env = append(checkoutContainer.Env, env...)
-	if podUser != 0 {
-		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
-		checkoutContainer.SecurityContext = &corev1.SecurityContext{
-			RunAsUser:    pointer.Int64(0),
-			RunAsGroup:   pointer.Int64(0),
-			RunAsNonRoot: pointer.Bool(false),
-		}
 
-		checkoutContainer.Command = []string{"ash", "-c"}
-		if podGroup != 0 {
-			checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
-addgroup -g %d buildkite-agent
-adduser -D -u %d -G buildkite-agent -h /workspace buildkite-agent
-su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
-				podGroup,
-				podUser,
-			)}
-		} else {
-			checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
-adduser -D -u %d -G root -h /workspace buildkite-agent
-su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
-				podUser,
-			)}
-		}
-	}
+	checkoutContainer := w.createCheckoutContainer(kjob, env, volumeMounts)
 
 	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
 	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
@@ -469,6 +409,98 @@ su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
 
 	return kjob, nil
+}
+
+func (w *jobWrapper) createCheckoutContainer(
+	kjob *batchv1.Job,
+	env []corev1.EnvVar,
+	volumeMounts []corev1.VolumeMount,
+) corev1.Container {
+	checkoutContainer := corev1.Container{
+		Name:            "checkout",
+		Image:           w.cfg.Image,
+		WorkingDir:      "/workspace",
+		VolumeMounts:    volumeMounts,
+		ImagePullPolicy: corev1.PullAlways,
+		Env: []corev1.EnvVar{
+			{
+				Name:  "BUILDKITE_AGENT_EXPERIMENT",
+				Value: "kubernetes-exec",
+			},
+			{
+				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+				Value: "checkout",
+			},
+			{
+				Name:  "BUILDKITE_AGENT_NAME",
+				Value: "buildkite",
+			},
+			{
+				Name:  "BUILDKITE_CONTAINER_ID",
+				Value: "0",
+			},
+		},
+		EnvFrom: w.k8sPlugin.GitEnvFrom,
+	}
+	checkoutContainer.Env = append(checkoutContainer.Env, env...)
+
+	podUser, podGroup := int64(0), int64(0)
+	if kjob.Spec.Template.Spec.SecurityContext != nil {
+		if kjob.Spec.Template.Spec.SecurityContext.RunAsUser != nil {
+			podUser = *(w.k8sPlugin.PodSpec.SecurityContext.RunAsUser)
+		}
+		if kjob.Spec.Template.Spec.SecurityContext.RunAsGroup != nil {
+			podGroup = *(w.k8sPlugin.PodSpec.SecurityContext.RunAsGroup)
+		}
+	}
+
+	// Ensure that the checkout occurs as the user/group specified in the pod's security context.
+	// we will create a buildkite-agent user/group in the checkout container as needed and switch
+	// to it. The created user/group will have the uid/gid specified in the pod's security context.
+	switch {
+	case podUser != 0 && podGroup != 0:
+		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
+		checkoutContainer.SecurityContext = &corev1.SecurityContext{
+			RunAsUser:    pointer.Int64(0),
+			RunAsGroup:   pointer.Int64(0),
+			RunAsNonRoot: pointer.Bool(false),
+		}
+
+		checkoutContainer.Command = []string{"ash", "-c"}
+		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
+addgroup -g %d buildkite-agent
+adduser -D -u %d -G buildkite-agent -h /workspace buildkite-agent
+su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
+			podGroup,
+			podUser,
+		)}
+
+	case podUser != 0 && podGroup == 0:
+		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
+		checkoutContainer.SecurityContext = &corev1.SecurityContext{
+			RunAsUser:    pointer.Int64(0),
+			RunAsGroup:   pointer.Int64(0),
+			RunAsNonRoot: pointer.Bool(false),
+		}
+
+		checkoutContainer.Command = []string{"ash", "-c"}
+		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
+adduser -D -u %d -G root -h /workspace buildkite-agent
+su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
+			podUser,
+		)}
+
+	// If the group is not root, but the user is root, I don't think we NEED to do anything. It's fine
+	// for the user and group to be root for the checked out repo, even though the Pod's security
+	// context has a non-root group.
+	default:
+		checkoutContainer.SecurityContext = nil
+		// these are the default, but that default is sepciifed in the agent repo, so lets make it explicit
+		checkoutContainer.Command = []string{"buildkite-agent-entrypoint"}
+		checkoutContainer.Args = []string{"bootstrap"}
+	}
+
+	return checkoutContainer
 }
 
 func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
