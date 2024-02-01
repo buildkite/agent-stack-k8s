@@ -70,7 +70,7 @@ func (t testcase) Init() testcase {
 	return t
 }
 
-func (t testcase) CreatePipeline(ctx context.Context) (string, func(testcase) func()) {
+func (t testcase) CreatePipeline(ctx context.Context) (string, func()) {
 	t.Helper()
 
 	tpl, err := template.ParseFS(fixtures, fmt.Sprintf("fixtures/%s", t.Fixture))
@@ -90,11 +90,9 @@ func (t testcase) CreatePipeline(ctx context.Context) (string, func(testcase) fu
 	})
 	require.NoError(t, err)
 
-	return *pipeline.GraphQLID, func(t testcase) func() {
-		return func() {
-			if !preservePipelines && !t.Failed() {
-				t.deletePipeline(ctx)
-			}
+	return *pipeline.GraphQLID, func() {
+		if !preservePipelines && !t.Failed() {
+			t.deletePipeline(ctx)
 		}
 	}
 }
