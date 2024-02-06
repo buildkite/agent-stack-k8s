@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -90,7 +91,7 @@ func (t testcase) CreatePipeline(ctx context.Context) (string, func()) {
 	require.NoError(t, err)
 
 	return *pipeline.GraphQLID, func() {
-		if !preservePipelines {
+		if !preservePipelines && !t.Failed() {
 			t.deletePipeline(ctx)
 		}
 	}
@@ -188,10 +189,13 @@ func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 		nil,
 	)
 	require.NoError(t, err)
-	require.Len(t, artifacts, 2)
-	filenames := []string{*artifacts[0].Filename, *artifacts[1].Filename}
-	for _, filename := range expected {
-		assert.Contains(t, filenames, filename)
+
+	filenames := make([]string, 0, len(artifacts))
+	for _, filename := range artifacts {
+		filenames = append(filenames, *filename.Filename)
+	}
+	for _, e := range expected {
+		assert.True(t, slices.Contains(filenames, e), "expected %v to contain %v", filenames, e)
 	}
 }
 

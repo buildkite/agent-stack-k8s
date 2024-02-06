@@ -110,7 +110,7 @@ func NewInformerFactory(
 	for l, v := range labelsFromTags {
 		hasLabel, err := labels.NewRequirement(l, selection.Equals, []string{v})
 		if err != nil {
-			return nil, fmt.Errorf("failed to agent tag label selector for job manager: %w", err)
+			return nil, fmt.Errorf("failed create label selector agent tag: %w", err)
 		}
 		requirements = append(requirements, *hasLabel)
 	}
