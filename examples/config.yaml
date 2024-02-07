@@ -10,5 +10,9 @@ org: my-buildkite-org
 # the UUID may be found in the cluster settings
 cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 tags:
-- queue=my-queue
-- priority=high
+  - queue=my-queue
+  - priority=high
+# git-credentials-secret are the secret with the git credentials
+# configured on the agent with docker-ssh-config
+# @see https://github.com/buildkite/docker-ssh-env-config
+git-credentials-secret: buildkite-ssh-github-creds
