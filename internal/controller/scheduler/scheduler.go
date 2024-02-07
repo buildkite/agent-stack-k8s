@@ -30,10 +30,11 @@ const (
 )
 
 type Config struct {
-	Namespace  string
-	Image      string
-	AgentToken string
-	JobTTL     time.Duration
+	Namespace            string
+	Image                string
+	AgentToken           string
+	JobTTL               time.Duration
+	GitCredentialsSecret string
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
@@ -45,11 +46,12 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 }
 
 type KubernetesPlugin struct {
-	PodSpec           *corev1.PodSpec
-	GitEnvFrom        []corev1.EnvFromSource
-	Sidecars          []corev1.Container `json:"sidecars,omitempty"`
-	Metadata          Metadata
-	ExtraVolumeMounts []corev1.VolumeMount
+	PodSpec              *corev1.PodSpec
+	GitCredentialsSecret string
+	GitEnvFrom           []corev1.EnvFromSource
+	Sidecars             []corev1.Container `json:"sidecars,omitempty"`
+	Metadata             Metadata
+	ExtraVolumeMounts    []corev1.VolumeMount
 }
 
 type Metadata struct {
@@ -99,6 +101,7 @@ type jobWrapper struct {
 	logger       *zap.Logger
 	job          *api.CommandJob
 	envMap       map[string]string
+	envFrom      []corev1.EnvFromSource
 	err          error
 	k8sPlugin    KubernetesPlugin
 	otherPlugins []map[string]json.RawMessage
@@ -107,10 +110,11 @@ type jobWrapper struct {
 
 func NewJobWrapper(logger *zap.Logger, job *api.CommandJob, config Config) *jobWrapper {
 	return &jobWrapper{
-		logger: logger,
-		job:    job,
-		cfg:    config,
-		envMap: make(map[string]string),
+		logger:  logger,
+		job:     job,
+		cfg:     config,
+		envMap:  make(map[string]string),
+		envFrom: make([]corev1.EnvFromSource, 0),
 	}
 }
 
@@ -210,6 +214,24 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			Value: w.job.Uuid,
 		},
 	}
+
+	// Generate env from configuration for git credentials
+	secretName := w.cfg.GitCredentialsSecret
+	if w.k8sPlugin.GitCredentialsSecret != "" {
+		secretName = w.cfg.GitCredentialsSecret
+	}
+
+	if secretName != "" && len(w.k8sPlugin.GitEnvFrom) == 0 {
+		w.envFrom = append(w.envFrom, corev1.EnvFromSource{
+			SecretRef: &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.GitCredentialsSecret},
+			},
+		})
+	} else if len(w.k8sPlugin.GitEnvFrom) > 0 {
+		w.logger.Warn("git-env-from is deprecated, please use git-credentials-secret instead")
+		w.envFrom = append(w.envFrom, w.k8sPlugin.GitEnvFrom...)
+	}
+
 	if w.otherPlugins != nil {
 		otherPluginsJson, err := json.Marshal(w.otherPlugins)
 		if err != nil {
@@ -290,7 +312,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			c.WorkingDir = "/workspace"
 		}
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
+		c.EnvFrom = w.envFrom
 		podSpec.Containers[i] = c
 	}
 
@@ -301,7 +323,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
 		}
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
+		c.EnvFrom = w.envFrom
 		podSpec.Containers = append(podSpec.Containers, c)
 	}
 
@@ -426,7 +448,7 @@ func (w *jobWrapper) createCheckoutContainer(
 				Value: "0",
 			},
 		},
-		EnvFrom: w.k8sPlugin.GitEnvFrom,
+		EnvFrom: w.envFrom,
 	}
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
 
