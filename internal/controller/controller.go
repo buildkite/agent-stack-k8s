@@ -53,7 +53,7 @@ func Run(
 		Image:                cfg.Image,
 		AgentToken:           cfg.AgentTokenSecret,
 		JobTTL:               cfg.JobTTL,
-		GitCredentialsSecret: cfg.GitCredentialsSecret,
+		SSHCredentialsSecret: cfg.SSHCredentialsSecret,
 	})
 	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)
 

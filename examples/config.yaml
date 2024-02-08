@@ -15,4 +15,4 @@ tags:
 # git-credentials-secret are the secret with the git credentials
 # configured on the agent with docker-ssh-config
 # @see https://github.com/buildkite/docker-ssh-env-config
-git-credentials-secret: buildkite-ssh-github-creds
+ssh-credentials-secret: buildkite-ssh-github-creds

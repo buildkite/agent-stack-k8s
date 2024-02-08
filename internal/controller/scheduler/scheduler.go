@@ -34,7 +34,7 @@ type Config struct {
 	Image                string
 	AgentToken           string
 	JobTTL               time.Duration
-	GitCredentialsSecret string
+	SSHCredentialsSecret string
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
@@ -47,7 +47,7 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 
 type KubernetesPlugin struct {
 	PodSpec              *corev1.PodSpec
-	GitCredentialsSecret string
+	SSHCredentialsSecret string
 	GitEnvFrom           []corev1.EnvFromSource
 	Sidecars             []corev1.Container `json:"sidecars,omitempty"`
 	Metadata             Metadata
@@ -216,15 +216,15 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	}
 
 	// Generate env from configuration for git credentials
-	secretName := w.cfg.GitCredentialsSecret
-	if w.k8sPlugin.GitCredentialsSecret != "" {
-		secretName = w.cfg.GitCredentialsSecret
+	secretName := w.cfg.SSHCredentialsSecret
+	if w.k8sPlugin.SSHCredentialsSecret != "" {
+		secretName = w.cfg.SSHCredentialsSecret
 	}
 
 	if secretName != "" && len(w.k8sPlugin.GitEnvFrom) == 0 {
 		w.envFrom = append(w.envFrom, corev1.EnvFromSource{
 			SecretRef: &corev1.SecretEnvSource{
-				LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.GitCredentialsSecret},
+				LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.SSHCredentialsSecret},
 			},
 		})
 	} else if len(w.k8sPlugin.GitEnvFrom) > 0 {
