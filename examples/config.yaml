@@ -12,7 +12,7 @@ cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 tags:
   - queue=my-queue
   - priority=high
-# git-credentials-secret are the secret with the git credentials
+# ssh-credentials-secret are the secret with the ssh credentials
 # configured on the agent with docker-ssh-config
 # @see https://github.com/buildkite/docker-ssh-env-config
 ssh-credentials-secret: buildkite-ssh-github-creds

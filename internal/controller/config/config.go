@@ -26,7 +26,7 @@ type Config struct {
 	Tags                 stringSlice   `mapstructure:"tags"               validate:"min=1"`
 	ProfilerAddress      string        `mapstructure:"profiler-address"   validate:"omitempty,hostname_port"`
 	ClusterUUID          string        `mapstructure:"cluster-uuid"       validate:"omitempty"`
-	SSHCredentialsSecret string        `mapstructure:"git-credentials-secret" validate:"omitempty"`
+	SSHCredentialsSecret string        `mapstructure:"ssh-credentials-secret" validate:"omitempty"`
 }
 
 type stringSlice []string
