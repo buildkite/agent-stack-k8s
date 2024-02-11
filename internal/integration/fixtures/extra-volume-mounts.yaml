@@ -12,25 +12,25 @@ steps:
         - image: alpine:latest
           command: [ash, -c]
           args:
-          - echo volume_mounted > "/tmp/buildkite-git-mirrors/foo-${BUILDKITE_JOB_ID}.txt"
+          - echo volume_mounted > "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"
         - image: alpine:latest
           command: [ash, -c]
           args:
           - |-
             COUNT=0
-            until [[ $((COUNT++)) == 4 ]]; do
-              grep -Fx volume_mounted "/tmp/buildkite-git-mirrors/foo-${BUILDKITE_JOB_ID}.txt" && break
-              echo "Waiting for 'volume_mounted' to be written to /tmp/buildkite-git-mirrors/foo-${BUILDKITE_JOB_ID}.txt"
+            until [[ $$((COUNT++)) == 4 ]]; do
+              grep -Fx volume_mounted "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt" && break
+              echo "Waiting for 'volume_mounted' to be written to /tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"
               sleep 1
             done
 
-            if ! grep -Fx volume_mounted "/tmp/buildkite-git-mirrors/foo-${BUILDKITE_JOB_ID}.txt"; then
-              echo "'volume_mounted' has not been written to /tmp/buildkite-git-mirrors/foo-${BUILDKITE_JOB_ID}.txt"
+            if ! grep -Fx volume_mounted "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"; then
+              echo "'volume_mounted' has not been written to /tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"
               exit 1
             fi
 
-            echo "'volume_mounted' has been written to /tmp/buildkite-git-mirrors/foo-${BUILDKITE_JOB_ID}.txt"
-            rm -f "/tmp/buildkite-git-mirrors/foo-${BUILDKITE_JOB_ID}.txt"
+            echo "'volume_mounted' has been written to /tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"
+            rm -f "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"
         volumes:
         - name: host-volume
           hostPath:
