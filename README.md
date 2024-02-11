@@ -95,21 +95,14 @@ Use "agent-stack-k8s [command] --help" for more information about a command.
 
 Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](examples) folder there is a sample [YAML config](examples/config.yaml) and a sample [dotenv config](examples/config.env).
 
-### Sample buildkite pipeline
-
+### Sample Buildkite Pipelines
+For simple commands, you merely have to target the queue you configured agent-stack-k8s with.
 ```yaml
 steps:
-  - label: build image
+  - label: Hello World!
+    command: echo Hello World!
     agents:
       queue: kubernetes
-    plugins:
-      - kubernetes:
-          podSpec:
-            containers:
-              - image: alpine:latest
-                command: [echo]
-                args:
-                - "Hello, world!"
 ```
 
 The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec` resource [in the Kubernetes API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#podspec-v1-core).
