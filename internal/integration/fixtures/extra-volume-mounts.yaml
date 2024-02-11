@@ -12,7 +12,9 @@ steps:
         - image: alpine:latest
           command: [ash, -c]
           args:
-          - echo volume_mounted > "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"
+          - |-
+            echo volume_mounted > "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"
+            cat "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"
         - image: alpine:latest
           command: [ash, -c]
           args:
