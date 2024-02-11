@@ -30,13 +30,14 @@ import (
 
 type testcase struct {
 	*testing.T
-	Logger       *zap.Logger
-	Fixture      string
-	Repo         string
-	GraphQL      graphql.Client
-	Kubernetes   kubernetes.Interface
-	Buildkite    *buildkite.Client
-	PipelineName string
+	Logger            *zap.Logger
+	Fixture           string
+	Repo              string
+	GraphQL           graphql.Client
+	Kubernetes        kubernetes.Interface
+	Buildkite         *buildkite.Client
+	ShortPipelineName string
+	PipelineName      string
 }
 
 func (t testcase) Init() testcase {
@@ -49,6 +50,7 @@ func (t testcase) Init() testcase {
 		jobID = strconv.FormatInt(time.Now().Unix(), 10)
 	}
 	t.PipelineName = fmt.Sprintf("%s-%s", namePrefix, jobID)
+	t.ShortPipelineName = t.PipelineName[:min(len(t.PipelineName), 63)]
 
 	t.Logger = zaptest.NewLogger(t).Named(t.Name())
 
@@ -76,7 +78,7 @@ func (t testcase) CreatePipeline(ctx context.Context) (string, func()) {
 	require.NoError(t, tpl.Execute(&steps, map[string]string{
 		// k8s labels are limited to length 63, we use the pipeline name as a label.
 		// So we need to limit the length of the pipeline name too.
-		"queue": t.PipelineName[:min(len(t.PipelineName), 63)],
+		"queue": t.ShortPipelineName,
 	}))
 	pipeline, _, err := t.Buildkite.Pipelines.Create(cfg.Org, &buildkite.CreatePipeline{
 		Name:       t.PipelineName,
@@ -101,7 +103,7 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config) {
 	runCtx, cancel := context.WithCancel(ctx)
 	EnsureCleanup(t.T, cancel)
 
-	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.PipelineName)}
+	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.ShortPipelineName)}
 	cfg.Debug = true
 
 	go controller.Run(runCtx, t.Logger, t.Kubernetes, cfg)
@@ -159,7 +161,7 @@ func (t testcase) AssertLogsContain(build api.Build, content string) {
 
 		jobLog, _, err := client.Jobs.GetJobLog(
 			cfg.Org,
-			t.PipelineName,
+			t.ShortPipelineName,
 			strconv.Itoa(build.Number),
 			job.Uuid,
 		)
@@ -182,7 +184,7 @@ func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 
 	artifacts, _, err := client.Artifacts.ListByBuild(
 		cfg.Org,
-		t.PipelineName,
+		t.ShortPipelineName,
 		strconv.Itoa(build.Number),
 		nil,
 	)
@@ -229,7 +231,7 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[string]string) {
 	t.Helper()
 
-	tagReq, err := labels.NewRequirement("tag.buildkite.com/queue", selection.Equals, []string{t.PipelineName})
+	tagReq, err := labels.NewRequirement("tag.buildkite.com/queue", selection.Equals, []string{t.ShortPipelineName})
 	require.NoError(t, err)
 
 	selector := labels.NewSelector().Add(*tagReq)
