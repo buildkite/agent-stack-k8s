@@ -20,7 +20,7 @@ steps:
           args:
           - |-
             COUNT=0
-            until [[ $$((COUNT++)) == 4 ]]; do
+            until [[ $$((COUNT++)) == 9 ]]; do
               grep -Fx volume_mounted "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt" && break
               echo "Waiting for 'volume_mounted' to be written to /tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"
               sleep 1
