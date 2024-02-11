@@ -3,8 +3,8 @@ package integration_test
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -43,16 +43,12 @@ func (t testcase) Init() testcase {
 	t.Helper()
 	t.Parallel()
 
-	if t.PipelineName == "" {
-		queuePrefix := "queue_"
-		namePrefix := "agent-stack-k8s-test-"
-		nameVariable := fmt.Sprintf("%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
-		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(nameVariable)))
-
-		// k8s labels are limited to length 63, we use the pipeline name as a label.
-		// So we need to limit the length of the pipeline name too.
-		t.PipelineName = fmt.Sprintf("%s%s", namePrefix, hash[:63-len(namePrefix)-len(queuePrefix)])
+	namePrefix := t.Name()
+	jobID := os.Getenv("BUILDKITE_JOB_ID")
+	if jobID == "" {
+		jobID = strconv.FormatInt(time.Now().Unix(), 10)
 	}
+	t.PipelineName = fmt.Sprintf("%s-%s", namePrefix, jobID)
 
 	t.Logger = zaptest.NewLogger(t).Named(t.Name())
 
@@ -78,7 +74,9 @@ func (t testcase) CreatePipeline(ctx context.Context) (string, func()) {
 
 	var steps bytes.Buffer
 	require.NoError(t, tpl.Execute(&steps, map[string]string{
-		"queue": t.PipelineName,
+		// k8s labels are limited to length 63, we use the pipeline name as a label.
+		// So we need to limit the length of the pipeline name too.
+		"queue": t.PipelineName[:min(len(t.PipelineName), 63)],
 	}))
 	pipeline, _, err := t.Buildkite.Pipelines.Create(cfg.Org, &buildkite.CreatePipeline{
 		Name:       t.PipelineName,
