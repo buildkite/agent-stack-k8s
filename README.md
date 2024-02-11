@@ -123,6 +123,8 @@ steps:
           - -c
           - echo 'Hello World!'
 ```
+Note that almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
+
 Note how this example demonstrates a subtlety when attempting to use shell syntax for Kubernetes Containers: the `command` should be an executable, and shells typically execute a script as a `command_string` that is required to be single argument that follows `-c`.
 Within the command string, shell syntax such `>` for output redirection may be used, but outside of it, Kubernetes will not interpret it.
 
