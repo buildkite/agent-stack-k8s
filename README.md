@@ -99,19 +99,32 @@ Configuration can also be provided by a config file (`--config` or `CONFIG`), or
 For simple commands, you merely have to target the queue you configured agent-stack-k8s with.
 ```yaml
 steps:
-  - label: Hello World!
-    command: echo Hello World!
-    agents:
-      queue: kubernetes
+- label: Hello World!
+  command: echo Hello World!
+  agents:
+    queue: kubernetes
 ```
-
-The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec` resource [in the Kubernetes API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#podspec-v1-core).
-
-If however no `podSpec` is specified then behaviour will default to the command step.
+For more complicated steps, you have access to the [`PodSpec`](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#podspec-v1-core) Kubernetes API resource that will be used in a Kubernetes [`Job`](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#job-v1-batch).
+For now, this is nested under a `kubernetes` plugin.
+But unlike other Buildkite plugins, there is no corresponding plugin repository.
+Rather this is syntax that is interpreted by the `agent-stack-k8s` controller.
 ```yaml
 steps:
-  - command: "blah.sh"
+- label: Hello World!
+  agents:
+    queue: kubernetes
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - image: alpine:latest
+          command: [sh]
+          args:
+          - -c
+          - echo 'Hello World!'
 ```
+Note how this example demonstrates a subtlety when attempting to use shell syntax for Kubernetes Containers: the `command` should be an executable, and shells typically execute a script as a `command_string` that is required to be single argument that follows `-c`.
+Within the command string, shell syntax such `>` for output redirection may be used, but outside of it, Kubernetes will not interpret it.
 
 More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
 
