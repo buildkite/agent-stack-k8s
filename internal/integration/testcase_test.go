@@ -39,6 +39,8 @@ type testcase struct {
 	PipelineName string
 }
 
+// k8s labels are limited to length 63, we use the pipeline name as a label.
+// So we sometimes need to limit the length of the pipeline name too.
 func (t *testcase) ShortPipelineName() string {
 	return t.PipelineName[:min(len(t.PipelineName), 63)]
 }
@@ -79,11 +81,7 @@ func (t testcase) CreatePipeline(ctx context.Context) (string, func()) {
 	require.NoError(t, err)
 
 	var steps bytes.Buffer
-	require.NoError(t, tpl.Execute(&steps, map[string]string{
-		// k8s labels are limited to length 63, we use the pipeline name as a label.
-		// So we need to limit the length of the pipeline name too.
-		"queue": t.ShortPipelineName(),
-	}))
+	require.NoError(t, tpl.Execute(&steps, map[string]string{"queue": t.ShortPipelineName()}))
 	pipeline, _, err := t.Buildkite.Pipelines.Create(cfg.Org, &buildkite.CreatePipeline{
 		Name:       t.PipelineName,
 		Repository: t.Repo,
