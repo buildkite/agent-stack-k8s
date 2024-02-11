@@ -24,8 +24,9 @@ import (
 )
 
 const (
-	agentTokenKey      = "BUILDKITE_AGENT_TOKEN"
-	AgentContainerName = "agent"
+	defaultTermGracePeriodSeconds = 60
+	agentTokenKey                 = "BUILDKITE_AGENT_TOKEN"
+	AgentContainerName            = "agent"
 )
 
 type Config struct {
@@ -187,6 +188,8 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	kjob.Annotations = w.k8sPlugin.Metadata.Annotations
 	kjob.Spec.Template.Annotations = w.k8sPlugin.Metadata.Annotations
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
+	kjob.Spec.Template.Spec.TerminationGracePeriodSeconds = pointer.Int64(defaultTermGracePeriodSeconds)
+
 	env := []corev1.EnvVar{
 		{
 			Name:  "BUILDKITE_BUILD_PATH",

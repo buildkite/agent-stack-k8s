@@ -5,7 +5,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"go.uber.org/zap"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -61,14 +61,14 @@ func (w *completionsWatcher) OnUpdate(old interface{}, new interface{}) {
 func (w *completionsWatcher) cleanupSidecars(pod *v1.Pod) {
 	if terminated := getTermination(pod); terminated != nil {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			job, err := w.k8s.BatchV1().Jobs(pod.Namespace).Get(context.TODO(), pod.Labels["job-name"], metav1.GetOptions{})
+			ctx := context.Background()
+			job, err := w.k8s.BatchV1().Jobs(pod.Namespace).Get(ctx, pod.Labels["job-name"], metav1.GetOptions{})
 			if err != nil {
 				return err
-			} else {
-				job.Spec.ActiveDeadlineSeconds = pointer.Int64(1)
-				_, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(context.TODO(), job, metav1.UpdateOptions{})
-				return err
 			}
+			job.Spec.ActiveDeadlineSeconds = pointer.Int64(defaultTermGracePeriodSeconds)
+			_, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(ctx, job, metav1.UpdateOptions{})
+			return err
 		}); err != nil {
 			w.logger.Error("failed to update job", zap.Error(err))
 		}
