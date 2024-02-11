@@ -165,7 +165,26 @@ Our JSON schema can also be used with editors that support JSON Schema by config
 ### Cloning repos via SSH
 
 To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
+Place this object under a `gitEnvFrom` key in the `kubernetes` plugin (see the example below).
 
+You should create a secret in your namespace with an environment variable name that's recognised by [`docker-ssh-env-config`](https://github.com/buildkite/docker-ssh-env-config).
+A script from this project is included in the default entrypoint of the default [`buildkite/agent`](https://hub.docker.com/r/buildkite/agent) Docker image.
+It will process the value of the secret and write out a private key to the `~/.ssh` directory of the checkout container.
+
+However this key will not be available in your job containers.
+If you need to use git ssh credentials in your job containers, we recommend one of the following options:
+1. Use a container image that's based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
+2. Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entrypoint for your job container image
+
+#### Example secret creation for ssh cloning
+You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
+
+Supposing a SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
+```bash
+kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_DSA_KEY="$HOME/.ssh/id_ecdsa"
+```
+
+Then the following pipeline will be able to clone a git repository that requires ssh credentials.
 ```yaml
 steps:
   - label: build image
@@ -174,7 +193,8 @@ steps:
     plugins:
       - kubernetes:
           gitEnvFrom:
-            - secretRef: { name: agent-stack-k8s } # <--
+            - secretRef:
+                name: my-git-ssh-credentials # <----
           podSpec:
             containers:
               - image: gradle:latest
@@ -183,15 +203,6 @@ steps:
                   - jib
                   - --image=ttl.sh/example:1h
 ```
-
-The agent will automatically configure SSH access based on environment variables using the [docker-ssh-env-config](https://github.com/buildkite/docker-ssh-env-config) shell script. This script will run during the `checkout` stage of the job, and all resulting SSH keys and SSH config will live in the `/workspace/.ssh` in subsequent containers of the job.
-
-To use these keys and config in a separate step, for example if your job runs `git clone`, you can either:
-
-- symlink the `/workspace/.ssh` directory to `~/.ssh`
-- specify the path to the key explicitly, for example by setting `GIT_SSH_COMMAND="ssh -i /workspace/.ssh/id_rsa"` in your job's environment.
-
-Note that setting the `HOME` environment variable in your container will likely not work, since OpenSSH looks for the home directory configured in `/etc/passwd`.
 
 ## How does it work
 
