@@ -47,12 +47,14 @@ func (t testcase) Init() testcase {
 	t.Helper()
 	t.Parallel()
 
-	namePrefix := t.Name()
-	jobID := os.Getenv("BUILDKITE_JOB_ID")
-	if jobID == "" {
-		jobID = strconv.FormatInt(time.Now().Unix(), 10)
+	if t.PipelineName == "" {
+		namePrefix := t.Name()
+		jobID := os.Getenv("BUILDKITE_JOB_ID")
+		if jobID == "" {
+			jobID = strconv.FormatInt(time.Now().Unix(), 10)
+		}
+		t.PipelineName = strings.ToLower(fmt.Sprintf("test-%s-%s", namePrefix, jobID))
 	}
-	t.PipelineName = strings.ToLower(fmt.Sprintf("test-%s-%s", namePrefix, jobID))
 
 	t.Logger = zaptest.NewLogger(t).Named(t.Name())
 
