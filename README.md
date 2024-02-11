@@ -30,6 +30,9 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
 We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
 which means you'll need Helm version 3.8.0 or newer.
 
+This will create an agent-stack-k8s installation that will listen to the `kubernetes` queue.
+See the `--tags` [option](#Options) for specifying a different queue.
+
 #### Externalize Secrets
 
 You can also have an external provider create a secret for you in the namespace before deploying the chart with helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
@@ -62,7 +65,6 @@ Available versions and their digests can be found on [the releases page](https:/
 ### Options
 
 ```text
-$ agent-stack-k8s --help
 Usage:
   agent-stack-k8s [flags]
   agent-stack-k8s [command]
@@ -80,13 +82,15 @@ Flags:
   -f, --config string               config file path
       --debug                       debug logs
   -h, --help                        help for agent-stack-k8s
-      --image string                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent-k8s:latest")
+      --image string                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent-stack-k8s/agent:latest")
       --job-ttl duration            time to retain kubernetes jobs after completion (default 10m0s)
       --max-in-flight int           max jobs in flight, 0 means no max (default 25)
       --namespace string            kubernetes namespace to create resources in (default "default")
       --org string                  Buildkite organization name to watch
       --profiler-address string     Bind address to expose the pprof profiler (e.g. localhost:6060)
-      --tags strings                A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8") (default [queue=kubernetes])
+      --tags strings                A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux") (default [queue=kubernetes])
+
+Use "agent-stack-k8s [command] --help" for more information about a command.
 ```
 
 Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](examples) folder there is a sample [YAML config](examples/config.yaml) and a sample [dotenv config](examples/config.env).
