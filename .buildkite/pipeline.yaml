@@ -53,8 +53,8 @@ steps:
   - kubernetes:
       podSpec:
         containers:
-        - image: golangci/golangci-lint:v1.55.2
-          command: [golangci-lint, run, ./...]
+        - image: golangci/golangci-lint:v1.56.1
+          command: [golangci-lint, run, -v, ./...]
           resources:
             requests:
               cpu: 1000m
