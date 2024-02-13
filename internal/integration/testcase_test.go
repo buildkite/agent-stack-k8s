@@ -53,7 +53,7 @@ func (t testcase) Init() testcase {
 		namePrefix := t.Name()
 		jobID := os.Getenv("BUILDKITE_JOB_ID")
 		if jobID == "" {
-			jobID = strconv.FormatInt(time.Now().Unix(), 10)
+			jobID = strconv.FormatInt(time.Now().UnixNano(), 10)
 		}
 		t.PipelineName = strings.ToLower(fmt.Sprintf("test-%s-%s", namePrefix, jobID))
 	}
