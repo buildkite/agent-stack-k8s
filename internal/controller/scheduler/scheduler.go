@@ -215,17 +215,17 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	// Generate env from configuration for git credentials
 	secretName := w.cfg.SSHCredentialsSecret
 	if w.k8sPlugin.SSHCredentialsSecret != "" {
-		secretName = w.cfg.SSHCredentialsSecret
+		secretName = w.k8sPlugin.SSHCredentialsSecret
 	}
 
 	if secretName != "" && len(w.k8sPlugin.GitEnvFrom) == 0 {
 		w.envFrom = append(w.envFrom, corev1.EnvFromSource{
 			SecretRef: &corev1.SecretEnvSource{
-				LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.SSHCredentialsSecret},
+				LocalObjectReference: corev1.LocalObjectReference{Name: secretName},
 			},
 		})
 	} else if len(w.k8sPlugin.GitEnvFrom) > 0 {
-		w.logger.Warn("git-env-from is deprecated, please use git-credentials-secret instead")
+		w.logger.Warn("git-env-from is deprecated, please use ssh-credentials-secret instead")
 		w.envFrom = append(w.envFrom, w.k8sPlugin.GitEnvFrom...)
 	}
 
