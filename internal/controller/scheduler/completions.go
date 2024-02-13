@@ -61,7 +61,7 @@ func (w *completionsWatcher) OnUpdate(old interface{}, new interface{}) {
 func (w *completionsWatcher) cleanupSidecars(pod *v1.Pod) {
 	if terminated := getTermination(pod); terminated != nil {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			ctx := context.Background()
+			ctx := context.TODO()
 			job, err := w.k8s.BatchV1().Jobs(pod.Namespace).Get(ctx, pod.Labels["job-name"], metav1.GetOptions{})
 			if err != nil {
 				return err
