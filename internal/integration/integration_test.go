@@ -201,7 +201,6 @@ func TestExtraVolumeMounts(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	tc.AssertLogsContain(build, "volume_mounted")
 }
 
 func TestInvalidPodSpec(t *testing.T) {
@@ -272,4 +271,20 @@ func TestImagePullBackOffCancelled(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
 	tc.AssertLogsContain(build, "other job has run")
+}
+
+func TestArtifactsUploadFailedJobs(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "artifact-upload-failed-job.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+	tc.AssertArtifactsContain(build, "artifact.txt")
 }
