@@ -205,6 +205,45 @@ steps:
                   - --image=ttl.sh/example:1h
 ```
 
+## Agent Hooks
+The agent looks for hooks in the `/buildkite/hooks` directory by default. You can either build your own agent image with hooks baked there, or mount a volume there which includes the hooks you want to run. For example, if you have a `my-agent-hooks` configmap like this:
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-agent-hooks
+data:
+  pre-checkout: |
+    #!/usr/bin/env bash
+
+    echo "Pre-checkout hook"
+```
+
+Then you could mount it like this:
+```yaml
+steps:
+  - label: build image
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: gradle:latest
+                command: [ gradle ]
+                args:
+                  - jib
+                  - --image=ttl.sh/example:1h
+            volumes:
+              - name: agent-hooks
+                configMap:
+                  name: my-agent-hooks
+                  defaultMode: 0755 # needed so the hook(s) are executable!
+          extraVolumeMounts:
+            - name: agent-hooks
+              mountPath: /buildkite/hooks
+```
+
 ## How does it work
 
 The controller uses the [Buildkite GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled work that uses the `kubernetes` plugin.
