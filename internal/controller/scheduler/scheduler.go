@@ -197,6 +197,9 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		}, {
 			Name:  "BUILDKITE_BIN_PATH",
 			Value: "/workspace",
+		}, {	
+			Name:  "BUILDKITE_HOOKS_PATH",
+			Value: "/buildkite/hooks",
 		}, {
 			Name: agentTokenKey,
 			ValueFrom: &corev1.EnvVarSource{
