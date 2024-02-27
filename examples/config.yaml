@@ -10,5 +10,16 @@ org: my-buildkite-org
 # the UUID may be found in the cluster settings
 cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 tags:
-- queue=my-queue
-- priority=high
+  - queue=my-queue
+  - priority=high
+pod-spec-patch:
+  serviceAccountName: 'buildkite-agent-sa'
+  automountServiceAccountToken: true
+  containers:
+    - name: container-0
+      env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-secrets
+              key: github-token
