@@ -25,7 +25,7 @@ steps:
   - kubernetes:
       podSpec:
         containers:
-        - image: golang:1.21-alpine
+        - image: golang:1.22-alpine
           command: [.buildkite/steps/tidy.sh]
           env:
           - name: GOCACHE
@@ -53,8 +53,8 @@ steps:
   - kubernetes:
       podSpec:
         containers:
-        - image: golangci/golangci-lint:v1.55.2
-          command: [golangci-lint, run, ./...]
+        - image: golangci/golangci-lint:v1.56.1
+          command: [golangci-lint, run, -v, ./...]
           resources:
             requests:
               cpu: 1000m
@@ -94,7 +94,7 @@ steps:
       podSpec:
         containers:
         - name: docker
-          image: golang:1.21-alpine
+          image: golang:1.22-alpine
           command: [.buildkite/steps/check-code-generation.sh]
           env:
           - name: GOCACHE
@@ -185,7 +185,7 @@ steps:
       podSpec:
         containers:
         - name: ko
-          image: golang:1.21
+          image: golang:1.22
           command: [.buildkite/steps/controller.sh]
           envFrom:
           - secretRef:

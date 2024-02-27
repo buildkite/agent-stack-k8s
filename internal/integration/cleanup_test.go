@@ -22,7 +22,7 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 	ctx := context.Background()
 	graphqlClient := api.NewClient(cfg.BuildkiteToken)
 
-	pipelines, err := api.SearchPipelines(ctx, graphqlClient, cfg.Org, "agent-stack-k8s-", 100)
+	pipelines, err := api.SearchPipelines(ctx, graphqlClient, cfg.Org, "test-", 100)
 	require.NoError(t, err)
 
 	numPipelines := len(pipelines.Organization.Pipelines.Edges)

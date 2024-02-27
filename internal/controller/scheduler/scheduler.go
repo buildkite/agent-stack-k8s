@@ -26,8 +26,9 @@ import (
 )
 
 const (
-	agentTokenKey      = "BUILDKITE_AGENT_TOKEN"
-	AgentContainerName = "agent"
+	defaultTermGracePeriodSeconds = 60
+	agentTokenKey                 = "BUILDKITE_AGENT_TOKEN"
+	AgentContainerName            = "agent"
 )
 
 type Config struct {
@@ -195,6 +196,8 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	kjob.Annotations = w.k8sPlugin.Metadata.Annotations
 	kjob.Spec.Template.Annotations = w.k8sPlugin.Metadata.Annotations
 	kjob.Spec.BackoffLimit = pointer.Int32(0)
+	kjob.Spec.Template.Spec.TerminationGracePeriodSeconds = pointer.Int64(defaultTermGracePeriodSeconds)
+
 	env := []corev1.EnvVar{
 		{
 			Name:  "BUILDKITE_BUILD_PATH",
@@ -297,6 +300,18 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		}, corev1.EnvVar{
 			Name:  "BUILDKITE_CONTAINER_ID",
 			Value: strconv.Itoa(i + systemContainers),
+		}, corev1.EnvVar{
+			Name:  "BUILDKITE_PLUGINS_PATH",
+			Value: "/tmp",
+		}, corev1.EnvVar{
+			Name:  clicommand.RedactedVars.EnvVar,
+			Value: strings.Join(clicommand.RedactedVars.Value.Value(), ","),
+		}, corev1.EnvVar{
+			Name:  "BUILDKITE_SHELL",
+			Value: "/bin/sh -ec",
+		}, corev1.EnvVar{
+			Name:  "BUILDKITE_ARTIFACT_PATHS",
+			Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
 		})
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
@@ -339,39 +354,6 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 		c.EnvFrom = append(c.EnvFrom, w.envFrom...)
 		podSpec.Containers = append(podSpec.Containers, c)
-	}
-
-	if artifactPaths, found := w.envMap["BUILDKITE_ARTIFACT_PATHS"]; found && artifactPaths != "" {
-		artifactsContainer := corev1.Container{
-			Name:            "upload-artifacts",
-			Image:           w.cfg.Image,
-			Args:            []string{"bootstrap"},
-			WorkingDir:      "/workspace",
-			VolumeMounts:    volumeMounts,
-			ImagePullPolicy: corev1.PullAlways,
-			Env: []corev1.EnvVar{{
-				Name:  "BUILDKITE_AGENT_EXPERIMENT",
-				Value: "kubernetes-exec",
-			}, {
-				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-				Value: "command",
-			}, {
-				Name:  "BUILDKITE_COMMAND",
-				Value: "true",
-			}, {
-				Name:  "BUILDKITE_AGENT_NAME",
-				Value: "buildkite",
-			}, {
-				Name:  "BUILDKITE_CONTAINER_ID",
-				Value: strconv.Itoa(containerCount),
-			}, {
-				Name:  "BUILDKITE_ARTIFACT_PATHS",
-				Value: artifactPaths,
-			}},
-		}
-		artifactsContainer.Env = append(artifactsContainer.Env, env...)
-		containerCount++
-		podSpec.Containers = append(podSpec.Containers, artifactsContainer)
 	}
 
 	agentTags := []agentTag{

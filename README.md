@@ -30,6 +30,9 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
 We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
 which means you'll need Helm version 3.8.0 or newer.
 
+This will create an agent-stack-k8s installation that will listen to the `kubernetes` queue.
+See the `--tags` [option](#Options) for specifying a different queue.
+
 #### Externalize Secrets
 
 You can also have an external provider create a secret for you in the namespace before deploying the chart with helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
@@ -62,7 +65,6 @@ Available versions and their digests can be found on [the releases page](https:/
 ### Options
 
 ```text
-$ agent-stack-k8s --help
 Usage:
   agent-stack-k8s [flags]
   agent-stack-k8s [command]
@@ -80,41 +82,50 @@ Flags:
   -f, --config string               config file path
       --debug                       debug logs
   -h, --help                        help for agent-stack-k8s
-      --image string                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent-k8s:latest")
+      --image string                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent-stack-k8s/agent:latest")
       --job-ttl duration            time to retain kubernetes jobs after completion (default 10m0s)
       --max-in-flight int           max jobs in flight, 0 means no max (default 25)
       --namespace string            kubernetes namespace to create resources in (default "default")
       --org string                  Buildkite organization name to watch
       --profiler-address string     Bind address to expose the pprof profiler (e.g. localhost:6060)
-      --tags strings                A comma-separated list of tags for the agent (for example, "linux" or "mac,xcode=8") (default [queue=kubernetes])
+      --tags strings                A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux") (default [queue=kubernetes])
+
+Use "agent-stack-k8s [command] --help" for more information about a command.
 ```
 
 Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](examples) folder there is a sample [YAML config](examples/config.yaml) and a sample [dotenv config](examples/config.env).
 
-### Sample buildkite pipeline
-
+### Sample Buildkite Pipelines
+For simple commands, you merely have to target the queue you configured agent-stack-k8s with.
 ```yaml
 steps:
-  - label: build image
-    agents:
-      queue: kubernetes
-    plugins:
-      - kubernetes:
-          podSpec:
-            containers:
-              - image: alpine:latest
-                command: [echo]
-                args:
-                - "Hello, world!"
+- label: Hello World!
+  command: echo Hello World!
+  agents:
+    queue: kubernetes
 ```
-
-The `podSpec` of the `kubernetes` plugin can support any field from the `PodSpec` resource [in the Kubernetes API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.24/#podspec-v1-core).
-
-If however no `podSpec` is specified then behaviour will default to the command step.
+For more complicated steps, you have access to the [`PodSpec`](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#podspec-v1-core) Kubernetes API resource that will be used in a Kubernetes [`Job`](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#job-v1-batch).
+For now, this is nested under a `kubernetes` plugin.
+But unlike other Buildkite plugins, there is no corresponding plugin repository.
+Rather this is syntax that is interpreted by the `agent-stack-k8s` controller.
 ```yaml
 steps:
-  - command: "blah.sh"
+- label: Hello World!
+  agents:
+    queue: kubernetes
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - image: alpine:latest
+          command: [sh, -c]
+          args:
+          - "'echo Hello World!'"
 ```
+Note that almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
+
+Note how this example demonstrates a subtlety when attempting to use shell syntax for Kubernetes Containers: the `command` should be an executable, and shells typically execute a script as a [`command_string`](https://man7.org/linux/man-pages/man1/sh.1p.html) that is required to be single argument that follows `-c`.
+Within the command string, shell syntax such `>` for output redirection may be used, but outside of it, Kubernetes will not interpret it.
 
 More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
 
@@ -155,7 +166,26 @@ Our JSON schema can also be used with editors that support JSON Schema by config
 ### Cloning repos via SSH
 
 To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
+Place this object under a `gitEnvFrom` key in the `kubernetes` plugin (see the example below).
 
+You should create a secret in your namespace with an environment variable name that's recognised by [`docker-ssh-env-config`](https://github.com/buildkite/docker-ssh-env-config).
+A script from this project is included in the default entrypoint of the default [`buildkite/agent`](https://hub.docker.com/r/buildkite/agent) Docker image.
+It will process the value of the secret and write out a private key to the `~/.ssh` directory of the checkout container.
+
+However this key will not be available in your job containers.
+If you need to use git ssh credentials in your job containers, we recommend one of the following options:
+1. Use a container image that's based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
+2. Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entrypoint for your job container image
+
+#### Example secret creation for ssh cloning
+You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
+
+Supposing a SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
+```bash
+kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_DSA_KEY="$HOME/.ssh/id_ecdsa"
+```
+
+Then the following pipeline will be able to clone a git repository that requires ssh credentials.
 ```yaml
 steps:
   - label: build image
@@ -164,7 +194,8 @@ steps:
     plugins:
       - kubernetes:
           gitEnvFrom:
-            - secretRef: { name: agent-stack-k8s } # <--
+            - secretRef:
+                name: my-git-ssh-credentials # <----
           podSpec:
             containers:
               - image: gradle:latest
@@ -173,15 +204,6 @@ steps:
                   - jib
                   - --image=ttl.sh/example:1h
 ```
-
-The agent will automatically configure SSH access based on environment variables using the [docker-ssh-env-config](https://github.com/buildkite/docker-ssh-env-config) shell script. This script will run during the `checkout` stage of the job, and all resulting SSH keys and SSH config will live in the `/workspace/.ssh` in subsequent containers of the job.
-
-To use these keys and config in a separate step, for example if your job runs `git clone`, you can either:
-
-- symlink the `/workspace/.ssh` directory to `~/.ssh`
-- specify the path to the key explicitly, for example by setting `GIT_SSH_COMMAND="ssh -i /workspace/.ssh/id_rsa"` in your job's environment.
-
-Note that setting the `HOME` environment variable in your container will likely not work, since OpenSSH looks for the home directory configured in `/etc/passwd`.
 
 ## How does it work
 

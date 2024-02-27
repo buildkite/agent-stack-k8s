@@ -43,11 +43,11 @@ func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, er
 	}, nil
 }
 
-// jobResp is used to identify the reponse types from methods that call the GraphQL API
+// jobResp is used to identify the response types from methods that call the GraphQL API
 // in the cases where a cluster is specified or otherwise.
 // The return types are are isomorphic, but this has been lost in the generation of the
-// API calling methods. As such, the implmentations should syntacticaly identical, but
-// sematically, they operate on differnt types.
+// API calling methods. As such, the implementations should be syntacticaly identical, but
+// semantically, they operate on different types.
 type jobResp interface {
 	OrganizationExists() bool
 	CommandJobs() []*api.JobJobTypeCommand

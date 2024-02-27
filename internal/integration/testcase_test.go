@@ -3,8 +3,8 @@ package integration_test
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -39,19 +39,23 @@ type testcase struct {
 	PipelineName string
 }
 
+// k8s labels are limited to length 63, we use the pipeline name as a label.
+// So we sometimes need to limit the length of the pipeline name too.
+func (t *testcase) ShortPipelineName() string {
+	return t.PipelineName[:min(len(t.PipelineName), 63)]
+}
+
 func (t testcase) Init() testcase {
 	t.Helper()
 	t.Parallel()
 
 	if t.PipelineName == "" {
-		queuePrefix := "queue_"
-		namePrefix := "agent-stack-k8s-test-"
-		nameVariable := fmt.Sprintf("%s-%d", strings.ToLower(t.Name()), time.Now().UnixNano())
-		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(nameVariable)))
-
-		// k8s labels are limited to length 63, we use the pipeline name as a label.
-		// So we need to limit the length of the pipeline name too.
-		t.PipelineName = fmt.Sprintf("%s%s", namePrefix, hash[:63-len(namePrefix)-len(queuePrefix)])
+		namePrefix := t.Name()
+		jobID := os.Getenv("BUILDKITE_JOB_ID")
+		if jobID == "" {
+			jobID = strconv.FormatInt(time.Now().UnixNano(), 10)
+		}
+		t.PipelineName = strings.ToLower(fmt.Sprintf("test-%s-%s", namePrefix, jobID))
 	}
 
 	t.Logger = zaptest.NewLogger(t).Named(t.Name())
@@ -77,9 +81,7 @@ func (t testcase) CreatePipeline(ctx context.Context) (string, func()) {
 	require.NoError(t, err)
 
 	var steps bytes.Buffer
-	require.NoError(t, tpl.Execute(&steps, map[string]string{
-		"queue": t.PipelineName,
-	}))
+	require.NoError(t, tpl.Execute(&steps, map[string]string{"queue": t.ShortPipelineName()}))
 	pipeline, _, err := t.Buildkite.Pipelines.Create(cfg.Org, &buildkite.CreatePipeline{
 		Name:       t.PipelineName,
 		Repository: t.Repo,
@@ -103,7 +105,7 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config) {
 	runCtx, cancel := context.WithCancel(ctx)
 	EnsureCleanup(t.T, cancel)
 
-	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.PipelineName)}
+	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.ShortPipelineName())}
 	cfg.Debug = true
 
 	go controller.Run(runCtx, t.Logger, t.Kubernetes, cfg)
@@ -231,7 +233,7 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[string]string) {
 	t.Helper()
 
-	tagReq, err := labels.NewRequirement("tag.buildkite.com/queue", selection.Equals, []string{t.PipelineName})
+	tagReq, err := labels.NewRequirement("tag.buildkite.com/queue", selection.Equals, []string{t.ShortPipelineName()})
 	require.NoError(t, err)
 
 	selector := labels.NewSelector().Add(*tagReq)
