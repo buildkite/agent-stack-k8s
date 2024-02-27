@@ -16,3 +16,14 @@ tags:
 # configured on the agent with docker-ssh-config
 # @see https://github.com/buildkite/docker-ssh-env-config
 ssh-credentials-secret: buildkite-ssh-github-creds
+pod-spec-patch:
+  serviceAccountName: 'buildkite-agent-sa'
+  automountServiceAccountToken: true
+  containers:
+    - name: container-0
+      env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-secrets
+              key: github-token

@@ -15,18 +15,19 @@ const (
 )
 
 type Config struct {
-	Debug                bool          `mapstructure:"debug"`
-	AgentTokenSecret     string        `mapstructure:"agent-token-secret" validate:"required"`
-	BuildkiteToken       string        `mapstructure:"buildkite-token"    validate:"required"`
-	Image                string        `mapstructure:"image"              validate:"required"`
-	JobTTL               time.Duration `mapstructure:"job-ttl"`
-	MaxInFlight          int           `mapstructure:"max-in-flight"      validate:"min=0"`
-	Namespace            string        `mapstructure:"namespace"          validate:"required"`
-	Org                  string        `mapstructure:"org"                validate:"required"`
-	Tags                 stringSlice   `mapstructure:"tags"               validate:"min=1"`
-	ProfilerAddress      string        `mapstructure:"profiler-address"   validate:"omitempty,hostname_port"`
-	ClusterUUID          string        `mapstructure:"cluster-uuid"       validate:"omitempty"`
-	SSHCredentialsSecret string        `mapstructure:"ssh-credentials-secret" validate:"omitempty"`
+	Debug                bool                   `mapstructure:"debug"`
+	AgentTokenSecret     string                 `mapstructure:"agent-token-secret" validate:"required"`
+	BuildkiteToken       string                 `mapstructure:"buildkite-token"    validate:"required"`
+	Image                string                 `mapstructure:"image"              validate:"required"`
+	JobTTL               time.Duration          `mapstructure:"job-ttl"`
+	MaxInFlight          int                    `mapstructure:"max-in-flight"      validate:"min=0"`
+	Namespace            string                 `mapstructure:"namespace"          validate:"required"`
+	Org                  string                 `mapstructure:"org"                validate:"required"`
+	Tags                 stringSlice            `mapstructure:"tags"               validate:"min=1"`
+	ProfilerAddress      string                 `mapstructure:"profiler-address"   validate:"omitempty,hostname_port"`
+	ClusterUUID          string                 `mapstructure:"cluster-uuid"       validate:"omitempty"`
+	PodSpecPatch         map[string]interface{} `mapstructure:"pod-spec-patch"     validate:"omitempty"`
+	SSHCredentialsSecret string                 `mapstructure:"ssh-credentials-secret" validate:"omitempty"`
 }
 
 type stringSlice []string
@@ -49,5 +50,8 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("org", c.Org)
 	enc.AddString("profiler-address", c.ProfilerAddress)
 	enc.AddString("cluster-uuid", c.ClusterUUID)
+	if err := enc.AddReflected("pod-spec-patch", c.PodSpecPatch); err != nil {
+		return err
+	}
 	return enc.AddArray("tags", c.Tags)
 }
