@@ -282,6 +282,9 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	}, corev1.EnvVar{
 		Name:  "BUILDKITE_SHELL",
 		Value: "/bin/sh -ec",
+	}, corev1.EnvVar{
+		Name:  "BUILDKITE_ARTIFACT_PATHS",
+		Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
 	})
 
 	for i, c := range podSpec.Containers {
@@ -300,18 +303,6 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		}, corev1.EnvVar{
 			Name:  "BUILDKITE_CONTAINER_ID",
 			Value: strconv.Itoa(i + systemContainers),
-		}, corev1.EnvVar{
-			Name:  "BUILDKITE_PLUGINS_PATH",
-			Value: "/tmp",
-		}, corev1.EnvVar{
-			Name:  clicommand.RedactedVars.EnvVar,
-			Value: strings.Join(clicommand.RedactedVars.Value.Value(), ","),
-		}, corev1.EnvVar{
-			Name:  "BUILDKITE_SHELL",
-			Value: "/bin/sh -ec",
-		}, corev1.EnvVar{
-			Name:  "BUILDKITE_ARTIFACT_PATHS",
-			Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
 		})
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
