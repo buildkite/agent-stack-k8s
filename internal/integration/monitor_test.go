@@ -16,7 +16,7 @@ func TestInvalidOrg(t *testing.T) {
 		Token:       os.Getenv("BUILDKITE_TOKEN"),
 		MaxInFlight: 1,
 		Org:         "foo",
-		Tags:        []string{"foo=bar"},
+		Tags:        []string{"queue=default", "foo=bar"},
 	})
 	require.NoError(t, err)
 

@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -83,14 +84,14 @@ func (r clusteredJobResp) CommandJobs() []*api.JobJobTypeCommand {
 
 // getScheduledCommandJobs calls either the clustered or unclustered GraphQL API
 // methods, depending on if a cluster uuid was provided in the config
-func (m *Monitor) getScheduledCommandJobs(ctx context.Context, tags []string) (jobResp, error) {
+func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jobResp, error) {
 	if m.cfg.ClusterUUID == "" {
-		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, tags)
+		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)})
 		return unclusteredJobResp(*resp), err
 	}
 
 	resp, err := api.GetScheduledJobsClustered(
-		ctx, m.gql, m.cfg.Org, tags, encodeClusterGraphQLID(m.cfg.ClusterUUID),
+		ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, encodeClusterGraphQLID(m.cfg.ClusterUUID),
 	)
 	return clusteredJobResp(*resp), err
 }
@@ -109,13 +110,20 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 
 	agentTags := toMapAndLogErrors(logger, m.cfg.Tags)
 
+	var queue string
+	var ok bool
+	if queue, ok = agentTags["queue"]; !ok {
+		errs <- errors.New("missing required tag: queue")
+		return errs
+	}
+
 	go func() {
 		logger.Info("started")
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 
 		for {
-			resp, err := m.getScheduledCommandJobs(ctx, m.cfg.Tags)
+			resp, err := m.getScheduledCommandJobs(ctx, queue)
 			if err != nil {
 				logger.Warn("failed to get scheduled command jobs", zap.Error(err))
 				continue
