@@ -242,34 +242,47 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		c.Args = []string{"bootstrap"}
 		c.ImagePullPolicy = corev1.PullAlways
 		c.Env = append(c.Env, env...)
-		c.Env = append(c.Env, corev1.EnvVar{
-			Name:  "BUILDKITE_COMMAND",
-			Value: command,
-		}, corev1.EnvVar{
-			Name:  "BUILDKITE_AGENT_EXPERIMENT",
-			Value: "kubernetes-exec",
-		}, corev1.EnvVar{
-			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-			Value: "plugin,command",
-		}, corev1.EnvVar{
-			Name:  "BUILDKITE_AGENT_NAME",
-			Value: "buildkite",
-		}, corev1.EnvVar{
-			Name:  "BUILDKITE_CONTAINER_ID",
-			Value: strconv.Itoa(i + systemContainers),
-		}, corev1.EnvVar{
-			Name:  "BUILDKITE_PLUGINS_PATH",
-			Value: "/tmp",
-		}, corev1.EnvVar{
-			Name:  clicommand.RedactedVars.EnvVar,
-			Value: strings.Join(clicommand.RedactedVars.Value.Value(), ","),
-		}, corev1.EnvVar{
-			Name:  "BUILDKITE_SHELL",
-			Value: "/bin/sh -ec",
-		}, corev1.EnvVar{
-			Name:  "BUILDKITE_ARTIFACT_PATHS",
-			Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
-		})
+		c.Env = append(c.Env,
+			corev1.EnvVar{
+				Name:  "BUILDKITE_COMMAND",
+				Value: command,
+			},
+			corev1.EnvVar{
+				Name:  "BUILDKITE_AGENT_EXPERIMENT",
+				Value: "kubernetes-exec",
+			},
+			corev1.EnvVar{
+				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+				Value: "plugin,command",
+			},
+			corev1.EnvVar{
+				Name:  "BUILDKITE_AGENT_NAME",
+				Value: "buildkite",
+			},
+			corev1.EnvVar{
+				Name:  "BUILDKITE_CONTAINER_ID",
+				Value: strconv.Itoa(i + systemContainers),
+			},
+			corev1.EnvVar{
+				Name:  "BUILDKITE_PLUGINS_PATH",
+				Value: "/tmp",
+			},
+			corev1.EnvVar{
+				Name:  "BUILDKITE_SOCKETS_PATH",
+				Value: "/workspace/sockets",
+			},
+			corev1.EnvVar{
+				Name:  clicommand.RedactedVars.EnvVar,
+				Value: strings.Join(clicommand.RedactedVars.Value.Value(), ","),
+			},
+			corev1.EnvVar{
+				Name:  "BUILDKITE_SHELL",
+				Value: "/bin/sh -ec",
+			},
+			corev1.EnvVar{
+				Name:  "BUILDKITE_ARTIFACT_PATHS",
+				Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
+			})
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
 		}
