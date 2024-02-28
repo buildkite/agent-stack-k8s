@@ -51,11 +51,17 @@ func (t testcase) Init() testcase {
 
 	if t.PipelineName == "" {
 		namePrefix := t.Name()
-		jobID := os.Getenv("BUILDKITE_JOB_ID")
-		if jobID == "" {
-			jobID = strconv.FormatInt(time.Now().UnixNano(), 10)
+		buildNum := os.Getenv("BUILDKITE_BUILD_NUMBER")
+		if buildNum == "" {
+			buildNum = strconv.FormatInt(time.Now().UnixNano(), 10)
 		}
-		t.PipelineName = strings.ToLower(fmt.Sprintf("test-%s-%s", namePrefix, jobID))
+
+		t.PipelineName = strings.ToLower(fmt.Sprintf("test-%s-%s", namePrefix, buildNum))
+
+		retryNum := os.Getenv("BUILDKITE_RETRY_COUNT")
+		if retryNum != "0" {
+			t.PipelineName = fmt.Sprintf("%s-retry-%s", t.PipelineName, retryNum)
+		}
 	}
 
 	t.Logger = zaptest.NewLogger(t).Named(t.Name())
