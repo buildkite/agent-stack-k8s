@@ -33,6 +33,26 @@ func TestWalkingSkeleton(t *testing.T) {
 	)
 }
 
+func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "helloworld.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+
+	cfg := cfg
+	cfg.Tags = append(cfg.Tags, "foo=bar") // job has queue=<something>, agent has queue=<something> and foo=bar
+
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+}
+
 func TestChown(t *testing.T) {
 	tc := testcase{
 		T:       t,
