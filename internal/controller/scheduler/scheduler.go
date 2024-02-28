@@ -267,6 +267,9 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	}, corev1.EnvVar{
 		Name:  "BUILDKITE_SHELL",
 		Value: "/bin/sh -ec",
+	}, corev1.EnvVar{
+		Name:  "BUILDKITE_ARTIFACT_PATHS",
+		Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
 	})
 
 	for i, c := range podSpec.Containers {
