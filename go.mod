@@ -1,6 +1,7 @@
 module github.com/buildkite/agent-stack-k8s/v2
 
 go 1.22
+
 toolchain go1.22.0
 
 require (
@@ -150,7 +151,7 @@ require (
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tinylib/msgp v1.1.8 // indirect
 	github.com/urfave/cli v1.22.14 // indirect
