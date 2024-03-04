@@ -148,6 +148,8 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 	_, ok := node.(*api.JobJobTypeCommand)
 	require.True(t, ok)
 
+	t.Logf("Triggered build: https://buildkite.com/buildkite-kubernetes-stack/%s/builds/%d", t.PipelineName, build.Number)
+
 	return build.Build
 }
 
