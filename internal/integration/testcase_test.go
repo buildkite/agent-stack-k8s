@@ -114,8 +114,18 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config) {
 func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build {
 	t.Helper()
 
+	authorEmail := os.Getenv("BUILDKITE_BUILD_CREATOR_EMAIL")
+	authorName := os.Getenv("BUILDKITE_BUILD_CREATOR")
+	if authorName == "" {
+		authorName = "Agent Stack K8s Integration Test"
+	}
+
 	// trigger build
 	createBuild, err := api.BuildCreate(ctx, t.GraphQL, api.BuildCreateInput{
+		Author: api.BuildAuthorInput{
+			Email: authorEmail,
+			Name:  authorName,
+		},
 		PipelineID: pipelineID,
 		Commit:     "HEAD",
 		Branch:     branch,
@@ -137,6 +147,8 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 	node := build.Jobs.Edges[0].Node
 	_, ok := node.(*api.JobJobTypeCommand)
 	require.True(t, ok)
+
+	t.Logf("Triggered build: https://buildkite.com/buildkite-kubernetes-stack/%s/builds/%d", t.PipelineName, build.Number)
 
 	return build.Build
 }
