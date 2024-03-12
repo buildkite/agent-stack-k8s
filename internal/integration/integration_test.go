@@ -69,6 +69,30 @@ func TestChown(t *testing.T) {
 	tc.AssertArtifactsContain(build, "some-file")
 }
 
+func TestSSHRepoCloneWithSSHCredentialsSecret(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "ssh-credentials-secret.yaml",
+		Repo:    repoSSH,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+	_, err := tc.Kubernetes.CoreV1().
+		Secrets(cfg.Namespace).
+		Get(ctx, "agent-stack-k8s", v1.GetOptions{})
+	require.NoError(t, err, "agent-stack-k8s secret must exist")
+
+	cfg := cfg
+	cfg.SSHCredentialsSecret = "agent-stack-k8s"
+
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+}
+
 func TestSSHRepoClone(t *testing.T) {
 	tc := testcase{
 		T:       t,
