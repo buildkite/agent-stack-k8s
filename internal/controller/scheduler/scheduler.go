@@ -223,6 +223,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			},
 		})
 	} else if len(w.k8sPlugin.GitEnvFrom) > 0 {
+		w.logger.Warn("gitEnvFrom at the step level is deprecated, please use ssh-credentials-secret in the controller config instead")
 		w.envFrom = append(w.envFrom, w.k8sPlugin.GitEnvFrom...)
 	}
 
