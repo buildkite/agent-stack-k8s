@@ -15,6 +15,8 @@ just --list
 ```
 
 # Integration Tests
+
+## Setup
 For running the integration tests you'll need to add some additional scopes to your Buildkite API token:
 
 - `read_artifacts`
@@ -26,6 +28,31 @@ You'll also need to create an SSH secret in your cluster to run [this test pipel
 ```bash
 kubectl create secret generic agent-stack-k8s --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
 ```
+
+## Debugging
+The integration tests on the [`kubernetes-agent-stack`](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack) pipeline will create additional pipelines in the [`buildkite-kubernetes-stack`](https://buildkite.com/buildkite-kubernetes-stack) organization.
+
+
+## Cleanup
+These will be deleted automatically for successful tests, but for unsuccessful tests, then will remain after then end of the test job to allow you to debug them.
+However, this means they should be cleaned up manually. To do this run
+```bash
+CLEANUP_PIPELINES=true just cleanup-orphans --org=buildkite-kubernetes-stack --buildkite-token=<buildkite-api-token>
+```
+
+The token will need to have graphql access as well as:
+- `read_artifacts`
+- `write_pipelines`
+
+This is usually enough, but there is another situation where the cluster could be clogged with K8s jobs.
+To clean these out you should run the following in a kubernetes context in the namespace containing the controller used to run the CI pipeline.
+```bash
+kubectl get -o jsonpath='{.items[*].metadata.name}' jobs | xargs -L1 kubectl delete job
+```
+
+At the time of writing, the CI pipeline is run in an EKS cluster, `agent-stack-k8s-ci` in the `buildkite-agent` AWS account.
+The controller is deployed to the `buildkite` namespace in that cluster.
+See https://docs.aws.amazon.com/eks/latest/userguide/create-kubeconfig.html for how to obtain a kubeconfig for an EKS cluster.
 
 # Run from source
 
