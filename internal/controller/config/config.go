@@ -16,16 +16,16 @@ const (
 
 type Config struct {
 	Debug                bool          `mapstructure:"debug"`
-	AgentTokenSecret     string        `mapstructure:"agent-token-secret" validate:"required"`
-	BuildkiteToken       string        `mapstructure:"buildkite-token"    validate:"required"`
-	Image                string        `mapstructure:"image"              validate:"required"`
+	AgentTokenSecret     string        `mapstructure:"agent-token-secret"     validate:"required"`
+	BuildkiteToken       string        `mapstructure:"buildkite-token"        validate:"required"`
+	Image                string        `mapstructure:"image"                  validate:"required"`
 	JobTTL               time.Duration `mapstructure:"job-ttl"`
-	MaxInFlight          int           `mapstructure:"max-in-flight"      validate:"min=0"`
-	Namespace            string        `mapstructure:"namespace"          validate:"required"`
-	Org                  string        `mapstructure:"org"                validate:"required"`
-	Tags                 stringSlice   `mapstructure:"tags"               validate:"min=1"`
-	ProfilerAddress      string        `mapstructure:"profiler-address"   validate:"omitempty,hostname_port"`
-	ClusterUUID          string        `mapstructure:"cluster-uuid"       validate:"omitempty"`
+	MaxInFlight          int           `mapstructure:"max-in-flight"          validate:"min=0"`
+	Namespace            string        `mapstructure:"namespace"              validate:"required"`
+	Org                  string        `mapstructure:"org"                    validate:"required"`
+	Tags                 stringSlice   `mapstructure:"tags"                   validate:"min=1"`
+	ProfilerAddress      string        `mapstructure:"profiler-address"       validate:"omitempty,hostname_port"`
+	ClusterUUID          string        `mapstructure:"cluster-uuid"           validate:"omitempty"`
 	SSHCredentialsSecret string        `mapstructure:"ssh-credentials-secret" validate:"omitempty"`
 }
 
