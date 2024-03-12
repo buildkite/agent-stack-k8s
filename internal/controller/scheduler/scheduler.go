@@ -30,11 +30,11 @@ const (
 )
 
 type Config struct {
-	Namespace            string
-	Image                string
-	AgentToken           string
-	JobTTL               time.Duration
-	SSHCredentialsSecret string
+	Namespace      string
+	Image          string
+	AgentToken     string
+	JobTTL         time.Duration
+	SSHCredentials string
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
@@ -46,12 +46,11 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 }
 
 type KubernetesPlugin struct {
-	PodSpec              *corev1.PodSpec
-	SSHCredentialsSecret string
-	GitEnvFrom           []corev1.EnvFromSource
-	Sidecars             []corev1.Container `json:"sidecars,omitempty"`
-	Metadata             Metadata
-	ExtraVolumeMounts    []corev1.VolumeMount
+	PodSpec           *corev1.PodSpec
+	GitEnvFrom        []corev1.EnvFromSource
+	Sidecars          []corev1.Container `json:"sidecars,omitempty"`
+	Metadata          Metadata
+	ExtraVolumeMounts []corev1.VolumeMount
 }
 
 type Metadata struct {
@@ -216,11 +215,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	}
 
 	// Generate env from configuration for git credentials
-	secretName := w.cfg.SSHCredentialsSecret
-	if w.k8sPlugin.SSHCredentialsSecret != "" {
-		secretName = w.k8sPlugin.SSHCredentialsSecret
-	}
-
+	secretName := w.cfg.SSHCredentials
 	if secretName != "" && len(w.k8sPlugin.GitEnvFrom) == 0 {
 		w.envFrom = append(w.envFrom, corev1.EnvFromSource{
 			SecretRef: &corev1.SecretEnvSource{
@@ -228,7 +223,6 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			},
 		})
 	} else if len(w.k8sPlugin.GitEnvFrom) > 0 {
-		w.logger.Warn("git-env-from is deprecated, please use ssh-credentials-secret instead")
 		w.envFrom = append(w.envFrom, w.k8sPlugin.GitEnvFrom...)
 	}
 
