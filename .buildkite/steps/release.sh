@@ -9,21 +9,11 @@ if [[ -z "${BUILDKITE_TAG:-}" ]]; then
 fi
 
 ARCH=$(uname -m)
-GOARCH=""
-case "$ARCH" in
-  x86_64 | amd64)
-    GOARCH="amd64"
-    ;;
-  aarch64 | arm64)
-    GOARCH="arm64"
-    ;;
-esac
-
 GORELEASER_VERSION=1.19.2
 GORELEASER_URL=https://github.com/goreleaser/goreleaser/releases/download
 GORELEASER_FILE="goreleaser_${GORELEASER_VERSION}_${ARCH}.apk"
 GHCH_VERSION=0.11.0
-GHCH_URL="https://github.com/buildkite/ghch/releases/download/v${GHCH_VERSION}/ghch-${GOARCH}"
+GHCH_URL="https://github.com/buildkite/ghch/releases/download/v${GHCH_VERSION}/ghch-$(go env GOARCH)"
 
 echo --- :hammer: Installing packages
 apk add --no-progress crane git
