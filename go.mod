@@ -1,12 +1,13 @@
 module github.com/buildkite/agent-stack-k8s/v2
 
 go 1.22
+
 toolchain go1.22.0
 
 require (
 	github.com/Khan/genqlient v0.6.0
 	github.com/buildkite/go-buildkite/v3 v3.1.0
-	github.com/buildkite/roko v1.1.1
+	github.com/buildkite/roko v1.2.0
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
 	github.com/go-playground/validator/v10 v10.18.0
