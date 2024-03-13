@@ -16,7 +16,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
 	github.com/xeipuuv/gojsonschema v1.2.0
-	go.uber.org/zap v1.26.0
+	go.uber.org/zap v1.27.0
 	gotest.tools/gotestsum v1.11.0
 	k8s.io/api v0.26.0
 	k8s.io/apimachinery v0.26.0
