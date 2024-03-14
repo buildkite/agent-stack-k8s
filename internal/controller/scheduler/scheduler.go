@@ -231,7 +231,11 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
 	volumeMounts = append(volumeMounts, w.k8sPlugin.ExtraVolumeMounts...)
 
-	const systemContainers = 1
+	systemContainerCount := 0
+	if !skipCheckout {
+		systemContainerCount = 1
+	}
+
 	ttl := int32(w.cfg.JobTTL.Seconds())
 	kjob.Spec.TTLSecondsAfterFinished = &ttl
 
@@ -261,7 +265,7 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 			},
 			corev1.EnvVar{
 				Name:  "BUILDKITE_CONTAINER_ID",
-				Value: strconv.Itoa(i + systemContainers),
+				Value: strconv.Itoa(i + systemContainerCount),
 			},
 			corev1.EnvVar{
 				Name:  "BUILDKITE_PLUGINS_PATH",
@@ -294,7 +298,7 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		podSpec.Containers[i] = c
 	}
 
-	containerCount := len(podSpec.Containers) + systemContainers
+	containerCount := len(podSpec.Containers) + systemContainerCount
 
 	for i, c := range w.k8sPlugin.Sidecars {
 		if c.Name == "" {
