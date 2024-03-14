@@ -10,7 +10,7 @@ steps:
             containers:
               - image: alpine:latest
                 name: invalid
-                command: [echo hello world]
+                command: [echo, hello world]
                 env:
                   - name: CGO_ENABLED
                     value: 0 # invalid type, should be string

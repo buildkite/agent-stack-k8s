@@ -14,8 +14,7 @@ steps:
           args:
           - /tmp/buildkite-git-mirrors/foo-$$(BUILDKITE_JOB_ID).txt
         - image: alpine:latest
-          command: [ash, -c]
-          args:
+          command:
           - |-
             COUNT=0
             until [[ $$((COUNT++)) == 9 ]]; do
