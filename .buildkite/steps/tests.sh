@@ -13,6 +13,5 @@ export IMAGE
 
 gotestsum --junitfile "junit-${BUILDKITE_JOB_ID}.xml" -- \
   -count=1 \
-  -failfast \
   -ldflags="-X ${package}.branch=${branch}" \
   ./...
