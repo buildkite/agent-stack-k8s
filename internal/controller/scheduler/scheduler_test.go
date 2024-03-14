@@ -63,7 +63,7 @@ func TestJobPluginConversion(t *testing.T) {
 		input,
 		scheduler.Config{AgentToken: "token-secret"},
 	)
-	result, err := wrapper.ParsePlugins().Build()
+	result, err := wrapper.ParsePlugins().Build(false)
 	require.NoError(t, err)
 
 	assert.Len(t, result.Spec.Template.Spec.Containers, 3)
@@ -122,7 +122,7 @@ func TestTagEnv(t *testing.T) {
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	wrapper := scheduler.NewJobWrapper(logger, input, scheduler.Config{AgentToken: "token-secret"})
-	result, err := wrapper.ParsePlugins().Build()
+	result, err := wrapper.ParsePlugins().Build(false)
 	require.NoError(t, err)
 
 	container := findContainer(t, result.Spec.Template.Spec.Containers, "agent")
@@ -152,7 +152,7 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 		AgentQueryRules: []string{},
 	}
 	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{})
-	result, err := wrapper.ParsePlugins().Build()
+	result, err := wrapper.ParsePlugins().Build(false)
 	require.NoError(t, err)
 
 	require.Len(t, result.Spec.Template.Spec.Containers, 3)
@@ -179,7 +179,7 @@ func TestFailureJobs(t *testing.T) {
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{})
-	_, err = wrapper.ParsePlugins().Build()
+	_, err = wrapper.ParsePlugins().Build(false)
 	require.Error(t, err)
 
 	result, err := wrapper.BuildFailureJob(err)

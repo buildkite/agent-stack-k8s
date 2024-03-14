@@ -67,7 +67,7 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 	logger := w.logger.With(zap.String("uuid", job.Uuid))
 	logger.Info("creating job")
 	jobWrapper := NewJobWrapper(w.logger, job, w.cfg).ParsePlugins()
-	kjob, err := jobWrapper.Build()
+	kjob, err := jobWrapper.Build(false)
 	if err != nil {
 		kjob, err = jobWrapper.BuildFailureJob(err)
 		if err != nil {
@@ -146,7 +146,7 @@ func (w *jobWrapper) ParsePlugins() *jobWrapper {
 	return w
 }
 
-func (w *jobWrapper) Build() (*batchv1.Job, error) {
+func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	// if previous steps have failed, error immediately
 	if w.err != nil {
 		return nil, w.err
@@ -366,10 +366,12 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		},
 	}
 	agentContainer.Env = append(agentContainer.Env, env...)
+	podSpec.Containers = append(podSpec.Containers, agentContainer)
 
-	checkoutContainer := w.createCheckoutContainer(kjob, env, volumeMounts)
+	if !skipCheckout {
+		podSpec.Containers = append(podSpec.Containers, w.createCheckoutContainer(kjob, env, volumeMounts))
+	}
 
-	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
 	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
 		Name:            "copy-agent",
 		Image:           w.cfg.Image,
@@ -502,7 +504,7 @@ func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
 		},
 	}
 	w.otherPlugins = nil
-	return w.Build()
+	return w.Build(true)
 }
 
 func (w *jobWrapper) labelWithAgentTags() {
