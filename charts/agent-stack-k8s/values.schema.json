@@ -204,6 +204,12 @@
           "default": "",
           "title": "The UUID of the Buildkite cluster to pull Jobs from",
           "examples": [""]
+        },
+        "ssh-credentials-secret": {
+          "type": "string",
+          "default": "",
+          "title": "The name of the Kubernetes secret containing the SSH private key to use for git clone",
+          "examples": ["ssh-git-secret"]
         }
       },
       "examples": [

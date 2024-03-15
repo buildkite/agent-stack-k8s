@@ -14,7 +14,10 @@ const (
 	DefaultAgentImage  = "ghcr.io/buildkite/agent-stack-k8s/agent:latest"
 )
 
+// Config is the configuration for the controller
 type Config struct {
+	// If you add a new field here, make sure to add it to the MarshalLogObject AND to charts/agent-stack-k8s/values.schema.json
+
 	Debug                bool          `mapstructure:"debug"`
 	AgentTokenSecret     string        `mapstructure:"agent-token-secret"     validate:"required"`
 	BuildkiteToken       string        `mapstructure:"buildkite-token"        validate:"required"`
