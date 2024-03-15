@@ -6,7 +6,7 @@ toolchain go1.22.0
 
 require (
 	github.com/Khan/genqlient v0.7.0
-	github.com/buildkite/go-buildkite/v3 v3.1.0
+	github.com/buildkite/go-buildkite/v3 v3.11.0
 	github.com/buildkite/roko v1.2.0
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
@@ -193,5 +193,3 @@ require (
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )
-
-replace github.com/buildkite/go-buildkite/v3 => github.com/benmoss/go-buildkite/v3 v3.0.0-20230123160229-4d43d72f967e
