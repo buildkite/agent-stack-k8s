@@ -281,7 +281,7 @@ func TestInvalidPodJSON(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	tc.AssertLogsContain(
 		build,
-		"failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.PodSpec.containers.env.value of type string",
+		"failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.podSpec.containers.env.value of type string",
 	)
 }
 
