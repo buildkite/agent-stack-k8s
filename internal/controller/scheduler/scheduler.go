@@ -270,6 +270,9 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	}, corev1.EnvVar{
 		Name:  "BUILDKITE_ARTIFACT_PATHS",
 		Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
+	}, corev1.EnvVar{
+		Name:  "BUILDKITE_SOCKETS_PATH",
+		Value: "/workspace/sockets",
 	})
 
 	for i, c := range podSpec.Containers {
