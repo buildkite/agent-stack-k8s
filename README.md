@@ -107,7 +107,7 @@ steps:
 For more complicated steps, you have access to the [`PodSpec`](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#podspec-v1-core) Kubernetes API resource that will be used in a Kubernetes [`Job`](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#job-v1-batch).
 For now, this is nested under a `kubernetes` plugin.
 But unlike other Buildkite plugins, there is no corresponding plugin repository.
-Rather this is syntax that is interpreted by the `agent-stack-k8s` controller.
+Rather, this is syntax that is interpreted by the `agent-stack-k8s` controller.
 ```yaml
 steps:
 - label: Hello World!
@@ -118,19 +118,38 @@ steps:
       podSpec:
         containers:
         - image: alpine:latest
-          command: [sh, -c]
-          args:
-          - "'echo Hello World!'"
+          command:
+          - echo
+          - Hello World!
 ```
-Note that almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
+Note that in a `podSpec`, a `command` should be YAML list that will be combined into a single command for a container to run.
 
-Note how this example demonstrates a subtlety when attempting to use shell syntax for Kubernetes Containers: the `command` should be an executable, and shells typically execute a script as a [`command_string`](https://man7.org/linux/man-pages/man1/sh.1p.html) that is required to be single argument that follows `-c`.
-Within the command string, shell syntax such `>` for output redirection may be used, but outside of it, Kubernetes will not interpret it.
+Almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
+
+It's also possible to specify an entire script as a `command`
+```yaml
+steps:
+- label: Hello World!
+  agents:
+    queue: kubernetes
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - image: alpine:latest
+          command:
+          - |-
+            set -euo pipefail
+
+            echo Hello World! > hello.txt
+            cat hello.txt | buildkite-agent annotate
+```
+If you have a multi-line `command`, specifying the `args` as well could lead to confusion, so we recommend just using `command`.
 
 More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
 
 ### Buildkite Clusters
-If you are using [Buildkite Cluster](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
+If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
 ```yaml
 # values.yaml
 config:
