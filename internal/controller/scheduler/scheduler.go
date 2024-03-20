@@ -67,7 +67,7 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 	logger := w.logger.With(zap.String("uuid", job.Uuid))
 	logger.Info("creating job")
 	jobWrapper := NewJobWrapper(w.logger, job, w.cfg).ParsePlugins()
-	kjob, err := jobWrapper.Build()
+	kjob, err := jobWrapper.Build(false)
 	if err != nil {
 		kjob, err = jobWrapper.BuildFailureJob(err)
 		if err != nil {
@@ -146,7 +146,7 @@ func (w *jobWrapper) ParsePlugins() *jobWrapper {
 	return w
 }
 
-func (w *jobWrapper) Build() (*batchv1.Job, error) {
+func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	// if previous steps have failed, error immediately
 	if w.err != nil {
 		return nil, w.err
@@ -231,7 +231,11 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
 	volumeMounts = append(volumeMounts, w.k8sPlugin.ExtraVolumeMounts...)
 
-	const systemContainers = 1
+	systemContainerCount := 0
+	if !skipCheckout {
+		systemContainerCount = 1
+	}
+
 	ttl := int32(w.cfg.JobTTL.Seconds())
 	kjob.Spec.TTLSecondsAfterFinished = &ttl
 
@@ -261,7 +265,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 			},
 			corev1.EnvVar{
 				Name:  "BUILDKITE_CONTAINER_ID",
-				Value: strconv.Itoa(i + systemContainers),
+				Value: strconv.Itoa(i + systemContainerCount),
 			},
 			corev1.EnvVar{
 				Name:  "BUILDKITE_PLUGINS_PATH",
@@ -294,7 +298,7 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		podSpec.Containers[i] = c
 	}
 
-	containerCount := len(podSpec.Containers) + systemContainers
+	containerCount := len(podSpec.Containers) + systemContainerCount
 
 	for i, c := range w.k8sPlugin.Sidecars {
 		if c.Name == "" {
@@ -366,10 +370,12 @@ func (w *jobWrapper) Build() (*batchv1.Job, error) {
 		},
 	}
 	agentContainer.Env = append(agentContainer.Env, env...)
+	podSpec.Containers = append(podSpec.Containers, agentContainer)
 
-	checkoutContainer := w.createCheckoutContainer(kjob, env, volumeMounts)
+	if !skipCheckout {
+		podSpec.Containers = append(podSpec.Containers, w.createCheckoutContainer(kjob, env, volumeMounts))
+	}
 
-	podSpec.Containers = append(podSpec.Containers, agentContainer, checkoutContainer)
 	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
 		Name:            "copy-agent",
 		Image:           w.cfg.Image,
@@ -495,14 +501,24 @@ func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
 		PodSpec: &corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Image:   w.cfg.Image,
+					// the configured agent image may be private. If there is an error in specifying the
+					// secrets for this image, we should still be able to run the failure job. So, we
+					// bypass the potentially private image and use a public one. We could use a
+					// thinner public image like `alpine:latest`, but it's generally unwise to depend
+					// on an image that's not published by us.
+					//
+					// TODO: pin the version of the agent image and use that here.
+					// Currently, DefaultAgentImage has a latest tag. That's not ideal as
+					// a given version of agent stack-k8s may use different versions of the agent image over
+					// time. We should consider using a specific version of the agent image here.
+					Image:   config.DefaultAgentImage,
 					Command: []string{fmt.Sprintf("echo %q && exit 1", err.Error())},
 				},
 			},
 		},
 	}
 	w.otherPlugins = nil
-	return w.Build()
+	return w.Build(true)
 }
 
 func (w *jobWrapper) labelWithAgentTags() {
