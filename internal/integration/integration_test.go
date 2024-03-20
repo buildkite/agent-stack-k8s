@@ -34,6 +34,58 @@ func TestWalkingSkeleton(t *testing.T) {
 	)
 }
 
+func TestPodSpecPatchInStep(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "podspecpatch-step.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "value of MOUNTAIN is cotopaxi")
+}
+
+func TestPodSpecPatchInController(t *testing.T) {
+	t.Skip("can't patch commands")
+
+	tc := testcase{
+		T:       t,
+		Fixture: "simple.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+	cfg := cfg
+	cfg.PodSpecPatch = map[string]any{
+		"containers": []any{
+			map[string]any{
+				"name":    "cat",
+				"command": []string{"echo", `"value of MOUNTAIN is \$MOUNTAIN"`},
+				"env": []any{
+					map[string]any{
+						"name":  "MOUNTAIN",
+						"value": "antisana",
+					},
+				},
+			},
+		},
+	}
+
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "value of MOUNTAIN is antisana")
+}
+
 func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
 	tc := testcase{
 		T:       t,
