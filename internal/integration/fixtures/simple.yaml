@@ -1,0 +1,12 @@
+steps:
+  - label: ":wave:"
+    agents:
+      queue: {{.queue}}
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: alpine:latest
+                name: cat
+                command: [cat]
+                args: [README.md]
