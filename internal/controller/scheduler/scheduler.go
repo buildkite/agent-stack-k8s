@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -19,7 +20,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
@@ -37,7 +37,7 @@ type Config struct {
 	AgentToken             string
 	JobTTL                 time.Duration
 	AdditionalRedactedVars []string
-	PodSpecPatch           map[string]interface{}
+	PodSpecPatch           *corev1.PodSpec
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
@@ -50,7 +50,7 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 
 type KubernetesPlugin struct {
 	PodSpec           *corev1.PodSpec        `json:"podSpec,omitempty"`
-	PodSpecPatch      map[string]interface{} `json:"podSpecPatch,omitempty"`
+	PodSpecPatch      *corev1.PodSpec        `json:"podSpecPatch,omitempty"`
 	GitEnvFrom        []corev1.EnvFromSource `json:"gitEnvFrom,omitempty"`
 	Sidecars          []corev1.Container     `json:"sidecars,omitempty"`
 	Metadata          Metadata               `json:"metadata,omitempty"`
@@ -449,7 +449,7 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	var err error
 	if w.cfg.PodSpecPatch != nil {
 		w.logger.Info("applying podSpec patch from agent")
-		podSpec, err = patchPodSpec(podSpec, w.cfg.PodSpecPatch)
+		podSpec, err = PatchPodSpec(podSpec, w.cfg.PodSpecPatch)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
 		}
@@ -457,7 +457,7 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 
 	if w.k8sPlugin.PodSpecPatch != nil {
 		w.logger.Info("applying podSpec patch from k8s plugin")
-		podSpec, err = patchPodSpec(podSpec, w.k8sPlugin.PodSpecPatch)
+		podSpec, err = PatchPodSpec(podSpec, w.k8sPlugin.PodSpecPatch)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
 		}
@@ -468,14 +468,23 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	return kjob, nil
 }
 
-func patchPodSpec(original *corev1.PodSpec, patchMap map[string]interface{}) (*corev1.PodSpec, error) {
+var ErrNoCommandModification = errors.New("modifying container commands or args via podSpecPatch is not supported. Specify the command in the job's command field instead")
+
+func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec) (*corev1.PodSpec, error) {
+	// We do special stuff™️ with container commands to make them run as buildkite agent things under the hood, so don't
+	// let users mess with them via podSpecPatch.
+	for _, c := range patch.Containers {
+		if len(c.Command) != 0 || len(c.Args) != 0 {
+			return nil, ErrNoCommandModification
+		}
+	}
+
 	originalJSON, err := json.Marshal(original)
 	if err != nil {
 		return nil, fmt.Errorf("error converting original to JSON: %v", err)
 	}
 
-	patch := &unstructured.Unstructured{Object: patchMap}
-	patchJSON, err := patch.MarshalJSON()
+	patchJSON, err := json.Marshal(patch)
 	if err != nil {
 		return nil, fmt.Errorf("error converting patch to JSON: %v", err)
 	}

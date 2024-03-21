@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/version"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -97,8 +98,17 @@ func ParseConfig(cmd *cobra.Command, args []string) (config.Config, error) {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return cfg, fmt.Errorf("failed to parse config: %w", err)
 	}
+
 	if err := validate.Struct(cfg); err != nil {
 		return cfg, fmt.Errorf("failed to validate config: %w", err)
+	}
+
+	if cfg.PodSpecPatch != nil {
+		for _, c := range cfg.PodSpecPatch.Containers {
+			if len(c.Command) != 0 || len(c.Args) != 0 {
+				return cfg, scheduler.ErrNoCommandModification
+			}
+		}
 	}
 
 	return cfg, nil

@@ -7,9 +7,11 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestWalkingSkeleton(t *testing.T) {
@@ -51,12 +53,29 @@ func TestPodSpecPatchInStep(t *testing.T) {
 	tc.AssertLogsContain(build, "value of MOUNTAIN is cotopaxi")
 }
 
-func TestPodSpecPatchInController(t *testing.T) {
-	t.Skip("can't patch commands")
-
+func TestPodSpecPatchInStepFailsWhenPatchingContainerCommands(t *testing.T) {
 	tc := testcase{
 		T:       t,
-		Fixture: "simple.yaml",
+		Fixture: "podspecpatch-command-step.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+
+	tc.AssertFail(ctx, build)
+	tc.AssertLogsContain(build, fmt.Sprintf("%v", scheduler.ErrNoCommandModification))
+}
+
+func TestPodSpecPatchInController(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "mountain.yaml",
 		Repo:    repoHTTP,
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
@@ -64,15 +83,14 @@ func TestPodSpecPatchInController(t *testing.T) {
 	pipelineID, cleanup := tc.CreatePipeline(ctx)
 	t.Cleanup(cleanup)
 	cfg := cfg
-	cfg.PodSpecPatch = map[string]any{
-		"containers": []any{
-			map[string]any{
-				"name":    "cat",
-				"command": []string{"echo", `"value of MOUNTAIN is \$MOUNTAIN"`},
-				"env": []any{
-					map[string]any{
-						"name":  "MOUNTAIN",
-						"value": "antisana",
+	cfg.PodSpecPatch = &corev1.PodSpec{
+		Containers: []corev1.Container{
+			{
+				Name: "mountain",
+				Env: []corev1.EnvVar{
+					{
+						Name:  "MOUNTAIN",
+						Value: "antisana",
 					},
 				},
 			},
@@ -156,7 +174,7 @@ func TestSSHRepoClone(t *testing.T) {
 	ctx := context.Background()
 	_, err := tc.Kubernetes.CoreV1().
 		Secrets(cfg.Namespace).
-		Get(ctx, "agent-stack-k8s", v1.GetOptions{})
+		Get(ctx, "agent-stack-k8s", metav1.GetOptions{})
 	require.NoError(t, err, "agent-stack-k8s secret must exist")
 
 	pipelineID, cleanup := tc.CreatePipeline(ctx)
