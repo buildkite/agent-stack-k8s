@@ -247,6 +247,7 @@
         "debug": false,
         "jobTTL": "",
         "maxInFlight": 100,
+        "pollInterval": "5s",
         "org": "",
         "tags": []
       }
