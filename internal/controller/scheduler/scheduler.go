@@ -199,10 +199,12 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		{
 			Name:  "BUILDKITE_BUILD_PATH",
 			Value: "/workspace/build",
-		}, {
+		},
+		{
 			Name:  "BUILDKITE_BIN_PATH",
 			Value: "/workspace",
-		}, {
+		},
+		{
 			Name: agentTokenKey,
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
@@ -210,7 +212,8 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 					Key:                  agentTokenKey,
 				},
 			},
-		}, {
+		},
+		{
 			Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
 			Value: w.job.Uuid,
 		},
@@ -249,31 +252,39 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	podSpec := &kjob.Spec.Template.Spec
 
 	containerEnv := env
-	containerEnv = append(containerEnv, corev1.EnvVar{
-		Name:  "BUILDKITE_AGENT_EXPERIMENT",
-		Value: "kubernetes-exec",
-	}, corev1.EnvVar{
-		Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-		Value: "plugin,command",
-	}, corev1.EnvVar{
-		Name:  "BUILDKITE_AGENT_NAME",
-		Value: "buildkite",
-	}, corev1.EnvVar{
-		Name:  "BUILDKITE_PLUGINS_PATH",
-		Value: "/tmp",
-	}, corev1.EnvVar{
-		Name:  "BUILDKITE_SOCKETS_PATH",
-		Value: "/workspace/sockets",
-	}, corev1.EnvVar{
-		Name:  clicommand.RedactedVars.EnvVar,
-		Value: strings.Join(redactedVars, ","),
-	}, corev1.EnvVar{
-		Name:  "BUILDKITE_SHELL",
-		Value: "/bin/sh -ec",
-	}, corev1.EnvVar{
-		Name:  "BUILDKITE_ARTIFACT_PATHS",
-		Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
-	})
+	containerEnv = append(containerEnv,
+		corev1.EnvVar{
+			Name:  "BUILDKITE_AGENT_EXPERIMENT",
+			Value: "kubernetes-exec",
+		},
+		corev1.EnvVar{
+			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+			Value: "plugin,command",
+		},
+		corev1.EnvVar{
+			Name:  "BUILDKITE_AGENT_NAME",
+			Value: "buildkite",
+		},
+		corev1.EnvVar{
+			Name:  "BUILDKITE_PLUGINS_PATH",
+			Value: "/tmp",
+		},
+		corev1.EnvVar{
+			Name:  clicommand.RedactedVars.EnvVar,
+			Value: strings.Join(redactedVars, ","),
+		},
+		corev1.EnvVar{
+			Name:  "BUILDKITE_SHELL",
+			Value: "/bin/sh -ec",
+		},
+		corev1.EnvVar{
+			Name:  "BUILDKITE_ARTIFACT_PATHS",
+			Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
+		},
+		corev1.EnvVar{
+			Name:  "BUILDKITE_SOCKETS_PATH",
+			Value: "/workspace/sockets",
+		})
 
 	for i, c := range podSpec.Containers {
 		// If the command is empty, use the command from the step
@@ -285,16 +296,21 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		c.Args = []string{"bootstrap"}
 		c.ImagePullPolicy = corev1.PullAlways
 		c.Env = append(c.Env, containerEnv...)
-		c.Env = append(c.Env, corev1.EnvVar{
-			Name:  "BUILDKITE_COMMAND",
-			Value: command,
-		}, corev1.EnvVar{
-			Name:  "BUILDKITE_CONTAINER_ID",
-			Value: strconv.Itoa(i + systemContainerCount),
-		})
+		c.Env = append(c.Env,
+			corev1.EnvVar{
+				Name:  "BUILDKITE_COMMAND",
+				Value: command,
+			},
+			corev1.EnvVar{
+				Name:  "BUILDKITE_CONTAINER_ID",
+				Value: strconv.Itoa(i + systemContainerCount),
+			},
+		)
+
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
 		}
+
 		if c.WorkingDir == "" {
 			c.WorkingDir = "/workspace"
 		}
@@ -318,10 +334,12 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 				corev1.EnvVar{
 					Name:  "BUILDKITE_COMMAND",
 					Value: w.job.Command,
-				}, corev1.EnvVar{
+				},
+				corev1.EnvVar{
 					Name:  "BUILDKITE_CONTAINER_ID",
 					Value: strconv.Itoa(0 + systemContainerCount),
-				}),
+				},
+			),
 			EnvFrom: w.k8sPlugin.GitEnvFrom,
 		})
 	}
