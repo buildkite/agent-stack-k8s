@@ -13,6 +13,99 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+func TestPatchPodSpec(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		podspec   *corev1.PodSpec
+		patch     *corev1.PodSpec
+		assertion func(t *testing.T, result *corev1.PodSpec)
+		err       error
+	}{
+		{
+			name: "patching a container",
+			podspec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Image: "alpine:latest",
+						Command: []string{
+							"echo hello world",
+						},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Image: "debian:latest",
+						Name:  "my-cool-container",
+					},
+				},
+			},
+			assertion: func(t *testing.T, result *corev1.PodSpec) {
+				assert.Equal(t, "debian:latest", result.Containers[0].Image)
+			},
+		},
+		{
+			name: "patching container commands should fail",
+			podspec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Image: "alpine:latest",
+						Command: []string{
+							"echo hello world",
+						},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:    "my-cool-container",
+						Command: []string{"this", "shouldn't", "work"},
+					},
+				},
+			},
+			err: scheduler.ErrNoCommandModification,
+		},
+		{
+			name: "patching container args should fail",
+			podspec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Image: "alpine:latest",
+						Command: []string{
+							"echo hello world",
+						},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name: "my-cool-container",
+						Args: []string{"this", "also", "shouldn't", "work"},
+					},
+				},
+			},
+			err: scheduler.ErrNoCommandModification,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			result, err := scheduler.PatchPodSpec(c.podspec, c.patch)
+			if c.err != nil {
+				require.Error(t, err)
+				require.ErrorIs(t, c.err, err)
+			} else {
+				c.assertion(t, result)
+			}
+		})
+	}
+}
+
 func TestJobPluginConversion(t *testing.T) {
 	t.Parallel()
 	pluginConfig := scheduler.KubernetesPlugin{
