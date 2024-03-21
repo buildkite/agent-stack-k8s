@@ -21,6 +21,7 @@ type Config struct {
 	Image            string        `mapstructure:"image"              validate:"required"`
 	JobTTL           time.Duration `mapstructure:"job-ttl"`
 	MaxInFlight      int           `mapstructure:"max-in-flight"      validate:"min=0"`
+	PollInterval     time.Duration `mapstructure:"poll-interval"`
 	Namespace        string        `mapstructure:"namespace"          validate:"required"`
 	Org              string        `mapstructure:"org"                validate:"required"`
 	Tags             stringSlice   `mapstructure:"tags"               validate:"min=1"`
