@@ -67,6 +67,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		10*time.Minute,
 		"time to retain kubernetes jobs after completion",
 	)
+	cmd.Flags().Duration(
+		"poll-interval",
+		time.Second,
+		"time to wait between polling for new jobs",
+	)
 	cmd.Flags().String(
 		"cluster-uuid",
 		"",
