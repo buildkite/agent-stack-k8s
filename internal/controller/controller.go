@@ -37,12 +37,13 @@ func Run(
 	}
 
 	m, err := monitor.New(logger.Named("monitor"), k8sClient, monitor.Config{
-		Namespace:   cfg.Namespace,
-		Org:         cfg.Org,
-		ClusterUUID: cfg.ClusterUUID,
-		MaxInFlight: cfg.MaxInFlight,
-		Tags:        cfg.Tags,
-		Token:       cfg.BuildkiteToken,
+		Namespace:    cfg.Namespace,
+		Org:          cfg.Org,
+		ClusterUUID:  cfg.ClusterUUID,
+		MaxInFlight:  cfg.MaxInFlight,
+		PollInterval: cfg.PollInterval,
+		Tags:        	cfg.Tags,
+		Token:       	cfg.BuildkiteToken,
 	})
 	if err != nil {
 		logger.Fatal("failed to create monitor", zap.Error(err))

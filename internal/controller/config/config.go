@@ -21,6 +21,7 @@ type Config struct {
 	Image            string        `mapstructure:"image"              validate:"required"`
 	JobTTL           time.Duration `mapstructure:"job-ttl"`
 	MaxInFlight      int           `mapstructure:"max-in-flight"      validate:"min=0"`
+	PollInterval     time.Duration `mapstructure:"poll-interval"`
 	Namespace        string        `mapstructure:"namespace"          validate:"required"`
 	Org              string        `mapstructure:"org"                validate:"required"`
 	Tags             stringSlice   `mapstructure:"tags"               validate:"min=1"`
@@ -42,6 +43,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddBool("debug", c.Debug)
 	enc.AddString("image", c.Image)
 	enc.AddDuration("job-ttl", c.JobTTL)
+	enc.AddDuration("poll-interval", c.PollInterval)
 	enc.AddInt("max-in-flight", c.MaxInFlight)
 	enc.AddString("namespace", c.Namespace)
 	enc.AddString("org", c.Org)
