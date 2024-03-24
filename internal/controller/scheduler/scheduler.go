@@ -74,23 +74,23 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 	jobWrapper := NewJobWrapper(w.logger, job, w.cfg).ParsePlugins()
 	kjob, err := jobWrapper.Build(false)
 	if err != nil {
+		logger.Warn("Job definition error detected, creating failure job instead", zap.Error(err))
 		kjob, err = jobWrapper.BuildFailureJob(err)
 		if err != nil {
-			return fmt.Errorf("failed to create job: %w", err)
+			return fmt.Errorf("job definition error and failure job definition error: %w", err)
 		}
 	}
+
 	_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
 		if kerrors.IsInvalid(err) {
 			kjob, err = jobWrapper.BuildFailureJob(err)
 			if err != nil {
-				return fmt.Errorf("failed to create job: %w", err)
+				return fmt.Errorf("job registration error and failure job definition error: %w", err)
 			}
-			_, err = w.client.BatchV1().
-				Jobs(w.cfg.Namespace).
-				Create(ctx, kjob, metav1.CreateOptions{})
+			_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
 			if err != nil {
-				return fmt.Errorf("failed to create job: %w", err)
+				return fmt.Errorf("job registration error and failure job registration error: %w", err)
 			}
 			return nil
 		} else {
