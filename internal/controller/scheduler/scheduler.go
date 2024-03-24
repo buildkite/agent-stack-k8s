@@ -132,6 +132,7 @@ func (w *jobWrapper) ParsePlugins() *jobWrapper {
 			return w
 		}
 	}
+	w.logger.Info("parsing", zap.Any("plugins", plugins))
 	for _, plugin := range plugins {
 		if len(plugin) != 1 {
 			w.err = fmt.Errorf("found invalid plugin: %v", plugin)
@@ -481,22 +482,22 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec) (*corev1.PodS
 
 	originalJSON, err := json.Marshal(original)
 	if err != nil {
-		return nil, fmt.Errorf("error converting original to JSON: %v", err)
+		return nil, fmt.Errorf("error converting original to JSON: %w", err)
 	}
 
 	patchJSON, err := json.Marshal(patch)
 	if err != nil {
-		return nil, fmt.Errorf("error converting patch to JSON: %v", err)
+		return nil, fmt.Errorf("error converting patch to JSON: %w", err)
 	}
 
 	patchedJSON, err := strategicpatch.StrategicMergePatch(originalJSON, patchJSON, corev1.PodSpec{})
 	if err != nil {
-		return nil, fmt.Errorf("error applying strategic patch: %v", err)
+		return nil, fmt.Errorf("error applying strategic patch: %w", err)
 	}
 
 	var patchedSpec corev1.PodSpec
 	if err := json.Unmarshal(patchedJSON, &patchedSpec); err != nil {
-		return nil, fmt.Errorf("error converting patched JSON to PodSpec: %v", err)
+		return nil, fmt.Errorf("error converting patched JSON to PodSpec: %w", err)
 	}
 
 	return &patchedSpec, nil
