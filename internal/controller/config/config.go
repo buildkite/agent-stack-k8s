@@ -26,6 +26,7 @@ type Config struct {
 	Tags             stringSlice   `mapstructure:"tags"               validate:"min=1"`
 	ProfilerAddress  string        `mapstructure:"profiler-address"   validate:"omitempty,hostname_port"`
 	ClusterUUID      string        `mapstructure:"cluster-uuid"       validate:"omitempty"`
+	RedactedVars     stringSlice   `mapstructure:"redacted-vars"      validate:"omitempty"`
 }
 
 type stringSlice []string
@@ -47,5 +48,8 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("org", c.Org)
 	enc.AddString("profiler-address", c.ProfilerAddress)
 	enc.AddString("cluster-uuid", c.ClusterUUID)
+	if err := enc.AddArray("redacted-vars", c.RedactedVars); err != nil {
+		return err
+	}
 	return enc.AddArray("tags", c.Tags)
 }

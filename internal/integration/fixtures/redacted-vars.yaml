@@ -1,0 +1,20 @@
+steps:
+  - label: ":earth_asia:"
+    agents:
+      queue: {{.queue}}
+    env:
+      BUILDKITE_SHELL: /bin/sh -ec
+      # Note that this is example is a bit contrived, since environment
+      # variables and values can usually be browsed from the Buildkite UI.
+      ELEVEN_HERBS_AND_SPICES: white pepper and 10 others
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: alpine:latest
+                command:
+                - echo
+                args:
+                - >-
+                  This should be redacted:
+                  $${ELEVEN_HERBS_AND_SPICES}

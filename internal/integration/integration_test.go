@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -51,6 +52,29 @@ func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
+}
+
+func TestControllerSetsRedactedVars(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "redacted-vars.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+
+	cfg := cfg
+	cfg.RedactedVars = []string{"ELEVEN_HERBS_AND_SPICES"}
+
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	logs := tc.FetchLogs(build)
+	assert.Contains(t, logs, "This should be redacted:")
+	assert.NotContains(t, logs, "white pepper and 10 others")
 }
 
 func TestChown(t *testing.T) {

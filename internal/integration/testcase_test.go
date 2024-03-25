@@ -158,7 +158,7 @@ func (t testcase) AssertSuccess(ctx context.Context, build api.Build) {
 	require.Equal(t, api.BuildStatesPassed, t.waitForBuild(ctx, build))
 }
 
-func (t testcase) AssertLogsContain(build api.Build, content string) {
+func (t testcase) FetchLogs(build api.Build) string {
 	t.Helper()
 
 	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
@@ -187,7 +187,19 @@ func (t testcase) AssertLogsContain(build api.Build, content string) {
 		assert.NoError(t, err)
 	}
 
-	assert.Contains(t, logs.String(), content)
+	return logs.String()
+}
+
+func (t testcase) AssertLogsContain(build api.Build, content string) {
+	t.Helper()
+
+	assert.Contains(t, t.FetchLogs(build), content)
+}
+
+func (t testcase) AssertLogsDoNotContain(build api.Build, content string) {
+	t.Helper()
+
+	assert.NotContains(t, t.FetchLogs, content)
 }
 
 func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
