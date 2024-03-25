@@ -49,11 +49,11 @@ func Run(
 	}
 
 	sched := scheduler.New(logger.Named("scheduler"), k8sClient, scheduler.Config{
-		Namespace:    cfg.Namespace,
-		Image:        cfg.Image,
-		AgentToken:   cfg.AgentTokenSecret,
-		JobTTL:       cfg.JobTTL,
-		RedactedVars: cfg.RedactedVars,
+		Namespace:              cfg.Namespace,
+		Image:                  cfg.Image,
+		AgentToken:             cfg.AgentTokenSecret,
+		JobTTL:                 cfg.JobTTL,
+		AdditionalRedactedVars: cfg.AdditionalRedactedVars,
 	})
 	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)
 

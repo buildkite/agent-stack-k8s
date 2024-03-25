@@ -205,7 +205,7 @@
           "title": "The UUID of the Buildkite cluster to pull Jobs from",
           "examples": [""]
         },
-        "redacted-vars": {
+        "additional-redacted-vars": {
           "type": "array",
           "default": [],
           "title": "Additional environment variables to redact values from logs",

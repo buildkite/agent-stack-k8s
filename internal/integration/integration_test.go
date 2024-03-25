@@ -54,7 +54,7 @@ func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
 	tc.AssertSuccess(ctx, build)
 }
 
-func TestControllerSetsRedactedVars(t *testing.T) {
+func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
 	tc := testcase{
 		T:       t,
 		Fixture: "redacted-vars.yaml",
@@ -67,7 +67,7 @@ func TestControllerSetsRedactedVars(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	cfg := cfg
-	cfg.RedactedVars = []string{"ELEVEN_HERBS_AND_SPICES"}
+	cfg.AdditionalRedactedVars = []string{"ELEVEN_HERBS_AND_SPICES"}
 
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)

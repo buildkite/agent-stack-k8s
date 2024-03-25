@@ -196,12 +196,6 @@ func (t testcase) AssertLogsContain(build api.Build, content string) {
 	assert.Contains(t, t.FetchLogs(build), content)
 }
 
-func (t testcase) AssertLogsDoNotContain(build api.Build, content string) {
-	t.Helper()
-
-	assert.NotContains(t, t.FetchLogs, content)
-}
-
 func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 	t.Helper()
 	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)

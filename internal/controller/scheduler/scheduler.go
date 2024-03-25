@@ -30,11 +30,11 @@ const (
 )
 
 type Config struct {
-	Namespace    string
-	Image        string
-	AgentToken   string
-	JobTTL       time.Duration
-	RedactedVars []string
+	Namespace              string
+	Image                  string
+	AgentToken             string
+	JobTTL                 time.Duration
+	AdditionalRedactedVars []string
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
@@ -229,7 +229,7 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		}
 	}
 
-	redactedVars := append(w.cfg.RedactedVars, clicommand.RedactedVars.Value.Value()...)
+	redactedVars := append(w.cfg.AdditionalRedactedVars, clicommand.RedactedVars.Value.Value()...)
 
 	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
 	volumeMounts = append(volumeMounts, w.k8sPlugin.ExtraVolumeMounts...)
