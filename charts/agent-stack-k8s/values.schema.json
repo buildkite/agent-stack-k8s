@@ -213,6 +213,9 @@
             "type": "string"
           },
           "examples": [["SECRET_RECIPE"]]
+        },
+        "pod-spec-patch": {
+          "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
         }
       },
       "examples": [
