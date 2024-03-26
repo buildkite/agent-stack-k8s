@@ -17,6 +17,7 @@ import (
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	en_translations "github.com/go-playground/validator/v10/translations/en"
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -98,7 +99,9 @@ func ParseConfig(cmd *cobra.Command, args []string) (config.Config, error) {
 	// We want to let the user know if they have any extra fields, so use UnmarshalExact.
 	// The user likely expects every part of their config to be meaningful, so if some of it is
 	// ignored in parsing, they almost certainly want to know about it.
-	if err := viper.UnmarshalExact(&cfg); err != nil {
+	if err := viper.UnmarshalExact(&cfg, func(c *mapstructure.DecoderConfig) {
+		c.TagName = "json"
+	}); err != nil {
 		return cfg, fmt.Errorf("failed to parse config: %w", err)
 	}
 

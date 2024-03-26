@@ -16,19 +16,19 @@ const (
 )
 
 type Config struct {
-	Debug                  bool            `mapstructure:"debug"`
-	AgentTokenSecret       string          `mapstructure:"agent-token-secret"       validate:"required"`
-	BuildkiteToken         string          `mapstructure:"buildkite-token"          validate:"required"`
-	Image                  string          `mapstructure:"image"                    validate:"required"`
-	JobTTL                 time.Duration   `mapstructure:"job-ttl"`
-	MaxInFlight            int             `mapstructure:"max-in-flight"            validate:"min=0"`
-	Namespace              string          `mapstructure:"namespace"                validate:"required"`
-	Org                    string          `mapstructure:"org"                      validate:"required"`
-	Tags                   stringSlice     `mapstructure:"tags"                     validate:"min=1"`
-	ProfilerAddress        string          `mapstructure:"profiler-address"         validate:"omitempty,hostname_port"`
-	ClusterUUID            string          `mapstructure:"cluster-uuid"             validate:"omitempty"`
-	AdditionalRedactedVars stringSlice     `mapstructure:"additional-redacted-vars" validate:"omitempty"`
-	PodSpecPatch           *corev1.PodSpec `mapstructure:"pod-spec-patch"           validate:"omitempty"`
+	Debug                  bool            `json:"debug"`
+	AgentTokenSecret       string          `json:"agent-token-secret"       validate:"required"`
+	BuildkiteToken         string          `json:"buildkite-token"          validate:"required"`
+	Image                  string          `json:"image"                    validate:"required"`
+	JobTTL                 time.Duration   `json:"job-ttl"`
+	MaxInFlight            int             `json:"max-in-flight"            validate:"min=0"`
+	Namespace              string          `json:"namespace"                validate:"required"`
+	Org                    string          `json:"org"                      validate:"required"`
+	Tags                   stringSlice     `json:"tags"                     validate:"min=1"`
+	ProfilerAddress        string          `json:"profiler-address"         validate:"omitempty,hostname_port"`
+	ClusterUUID            string          `json:"cluster-uuid"             validate:"omitempty"`
+	AdditionalRedactedVars stringSlice     `json:"additional-redacted-vars" validate:"omitempty"`
+	PodSpecPatch           *corev1.PodSpec `json:"pod-spec-patch"           validate:"omitempty"`
 }
 
 type stringSlice []string
