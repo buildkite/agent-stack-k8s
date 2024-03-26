@@ -1,0 +1,13 @@
+agent-token-secret: agent-token
+buildkite-token: graphql-token
+image: ghcr.io/buildkite/agent-stack-k8s/agent:latest
+namespece: my-buildkite-ns
+org: my-org
+tags:
+- queue=kubernetes
+pod-spec-patch:
+  containers:
+  - name: checkout
+    envFrom:
+    - secretRef:
+        name: git-checkout
