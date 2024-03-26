@@ -108,7 +108,7 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config) {
 	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.ShortPipelineName())}
 	cfg.Debug = true
 
-	go controller.Run(runCtx, t.Logger, t.Kubernetes, cfg)
+	go controller.Run(runCtx, t.Logger, t.Kubernetes, &cfg)
 }
 
 func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build {
