@@ -95,7 +95,10 @@ func ParseConfig(cmd *cobra.Command, args []string) (config.Config, error) {
 		}
 	}
 
-	if err := viper.Unmarshal(&cfg); err != nil {
+	// We want to let the user know if they have any extra fields, so use UnmarshalExact.
+	// The user likely expects every part of their config to be meaningful, so if some of it is
+	// ignored in parsing, they almost certainly want to know about it.
+	if err := viper.UnmarshalExact(&cfg); err != nil {
 		return cfg, fmt.Errorf("failed to parse config: %w", err)
 	}
 
