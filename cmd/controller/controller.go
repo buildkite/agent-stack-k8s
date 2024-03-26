@@ -75,44 +75,50 @@ func addFlags(cmd *cobra.Command) {
 	)
 }
 
-func ParseConfig(cmd *cobra.Command, args []string) (config.Config, error) {
-	var cfg config.Config
+// readConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.
+// an excaption is the path to the config file which is read from the args and env only.
+func readConfigFromFileArgsAndEnv(cmd *cobra.Command, args []string) (*viper.Viper, error) {
+	// First parse the flags so we can settle on the config file
 	if err := cmd.Flags().Parse(args); err != nil {
-		return cfg, fmt.Errorf("failed to parse flags: %w", err)
+		return nil, fmt.Errorf("failed to parse flags: %w", err)
 	}
 
-	if err := viper.BindPFlags(cmd.Flags()); err != nil {
-		return cfg, fmt.Errorf("failed to bind flags: %w", err)
-	}
+	// Settle on the config file
 	if configFile == "" {
 		configFile = os.Getenv("CONFIG")
 	}
-	viper.SetConfigFile(configFile)
-	viper.AutomaticEnv()
-	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	if err := viper.ReadInConfig(); err != nil {
-		if !errors.As(err, &viper.ConfigFileNotFoundError{}) {
-			return cfg, fmt.Errorf("failed to read config: %w", err)
-		}
-	}
 
+	v := viper.New()
+	v.SetConfigFile(configFile)
+	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	if err := v.BindPFlags(cmd.Flags()); err != nil {
+		return nil, fmt.Errorf("failed to bind flags: %w", err)
+	}
+	v.AutomaticEnv()
+
+	return v, nil
+}
+
+// ParseAndValidateConfig parses the config into a struct and validates the values.
+func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 	// We want to let the user know if they have any extra fields, so use UnmarshalExact.
 	// The user likely expects every part of their config to be meaningful, so if some of it is
 	// ignored in parsing, they almost certainly want to know about it.
-	if err := viper.UnmarshalExact(&cfg, func(c *mapstructure.DecoderConfig) {
+	cfg := &config.Config{}
+	if err := v.UnmarshalExact(cfg, func(c *mapstructure.DecoderConfig) {
 		c.TagName = "json"
 	}); err != nil {
-		return cfg, fmt.Errorf("failed to parse config: %w", err)
+		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
 	if err := validate.Struct(cfg); err != nil {
-		return cfg, fmt.Errorf("failed to validate config: %w", err)
+		return nil, fmt.Errorf("failed to validate config: %w", err)
 	}
 
 	if cfg.PodSpecPatch != nil {
 		for _, c := range cfg.PodSpecPatch.Containers {
 			if len(c.Command) != 0 || len(c.Args) != 0 {
-				return cfg, scheduler.ErrNoCommandModification
+				return nil, scheduler.ErrNoCommandModification
 			}
 		}
 	}
@@ -131,19 +137,23 @@ func New() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "agent-stack-k8s",
 		SilenceUsage: true,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := signals.SetupSignalHandler()
 
-			cfg, err := ParseConfig(cmd, args)
+			v, err := readConfigFromFileArgsAndEnv(cmd, args)
+			if err != nil {
+				return err
+			}
+
+			cfg, err := ParseAndValidateConfig(v)
 			if err != nil {
 				var errs validator.ValidationErrors
 				if errors.As(err, &errs) {
 					for _, e := range errs {
 						log.Println(e.Translate(trans))
 					}
-					os.Exit(1)
 				}
-				log.Fatalf("failed to parse config: %v", err)
+				return fmt.Errorf("failed to parse config: %w", err)
 			}
 
 			config := zap.NewDevelopmentConfig()
@@ -163,6 +173,8 @@ func New() *cobra.Command {
 			}
 
 			controller.Run(ctx, logger, k8sClient, cfg)
+
+			return nil
 		},
 	}
 	addFlags(cmd)

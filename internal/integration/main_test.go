@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -29,18 +30,21 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	var err error
+	v := viper.New()
+	v.SetConfigFile(os.Getenv("CONFIG"))
+	v.AutomaticEnv()
 
-	cmd := controller.New()
-	if err = os.Chdir("../.."); err != nil {
-		log.Fatalf("Error changing dir: %s", err)
-	}
-	if cfg, err = controller.ParseConfig(cmd, os.Args[1:]); err != nil {
+	// These are usually set by cobra, but we're not using it here
+	v.Set("tags", []string{"test=integration"})
+	v.Set("buildkite-token", os.Getenv("BUILDKITE_TOKEN"))
+
+	var testCfg *config.Config
+	var err error
+	if testCfg, err = controller.ParseAndValidateConfig(v); err != nil {
 		log.Fatalf("Error parsing config: %s", err)
 	}
-	if err = os.Chdir("internal/integration"); err != nil {
-		log.Fatalf("Error changing dir: %s", err)
-	}
+
+	cfg = *testCfg
 
 	cleanupPipelines = parseBoolEnvVar("CLEANUP_PIPELINES")
 	preservePipelines = parseBoolEnvVar("PRESERVE_PIPELINES")

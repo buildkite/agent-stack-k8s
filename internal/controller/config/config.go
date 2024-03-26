@@ -15,12 +15,15 @@ const (
 	DefaultAgentImage  = "ghcr.io/buildkite/agent-stack-k8s/agent:latest"
 )
 
+// viper requires mapstructure struct tags, but the k8s types only have json struct tags.
+// mapstructure (the module) supports switching the struct tag to "json", viper does not. So we have
+// to have the `mapstructure` tag for viper and the `json` tag is used by the mapstructure!
 type Config struct {
 	Debug                  bool            `json:"debug"`
+	JobTTL                 time.Duration   `json:"job-ttl"`
 	AgentTokenSecret       string          `json:"agent-token-secret"       validate:"required"`
 	BuildkiteToken         string          `json:"buildkite-token"          validate:"required"`
 	Image                  string          `json:"image"                    validate:"required"`
-	JobTTL                 time.Duration   `json:"job-ttl"`
 	MaxInFlight            int             `json:"max-in-flight"            validate:"min=0"`
 	Namespace              string          `json:"namespace"                validate:"required"`
 	Org                    string          `json:"org"                      validate:"required"`

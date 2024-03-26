@@ -1,7 +1,7 @@
 agent-token-secret: agent-token
 buildkite-token: graphql-token
 image: ghcr.io/buildkite/agent-stack-k8s/agent:latest
-namespece: my-buildkite-ns
+namespace: my-buildkite-ns
 org: my-org
 tags:
 - queue=kubernetes
