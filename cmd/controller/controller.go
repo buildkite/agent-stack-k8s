@@ -28,9 +28,7 @@ import (
 
 var configFile string
 
-func addFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&configFile, "config", "f", "", "config file path")
-
+func AddConfigFlags(cmd *cobra.Command) {
 	// not in the config file
 	cmd.Flags().String(
 		"agent-token-secret",
@@ -177,7 +175,9 @@ func New() *cobra.Command {
 			return nil
 		},
 	}
-	addFlags(cmd)
+
+	cmd.Flags().StringVarP(&configFile, "config", "f", "", "config file path")
+	AddConfigFlags(cmd)
 	cmd.AddCommand(linter.New())
 	cmd.AddCommand(version.New())
 	if err := en_translations.RegisterDefaultTranslations(validate, trans); err != nil {

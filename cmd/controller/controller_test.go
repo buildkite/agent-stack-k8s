@@ -7,6 +7,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -52,17 +53,25 @@ func TestReadAndParseConfig(t *testing.T) {
 		},
 	}
 
+	cmd := &cobra.Command{}
+	controller.AddConfigFlags(cmd)
+	require.NoError(t, cmd.ParseFlags([]string{}))
+
 	v := viper.New()
+	require.NoError(t, v.BindPFlags(cmd.Flags()))
+
+	t.Logf("read config: %#v", v.AllSettings())
 
 	// The buildkite token is required, but it is set from a Kubernetes secret, not the config file,
 	// which is itself set from a config map that is used to create env variables in the controller
 	// container. As this is required, we set it here to avoid the validation error.
 	t.Setenv("BUILDKITE_TOKEN", "my-graphql-enabled-token")
-	v.SetDefault("buildkite-token", "")
 
 	v.SetConfigFile("../../examples/config.yaml")
 	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	v.AutomaticEnv()
+
+	t.Logf("read config: %#v", v.AllSettings())
 
 	actual, err := controller.ParseAndValidateConfig(v)
 	require.NoError(t, err)
