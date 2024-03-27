@@ -19,6 +19,7 @@ import (
 	en_translations "github.com/go-playground/validator/v10/translations/en"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
@@ -29,6 +30,9 @@ import (
 var configFile string
 
 func AddConfigFlags(cmd *cobra.Command) {
+	// the config file flag
+	cmd.Flags().StringVarP(&configFile, "config", "f", "", "config file path")
+
 	// not in the config file
 	cmd.Flags().String(
 		"agent-token-secret",
@@ -73,9 +77,9 @@ func AddConfigFlags(cmd *cobra.Command) {
 	)
 }
 
-// readConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.
+// ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.
 // an excaption is the path to the config file which is read from the args and env only.
-func readConfigFromFileArgsAndEnv(cmd *cobra.Command, args []string) (*viper.Viper, error) {
+func ReadConfigFromFileArgsAndEnv(cmd *cobra.Command, args []string) (*viper.Viper, error) {
 	// First parse the flags so we can settle on the config file
 	if err := cmd.Flags().Parse(args); err != nil {
 		return nil, fmt.Errorf("failed to parse flags: %w", err)
@@ -89,10 +93,30 @@ func readConfigFromFileArgsAndEnv(cmd *cobra.Command, args []string) (*viper.Vip
 	v := viper.New()
 	v.SetConfigFile(configFile)
 	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	if err := v.BindPFlags(cmd.Flags()); err != nil {
-		return nil, fmt.Errorf("failed to bind flags: %w", err)
+
+	// Bind the flags to the viper instance, but only those that can appear in the config file.
+	errs := []error{}
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		switch f.Name {
+		case "config", "help":
+			// skip
+		default:
+			if err := v.BindPFlag(f.Name, f); err != nil {
+				errs = append(errs, fmt.Errorf("failed to bind flag %s: %w", f.Name, err))
+			}
+		}
+	})
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
+
 	v.AutomaticEnv()
+
+	if err := v.ReadInConfig(); err != nil {
+		if !errors.As(err, &viper.ConfigFileNotFoundError{}) {
+			return nil, fmt.Errorf("failed to read config: %w", err)
+		}
+	}
 
 	return v, nil
 }
@@ -138,7 +162,7 @@ func New() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := signals.SetupSignalHandler()
 
-			v, err := readConfigFromFileArgsAndEnv(cmd, args)
+			v, err := ReadConfigFromFileArgsAndEnv(cmd, args)
 			if err != nil {
 				return err
 			}
@@ -176,7 +200,6 @@ func New() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configFile, "config", "f", "", "config file path")
 	AddConfigFlags(cmd)
 	cmd.AddCommand(linter.New())
 	cmd.AddCommand(version.New())

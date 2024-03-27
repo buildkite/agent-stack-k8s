@@ -11,7 +11,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
-	"github.com/spf13/viper"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -30,17 +30,15 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	v := viper.New()
-	v.SetConfigFile(os.Getenv("CONFIG"))
-	v.AutomaticEnv()
+	cmd := &cobra.Command{}
+	controller.AddConfigFlags(cmd)
+	v, err := controller.ReadConfigFromFileArgsAndEnv(cmd, []string{})
+	if err != nil {
+		log.Fatalf("Error reading config: %s", err)
+	}
 
-	// These are usually set by cobra, but we're not using it here
-	v.Set("tags", []string{"test=integration"})
-	v.Set("buildkite-token", os.Getenv("BUILDKITE_TOKEN"))
-
-	var testCfg *config.Config
-	var err error
-	if testCfg, err = controller.ParseAndValidateConfig(v); err != nil {
+	testCfg, err := controller.ParseAndValidateConfig(v)
+	if err != nil {
 		log.Fatalf("Error parsing config: %s", err)
 	}
 
