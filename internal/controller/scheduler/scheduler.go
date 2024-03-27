@@ -252,40 +252,41 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 
 	podSpec := &kjob.Spec.Template.Spec
 
-	containerEnv := env
-	containerEnv = append(containerEnv,
-		corev1.EnvVar{
+	containerEnv := append([]corev1.EnvVar{}, env...)
+	containerEnv = append(containerEnv, []corev1.EnvVar{
+		{
 			Name:  "BUILDKITE_AGENT_EXPERIMENT",
 			Value: "kubernetes-exec",
 		},
-		corev1.EnvVar{
+		{
 			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
 			Value: "plugin,command",
 		},
-		corev1.EnvVar{
+		{
 			Name:  "BUILDKITE_AGENT_NAME",
 			Value: "buildkite",
 		},
-		corev1.EnvVar{
+		{
 			Name:  "BUILDKITE_PLUGINS_PATH",
 			Value: "/tmp",
 		},
-		corev1.EnvVar{
+		{
 			Name:  clicommand.RedactedVars.EnvVar,
 			Value: strings.Join(redactedVars, ","),
 		},
-		corev1.EnvVar{
+		{
 			Name:  "BUILDKITE_SHELL",
 			Value: "/bin/sh -ec",
 		},
-		corev1.EnvVar{
+		{
 			Name:  "BUILDKITE_ARTIFACT_PATHS",
 			Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
 		},
-		corev1.EnvVar{
+		{
 			Name:  "BUILDKITE_SOCKETS_PATH",
 			Value: "/workspace/sockets",
-		})
+		},
+	}...)
 
 	for i, c := range podSpec.Containers {
 		// If the command is empty, use the command from the step
