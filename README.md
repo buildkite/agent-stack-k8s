@@ -160,7 +160,7 @@ Here's an example demonstrating how one would eliminate the need to specify `git
 First, deploy the helm chart with a `values.yaml` file.
 ```yaml
 # values.yaml
-agentStackSecret: <name of predefend secrets for k8s>
+agentStackSecret: <name of predefined secrets for k8s>
 config:
   org: <your-org-slug>
   pod-spec-patch:
