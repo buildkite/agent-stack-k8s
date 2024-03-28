@@ -175,7 +175,7 @@ You may use the `-f` or `--values` arguments to `helm upgrade` to specify a `val
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --create-namespace \
     --namespace buildkite \
-    --values values.yaml
+    --values values.yaml \
     --version <agent-stack-k8s version>
 ```
 
