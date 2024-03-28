@@ -148,6 +148,144 @@ If you have a multi-line `command`, specifying the `args` as well could lead to 
 
 More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
 
+### Pod Spec Patch
+Rather than defining the entire Pod Spec in a step, there is the option to define a [strategic merge patch](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/) in the controller.
+Agent Stack K8s will first generate a K8s Job with a PodSpec from a Buildkite Job and then apply the patch in the controller.
+It will then apply the patch specified in its config file, which is derived from the value in the helm installation.
+This can replace much of the functionality of some of the other fields in the plugin, like `gitEnvFrom`.
+
+#### Eliminate `gitEnvFrom`
+Here's an example demonstrating how one would eliminate the need to specify `gitEnvFrom` from every step, but still checkout private repositories.
+
+First, deploy the helm chart with a `values.yaml` file.
+```yaml
+# values.yaml
+agentStackSecret: <name of predefend secrets for k8s>
+config:
+  org: <your-org-slug>
+  pod-spec-patch:
+    containers:
+    - name: checkout         # <---- this is needed so that the secret will only be mounted on the checkout container
+      envFrom:
+      - secretRef:
+          name: git-checkout # <---- this is the same secret name you would have put in `gitEnvFrom` in the kubernetes plugin
+```
+You may use the `-f` or `--values` arguments to `helm upgrade` to specify a `values.yaml` file.
+```shell
+helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
+    --create-namespace \
+    --namespace buildkite \
+    --values values.yaml
+    --
+```
+
+Now, with this setup, we don't even need to specify the `kubernetes` plugin to use Agent Stack K8s with a private repo
+```yaml
+# pipelines.yaml
+agents:
+  queue: kubernetes
+steps:
+- name: Hello World!
+  commands:
+  - echo -n Hello!
+  - echo " World!"
+
+- name: Hello World in one command
+  command: |-
+    echo -n Hello!
+    echo " World!"
+```
+
+#### Custom Images
+You can specify a different image to use for a step in a step level `podSpecPatch`. Previously this could be done with a step level `podSpec`.
+```yaml
+# pipelines.yaml
+agents:
+  queue: kubernetes
+steps:
+- name: Hello World!
+  commands:
+  - echo -n Hello!
+  - echo " World!"
+  plugins:
+  - kubernetes:
+      podSpecPatch:
+      - name: container-0
+        image: alpine:latest
+
+- name: Hello World from alpine!
+  commands:
+  - echo -n Hello
+  - echo " from alpine!"
+  plugins:
+  - kubernetes:
+      podSpecPatch:
+      - name: container-0      # <---- You must specify this as exactly `container-0` for now.
+        image: alpine:latest   #       We are experimenting with ways to make it more ergonomic
+```
+
+#### Default Resources
+In the helm values, you can specify default resources to be used by the containers in Pods that are launched to run Jobs.
+```yaml
+# values.yaml
+agentStackSecret: <name of predefend secrets for k8s>
+config:
+  org: <your-org-slug>
+  pod-spec-patch:
+    initContainers:
+    - name: copy-agent
+    requests:
+      cpu: 100m
+      memory: 50Mi
+    limits:
+      memory: 100Mi
+    containers:
+    - name: agent          # this container acquires the job
+      resources:
+        requests:
+          cpu: 100m
+          memory: 50Mi
+        limits:
+          memory: 1Gi
+    - name: checkout       # this container clones the repo
+      resources:
+        requests:
+          cpu: 100m
+          memory: 50Mi
+        limits:
+          memory: 1Gi
+    - name: container-0    # the job runs in a container with this name by default
+      resources:
+        requests:
+          cpu: 100m
+          memory: 50Mi
+        limits:
+          memory: 1Gi
+```
+and then every job that's handled by this installation of agent-stack-k8s will default to these values. To override it for a step, use a step level `podSpecPatch`.
+```yaml
+# pipelines.yaml
+agents:
+  queue: kubernetes
+steps:
+- name: Hello from a container with more resources
+  command: echo Hello World!
+  plugins:
+  - kubernetes:
+      podSpecPatch:
+        containers:
+        - name: container-0    # <---- You must specify this as exactly `container-0` for now.
+          resources:           #       We are experimenting with ways to make it more ergonomic
+            requests:
+              cpu: 1000m
+              memory: 50Mi
+            limits:
+              memory: 1Gi
+
+- name: Hello from a container with default resources
+  command: echo Hello World!
+```
+
 ### Buildkite Clusters
 If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
 ```yaml
