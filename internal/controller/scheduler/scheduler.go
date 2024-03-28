@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/pointer"
 )
@@ -35,6 +37,7 @@ type Config struct {
 	AgentToken             string
 	JobTTL                 time.Duration
 	AdditionalRedactedVars []string
+	PodSpecPatch           *corev1.PodSpec
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
@@ -46,11 +49,12 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 }
 
 type KubernetesPlugin struct {
-	PodSpec           *corev1.PodSpec
-	GitEnvFrom        []corev1.EnvFromSource
-	Sidecars          []corev1.Container `json:"sidecars,omitempty"`
-	Metadata          Metadata
-	ExtraVolumeMounts []corev1.VolumeMount
+	PodSpec           *corev1.PodSpec        `json:"podSpec,omitempty"`
+	PodSpecPatch      *corev1.PodSpec        `json:"podSpecPatch,omitempty"`
+	GitEnvFrom        []corev1.EnvFromSource `json:"gitEnvFrom,omitempty"`
+	Sidecars          []corev1.Container     `json:"sidecars,omitempty"`
+	Metadata          Metadata               `json:"metadata,omitempty"`
+	ExtraVolumeMounts []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
 }
 
 type Metadata struct {
@@ -70,23 +74,23 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 	jobWrapper := NewJobWrapper(w.logger, job, w.cfg).ParsePlugins()
 	kjob, err := jobWrapper.Build(false)
 	if err != nil {
+		logger.Warn("Job definition error detected, creating failure job instead", zap.Error(err))
 		kjob, err = jobWrapper.BuildFailureJob(err)
 		if err != nil {
-			return fmt.Errorf("failed to create job: %w", err)
+			return fmt.Errorf("job definition error and failure job definition error: %w", err)
 		}
 	}
+
 	_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
 		if kerrors.IsInvalid(err) {
 			kjob, err = jobWrapper.BuildFailureJob(err)
 			if err != nil {
-				return fmt.Errorf("failed to create job: %w", err)
+				return fmt.Errorf("job registration error and failure job definition error: %w", err)
 			}
-			_, err = w.client.BatchV1().
-				Jobs(w.cfg.Namespace).
-				Create(ctx, kjob, metav1.CreateOptions{})
+			_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
 			if err != nil {
-				return fmt.Errorf("failed to create job: %w", err)
+				return fmt.Errorf("job registration error and failure job registration error: %w", err)
 			}
 			return nil
 		} else {
@@ -128,6 +132,7 @@ func (w *jobWrapper) ParsePlugins() *jobWrapper {
 			return w
 		}
 	}
+	w.logger.Info("parsing", zap.Any("plugins", plugins))
 	for _, plugin := range plugins {
 		if len(plugin) != 1 {
 			w.err = fmt.Errorf("found invalid plugin: %v", plugin)
@@ -195,10 +200,12 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		{
 			Name:  "BUILDKITE_BUILD_PATH",
 			Value: "/workspace/build",
-		}, {
+		},
+		{
 			Name:  "BUILDKITE_BIN_PATH",
 			Value: "/workspace",
-		}, {
+		},
+		{
 			Name: agentTokenKey,
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
@@ -206,7 +213,8 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 					Key:                  agentTokenKey,
 				},
 			},
-		}, {
+		},
+		{
 			Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
 			Value: w.job.Uuid,
 		},
@@ -243,56 +251,68 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	kjob.Spec.TTLSecondsAfterFinished = &ttl
 
 	podSpec := &kjob.Spec.Template.Spec
+
+	containerEnv := append([]corev1.EnvVar{}, env...)
+	containerEnv = append(containerEnv, []corev1.EnvVar{
+		{
+			Name:  "BUILDKITE_AGENT_EXPERIMENT",
+			Value: "kubernetes-exec",
+		},
+		{
+			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+			Value: "plugin,command",
+		},
+		{
+			Name:  "BUILDKITE_AGENT_NAME",
+			Value: "buildkite",
+		},
+		{
+			Name:  "BUILDKITE_PLUGINS_PATH",
+			Value: "/tmp",
+		},
+		{
+			Name:  clicommand.RedactedVars.EnvVar,
+			Value: strings.Join(redactedVars, ","),
+		},
+		{
+			Name:  "BUILDKITE_SHELL",
+			Value: "/bin/sh -ec",
+		},
+		{
+			Name:  "BUILDKITE_ARTIFACT_PATHS",
+			Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
+		},
+		{
+			Name:  "BUILDKITE_SOCKETS_PATH",
+			Value: "/workspace/sockets",
+		},
+	}...)
+
 	for i, c := range podSpec.Containers {
-		command := strings.Join(append(c.Command, c.Args...), " ")
+		// If the command is empty, use the command from the step
+		command := w.job.Command
+		if len(c.Command) > 0 {
+			command = strings.Join(append(c.Command, c.Args...), " ")
+		}
 		c.Command = []string{"/workspace/buildkite-agent"}
 		c.Args = []string{"bootstrap"}
 		c.ImagePullPolicy = corev1.PullAlways
-		c.Env = append(c.Env, env...)
+		c.Env = append(c.Env, containerEnv...)
 		c.Env = append(c.Env,
 			corev1.EnvVar{
 				Name:  "BUILDKITE_COMMAND",
 				Value: command,
 			},
 			corev1.EnvVar{
-				Name:  "BUILDKITE_AGENT_EXPERIMENT",
-				Value: "kubernetes-exec",
-			},
-			corev1.EnvVar{
-				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-				Value: "plugin,command",
-			},
-			corev1.EnvVar{
-				Name:  "BUILDKITE_AGENT_NAME",
-				Value: "buildkite",
-			},
-			corev1.EnvVar{
 				Name:  "BUILDKITE_CONTAINER_ID",
 				Value: strconv.Itoa(i + systemContainerCount),
 			},
-			corev1.EnvVar{
-				Name:  "BUILDKITE_PLUGINS_PATH",
-				Value: "/tmp",
-			},
-			corev1.EnvVar{
-				Name:  "BUILDKITE_SOCKETS_PATH",
-				Value: "/workspace/sockets",
-			},
-			corev1.EnvVar{
-				Name:  clicommand.RedactedVars.EnvVar,
-				Value: strings.Join(redactedVars, ","),
-			},
-			corev1.EnvVar{
-				Name:  "BUILDKITE_SHELL",
-				Value: "/bin/sh -ec",
-			},
-			corev1.EnvVar{
-				Name:  "BUILDKITE_ARTIFACT_PATHS",
-				Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
-			})
+		)
+
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
 		}
+
 		if c.WorkingDir == "" {
 			c.WorkingDir = "/workspace"
 		}
@@ -302,6 +322,29 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	}
 
 	containerCount := len(podSpec.Containers) + systemContainerCount
+
+	if len(podSpec.Containers) == 0 {
+		podSpec.Containers = append(podSpec.Containers, corev1.Container{
+			Name:            "container-0",
+			Image:           w.cfg.Image,
+			Command:         []string{"/workspace/buildkite-agent"},
+			Args:            []string{"bootstrap"},
+			WorkingDir:      "/workspace",
+			VolumeMounts:    volumeMounts,
+			ImagePullPolicy: corev1.PullAlways,
+			Env: append(containerEnv,
+				corev1.EnvVar{
+					Name:  "BUILDKITE_COMMAND",
+					Value: w.job.Command,
+				},
+				corev1.EnvVar{
+					Name:  "BUILDKITE_CONTAINER_ID",
+					Value: strconv.Itoa(0 + systemContainerCount),
+				},
+			),
+			EnvFrom: w.k8sPlugin.GitEnvFrom,
+		})
+	}
 
 	for i, c := range w.k8sPlugin.Sidecars {
 		if c.Name == "" {
@@ -403,7 +446,63 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	})
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
 
+	// Allow podSpec to be overridden by the agent configuration and the k8s plugin
+
+	// Patch from the agent is applied first
+	var err error
+	if w.cfg.PodSpecPatch != nil {
+		w.logger.Info("applying podSpec patch from agent")
+		podSpec, err = PatchPodSpec(podSpec, w.cfg.PodSpecPatch)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
+		}
+	}
+
+	if w.k8sPlugin.PodSpecPatch != nil {
+		w.logger.Info("applying podSpec patch from k8s plugin")
+		podSpec, err = PatchPodSpec(podSpec, w.k8sPlugin.PodSpecPatch)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
+		}
+	}
+
+	kjob.Spec.Template.Spec = *podSpec
+
 	return kjob, nil
+}
+
+var ErrNoCommandModification = errors.New("modifying container commands or args via podSpecPatch is not supported. Specify the command in the job's command field instead")
+
+func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec) (*corev1.PodSpec, error) {
+	// We do special stuff™️ with container commands to make them run as buildkite agent things under the hood, so don't
+	// let users mess with them via podSpecPatch.
+	for _, c := range patch.Containers {
+		if len(c.Command) != 0 || len(c.Args) != 0 {
+			return nil, ErrNoCommandModification
+		}
+	}
+
+	originalJSON, err := json.Marshal(original)
+	if err != nil {
+		return nil, fmt.Errorf("error converting original to JSON: %w", err)
+	}
+
+	patchJSON, err := json.Marshal(patch)
+	if err != nil {
+		return nil, fmt.Errorf("error converting patch to JSON: %w", err)
+	}
+
+	patchedJSON, err := strategicpatch.StrategicMergePatch(originalJSON, patchJSON, corev1.PodSpec{})
+	if err != nil {
+		return nil, fmt.Errorf("error applying strategic patch: %w", err)
+	}
+
+	var patchedSpec corev1.PodSpec
+	if err := json.Unmarshal(patchedJSON, &patchedSpec); err != nil {
+		return nil, fmt.Errorf("error converting patched JSON to PodSpec: %w", err)
+	}
+
+	return &patchedSpec, nil
 }
 
 func (w *jobWrapper) createCheckoutContainer(

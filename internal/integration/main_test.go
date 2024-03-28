@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/spf13/cobra"
 )
 
 const (
@@ -29,18 +30,19 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	var err error
-
-	cmd := controller.New()
-	if err = os.Chdir("../.."); err != nil {
-		log.Fatalf("Error changing dir: %s", err)
+	cmd := &cobra.Command{}
+	controller.AddConfigFlags(cmd)
+	v, err := controller.ReadConfigFromFileArgsAndEnv(cmd, os.Args[1:])
+	if err != nil {
+		log.Fatalf("Error reading config: %s", err)
 	}
-	if cfg, err = controller.ParseConfig(cmd, os.Args[1:]); err != nil {
+
+	testCfg, err := controller.ParseAndValidateConfig(v)
+	if err != nil {
 		log.Fatalf("Error parsing config: %s", err)
 	}
-	if err = os.Chdir("internal/integration"); err != nil {
-		log.Fatalf("Error changing dir: %s", err)
-	}
+
+	cfg = *testCfg
 
 	cleanupPipelines = parseBoolEnvVar("CLEANUP_PIPELINES")
 	preservePipelines = parseBoolEnvVar("PRESERVE_PIPELINES")
