@@ -176,7 +176,7 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --create-namespace \
     --namespace buildkite \
     --values values.yaml
-    --
+    --version <agent-stack-k8s version>
 ```
 
 Now, with this setup, we don't even need to specify the `kubernetes` plugin to use Agent Stack K8s with a private repo
