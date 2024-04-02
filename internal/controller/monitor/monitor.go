@@ -114,6 +114,7 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 	var ok bool
 	if queue, ok = agentTags["queue"]; !ok {
 		errs <- errors.New("missing required tag: queue")
+		close(errs)
 		return errs
 	}
 
@@ -121,9 +122,23 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 		logger.Info("started")
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
+		defer close(errs)
+
+		first := make(chan struct{}, 1)
+		first <- struct{}{}
 
 		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			case <-first:
+			}
+
 			resp, err := m.getScheduledCommandJobs(ctx, queue)
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return
+			}
 			if err != nil {
 				logger.Warn("failed to get scheduled command jobs", zap.Error(err))
 				continue
@@ -153,16 +168,11 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 
 				logger.Debug("creating job", zap.String("uuid", job.Uuid))
 				if err := handler.Create(ctx, &job.CommandJob); err != nil {
+					if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+						return
+					}
 					logger.Error("failed to create job", zap.Error(err))
 				}
-			}
-
-			select {
-			case <-ctx.Done():
-				close(errs)
-				return
-			case <-ticker.C:
-				continue
 			}
 		}
 	}()
