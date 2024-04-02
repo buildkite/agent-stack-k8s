@@ -283,6 +283,10 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 			Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
 		},
 		{
+			Name:  "BUILDKITE_PLUGINS_PATH",
+			Value: "/workspace/plugins",
+		},
+		{
 			Name:  "BUILDKITE_SOCKETS_PATH",
 			Value: "/workspace/sockets",
 		},
@@ -523,7 +527,7 @@ func (w *jobWrapper) createCheckoutContainer(
 			},
 			{
 				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-				Value: "checkout",
+				Value: "plugin,checkout",
 			},
 			{
 				Name:  "BUILDKITE_AGENT_NAME",
@@ -532,6 +536,10 @@ func (w *jobWrapper) createCheckoutContainer(
 			{
 				Name:  "BUILDKITE_CONTAINER_ID",
 				Value: "0",
+			},
+			{
+				Name:  "BUILDKITE_PLUGINS_PATH",
+				Value: "/workspace/plugins",
 			},
 		},
 		EnvFrom: w.k8sPlugin.GitEnvFrom,
