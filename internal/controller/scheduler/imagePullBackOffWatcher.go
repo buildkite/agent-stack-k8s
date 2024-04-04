@@ -44,7 +44,9 @@ func (w *imagePullBackOffWatcher) RegisterInformer(
 	factory informers.SharedInformerFactory,
 ) error {
 	informer := factory.Core().V1().Pods().Informer()
-	informer.AddEventHandler(w)
+	if _, err := informer.AddEventHandler(w); err != nil {
+		return err
+	}
 	go factory.Start(ctx.Done())
 	return nil
 }
