@@ -30,10 +30,10 @@ import (
 var configFile string
 
 func AddConfigFlags(cmd *cobra.Command) {
-	// the config file flag
+	/ the config file flag
 	cmd.Flags().StringVarP(&configFile, "config", "f", "", "config file path")
 
-	// not in the config file
+	/ not in the config file
 	cmd.Flags().String(
 		"agent-token-secret",
 		"buildkite-agent-token",
