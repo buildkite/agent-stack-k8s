@@ -1,6 +1,6 @@
-#!/bin/bash
+!/bin/bash
 
-# Function to get logs for pods with a specific label
+ Function to get logs for pods with a specific label
 get_logs_by_label() {
     local namespace=$1
     local label_selector=$2
