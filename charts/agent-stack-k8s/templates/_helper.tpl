@@ -1,4 +1,4 @@
-{{/* Generate basic labels */}}
+{{/* Generate basic labels *}}
 {{- define "agent-stack-k8s.mandatoryLabels" }}
 app: {{ .Release.Name }}
 {{- end }}
