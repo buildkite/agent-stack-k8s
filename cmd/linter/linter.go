@@ -22,7 +22,7 @@ const (
 	k8sSchema      = "https://kubernetesjsonschema.dev/master/_definitions.json"
 )
 
-//go:embed schema.json
+/go:embed schema.json
 var schema string
 
 type Options struct {
