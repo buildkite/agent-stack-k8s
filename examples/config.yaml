@@ -14,8 +14,8 @@ tags:
 - queue=my-queue
 - priority=high
 
-# This will be applied to the job's podSpec as a strategic merge patch
-# See https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch
+ This will be applied to the job's podSpec as a strategic merge patch
+ See https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch
 pod-spec-patch:
   serviceAccountName: buildkite-agent-sa
   automountServiceAccountToken: true
