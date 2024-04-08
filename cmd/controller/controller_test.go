@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func ptr[T any](v T) *T {
@@ -44,6 +45,15 @@ func TestReadAndParseConfig(t *testing.T) {
 									Key: "github-token",
 								},
 							},
+						},
+					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							"cpu": resource.MustParse("100m"),
+							"mem": resource.MustParse("50Mi"),
+						},
+						Limits: corev1.ResourceList{
+							"mem": resource.MustParse("1Gi"),
 						},
 					},
 				},

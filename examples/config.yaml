@@ -27,3 +27,9 @@ pod-spec-patch:
         secretKeyRef:
           name: github-secrets
           key: github-token
+    resources:
+      requests:
+        cpu: 100m
+        mem: 50Mi
+      limits:
+        mem: 1Gi
