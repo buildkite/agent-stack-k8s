@@ -3,6 +3,7 @@ package config
 import (
 	"time"
 
+	"github.com/buildkite/agent/v3/version"
 	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -12,8 +13,9 @@ const (
 	BuildURLAnnotation = "buildkite.com/build-url"
 	JobURLAnnotation   = "buildkite.com/job-url"
 	DefaultNamespace   = "default"
-	DefaultAgentImage  = "ghcr.io/buildkite/agent-stack-k8s/agent:latest"
 )
+
+var DefaultAgentImage = "ghcr.io/buildkite/agent-stack-k8s/agent:" + version.Version()
 
 // viper requires mapstructure struct tags, but the k8s types only have json struct tags.
 // mapstructure (the module) supports switching the struct tag to "json", viper does not. So we have

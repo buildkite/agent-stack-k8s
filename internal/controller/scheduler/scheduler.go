@@ -635,11 +635,6 @@ func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
 					// bypass the potentially private image and use a public one. We could use a
 					// thinner public image like `alpine:latest`, but it's generally unwise to depend
 					// on an image that's not published by us.
-					//
-					// TODO: pin the version of the agent image and use that here.
-					// Currently, DefaultAgentImage has a latest tag. That's not ideal as
-					// a given version of agent stack-k8s may use different versions of the agent image over
-					// time. We should consider using a specific version of the agent image here.
 					Image:   config.DefaultAgentImage,
 					Command: []string{fmt.Sprintf("echo %q && exit 1", err.Error())},
 				},
