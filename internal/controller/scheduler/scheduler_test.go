@@ -326,6 +326,48 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+func TestBuildSkipCheckout(t *testing.T) {
+	t.Parallel()
+
+	pluginsYAML := `- github.com/buildkite-plugins/kubernetes-buildkite-plugin:
+    checkout:
+      skip: true`
+
+	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
+	require.NoError(t, err)
+
+	wrapper := scheduler.NewJobWrapper(
+		zaptest.NewLogger(t),
+		&api.CommandJob{
+			Uuid:            "abc",
+			Command:         "echo hello world",
+			Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+			AgentQueryRules: []string{"queue=kubernetes"},
+		},
+		scheduler.Config{
+			Namespace:  "buildkite",
+			Image:      "buildkite/agent:latest",
+			AgentToken: "bkcq_1234567890",
+		},
+	).ParsePlugins()
+
+	job, err := wrapper.Build(false)
+	require.NoError(t, err)
+
+	require.Len(t, job.Spec.Template.Spec.Containers, 2)
+
+	container0 := findContainer(t, job.Spec.Template.Spec.Containers, "container-0")
+	if diff := cmp.Diff(container0.Image, "buildkite/agent:latest"); diff != "" {
+		t.Errorf("unexpected container image (-want +got):\n%s", diff)
+	}
+
+	for _, container := range job.Spec.Template.Spec.Containers {
+		if container.Name == "checkout" {
+			t.Error("with `checkout: skip: true`: checkout container is present, want no checkout container")
+		}
+	}
+}
+
 func TestFailureJobs(t *testing.T) {
 	t.Parallel()
 	pluginsJSON, err := json.Marshal([]map[string]any{
