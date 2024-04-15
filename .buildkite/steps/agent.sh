@@ -10,6 +10,7 @@ repo="ghcr.io/buildkite/agent"
 echo --- Awking go.mod for agent version
 agent_version="$(awk '/github\.com\/buildkite\/agent\/v3/ { print $2 }' go.mod | cut -c 2- )"
 echo "Using agent version ${agent_version} as image tag"
+buildkite-agent meta-data set agent-version "${agent_version}"
 
 echo --- :docker: Inspecting agent docker image manifest
 digest=$(skopeo inspect "docker://${repo}:${agent_version}" --format {{.Digest}})
