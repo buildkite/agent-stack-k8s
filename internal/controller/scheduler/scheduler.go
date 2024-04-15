@@ -22,7 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -204,8 +204,8 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	kjob.Spec.Template.Labels = w.k8sPlugin.Metadata.Labels
 	kjob.Annotations = w.k8sPlugin.Metadata.Annotations
 	kjob.Spec.Template.Annotations = w.k8sPlugin.Metadata.Annotations
-	kjob.Spec.BackoffLimit = pointer.Int32(0)
-	kjob.Spec.Template.Spec.TerminationGracePeriodSeconds = pointer.Int64(defaultTermGracePeriodSeconds)
+	kjob.Spec.BackoffLimit = ptr.To[int32](0)
+	kjob.Spec.Template.Spec.TerminationGracePeriodSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
 
 	env := []corev1.EnvVar{
 		{
@@ -582,9 +582,9 @@ func (w *jobWrapper) createCheckoutContainer(
 	case podUser != 0 && podGroup != 0:
 		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
 		checkoutContainer.SecurityContext = &corev1.SecurityContext{
-			RunAsUser:    pointer.Int64(0),
-			RunAsGroup:   pointer.Int64(0),
-			RunAsNonRoot: pointer.Bool(false),
+			RunAsUser:    ptr.To[int64](0),
+			RunAsGroup:   ptr.To[int64](0),
+			RunAsNonRoot: ptr.To[bool](false),
 		}
 
 		checkoutContainer.Command = []string{"ash", "-c"}
@@ -599,9 +599,9 @@ su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
 	case podUser != 0 && podGroup == 0:
 		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
 		checkoutContainer.SecurityContext = &corev1.SecurityContext{
-			RunAsUser:    pointer.Int64(0),
-			RunAsGroup:   pointer.Int64(0),
-			RunAsNonRoot: pointer.Bool(false),
+			RunAsUser:    ptr.To[int64](0),
+			RunAsGroup:   ptr.To[int64](0),
+			RunAsNonRoot: ptr.To[bool](false),
 		}
 
 		checkoutContainer.Command = []string{"ash", "-c"}

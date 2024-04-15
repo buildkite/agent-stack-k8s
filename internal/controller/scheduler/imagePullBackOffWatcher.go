@@ -44,14 +44,16 @@ func (w *imagePullBackOffWatcher) RegisterInformer(
 	factory informers.SharedInformerFactory,
 ) error {
 	informer := factory.Core().V1().Pods().Informer()
-	informer.AddEventHandler(w)
+	if _, err := informer.AddEventHandler(w); err != nil {
+		return err
+	}
 	go factory.Start(ctx.Done())
 	return nil
 }
 
 func (w *imagePullBackOffWatcher) OnDelete(obj any) {}
 
-func (w *imagePullBackOffWatcher) OnAdd(maybePod any) {
+func (w *imagePullBackOffWatcher) OnAdd(maybePod any, isInInitialList bool) {
 	pod, wasPod := maybePod.(*v1.Pod)
 	if !wasPod {
 		return

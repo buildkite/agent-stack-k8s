@@ -46,7 +46,9 @@ func (l *MaxInFlightLimiter) RegisterInformer(
 ) error {
 	informer := factory.Batch().V1().Jobs()
 	jobInformer := informer.Informer()
-	jobInformer.AddEventHandler(l)
+	if _, err := jobInformer.AddEventHandler(l); err != nil {
+		return err
+	}
 	go factory.Start(ctx.Done())
 
 	if !cache.WaitForCacheSync(ctx.Done(), jobInformer.HasSynced) {
@@ -85,7 +87,7 @@ func (l *MaxInFlightLimiter) add(ctx context.Context, job *api.CommandJob) error
 }
 
 // load jobs at controller startup/restart
-func (l *MaxInFlightLimiter) OnAdd(obj interface{}) {
+func (l *MaxInFlightLimiter) OnAdd(obj interface{}, isInInitialList bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
