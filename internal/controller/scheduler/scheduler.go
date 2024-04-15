@@ -55,6 +55,13 @@ type KubernetesPlugin struct {
 	Sidecars          []corev1.Container     `json:"sidecars,omitempty"`
 	Metadata          Metadata               `json:"metadata,omitempty"`
 	ExtraVolumeMounts []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
+	Checkout          Checkout               `json:"checkout,omitempty"`
+}
+
+type Checkout struct {
+	Skip       bool   `json:"skip,omitempty"`
+	CloneFlags string `json:"cloneFlags,omitempty"`
+	FetchFlags string `json:"fetchFlags,omitempty"`
 }
 
 type Metadata struct {
@@ -152,11 +159,15 @@ func (w *jobWrapper) ParsePlugins() *jobWrapper {
 	return w
 }
 
+// Build builds a job. The checkout container will be skipped either by passing
+// `true` or if the k8s plugin configuration is configured to skip it.
 func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	// if previous steps have failed, error immediately
 	if w.err != nil {
 		return nil, w.err
 	}
+
+	skipCheckout = skipCheckout || w.k8sPlugin.Checkout.Skip
 
 	kjob := &batchv1.Job{}
 	kjob.Name = kjobName(w.job)
@@ -540,6 +551,14 @@ func (w *jobWrapper) createCheckoutContainer(
 			{
 				Name:  "BUILDKITE_PLUGINS_PATH",
 				Value: "/workspace/plugins",
+			},
+			{
+				Name:  "BUILDKITE_GIT_CLONE_FLAGS",
+				Value: w.k8sPlugin.Checkout.CloneFlags,
+			},
+			{
+				Name:  "BUILDKITE_GIT_FETCH_FLAGS",
+				Value: w.k8sPlugin.Checkout.FetchFlags,
 			},
 		},
 		EnvFrom: w.k8sPlugin.GitEnvFrom,

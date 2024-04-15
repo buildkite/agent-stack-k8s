@@ -307,6 +307,38 @@ In some situations, for example if you want to use [git mirrors](https://buildki
 
 See [this example](internal/integration/fixtures/extra-volume-mounts.yaml), that will declare a new volume in the `podSpec` and mount it in all the containers. The benefit, is to have the same mounted path in all containers, including the `checkout` container.
 
+### Skipping checkout
+
+For some steps, you may wish to avoid checkout (cloning a source repository).
+This can be done with the `checkout` block under the `kubernetes` plugin:
+
+```yaml
+steps:
+- label: Hello World!
+  agents:
+    queue: kubernetes
+  plugins:
+  - kubernetes:
+      checkout:
+        skip: true # prevents scheduling the checkout container
+```
+
+### Overriding flags for git clone/fetch
+
+`git clone` and `git fetch` flags can be overridden per-step (similar to `BUILDKITE_GIT_CLONE_FLAGS` and `BUILDLKITE_GIT_FETCH_FLAGS` env vars) with the `checkout` block also:
+
+```yaml
+steps:
+- label: Hello World!
+  agents:
+    queue: kubernetes
+  plugins:
+  - kubernetes:
+      checkout:
+        cloneFlags: -v --depth 1
+        fetchFlags: -v --prune --tags
+```
+
 
 ### Validating your pipeline
 
