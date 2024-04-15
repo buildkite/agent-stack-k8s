@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -121,15 +123,42 @@ func ReadConfigFromFileArgsAndEnv(cmd *cobra.Command, args []string) (*viper.Vip
 	return v, nil
 }
 
+var resourceQuantityType = reflect.TypeOf(resource.Quantity{})
+
+// This mapstructure.DecodeHookFunc is needed to decode quantities (as used in
+// podSpecs) properly. Without this, viper (which uses mapstructure) doesn't
+// know how to put a string (e.g. "100m") into a "map" (resource.Quantity) and
+// will error out.
+func stringToResourceQuantity(f, t reflect.Type, data any) (any, error) {
+	if f.Kind() != reflect.String {
+		return data, nil
+	}
+	if t != resourceQuantityType {
+		return data, nil
+	}
+	return resource.ParseQuantity(data.(string))
+}
+
+// This viper.DecoderConfigOption is needed to make mapstructure (used by viper)
+// use the same struct tags that the k8s libraries provide.
+func useJSONTagForDecoder(c *mapstructure.DecoderConfig) {
+	c.TagName = "json"
+}
+
 // ParseAndValidateConfig parses the config into a struct and validates the values.
 func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 	// We want to let the user know if they have any extra fields, so use UnmarshalExact.
 	// The user likely expects every part of their config to be meaningful, so if some of it is
 	// ignored in parsing, they almost certainly want to know about it.
 	cfg := &config.Config{}
-	if err := v.UnmarshalExact(cfg, func(c *mapstructure.DecoderConfig) {
-		c.TagName = "json"
-	}); err != nil {
+	// This decode hook = the default Viper decode hooks + stringToResourceQuantity
+	// (Setting this option overrides the default.)
+	decodeHook := viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
+		stringToResourceQuantity,
+		mapstructure.StringToTimeDurationHookFunc(),
+		mapstructure.StringToSliceHookFunc(","),
+	))
+	if err := v.UnmarshalExact(cfg, useJSONTagForDecoder, decodeHook); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
