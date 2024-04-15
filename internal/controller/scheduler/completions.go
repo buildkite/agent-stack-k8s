@@ -5,7 +5,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"go.uber.org/zap"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -42,7 +42,7 @@ func (w *completionsWatcher) RegisterInformer(
 func (w *completionsWatcher) OnDelete(obj interface{}) {}
 
 // handle pods completed while the controller wasn't running
-func (w *completionsWatcher) OnAdd(obj interface{}) {
+func (w *completionsWatcher) OnAdd(obj interface{}, isInInitialList bool) {
 	pod := obj.(*v1.Pod)
 	w.cleanupSidecars(pod)
 }

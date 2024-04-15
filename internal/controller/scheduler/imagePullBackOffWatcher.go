@@ -51,7 +51,7 @@ func (w *imagePullBackOffWatcher) RegisterInformer(
 
 func (w *imagePullBackOffWatcher) OnDelete(obj any) {}
 
-func (w *imagePullBackOffWatcher) OnAdd(maybePod any) {
+func (w *imagePullBackOffWatcher) OnAdd(maybePod any, isInInitialList bool) {
 	pod, wasPod := maybePod.(*v1.Pod)
 	if !wasPod {
 		return

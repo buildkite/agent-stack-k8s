@@ -85,7 +85,7 @@ func (l *MaxInFlightLimiter) add(ctx context.Context, job *api.CommandJob) error
 }
 
 // load jobs at controller startup/restart
-func (l *MaxInFlightLimiter) OnAdd(obj interface{}) {
+func (l *MaxInFlightLimiter) OnAdd(obj interface{}, isInInitialList bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
