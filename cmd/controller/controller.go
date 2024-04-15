@@ -151,6 +151,8 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 	// The user likely expects every part of their config to be meaningful, so if some of it is
 	// ignored in parsing, they almost certainly want to know about it.
 	cfg := &config.Config{}
+	// This decode hook = the default Viper decode hooks + stringToResourceQuantity
+	// (Setting this option overrides the default.)
 	decodeHook := viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
 		stringToResourceQuantity,
 		mapstructure.StringToTimeDurationHookFunc(),
