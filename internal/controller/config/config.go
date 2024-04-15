@@ -15,7 +15,7 @@ const (
 	DefaultNamespace   = "default"
 )
 
-var DefaultAgentImage = "ghcr.io/buildkite/agent-stack-k8s/agent:" + version.Version()
+var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
 
 // viper requires mapstructure struct tags, but the k8s types only have json struct tags.
 // mapstructure (the module) supports switching the struct tag to "json", viper does not. So we have
