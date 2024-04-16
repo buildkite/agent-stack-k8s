@@ -24,7 +24,7 @@ func Run(
 	ctx context.Context,
 	logger *zap.Logger,
 	k8sClient kubernetes.Interface,
-	cfg config.Config,
+	cfg *config.Config,
 ) {
 	if cfg.ProfilerAddress != "" {
 		logger.Info("profiler listening for requests")
@@ -49,11 +49,13 @@ func Run(
 	}
 
 	sched := scheduler.New(logger.Named("scheduler"), k8sClient, scheduler.Config{
-		Namespace:            cfg.Namespace,
-		Image:                cfg.Image,
-		AgentToken:           cfg.AgentTokenSecret,
-		JobTTL:               cfg.JobTTL,
-		SSHCredentialsSecret: cfg.SSHCredentialsSecret,
+		Namespace:              cfg.Namespace,
+		Image:                  cfg.Image,
+		AgentToken:             cfg.AgentTokenSecret,
+		JobTTL:                 cfg.JobTTL,
+		AdditionalRedactedVars: cfg.AdditionalRedactedVars,
+		PodSpecPatch:           cfg.PodSpecPatch,
+ 		SSHCredentialsSecret:   cfg.SSHCredentialsSecret,
 	})
 	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)
 

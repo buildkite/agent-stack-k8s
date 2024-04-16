@@ -107,7 +107,7 @@ steps:
 For more complicated steps, you have access to the [`PodSpec`](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#podspec-v1-core) Kubernetes API resource that will be used in a Kubernetes [`Job`](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#job-v1-batch).
 For now, this is nested under a `kubernetes` plugin.
 But unlike other Buildkite plugins, there is no corresponding plugin repository.
-Rather this is syntax that is interpreted by the `agent-stack-k8s` controller.
+Rather, this is syntax that is interpreted by the `agent-stack-k8s` controller.
 ```yaml
 steps:
 - label: Hello World!
@@ -118,19 +118,176 @@ steps:
       podSpec:
         containers:
         - image: alpine:latest
-          command: [sh, -c]
-          args:
-          - "'echo Hello World!'"
+          command:
+          - echo
+          - Hello World!
 ```
-Note that almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
+Note that in a `podSpec`, a `command` should be YAML list that will be combined into a single command for a container to run.
 
-Note how this example demonstrates a subtlety when attempting to use shell syntax for Kubernetes Containers: the `command` should be an executable, and shells typically execute a script as a [`command_string`](https://man7.org/linux/man-pages/man1/sh.1p.html) that is required to be single argument that follows `-c`.
-Within the command string, shell syntax such `>` for output redirection may be used, but outside of it, Kubernetes will not interpret it.
+Almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
+
+It's also possible to specify an entire script as a `command`
+```yaml
+steps:
+- label: Hello World!
+  agents:
+    queue: kubernetes
+  plugins:
+  - kubernetes:
+      podSpec:
+        containers:
+        - image: alpine:latest
+          command:
+          - |-
+            set -euo pipefail
+
+            echo Hello World! > hello.txt
+            cat hello.txt | buildkite-agent annotate
+```
+If you have a multi-line `command`, specifying the `args` as well could lead to confusion, so we recommend just using `command`.
 
 More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
 
+### Pod Spec Patch
+Rather than defining the entire Pod Spec in a step, there is the option to define a [strategic merge patch](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/) in the controller.
+Agent Stack K8s will first generate a K8s Job with a PodSpec from a Buildkite Job and then apply the patch in the controller.
+It will then apply the patch specified in its config file, which is derived from the value in the helm installation.
+This can replace much of the functionality of some of the other fields in the plugin, like `gitEnvFrom`.
+
+#### Eliminate `gitEnvFrom`
+Here's an example demonstrating how one would eliminate the need to specify `gitEnvFrom` from every step, but still checkout private repositories.
+
+First, deploy the helm chart with a `values.yaml` file.
+```yaml
+# values.yaml
+agentStackSecret: <name of predefined secrets for k8s>
+config:
+  org: <your-org-slug>
+  pod-spec-patch:
+    containers:
+    - name: checkout         # <---- this is needed so that the secret will only be mounted on the checkout container
+      envFrom:
+      - secretRef:
+          name: git-checkout # <---- this is the same secret name you would have put in `gitEnvFrom` in the kubernetes plugin
+```
+You may use the `-f` or `--values` arguments to `helm upgrade` to specify a `values.yaml` file.
+```shell
+helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
+    --create-namespace \
+    --namespace buildkite \
+    --values values.yaml \
+    --version <agent-stack-k8s version>
+```
+
+Now, with this setup, we don't even need to specify the `kubernetes` plugin to use Agent Stack K8s with a private repo
+```yaml
+# pipelines.yaml
+agents:
+  queue: kubernetes
+steps:
+- name: Hello World!
+  commands:
+  - echo -n Hello!
+  - echo " World!"
+
+- name: Hello World in one command
+  command: |-
+    echo -n Hello!
+    echo " World!"
+```
+
+#### Custom Images
+You can specify a different image to use for a step in a step level `podSpecPatch`. Previously this could be done with a step level `podSpec`.
+```yaml
+# pipelines.yaml
+agents:
+  queue: kubernetes
+steps:
+- name: Hello World!
+  commands:
+  - echo -n Hello!
+  - echo " World!"
+  plugins:
+  - kubernetes:
+      podSpecPatch:
+      - name: container-0
+        image: alpine:latest
+
+- name: Hello World from alpine!
+  commands:
+  - echo -n Hello
+  - echo " from alpine!"
+  plugins:
+  - kubernetes:
+      podSpecPatch:
+      - name: container-0      # <---- You must specify this as exactly `container-0` for now.
+        image: alpine:latest   #       We are experimenting with ways to make it more ergonomic
+```
+
+#### Default Resources
+In the helm values, you can specify default resources to be used by the containers in Pods that are launched to run Jobs.
+```yaml
+# values.yaml
+agentStackSecret: <name of predefend secrets for k8s>
+config:
+  org: <your-org-slug>
+  pod-spec-patch:
+    initContainers:
+    - name: copy-agent
+    requests:
+      cpu: 100m
+      memory: 50Mi
+    limits:
+      memory: 100Mi
+    containers:
+    - name: agent          # this container acquires the job
+      resources:
+        requests:
+          cpu: 100m
+          memory: 50Mi
+        limits:
+          memory: 1Gi
+    - name: checkout       # this container clones the repo
+      resources:
+        requests:
+          cpu: 100m
+          memory: 50Mi
+        limits:
+          memory: 1Gi
+    - name: container-0    # the job runs in a container with this name by default
+      resources:
+        requests:
+          cpu: 100m
+          memory: 50Mi
+        limits:
+          memory: 1Gi
+```
+and then every job that's handled by this installation of agent-stack-k8s will default to these values. To override it for a step, use a step level `podSpecPatch`.
+```yaml
+# pipelines.yaml
+agents:
+  queue: kubernetes
+steps:
+- name: Hello from a container with more resources
+  command: echo Hello World!
+  plugins:
+  - kubernetes:
+      podSpecPatch:
+        containers:
+        - name: container-0    # <---- You must specify this as exactly `container-0` for now.
+          resources:           #       We are experimenting with ways to make it more ergonomic
+            requests:
+              cpu: 1000m
+              memory: 50Mi
+            limits:
+              memory: 1Gi
+
+- name: Hello from a container with default resources
+  command: echo Hello World!
+```
+
 ### Buildkite Clusters
-If you are using [Buildkite Cluster](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
+If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
 ```yaml
 # values.yaml
 config:
@@ -149,6 +306,38 @@ There is no guarantee that your sidecars will have started before your job, so u
 In some situations, for example if you want to use [git mirrors](https://buildkite.com/docs/agent/v3#promoted-experiments-git-mirrors) you may want to attach extra volume mounts (in addition to the `/workspace` one) in all the pod containers.
 
 See [this example](internal/integration/fixtures/extra-volume-mounts.yaml), that will declare a new volume in the `podSpec` and mount it in all the containers. The benefit, is to have the same mounted path in all containers, including the `checkout` container.
+
+### Skipping checkout
+
+For some steps, you may wish to avoid checkout (cloning a source repository).
+This can be done with the `checkout` block under the `kubernetes` plugin:
+
+```yaml
+steps:
+- label: Hello World!
+  agents:
+    queue: kubernetes
+  plugins:
+  - kubernetes:
+      checkout:
+        skip: true # prevents scheduling the checkout container
+```
+
+### Overriding flags for git clone/fetch
+
+`git clone` and `git fetch` flags can be overridden per-step (similar to `BUILDKITE_GIT_CLONE_FLAGS` and `BUILDLKITE_GIT_FETCH_FLAGS` env vars) with the `checkout` block also:
+
+```yaml
+steps:
+- label: Hello World!
+  agents:
+    queue: kubernetes
+  plugins:
+  - kubernetes:
+      checkout:
+        cloneFlags: -v --depth 1
+        fetchFlags: -v --prune --tags
+```
 
 
 ### Validating your pipeline
@@ -245,83 +434,13 @@ sequenceDiagram
     bc->>kubernetes: cleanup finished pods
 ```
 
-## Development
-
-Install dependencies with Homebrew via:
-
-```bash
-brew bundle
-```
-
-Run tasks via [just](https://github.com/casey/just):
-
-```bash
-just --list
-```
-
-For running the integration tests you'll need to add some additional scopes to your Buildkite API token:
-
-- `read_artifacts`
-- `read_build_logs`
-- `write_pipelines`
-
-You'll also need to create an SSH secret in your cluster to run [this test pipeline](internal/integration/fixtures/secretref.yaml). This SSH key needs to be associated with your GitHub account to be able to clone this public repo, and must be in a form acceptable to OpenSSH (aka `BEGIN OPENSSH PRIVATE KEY`, not `BEGIN PRIVATE KEY`).
-
-```bash
-kubectl create secret generic agent-stack-k8s --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
-```
-
-### Run from source
-
-First store the agent token in a Kubernetes secret:
-
-```bash!
-kubectl create secret generic buildkite-agent-token --from-literal=BUILDKITE_AGENT_TOKEN=my-agent-token
-```
-
-Next start the controller:
-
-```bash!
-just run --org my-org --buildkite-token my-api-token --debug
-```
-
-### Local Deployment with Helm
-
-`just deploy` will build the container image using [ko](https://ko.build/) and
-deploy it with [Helm](https://helm.sh/).
-
-You'll need to have set `KO_DOCKER_REPO` to a repository you have push access
-to. For development something like the [kind local
-registry](https://kind.sigs.k8s.io/docs/user/local-registry/) or the [minikube
-registry](https://minikube.sigs.k8s.io/docs/handbook/registry) can be used. More
-information is available at [ko's
-website](https://ko.build/configuration/#local-publishing-options).
-
-You'll also need to provide required configuration values to Helm, which can be done by passing extra args to `just`:
-
-```bash
-just deploy --values config.yaml
-```
-
-With config.yaml being a file containing [required Helm values](values.yaml), such as:
-
-```yaml
-agentToken: "abcdef"
-graphqlToken: "12345"
-config:
-  org: "my-buildkite-org"
-```
-
-The `config` key contains configuration passed directly to the binary, and so supports all the keys documented in [the example](examples/config.yaml).
-
-## Collect logs via script
+## Debugging
 Use the `log-collector` script in the `utils` folder to collect logs for agent-stack-k8s.
 
 ### Prerequisites
 
-kubectl binary
-
-kubectl setup and authenticated to correct k8s cluster
+- kubectl binary
+- kubectl setup and authenticated to correct k8s cluster
 
 ### Inputs to the script
 

@@ -269,7 +269,7 @@ steps:
         serviceAccountName: release
         containers:
         - name: release
-          image: alpine:latest
+          image: golang:1.22-alpine # Note goreleaser shells out to go!
           command: [.buildkite/steps/release.sh]
           envFrom:
           - secretRef:

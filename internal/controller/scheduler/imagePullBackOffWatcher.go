@@ -29,7 +29,7 @@ type imagePullBackOffWatcher struct {
 func NewImagePullBackOffWatcher(
 	logger *zap.Logger,
 	k8s kubernetes.Interface,
-	cfg config.Config,
+	cfg *config.Config,
 ) *imagePullBackOffWatcher {
 	return &imagePullBackOffWatcher{
 		logger: logger,
@@ -44,14 +44,16 @@ func (w *imagePullBackOffWatcher) RegisterInformer(
 	factory informers.SharedInformerFactory,
 ) error {
 	informer := factory.Core().V1().Pods().Informer()
-	informer.AddEventHandler(w)
+	if _, err := informer.AddEventHandler(w); err != nil {
+		return err
+	}
 	go factory.Start(ctx.Done())
 	return nil
 }
 
 func (w *imagePullBackOffWatcher) OnDelete(obj any) {}
 
-func (w *imagePullBackOffWatcher) OnAdd(maybePod any) {
+func (w *imagePullBackOffWatcher) OnAdd(maybePod any, isInInitialList bool) {
 	pod, wasPod := maybePod.(*v1.Pod)
 	if !wasPod {
 		return
@@ -114,7 +116,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 		switch job := resp.GetJob().(type) {
 		case *api.GetCommandJobJobJobTypeCommand:
 			// This is expected as there will be a gap between when cancel request completes and
-			// the kubernets job is cleaned up, during which more pods with containers destined to
+			// the Kubernetes job is cleaned up, during which more pods with containers destined to
 			// ImagePullBackOff may be created.
 			if job.GetState() == api.JobStatesCanceled || job.GetState() == api.JobStatesCanceling {
 				return

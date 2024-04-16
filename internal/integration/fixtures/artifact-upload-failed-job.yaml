@@ -9,8 +9,7 @@ steps:
       podSpec:
         containers:
         - image: alpine:latest
-          command: [sh, -c]
-          args:
+          command:
           - |-
             echo "Artifact Data" > artifact.txt
             exit 1

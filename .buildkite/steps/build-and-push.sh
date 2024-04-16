@@ -14,20 +14,6 @@ skopeo login ghcr.io \
   --password "$REGISTRY_PASSWORD" \
   --authfile ~/.docker/config.json
 
-echo --- :docker: Copying image to ghcr.io
-skopeo copy \
-  --authfile ~/.docker/config.json \
-  --multi-arch=all \
-  "docker://${temp_agent_image}" "docker://${agent_image}"
-
-buildkite-agent annotate --style success --append <<EOF
-### Agent
----------------------------------------------------
-| Version  | Image                                |
-|----------|--------------------------------------|
-| $version | $agent_image                         |
----------------------------------------------------
-EOF
 
 echo --- :helm: Packaging helm chart
 yq -i ".image = \"$controller_image\"" charts/agent-stack-k8s/values.yaml

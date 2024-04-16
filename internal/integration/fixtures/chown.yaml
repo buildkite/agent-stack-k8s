@@ -17,9 +17,6 @@ steps:
           - -la
         - image: alpine:latest
           command:
-          - ash
-          - -c
-          args:
           - |-
             echo "some contents" > some-file
         securityContext:

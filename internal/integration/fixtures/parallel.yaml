@@ -3,8 +3,6 @@ steps:
     parallelism: 4
     agents:
       queue: {{.queue}}
-    env:
-      BUILDKITE_SHELL: /bin/sh -e -c
     plugins:
       - kubernetes:
           podSpec:

@@ -7,8 +7,11 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestWalkingSkeleton(t *testing.T) {
@@ -31,6 +34,137 @@ func TestWalkingSkeleton(t *testing.T) {
 		map[string]string{"some-annotation": "cool"},
 		map[string]string{"some-label": "wow"},
 	)
+}
+
+func TestPodSpecPatchInStep(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "podspecpatch-step.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "value of MOUNTAIN is cotopaxi")
+}
+
+func TestPodSpecPatchInStepFailsWhenPatchingContainerCommands(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "podspecpatch-command-step.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+
+	tc.AssertFail(ctx, build)
+	tc.AssertLogsContain(build, fmt.Sprintf("%v", scheduler.ErrNoCommandModification))
+}
+
+func TestPodSpecPatchInController(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "mountain.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+	cfg := cfg
+	cfg.PodSpecPatch = &corev1.PodSpec{
+		Containers: []corev1.Container{
+			{
+				Name: "mountain",
+				Env: []corev1.EnvVar{
+					{
+						Name:  "MOUNTAIN",
+						Value: "antisana",
+					},
+				},
+			},
+		},
+	}
+
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "value of MOUNTAIN is antisana")
+}
+
+func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "helloworld.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+
+	cfg := cfg
+	cfg.Tags = append(cfg.Tags, "foo=bar") // job has queue=<something>, agent has queue=<something> and foo=bar
+
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+}
+
+func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "redacted-vars.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+
+	cfg := cfg
+	cfg.AdditionalRedactedVars = []string{"ELEVEN_HERBS_AND_SPICES"}
+
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	logs := tc.FetchLogs(build)
+	assert.Contains(t, logs, "This should be redacted:")
+	assert.NotContains(t, logs, "white pepper and 10 others")
+}
+
+func TestPrePostCheckoutHooksRun(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "plugin-checkout-hook.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	logs := tc.FetchLogs(build)
+	assert.Contains(t, logs, "The pre-checkout hook ran!")
+	assert.Contains(t, logs, "The post-checkout hook ran!")
 }
 
 func TestChown(t *testing.T) {
@@ -60,7 +194,7 @@ func TestSSHRepoClone(t *testing.T) {
 	ctx := context.Background()
 	_, err := tc.Kubernetes.CoreV1().
 		Secrets(cfg.Namespace).
-		Get(ctx, "agent-stack-k8s", v1.GetOptions{})
+		Get(ctx, "agent-stack-k8s", metav1.GetOptions{})
 	require.NoError(t, err, "agent-stack-k8s secret must exist")
 
 	pipelineID, cleanup := tc.CreatePipeline(ctx)
@@ -237,7 +371,7 @@ func TestInvalidPodJSON(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	tc.AssertLogsContain(
 		build,
-		"failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.PodSpec.containers.env.value of type string",
+		"failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.podSpec.containers.env.value of type string",
 	)
 }
 

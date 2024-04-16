@@ -204,6 +204,18 @@
           "default": "",
           "title": "The UUID of the Buildkite cluster to pull Jobs from",
           "examples": [""]
+        },
+        "additional-redacted-vars": {
+          "type": "array",
+          "default": [],
+          "title": "Additional environment variables to redact values from logs",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["SECRET_RECIPE"]]
+        },
+        "pod-spec-patch": {
+          "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
         }
       },
       "examples": [

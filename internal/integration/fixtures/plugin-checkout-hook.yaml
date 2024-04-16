@@ -1,0 +1,21 @@
+steps:
+  - label: ":earth_asia:"
+    agents:
+      queue: {{.queue}}
+    env:
+      BUILDKITE_SHELL: /bin/sh -ec
+    plugins:
+      - improbable-eng/metahook#v0.4.1:
+          pre-checkout: echo The pre-checkout hook ran!
+          post-checkout: echo The post-checkout hook ran!
+      - kubernetes:
+          podSpec:
+            containers:
+              # A container with Bash is needed to run the metahook hooks
+              # (that are empty, because only pre- and post-checkout are set).
+              - image: bash:latest
+                command:
+                - echo
+                args:
+                - >-
+                  The command ran!

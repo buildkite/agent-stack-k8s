@@ -5,13 +5,13 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"go.uber.org/zap"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 type completionsWatcher struct {
@@ -33,7 +33,9 @@ func (w *completionsWatcher) RegisterInformer(
 	factory informers.SharedInformerFactory,
 ) error {
 	informer := factory.Core().V1().Pods().Informer()
-	informer.AddEventHandler(w)
+	if _, err := informer.AddEventHandler(w); err != nil {
+		return err
+	}
 	go factory.Start(ctx.Done())
 	return nil
 }
@@ -42,7 +44,7 @@ func (w *completionsWatcher) RegisterInformer(
 func (w *completionsWatcher) OnDelete(obj interface{}) {}
 
 // handle pods completed while the controller wasn't running
-func (w *completionsWatcher) OnAdd(obj interface{}) {
+func (w *completionsWatcher) OnAdd(obj interface{}, isInInitialList bool) {
 	pod := obj.(*v1.Pod)
 	w.cleanupSidecars(pod)
 }
@@ -66,7 +68,7 @@ func (w *completionsWatcher) cleanupSidecars(pod *v1.Pod) {
 			if err != nil {
 				return err
 			}
-			job.Spec.ActiveDeadlineSeconds = pointer.Int64(defaultTermGracePeriodSeconds)
+			job.Spec.ActiveDeadlineSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
 			_, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(ctx, job, metav1.UpdateOptions{})
 			return err
 		}); err != nil {

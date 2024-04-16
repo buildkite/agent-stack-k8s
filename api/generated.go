@@ -1603,29 +1603,29 @@ mutation BuildCancel ($input: BuildCancelInput!) {
 `
 
 func BuildCancel(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	input BuildCancelInput,
 ) (*BuildCancelResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "BuildCancel",
 		Query:  BuildCancel_Operation,
 		Variables: &__BuildCancelInput{
 			Input: input,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data BuildCancelResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ BuildCancelResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
 
 // The query or mutation executed by BuildCreate.
@@ -1666,29 +1666,29 @@ fragment CommandJob on JobTypeCommand {
 `
 
 func BuildCreate(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	input BuildCreateInput,
 ) (*BuildCreateResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "BuildCreate",
 		Query:  BuildCreate_Operation,
 		Variables: &__BuildCreateInput{
 			Input: input,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data BuildCreateResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ BuildCreateResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
 
 // The query or mutation executed by CancelCommandJob.
@@ -1701,29 +1701,29 @@ mutation CancelCommandJob ($input: JobTypeCommandCancelInput!) {
 `
 
 func CancelCommandJob(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	input JobTypeCommandCancelInput,
 ) (*CancelCommandJobResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "CancelCommandJob",
 		Query:  CancelCommandJob_Operation,
 		Variables: &__CancelCommandJobInput{
 			Input: input,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data CancelCommandJobResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ CancelCommandJobResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
 
 // The query or mutation executed by GetBuild.
@@ -1762,29 +1762,29 @@ fragment CommandJob on JobTypeCommand {
 `
 
 func GetBuild(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	uuid string,
 ) (*GetBuildResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "GetBuild",
 		Query:  GetBuild_Operation,
 		Variables: &__GetBuildInput{
 			Uuid: uuid,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data GetBuildResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ GetBuildResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
 
 // The query or mutation executed by GetBuilds.
@@ -1829,13 +1829,13 @@ fragment CommandJob on JobTypeCommand {
 `
 
 func GetBuilds(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	slug string,
 	state []BuildStates,
 	first int,
 ) (*GetBuildsResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "GetBuilds",
 		Query:  GetBuilds_Operation,
 		Variables: &__GetBuildsInput{
@@ -1844,18 +1844,18 @@ func GetBuilds(
 			First: first,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data GetBuildsResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ GetBuildsResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
 
 // The query or mutation executed by GetCommandJob.
@@ -1872,29 +1872,29 @@ query GetCommandJob ($uuid: ID!) {
 `
 
 func GetCommandJob(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	uuid string,
 ) (*GetCommandJobResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "GetCommandJob",
 		Query:  GetCommandJob_Operation,
 		Variables: &__GetCommandJobInput{
 			Uuid: uuid,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data GetCommandJobResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ GetCommandJobResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
 
 // The query or mutation executed by GetOrganization.
@@ -1907,29 +1907,29 @@ query GetOrganization ($slug: ID!) {
 `
 
 func GetOrganization(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	slug string,
 ) (*GetOrganizationResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "GetOrganization",
 		Query:  GetOrganization_Operation,
 		Variables: &__GetOrganizationInput{
 			Slug: slug,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data GetOrganizationResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ GetOrganizationResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
 
 // The query or mutation executed by GetScheduledJobs.
@@ -1963,12 +1963,12 @@ fragment CommandJob on JobTypeCommand {
 `
 
 func GetScheduledJobs(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	slug string,
 	agentQueryRules []string,
 ) (*GetScheduledJobsResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "GetScheduledJobs",
 		Query:  GetScheduledJobs_Operation,
 		Variables: &__GetScheduledJobsInput{
@@ -1976,18 +1976,18 @@ func GetScheduledJobs(
 			AgentQueryRules: agentQueryRules,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data GetScheduledJobsResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ GetScheduledJobsResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
 
 // The query or mutation executed by GetScheduledJobsClustered.
@@ -2021,13 +2021,13 @@ fragment CommandJob on JobTypeCommand {
 `
 
 func GetScheduledJobsClustered(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	slug string,
 	agentQueryRules []string,
 	cluster string,
 ) (*GetScheduledJobsClusteredResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "GetScheduledJobsClustered",
 		Query:  GetScheduledJobsClustered_Operation,
 		Variables: &__GetScheduledJobsClusteredInput{
@@ -2036,18 +2036,18 @@ func GetScheduledJobsClustered(
 			Cluster:         cluster,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data GetScheduledJobsClusteredResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ GetScheduledJobsClusteredResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
 
 // The query or mutation executed by PipelineDelete.
@@ -2061,29 +2061,29 @@ mutation PipelineDelete ($input: PipelineDeleteInput!) {
 
 // ## The following are used in the cleanup integration "test"
 func PipelineDelete(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	input PipelineDeleteInput,
 ) (*PipelineDeleteResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "PipelineDelete",
 		Query:  PipelineDelete_Operation,
 		Variables: &__PipelineDeleteInput{
 			Input: input,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data PipelineDeleteResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ PipelineDeleteResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }
 
 // The query or mutation executed by SearchPipelines.
@@ -2103,13 +2103,13 @@ query SearchPipelines ($slug: ID!, $search: String!, $first: Int!) {
 `
 
 func SearchPipelines(
-	ctx context.Context,
-	client graphql.Client,
+	ctx_ context.Context,
+	client_ graphql.Client,
 	slug string,
 	search string,
 	first int,
 ) (*SearchPipelinesResponse, error) {
-	req := &graphql.Request{
+	req_ := &graphql.Request{
 		OpName: "SearchPipelines",
 		Query:  SearchPipelines_Operation,
 		Variables: &__SearchPipelinesInput{
@@ -2118,16 +2118,16 @@ func SearchPipelines(
 			First:  first,
 		},
 	}
-	var err error
+	var err_ error
 
-	var data SearchPipelinesResponse
-	resp := &graphql.Response{Data: &data}
+	var data_ SearchPipelinesResponse
+	resp_ := &graphql.Response{Data: &data_}
 
-	err = client.MakeRequest(
-		ctx,
-		req,
-		resp,
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
 	)
 
-	return &data, err
+	return &data_, err_
 }

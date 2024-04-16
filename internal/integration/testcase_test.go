@@ -108,14 +108,24 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config) {
 	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.ShortPipelineName())}
 	cfg.Debug = true
 
-	go controller.Run(runCtx, t.Logger, t.Kubernetes, cfg)
+	go controller.Run(runCtx, t.Logger, t.Kubernetes, &cfg)
 }
 
 func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build {
 	t.Helper()
 
+	authorEmail := os.Getenv("BUILDKITE_BUILD_CREATOR_EMAIL")
+	authorName := os.Getenv("BUILDKITE_BUILD_CREATOR")
+	if authorName == "" {
+		authorName = "Agent Stack K8s Integration Test"
+	}
+
 	// trigger build
 	createBuild, err := api.BuildCreate(ctx, t.GraphQL, api.BuildCreateInput{
+		Author: api.BuildAuthorInput{
+			Email: authorEmail,
+			Name:  authorName,
+		},
 		PipelineID: pipelineID,
 		Commit:     "HEAD",
 		Branch:     branch,
@@ -138,6 +148,8 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 	_, ok := node.(*api.JobJobTypeCommand)
 	require.True(t, ok)
 
+	t.Logf("Triggered build: https://buildkite.com/buildkite-kubernetes-stack/%s/builds/%d", t.PipelineName, build.Number)
+
 	return build.Build
 }
 
@@ -146,7 +158,7 @@ func (t testcase) AssertSuccess(ctx context.Context, build api.Build) {
 	require.Equal(t, api.BuildStatesPassed, t.waitForBuild(ctx, build))
 }
 
-func (t testcase) AssertLogsContain(build api.Build, content string) {
+func (t testcase) FetchLogs(build api.Build) string {
 	t.Helper()
 
 	config, err := buildkite.NewTokenConfig(cfg.BuildkiteToken, false)
@@ -175,7 +187,13 @@ func (t testcase) AssertLogsContain(build api.Build, content string) {
 		assert.NoError(t, err)
 	}
 
-	assert.Contains(t, logs.String(), content)
+	return logs.String()
+}
+
+func (t testcase) AssertLogsContain(build api.Build, content string) {
+	t.Helper()
+
+	assert.Contains(t, t.FetchLogs(build), content)
 }
 
 func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
