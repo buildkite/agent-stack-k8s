@@ -56,6 +56,7 @@ type KubernetesPlugin struct {
 	Metadata          Metadata               `json:"metadata,omitempty"`
 	ExtraVolumeMounts []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
 	Checkout          Checkout               `json:"checkout,omitempty"`
+	MultiCommand      bool                   `json:"multi_command,omitempty"`
 }
 
 type Checkout struct {
@@ -304,10 +305,22 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	}...)
 
 	for i, c := range podSpec.Containers {
-		// If the command is empty, use the command from the step
+		// If the container command is empty, use the command from the step
 		command := w.job.Command
 		if len(c.Command) > 0 {
-			command = strings.Join(append(c.Command, c.Args...), " ")
+			if w.k8sPlugin.MultiCommand {
+				// Interpret c.Command as Buildkite does: multiple commands.
+				// There's no such thing as BK "step args", so space-separate
+				// and add to the final command.
+				command = strings.Join(c.Command, "\n")
+				if len(c.Args) > 0 {
+					command += " " + strings.Join(c.Args, " ")
+				}
+			} else {
+				// Interpret c.Command and c.Args as Kubernetes does:
+				// a single command entrypoint to the container
+				command = strings.Join(append(c.Command, c.Args...), " ")
+			}
 		}
 		c.Command = []string{"/workspace/buildkite-agent"}
 		c.Args = []string{"bootstrap"}
