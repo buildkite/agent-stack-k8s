@@ -115,7 +115,8 @@ func TestJobPluginConversion(t *testing.T) {
 			Containers: []corev1.Container{
 				{
 					Image:   "alpine:latest",
-					Command: []string{"hello world a=b=c"},
+					Command: []string{"hello", "world"},
+					Args:    []string{"a = b = c"},
 					EnvFrom: []corev1.EnvFromSource{
 						{
 							ConfigMapRef: &corev1.ConfigMapEnvSource{
@@ -165,7 +166,7 @@ func TestJobPluginConversion(t *testing.T) {
 
 	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
 	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
-	assert.Equal(t, pluginConfig.PodSpec.Containers[0].Command[0], commandEnv.Value)
+	assert.Equal(t, "hello world 'a = b = c'", commandEnv.Value)
 
 	var envFromNames []string
 	for _, envFrom := range commandContainer.EnvFrom {

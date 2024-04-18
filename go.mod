@@ -6,6 +6,7 @@ toolchain go1.22.0
 
 require (
 	github.com/Khan/genqlient v0.7.0
+	github.com/alessio/shellescape v1.4.2
 	github.com/buildkite/go-buildkite/v3 v3.11.0
 	github.com/buildkite/roko v1.2.0
 	github.com/go-playground/locales v0.14.1

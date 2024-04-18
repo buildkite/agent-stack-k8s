@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alessio/shellescape"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
@@ -307,7 +308,23 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		// If the command is empty, use the command from the step
 		command := w.job.Command
 		if len(c.Command) > 0 {
-			command = strings.Join(append(c.Command, c.Args...), " ")
+			command = strings.Join(c.Command, " ")
+			if len(c.Args) > 0 {
+				// In order to be passed correctly through a single command string,
+				// c.Args needs to be quoted.
+				// Kubernetes has this example:
+				//   command: ["/bin/sh"]
+				//   args: ["-c", "while true; do echo hello; sleep 10;done"]
+				// (https://kubernetes.io/docs/tasks/inject-data-application/define-command-argument-container/#run-a-command-in-a-shell)
+				// which should become
+				//   /bin/sh -c 'while true; do echo hello; sleep 10;done'
+				// and _not_
+				//   /bin/sh -c while true; do echo hello; sleep 10;done
+				// Even though buildkite-agent chucks the resulting
+				// $BUILDKITE_COMMAND through a shell anyway, it won't run
+				// correctly.
+				command += " " + shellescape.QuoteCommand(c.Args)
+			}
 		}
 		c.Command = []string{"/workspace/buildkite-agent"}
 		c.Args = []string{"bootstrap"}
