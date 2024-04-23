@@ -424,8 +424,17 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 					},
 				},
 			},
+			{
+				Name:  "BUILDKITE_HOOKS_PATH",
+				Value: "/workspace/hooks",
+			},
 		},
 	}
+	agentContainer.VolumeMounts = append(agentContainer.VolumeMounts, corev1.VolumeMount{
+		Name:      "hooks-volume",
+		ReadOnly:  true,
+		MountPath: "/workspace/hooks",
+	})
 	agentContainer.Env = append(agentContainer.Env, env...)
 	podSpec.Containers = append(podSpec.Containers, agentContainer)
 
@@ -449,12 +458,23 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 			},
 		},
 	})
-	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
-		Name: "workspace",
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
+	podSpec.Volumes = append(podSpec.Volumes,
+		corev1.Volume{
+			Name: "workspace",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
 		},
-	})
+		corev1.Volume{
+			Name: "hooks-volume",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/etc/buildkite-agent/hooks",
+					Type: ptr.To(corev1.HostPathDirectoryOrCreate),
+				},
+			},
+		},
+	)
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
 
 	// Allow podSpec to be overridden by the agent configuration and the k8s plugin

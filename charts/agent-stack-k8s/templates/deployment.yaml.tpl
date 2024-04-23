@@ -31,9 +31,12 @@ spec:
           - secretRef:
               name: {{ if .Values.agentStackSecret }}{{ .Values.agentStackSecret }}{{ else }}{{ .Release.Name }}-secrets{{ end }}
         volumeMounts:
-          - name: config
+          - name: config-volume
             mountPath: /etc/config.yaml
             subPath: config.yaml
+          - name: config-volume
+            mountPath: /etc/buildkite-agent/hooks/pre-bootstrap
+            subPath: pre-bootstrap
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
         securityContext:
@@ -46,6 +49,6 @@ spec:
           seccompProfile:
             type: RuntimeDefault
       volumes:
-        - name: config
+        - name: config-volume
           configMap:
             name: {{ .Release.Name }}-config
