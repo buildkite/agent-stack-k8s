@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	UUIDLabel          = "buildkite.com/job-uuid"
-	BuildURLAnnotation = "buildkite.com/build-url"
-	JobURLAnnotation   = "buildkite.com/job-url"
-	DefaultNamespace   = "default"
+	UUIDLabel                  = "buildkite.com/job-uuid"
+	BuildURLAnnotation         = "buildkite.com/build-url"
+	JobURLAnnotation           = "buildkite.com/job-url"
+	DefaultNamespace           = "default"
+	DefaultPreScheduleHookPath = "/etc/agent-stack-k8s/pre-schedule"
 )
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
@@ -34,6 +35,7 @@ type Config struct {
 	ClusterUUID            string          `json:"cluster-uuid"             validate:"omitempty"`
 	AdditionalRedactedVars stringSlice     `json:"additional-redacted-vars" validate:"omitempty"`
 	PodSpecPatch           *corev1.PodSpec `json:"pod-spec-patch"           validate:"omitempty"`
+	PreScheduleHookPath    string          `json:"pre-schedule-hook-path"   validate:"omitempty"`
 }
 
 type stringSlice []string
@@ -55,6 +57,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("org", c.Org)
 	enc.AddString("profiler-address", c.ProfilerAddress)
 	enc.AddString("cluster-uuid", c.ClusterUUID)
+	enc.AddString("pre-schedule-hook-path", c.PreScheduleHookPath)
 	if err := enc.AddArray("additional-redacted-vars", c.AdditionalRedactedVars); err != nil {
 		return err
 	}

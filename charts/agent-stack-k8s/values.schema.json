@@ -153,6 +153,12 @@
         }
       ]
     },
+    "pre-schedule": {
+      "type": "string",
+      "default": "",
+      "title": "The pre-schedule hook",
+      "examples": [""]
+    },
     "config": {
       "type": "object",
       "default": {},
@@ -216,6 +222,12 @@
         },
         "pod-spec-patch": {
           "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
+        },
+        "pre-schedule-hook-path": {
+          "type": "string",
+          "default": "/etc/agent-stack-k8s/pre-schedule",
+          "title": "Path to a pre-schedule hook within the controller container",
+          "examples": ["/etc/agent-stack-k8s/pre-schedule"]
         }
       },
       "examples": [

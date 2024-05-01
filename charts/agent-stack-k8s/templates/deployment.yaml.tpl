@@ -26,14 +26,17 @@ spec:
         image: {{ .Values.image }}
         env:
         - name: CONFIG
-          value: /etc/config.yaml
+          value: /etc/agent-stack-k8s/config.yaml
         envFrom:
           - secretRef:
               name: {{ if .Values.agentStackSecret }}{{ .Values.agentStackSecret }}{{ else }}{{ .Release.Name }}-secrets{{ end }}
         volumeMounts:
           - name: config
-            mountPath: /etc/config.yaml
+            mountPath: /etc/agent-stack-k8s/config.yaml
             subPath: config.yaml
+          - name: config
+            mountPath: /etc/agent-stack-k8s/pre-schedule
+            subPath: pre-schedule
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
         securityContext:
@@ -49,3 +52,9 @@ spec:
         - name: config
           configMap:
             name: {{ .Release.Name }}-config
+            items:
+              - key: config.yaml
+                path: config.yaml
+              - key: pre-schedule
+                path: pre-schedule
+                mode: 0755

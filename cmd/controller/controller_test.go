@@ -18,16 +18,17 @@ func ptr[T any](v T) *T {
 
 func TestReadAndParseConfig(t *testing.T) {
 	expected := config.Config{
-		Debug:            true,
-		AgentTokenSecret: "my-kubernetes-secret",
-		BuildkiteToken:   "my-graphql-enabled-token",
-		Image:            "my.registry.dev/buildkite-agent:latest",
-		JobTTL:           300 * time.Second,
-		MaxInFlight:      100,
-		Namespace:        "my-buildkite-ns",
-		Org:              "my-buildkite-org",
-		Tags:             []string{"queue=my-queue", "priority=high"},
-		ClusterUUID:      "beefcafe-abbe-baba-abba-deedcedecade",
+		Debug:               true,
+		AgentTokenSecret:    "my-kubernetes-secret",
+		BuildkiteToken:      "my-graphql-enabled-token",
+		Image:               "my.registry.dev/buildkite-agent:latest",
+		JobTTL:              300 * time.Second,
+		MaxInFlight:         100,
+		Namespace:           "my-buildkite-ns",
+		Org:                 "my-buildkite-org",
+		Tags:                []string{"queue=my-queue", "priority=high"},
+		ClusterUUID:         "beefcafe-abbe-baba-abba-deedcedecade",
+		PreScheduleHookPath: "/etc/agent-stack-k8s/pre-schedule",
 		PodSpecPatch: &corev1.PodSpec{
 			ServiceAccountName:           "buildkite-agent-sa",
 			AutomountServiceAccountToken: ptr(true),

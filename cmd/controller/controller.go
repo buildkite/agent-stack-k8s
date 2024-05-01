@@ -77,6 +77,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"",
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)",
 	)
+	cmd.Flags().String(
+		"pre-schedule-hook-path",
+		config.DefaultPreScheduleHookPath,
+		"Path to a script that is executed prior to scheduling containers",
+	)
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.

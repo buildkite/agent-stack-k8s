@@ -1,0 +1,8 @@
+#!/bin/sh
+echo "This is a pre-schedule hook."
+echo "Here's the job definition:"
+cat "${BUILDKITE_JOB_DEFINITION}"
+echo "Any job containing a particular test string will be rejected."
+EICAR_FP='EICAR-STANDARD-ANTIVIRUS-TEST-FILE'
+grep -q "${EICAR_FP}" "${BUILDKITE_JOB_DEFINITION}" && exit 1
+exit 0

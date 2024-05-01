@@ -105,6 +105,7 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config) {
 	runCtx, cancel := context.WithCancel(ctx)
 	EnsureCleanup(t.T, cancel)
 
+	cfg.PreScheduleHookPath = "fixtures/pre-schedule"
 	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.ShortPipelineName())}
 	cfg.Debug = true
 
