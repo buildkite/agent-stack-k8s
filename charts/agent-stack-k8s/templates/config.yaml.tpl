@@ -9,4 +9,4 @@ data:
     namespace: {{ .Release.Namespace }}
     {{- .Values.config | toYaml | nindent 4 }}
   pre-schedule: |
-    {{- .Values.pre-schedule | nindent 4 }}
+    {{- index .Values "pre-schedule" | nindent 4 }}
