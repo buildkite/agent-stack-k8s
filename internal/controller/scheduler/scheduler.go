@@ -757,5 +757,6 @@ func (w *worker) runPreScheduleHook(ctx context.Context, logger *zap.Logger, job
 	if len(out) > 0 {
 		logger.Info("pre-schedule hook output", zap.ByteString("combinedOutput", out))
 	}
+	logger.Debug("pre-schedule hook succeeded")
 	return nil
 }
