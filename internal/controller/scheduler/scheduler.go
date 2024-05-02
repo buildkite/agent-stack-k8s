@@ -721,9 +721,17 @@ func (w *worker) runPreScheduleHook(ctx context.Context, logger *zap.Logger, job
 		return nil
 	}
 
+	hookInfo, err := os.Stat(hookPath)
+	if err != nil {
+		logger.Debug("failed to stat pre-schedule hook", zap.Error(err))
+		return fmt.Errorf("stat pre-schedule hook: %w", err)
+	}
+
+	logger.Debug("pre-schedule hook file mode", zap.String("mode", strconv.FormatUint(uint64(hookInfo.Mode()), 8)))
+
 	hookContent, err := os.ReadFile(hookPath)
 	if err != nil {
-		logger.Debug("reading pre-schedule hook", zap.String("hookPath", hookPath), zap.Error(err))
+		logger.Debug("failed to read pre-schedule hook", zap.String("hookPath", hookPath), zap.Error(err))
 		return fmt.Errorf("reading pre-schedule hook: %w", err)
 	}
 	logger.Debug("pre-schedule hook content", zap.ByteString("hookContent", hookContent))
