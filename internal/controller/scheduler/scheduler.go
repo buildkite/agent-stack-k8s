@@ -85,7 +85,7 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 
 	jobWrapper := NewJobWrapper(w.logger, job, w.cfg)
 
-	if err := w.runPreScheduleHook(ctx, job); err != nil {
+	if err := w.runPreScheduleHook(ctx, logger, job); err != nil {
 		return w.buildAndCreateFallbackJob(ctx, jobWrapper, err)
 	}
 
@@ -714,8 +714,8 @@ func createAgentTagString(tags []agentTag) string {
 	return sb.String()
 }
 
-func (w *worker) runPreScheduleHook(ctx context.Context, job *api.CommandJob) error {
-	w.logger.Debug("runPreScheduleHook")
+func (w *worker) runPreScheduleHook(ctx context.Context, logger *zap.Logger, job *api.CommandJob) error {
+	logger.Debug("runPreScheduleHook")
 	hookPath := w.cfg.PreScheduleHookPath
 	if hookPath == "" {
 		w.logger.Debug("no pre-schedule hook configured, skipping")
@@ -728,7 +728,7 @@ func (w *worker) runPreScheduleHook(ctx context.Context, job *api.CommandJob) er
 	}
 	if len(bytes.TrimSpace(hookContent)) == 0 {
 		// The hook is empty - skip running it.
-		w.logger.Debug("pre-schedule hook is empty, skipping")
+		logger.Debug("pre-schedule hook is empty, skipping")
 		return nil
 	}
 
@@ -750,7 +750,12 @@ func (w *worker) runPreScheduleHook(ctx context.Context, job *api.CommandJob) er
 	// Execute the hook directly.
 	cmd := exec.CommandContext(ctx, hookPath, jobOut.Name())
 	cmd.Env = append(os.Environ(), "BUILDKITE_JOB_DEFINITION="+jobOut.Name())
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("running pre-schedule hook: %w", err)
+	}
+	if len(out) > 0 {
+		logger.Info("pre-schedule hook output", zap.ByteString("combinedOutput", out))
+	}
+	return nil
 }
