@@ -718,7 +718,7 @@ func (w *worker) runPreScheduleHook(ctx context.Context, logger *zap.Logger, job
 	logger.Debug("runPreScheduleHook")
 	hookPath := w.cfg.PreScheduleHookPath
 	if hookPath == "" {
-		w.logger.Debug("no pre-schedule hook configured, skipping")
+		logger.Debug("no pre-schedule hook configured, skipping")
 		return nil
 	}
 
@@ -726,6 +726,8 @@ func (w *worker) runPreScheduleHook(ctx context.Context, logger *zap.Logger, job
 	if err != nil {
 		return fmt.Errorf("reading pre-schedule hook: %w", err)
 	}
+	logger.Debug("pre-schedule hook content", zap.ByteString("hookContent", hookContent))
+
 	if len(bytes.TrimSpace(hookContent)) == 0 {
 		// The hook is empty - skip running it.
 		logger.Debug("pre-schedule hook is empty, skipping")
