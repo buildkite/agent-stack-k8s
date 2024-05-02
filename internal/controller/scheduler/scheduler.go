@@ -86,10 +86,12 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 	jobWrapper := NewJobWrapper(w.logger, job, w.cfg)
 
 	if err := w.runPreScheduleHook(ctx, logger, job); err != nil {
+		logger.Warn("Pre-schedule hook failed, creating failure job instead", zap.Error(err))
 		return w.buildAndCreateFallbackJob(ctx, jobWrapper, err)
 	}
 
 	if err := jobWrapper.ParsePlugins(); err != nil {
+		logger.Warn("Plugin parsing failed, creating failure job instead", zap.Error(err))
 		return w.buildAndCreateFallbackJob(ctx, jobWrapper, err)
 	}
 
@@ -101,6 +103,7 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 
 	err = w.createJob(ctx, kjob)
 	if kerrors.IsInvalid(err) {
+		logger.Warn("Job creation failed, creating failure job instead", zap.Error(err))
 		return w.buildAndCreateFallbackJob(ctx, jobWrapper, err)
 	}
 	return err

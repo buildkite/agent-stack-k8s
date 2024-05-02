@@ -31,10 +31,12 @@ spec:
           - secretRef:
               name: {{ if .Values.agentStackSecret }}{{ .Values.agentStackSecret }}{{ else }}{{ .Release.Name }}-secrets{{ end }}
         volumeMounts:
-          - name: config
+          - name: tmp-volume
+            mountPath: /tmp
+          - name: config-volume
             mountPath: /etc/agent-stack-k8s/config.yaml
             subPath: config.yaml
-          - name: config
+          - name: config-volume
             mountPath: /etc/agent-stack-k8s/pre-schedule
             subPath: pre-schedule
         resources:
@@ -49,7 +51,11 @@ spec:
           seccompProfile:
             type: RuntimeDefault
       volumes:
-        - name: config
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: 100Mi
+        - name: config-volume
           configMap:
             name: {{ .Release.Name }}-config
             items:
