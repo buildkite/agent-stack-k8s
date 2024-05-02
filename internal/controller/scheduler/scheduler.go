@@ -720,6 +720,7 @@ func (w *worker) runPreScheduleHook(ctx context.Context, logger *zap.Logger, job
 
 	hookContent, err := os.ReadFile(hookPath)
 	if err != nil {
+		logger.Debug("reading pre-schedule hook", zap.String("hookPath", hookPath))
 		return fmt.Errorf("reading pre-schedule hook: %w", err)
 	}
 	logger.Debug("pre-schedule hook content", zap.ByteString("hookContent", hookContent))
@@ -731,28 +732,32 @@ func (w *worker) runPreScheduleHook(ctx context.Context, logger *zap.Logger, job
 	}
 
 	// Write the job definition to a file, so that the hook can inspect it.
-	jobOut, err := os.CreateTemp("", "job")
+	jobDef, err := os.CreateTemp("", "job."+job.Uuid)
 	if err != nil {
+		logger.Debug("creating temp file")
 		return fmt.Errorf("creating temp job definition file: %w", err)
 	}
-	logger.Debug("created temp file", zap.String("path", jobOut.Name()))
-	defer os.Remove(jobOut.Name())
-	defer jobOut.Close()
+	logger.Debug("created temp file", zap.String("", jobDef.Name()))
+	defer os.Remove(jobDef.Name())
+	defer jobDef.Close()
 
-	if err := json.NewEncoder(jobOut).Encode(job); err != nil {
+	if err := json.NewEncoder(jobDef).Encode(job); err != nil {
+		logger.Debug("writing temp file", zap.String("jobDef", jobDef.Name()))
 		return fmt.Errorf("writing temp job definition file: %w", err)
 	}
-	if err := jobOut.Close(); err != nil {
+	if err := jobDef.Close(); err != nil {
+		logger.Debug("closing temp file", zap.String("jobDef", jobDef.Name()))
 		return fmt.Errorf("closing temp job definition file: %w", err)
 	}
-	logger.Debug("wrote temp file successfully", zap.String("path", jobOut.Name()))
+	logger.Debug("wrote temp file successfully", zap.String("jobDef", jobDef.Name()))
 
 	// Execute the hook directly.
-	cmd := exec.CommandContext(ctx, hookPath, jobOut.Name())
-	cmd.Env = append(os.Environ(), "BUILDKITE_JOB_DEFINITION="+jobOut.Name())
+	cmd := exec.CommandContext(ctx, hookPath, jobDef.Name())
+	cmd.Env = append(os.Environ(), "BUILDKITE_JOB_DEFINITION="+jobDef.Name())
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("running pre-schedule hook: %w", err)
+		logger.Debug("executing pre-schedule hook", zap.String("hookPath", hookPath), zap.String("jobDef", jobDef.Name()))
+		return fmt.Errorf("executing pre-schedule hook: %w", err)
 	}
 	if len(out) > 0 {
 		logger.Info("pre-schedule hook output", zap.ByteString("combinedOutput", out))
