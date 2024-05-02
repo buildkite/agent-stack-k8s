@@ -737,6 +737,7 @@ func (w *worker) runPreScheduleHook(ctx context.Context, logger *zap.Logger, job
 	if err != nil {
 		return fmt.Errorf("creating temp job definition file: %w", err)
 	}
+	logger.Debug("created temp file", zap.String("path", jobOut.Name()))
 	defer os.Remove(jobOut.Name())
 	defer jobOut.Close()
 
@@ -746,6 +747,7 @@ func (w *worker) runPreScheduleHook(ctx context.Context, logger *zap.Logger, job
 	if err := jobOut.Close(); err != nil {
 		return fmt.Errorf("closing temp job definition file: %w", err)
 	}
+	logger.Debug("wrote temp file successfully", zap.String("path", jobOut.Name()))
 
 	// Execute the hook directly.
 	cmd := exec.CommandContext(ctx, hookPath, jobOut.Name())
