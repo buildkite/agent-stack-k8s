@@ -101,7 +101,7 @@ The `config` key contains configuration passed directly to the binary, and so su
 1. Make sure you're on the main branch!
 1. Create a tag
 ```bash
-git -sm v0.x.x v0.x.x
+git tag -sm v0.x.x v0.x.x
 ```
 1. Push your tag
 ```bash
