@@ -33,6 +33,9 @@ echo "Version: $version"
 echo "Tag: $tag"
 echo "Previous tag: $previous_tag"
 
+agent_version="$(buildkite-agent meta-data get agent-version)"
+echo "Agent version: ${agent_version}"
+
 echo --- :docker: Logging into ghcr.io
 crane auth login ghcr.io \
   --username "$REGISTRY_USERNAME" \
@@ -41,12 +44,11 @@ crane auth login ghcr.io \
 echo --- :docker: Tagging latest images
 crane tag "ghcr.io/buildkite/helm/agent-stack-k8s:${version}" latest
 crane tag "ghcr.io/buildkite/agent-stack-k8s/controller:${version}" latest
-crane tag "ghcr.io/buildkite/agent-stack-k8s/agent:${version}" latest
 
 echo --- :golang: Creating draft release with goreleaser
 chart_digest=$(crane digest "ghcr.io/buildkite/helm/agent-stack-k8s:$version")
 controller_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/controller:$version")
-agent_digest=$(crane digest "ghcr.io/buildkite/agent-stack-k8s/agent:$version")
+agent_digest="$(crane digest "ghcr.io/buildkite/agent:${agent_version}")"
 
 # TODO: remove once world write issues is fixed
 git stash -uk
@@ -63,7 +65,7 @@ Image: \`ghcr.io/buildkite/agent-stack-k8s/controller:${version}\`
 Digest: \`$controller_digest\`
 
 ### Agent
-Image: \`ghcr.io/buildkite/agent-stack-k8s/agent:${version}\`
+Image: \`ghcr.io/buildkite/agent:${agent_version}\`
 Digest: \`$agent_digest\`
 "
 
