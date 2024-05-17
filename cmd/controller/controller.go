@@ -48,7 +48,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 	cmd.Flags().String(
 		"image",
 		config.DefaultAgentImage,
-		"The image to use for the Buildkite agent",
+		"The image to use for the controller",
 	)
 	cmd.Flags().StringSlice(
 		"tags",

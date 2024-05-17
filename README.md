@@ -82,7 +82,7 @@ Flags:
   -f, --config string               config file path
       --debug                       debug logs
   -h, --help                        help for agent-stack-k8s
-      --image string                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent-stack-k8s/agent:latest")
+      --image string                The image to use for the controller (default "ghcr.io/buildkite/agent-stack-k8s/agent:latest")
       --job-ttl duration            time to retain kubernetes jobs after completion (default 10m0s)
       --max-in-flight int           max jobs in flight, 0 means no max (default 25)
       --namespace string            kubernetes namespace to create resources in (default "default")
