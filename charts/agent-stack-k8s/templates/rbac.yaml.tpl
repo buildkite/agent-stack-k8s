@@ -2,6 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   {{- include "agent-stack-k8s.serviceAccountMetadata" . | nindent 2 }}
+  namespace: {{ .Release.Namespace }}
 rules:
   - apiGroups:
       - batch
