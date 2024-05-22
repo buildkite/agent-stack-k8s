@@ -278,10 +278,6 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 			Value: "buildkite",
 		},
 		{
-			Name:  "BUILDKITE_PLUGINS_PATH",
-			Value: "/tmp",
-		},
-		{
 			Name:  clicommand.RedactedVars.EnvVar,
 			Value: strings.Join(redactedVars, ","),
 		},
