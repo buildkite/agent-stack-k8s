@@ -368,6 +368,135 @@ func TestBuildSkipCheckout(t *testing.T) {
 	}
 }
 
+func TestBuild_KubernetesStyleCommand(t *testing.T) {
+	t.Parallel()
+
+	pluginsYAML := `- github.com/buildkite-plugins/kubernetes-buildkite-plugin:
+    podSpec:
+      containers:
+        - name: echo
+          image: 'alpine:latest'
+          command:
+            - echo
+          args:
+            - "'Hello'"
+        - name: cowsay
+          image: 'debian:latest'
+          command:
+            - cowsay
+          args:
+            - "'Hello'"
+`
+
+	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
+	require.NoError(t, err)
+
+	wrapper := scheduler.NewJobWrapper(
+		zaptest.NewLogger(t),
+		&api.CommandJob{
+			Uuid:            "abc",
+			Command:         "",
+			Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+			AgentQueryRules: []string{"queue=kubernetes"},
+		},
+		scheduler.Config{
+			Namespace:  "buildkite",
+			Image:      "buildkite/agent:latest",
+			AgentToken: "bkcq_1234567890",
+		},
+	).ParsePlugins()
+
+	job, err := wrapper.Build(false)
+	require.NoError(t, err)
+
+	require.Len(t, job.Spec.Template.Spec.Containers, 4)
+
+	echo := findContainer(t, job.Spec.Template.Spec.Containers, "echo")
+	if got, want := echo.Image, "alpine:latest"; got != want {
+		t.Errorf("echo.Image = %q, want %q", got, want)
+	}
+	echoCmd := findEnv(t, echo.Env, "BUILDKITE_COMMAND")
+	if got, want := echoCmd.Value, "echo 'Hello'"; got != want {
+		t.Errorf("echo BUILDKITE_COMMAND = %q, want %q", got, want)
+	}
+
+	cowsay := findContainer(t, job.Spec.Template.Spec.Containers, "cowsay")
+	if got, want := cowsay.Image, "debian:latest"; got != want {
+		t.Errorf("cowsay.Image = %q, want %q", got, want)
+	}
+	cowsayCmd := findEnv(t, cowsay.Env, "BUILDKITE_COMMAND")
+	if got, want := cowsayCmd.Value, "cowsay 'Hello'"; got != want {
+		t.Errorf("cowsay BUILDKITE_COMMAND = %q, want %q", got, want)
+	}
+}
+
+func TestBuild_BuildkiteStyleMultiCommand(t *testing.T) {
+	t.Parallel()
+
+	pluginsYAML := `- github.com/buildkite-plugins/kubernetes-buildkite-plugin:
+    multi_command: true
+    podSpec:
+      containers:
+        - name: echo
+          image: 'alpine:latest'
+          command:
+            - echo 'Hello'
+            - echo 'Goodbye'
+          args:
+            - "'arg1'"
+            - "'arg2'"
+        - name: cowsay
+          image: 'debian:latest'
+          command:
+            - cowsay 'Hello'
+            - cowsay 'Goodbye'
+          args:
+            - "'arg1'"
+            - "'arg2'"
+`
+
+	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
+	require.NoError(t, err)
+
+	wrapper := scheduler.NewJobWrapper(
+		zaptest.NewLogger(t),
+		&api.CommandJob{
+			Uuid:            "abc",
+			Command:         "",
+			Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+			AgentQueryRules: []string{"queue=kubernetes"},
+		},
+		scheduler.Config{
+			Namespace:  "buildkite",
+			Image:      "buildkite/agent:latest",
+			AgentToken: "bkcq_1234567890",
+		},
+	).ParsePlugins()
+
+	job, err := wrapper.Build(false)
+	require.NoError(t, err)
+
+	require.Len(t, job.Spec.Template.Spec.Containers, 4)
+
+	echo := findContainer(t, job.Spec.Template.Spec.Containers, "echo")
+	if got, want := echo.Image, "alpine:latest"; got != want {
+		t.Errorf("echo.Image = %q, want %q", got, want)
+	}
+	echoCmd := findEnv(t, echo.Env, "BUILDKITE_COMMAND")
+	if got, want := echoCmd.Value, "echo 'Hello'\necho 'Goodbye' 'arg1' 'arg2'"; got != want {
+		t.Errorf("echo BUILDKITE_COMMAND = %q, want %q", got, want)
+	}
+
+	cowsay := findContainer(t, job.Spec.Template.Spec.Containers, "cowsay")
+	if got, want := cowsay.Image, "debian:latest"; got != want {
+		t.Errorf("cowsay.Image = %q, want %q", got, want)
+	}
+	cowsayCmd := findEnv(t, cowsay.Env, "BUILDKITE_COMMAND")
+	if got, want := cowsayCmd.Value, "cowsay 'Hello'\ncowsay 'Goodbye' 'arg1' 'arg2'"; got != want {
+		t.Errorf("cowsay BUILDKITE_COMMAND = %q, want %q", got, want)
+	}
+}
+
 func TestFailureJobs(t *testing.T) {
 	t.Parallel()
 	pluginsJSON, err := json.Marshal([]map[string]any{
