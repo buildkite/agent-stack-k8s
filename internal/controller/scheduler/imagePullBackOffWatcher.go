@@ -15,12 +15,14 @@ import (
 	_ "k8s.io/client-go/tools/cache"
 )
 
-const gracePeriodSeconds = 30
-
 type imagePullBackOffWatcher struct {
 	logger *zap.Logger
 	k8s    kubernetes.Interface
 	gql    graphql.Client
+
+	// The imagePullBackOffWatcher waits at least this duration after pod
+	// creation before it cancels the job.
+	startupGracePeriod time.Duration
 }
 
 // NewImagePullBackOffWatcher creates an informer that will use the Buildkite
@@ -32,9 +34,10 @@ func NewImagePullBackOffWatcher(
 	cfg *config.Config,
 ) *imagePullBackOffWatcher {
 	return &imagePullBackOffWatcher{
-		logger: logger,
-		k8s:    k8s,
-		gql:    api.NewClient(cfg.BuildkiteToken),
+		logger:             logger,
+		k8s:                k8s,
+		gql:                api.NewClient(cfg.BuildkiteToken),
+		startupGracePeriod: cfg.StartupGracePeriod,
 	}
 }
 
@@ -79,9 +82,8 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	log := w.logger.With(zap.String("namespace", pod.Namespace), zap.String("podName", pod.Name))
 	log.Debug("Checking pod for ImagePullBackOff")
 
-	now := time.Now()
 	startedAt := pod.GetCreationTimestamp().Time
-	if now.Sub(startedAt) < gracePeriodSeconds*time.Second {
+	if time.Since(startedAt) < w.startupGracePeriod {
 		return
 	}
 

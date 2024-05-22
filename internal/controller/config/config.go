@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	UUIDLabel          = "buildkite.com/job-uuid"
-	BuildURLAnnotation = "buildkite.com/build-url"
-	JobURLAnnotation   = "buildkite.com/job-url"
-	DefaultNamespace   = "default"
+	UUIDLabel                 = "buildkite.com/job-uuid"
+	BuildURLAnnotation        = "buildkite.com/build-url"
+	JobURLAnnotation          = "buildkite.com/job-url"
+	DefaultNamespace          = "default"
+	DefaultStartupGracePeriod = 30 * time.Second
 )
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
@@ -34,6 +35,7 @@ type Config struct {
 	ClusterUUID            string          `json:"cluster-uuid"             validate:"omitempty"`
 	AdditionalRedactedVars stringSlice     `json:"additional-redacted-vars" validate:"omitempty"`
 	PodSpecPatch           *corev1.PodSpec `json:"pod-spec-patch"           validate:"omitempty"`
+	StartupGracePeriod     time.Duration   `json:"startup-grace-period" validate:"omitempty"`
 }
 
 type stringSlice []string
@@ -61,5 +63,6 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	if err := enc.AddReflected("pod-spec-patch", c.PodSpecPatch); err != nil {
 		return err
 	}
+	enc.AddDuration("startup-grace-period", c.StartupGracePeriod)
 	return enc.AddArray("tags", c.Tags)
 }

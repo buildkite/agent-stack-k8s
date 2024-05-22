@@ -77,6 +77,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"",
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)",
 	)
+	cmd.Flags().Duration(
+		"startup-grace-period",
+		config.DefaultStartupGracePeriod,
+		"Duration after starting a pod that the controller will wait before considering cancelling a job (e.g. when the podSpec specifies container images that cannot be pulled)",
+	)
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.
