@@ -158,7 +158,9 @@ func TestJobPluginConversion(t *testing.T) {
 		input,
 		scheduler.Config{AgentToken: "token-secret"},
 	)
-	result, err := wrapper.ParsePlugins().Build(false)
+	err = wrapper.ParsePlugins()
+	require.NoError(t, err)
+	result, err := wrapper.Build(false)
 	require.NoError(t, err)
 
 	assert.Len(t, result.Spec.Template.Spec.Containers, 3)
@@ -217,7 +219,9 @@ func TestTagEnv(t *testing.T) {
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	wrapper := scheduler.NewJobWrapper(logger, input, scheduler.Config{AgentToken: "token-secret"})
-	result, err := wrapper.ParsePlugins().Build(false)
+	err = wrapper.ParsePlugins()
+	require.NoError(t, err)
+	result, err := wrapper.Build(false)
 	require.NoError(t, err)
 
 	container := findContainer(t, result.Spec.Template.Spec.Containers, "agent")
@@ -247,7 +251,9 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 		AgentQueryRules: []string{},
 	}
 	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{})
-	result, err := wrapper.ParsePlugins().Build(false)
+	err := wrapper.ParsePlugins()
+	require.NoError(t, err)
+	result, err := wrapper.Build(false)
 	require.NoError(t, err)
 
 	require.Len(t, result.Spec.Template.Spec.Containers, 3)
@@ -300,8 +306,9 @@ func TestBuild(t *testing.T) {
 				},
 			},
 		},
-	).ParsePlugins()
-
+	)
+	err = wrapper.ParsePlugins()
+	require.NoError(t, err)
 	job, err := wrapper.Build(false)
 	require.NoError(t, err)
 
@@ -349,8 +356,9 @@ func TestBuildSkipCheckout(t *testing.T) {
 			Image:      "buildkite/agent:latest",
 			AgentToken: "bkcq_1234567890",
 		},
-	).ParsePlugins()
-
+	)
+	err = wrapper.ParsePlugins()
+	require.NoError(t, err)
 	job, err := wrapper.Build(false)
 	require.NoError(t, err)
 
@@ -383,7 +391,7 @@ func TestFailureJobs(t *testing.T) {
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{})
-	_, err = wrapper.ParsePlugins().Build(false)
+	err = wrapper.ParsePlugins()
 	require.Error(t, err)
 
 	result, err := wrapper.BuildFailureJob(err)

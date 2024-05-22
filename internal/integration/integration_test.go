@@ -221,6 +221,23 @@ func TestPluginCloneFailsTests(t *testing.T) {
 	tc.AssertFail(ctx, build)
 }
 
+func TestPreScheduleHookRejectsJob(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "pre-schedule-reject.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+
+	ctx := context.Background()
+
+	pipelineID, cleanup := tc.CreatePipeline(ctx)
+	t.Cleanup(cleanup)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+}
+
 func TestMaxInFlightLimited(t *testing.T) {
 	tc := testcase{
 		T:       t,

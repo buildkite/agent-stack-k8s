@@ -55,6 +55,7 @@ func Run(
 		JobTTL:                 cfg.JobTTL,
 		AdditionalRedactedVars: cfg.AdditionalRedactedVars,
 		PodSpecPatch:           cfg.PodSpecPatch,
+		PreScheduleHookPath:    cfg.PreScheduleHookPath,
 	})
 	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)
 

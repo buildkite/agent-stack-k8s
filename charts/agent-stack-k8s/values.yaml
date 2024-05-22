@@ -17,3 +17,5 @@ labels: {}
 secretsMetadata: {}
 
 serviceAccountMetadata: {}
+
+pre-schedule: ""
