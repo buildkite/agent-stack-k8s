@@ -34,6 +34,7 @@ type Config struct {
 	ClusterUUID            string          `json:"cluster-uuid"             validate:"omitempty"`
 	AdditionalRedactedVars stringSlice     `json:"additional-redacted-vars" validate:"omitempty"`
 	PodSpecPatch           *corev1.PodSpec `json:"pod-spec-patch"           validate:"omitempty"`
+	SSHCredentialsSecret   string          `mapstructure:"ssh-credentials-secret" validate:"omitempty"`
 }
 
 type stringSlice []string
@@ -47,6 +48,7 @@ func (s stringSlice) MarshalLogArray(enc zapcore.ArrayEncoder) error {
 
 func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("agent-token-secret", c.AgentTokenSecret)
+	enc.AddString("ssh-credentials-secret", c.SSHCredentialsSecret)
 	enc.AddBool("debug", c.Debug)
 	enc.AddString("image", c.Image)
 	enc.AddDuration("job-ttl", c.JobTTL)

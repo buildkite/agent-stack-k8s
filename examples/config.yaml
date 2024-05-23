@@ -11,8 +11,14 @@ org: my-buildkite-org
 cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 
 tags:
-- queue=my-queue
-- priority=high
+  - queue=my-queue
+  - priority=high
+
+# ssh-credentials-secret are the secret with the ssh credentials
+# configured on the agent with docker-ssh-config
+# @see https://github.com/buildkite/docker-ssh-env-config
+ssh-credentials-secret: buildkite-ssh-github-creds
+
 
 # This will be applied to the job's podSpec as a strategic merge patch
 # See https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch
