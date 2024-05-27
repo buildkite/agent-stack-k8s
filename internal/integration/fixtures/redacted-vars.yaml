@@ -8,13 +8,17 @@ steps:
       # variables and values can usually be browsed from the Buildkite UI.
       ELEVEN_HERBS_AND_SPICES: white pepper and 10 others
     plugins:
+      - improbable-eng/metahook#v0.4.1:
+          pre-checkout: 'echo "Redaction should work in the checkout container: $${ELEVEN_HERBS_AND_SPICES}"'
       - kubernetes:
           podSpec:
             containers:
-              - image: alpine:latest
+              # A container with Bash is needed to run the metahook hooks
+              # (that are empty, because only pre--checkout is set).
+              - image: bash:latest
                 command:
                 - echo
                 args:
                 - >-
-                  This should be redacted:
+                  Redaction should work in the command container:
                   $${ELEVEN_HERBS_AND_SPICES}

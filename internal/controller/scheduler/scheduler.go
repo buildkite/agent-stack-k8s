@@ -248,7 +248,12 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		}
 	}
 
-	redactedVars := append(w.cfg.AdditionalRedactedVars, clicommand.RedactedVars.Value.Value()...)
+	redactedVars := append([]string(nil), clicommand.RedactedVars.Value.Value()...)
+	redactedVars = append(redactedVars, w.cfg.AdditionalRedactedVars...)
+	env = append(env, corev1.EnvVar{
+		Name:  clicommand.RedactedVars.EnvVar,
+		Value: strings.Join(redactedVars, ","),
+	})
 
 	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
 	volumeMounts = append(volumeMounts, w.k8sPlugin.ExtraVolumeMounts...)
@@ -276,10 +281,6 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		{
 			Name:  "BUILDKITE_AGENT_NAME",
 			Value: "buildkite",
-		},
-		{
-			Name:  clicommand.RedactedVars.EnvVar,
-			Value: strings.Join(redactedVars, ","),
 		},
 		{
 			Name:  "BUILDKITE_SHELL",
