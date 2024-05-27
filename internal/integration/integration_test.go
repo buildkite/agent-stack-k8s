@@ -143,7 +143,8 @@ func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 	logs := tc.FetchLogs(build)
-	assert.Contains(t, logs, "This should be redacted:")
+	assert.Contains(t, logs, "Redaction should work in the checkout container")
+	assert.Contains(t, logs, "Redaction should work in the command container:")
 	assert.NotContains(t, logs, "white pepper and 10 others")
 }
 
