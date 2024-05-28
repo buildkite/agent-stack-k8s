@@ -22,7 +22,7 @@ type imagePullBackOffWatcher struct {
 
 	// The imagePullBackOffWatcher waits at least this duration after pod
 	// creation before it cancels the job.
-	startupGracePeriod time.Duration
+	gracePeriod time.Duration
 }
 
 // NewImagePullBackOffWatcher creates an informer that will use the Buildkite
@@ -34,10 +34,10 @@ func NewImagePullBackOffWatcher(
 	cfg *config.Config,
 ) *imagePullBackOffWatcher {
 	return &imagePullBackOffWatcher{
-		logger:             logger,
-		k8s:                k8s,
-		gql:                api.NewClient(cfg.BuildkiteToken),
-		startupGracePeriod: cfg.StartupGracePeriod,
+		logger:      logger,
+		k8s:         k8s,
+		gql:         api.NewClient(cfg.BuildkiteToken),
+		gracePeriod: cfg.ImagePullBackOffGradePeriod,
 	}
 }
 
@@ -87,7 +87,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 		return
 	}
 	startedAt := pod.Status.StartTime.Time
-	if startedAt.IsZero() || time.Since(startedAt) < w.startupGracePeriod {
+	if startedAt.IsZero() || time.Since(startedAt) < w.gracePeriod {
 		// Not started yet, or started recently
 		return
 	}
