@@ -82,8 +82,13 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	log := w.logger.With(zap.String("namespace", pod.Namespace), zap.String("podName", pod.Name))
 	log.Debug("Checking pod for ImagePullBackOff")
 
-	startedAt := pod.GetCreationTimestamp().Time
-	if time.Since(startedAt) < w.startupGracePeriod {
+	if pod.Status.StartTime == nil {
+		// Status could be unpopulated, or it hasn't started yet.
+		return
+	}
+	startedAt := pod.Status.StartTime.Time
+	if startedAt.IsZero() || time.Since(startedAt) < w.startupGracePeriod {
+		// Not started yet, or started recently
 		return
 	}
 
