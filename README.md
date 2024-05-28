@@ -67,9 +67,13 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --set graphqlToken=<your Buildkite GraphQL-enabled API token>
 ```
 
-Note: If this agent-stack-k8s is being created for running builds of pipelines that belongs to
-a [Buildkite cluster](https://buildkite.com/docs/clusters/overview) then along with passing agentToken
-belonging to this Buildkite cluster need to set cluster uuid using `--set cluster-uuid=<your Buildkite cluster uuid>`
+If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
+```yaml
+# values.yaml
+config:
+  cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
+```
+The cluster's UUID may be obtained by navigating to the [clusters page](https://buildkite.com/organizations/-/clusters), clicking on the relevant cluster and then clicking on "Settings". It will be in a section titled "GraphQL API Integration".
 
 We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
 which means you'll need Helm version 3.8.0 or newer.
@@ -329,15 +333,6 @@ steps:
 - name: Hello from a container with default resources
   command: echo Hello World!
 ```
-
-### Buildkite Clusters
-If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
-```yaml
-# values.yaml
-config:
-  cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
-```
-The cluster's UUID may be obtained by navigating to the [clusters page](https://buildkite.com/organizations/-/clusters), clicking on the relevant cluster and then clicking on "Settings". It will be in a section titled "GraphQL API Integration".
 
 ### Sidecars
 
