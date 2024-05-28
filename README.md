@@ -143,7 +143,8 @@ helm template oci://ghcr.io/buildkite/helm/agent-stack-k8s -f my-values.yaml
 
 Available versions and their digests can be found on [the releases page](https://github.com/buildkite/agent-stack-k8s/releases).
 
-### Sample Buildkite Pipelines
+## Sample Buildkite Pipelines
+
 For simple commands, you merely have to target the queue you configured agent-stack-k8s with.
 ```yaml
 steps:
@@ -195,6 +196,49 @@ steps:
 If you have a multi-line `command`, specifying the `args` as well could lead to confusion, so we recommend just using `command`.
 
 More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
+
+### Cloning repos via SSH
+
+To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
+Place this object under a `gitEnvFrom` key in the `kubernetes` plugin (see the example below).
+
+You should create a secret in your namespace with an environment variable name that's recognised by [`docker-ssh-env-config`](https://github.com/buildkite/docker-ssh-env-config).
+A script from this project is included in the default entrypoint of the default [`buildkite/agent`](https://hub.docker.com/r/buildkite/agent) Docker image.
+It will process the value of the secret and write out a private key to the `~/.ssh` directory of the checkout container.
+
+However this key will not be available in your job containers.
+If you need to use git ssh credentials in your job containers, we recommend one of the following options:
+1. Use a container image that's based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
+2. Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entrypoint for your job container image
+
+#### Example secret creation for ssh cloning
+You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
+
+Supposing a SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
+```bash
+kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_DSA_KEY="$HOME/.ssh/id_ecdsa"
+```
+
+Then the following pipeline will be able to clone a git repository that requires ssh credentials.
+```yaml
+steps:
+  - label: build image
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          gitEnvFrom:
+            - secretRef:
+                name: my-git-ssh-credentials # <----
+          podSpec:
+            containers:
+              - image: gradle:latest
+                command: [gradle]
+                args:
+                  - jib
+                  - --image=ttl.sh/example:1h
+```
+
 
 ### Pod Spec Patch
 Rather than defining the entire Pod Spec in a step, there is the option to define a [strategic merge patch](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/) in the controller.
@@ -390,48 +434,6 @@ configuration.
 This currently can't prevent every sort of error, you might still have a reference to a Kubernetes volume that doesn't exist, or other errors of that sort, but it will validate that the fields match the API spec we expect.
 
 Our JSON schema can also be used with editors that support JSON Schema by configuring your editor to validate against the schema found [here](./cmd/linter/schema.json).
-
-### Cloning repos via SSH
-
-To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
-Place this object under a `gitEnvFrom` key in the `kubernetes` plugin (see the example below).
-
-You should create a secret in your namespace with an environment variable name that's recognised by [`docker-ssh-env-config`](https://github.com/buildkite/docker-ssh-env-config).
-A script from this project is included in the default entrypoint of the default [`buildkite/agent`](https://hub.docker.com/r/buildkite/agent) Docker image.
-It will process the value of the secret and write out a private key to the `~/.ssh` directory of the checkout container.
-
-However this key will not be available in your job containers.
-If you need to use git ssh credentials in your job containers, we recommend one of the following options:
-1. Use a container image that's based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
-2. Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entrypoint for your job container image
-
-#### Example secret creation for ssh cloning
-You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
-
-Supposing a SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
-```bash
-kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_DSA_KEY="$HOME/.ssh/id_ecdsa"
-```
-
-Then the following pipeline will be able to clone a git repository that requires ssh credentials.
-```yaml
-steps:
-  - label: build image
-    agents:
-      queue: kubernetes
-    plugins:
-      - kubernetes:
-          gitEnvFrom:
-            - secretRef:
-                name: my-git-ssh-credentials # <----
-          podSpec:
-            containers:
-              - image: gradle:latest
-                command: [gradle]
-                args:
-                  - jib
-                  - --image=ttl.sh/example:1h
-```
 
 ## Debugging
 Use the `log-collector` script in the `utils` folder to collect logs for agent-stack-k8s.
