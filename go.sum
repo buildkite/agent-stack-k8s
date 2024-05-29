@@ -62,8 +62,8 @@ github.com/bradleyjkemp/cupaloy/v2 v2.6.0 h1:knToPYa2xtfg42U3I6punFEjaGFKWQRXJwj
 github.com/bradleyjkemp/cupaloy/v2 v2.6.0/go.mod h1:bm7JXdkRd4BHJk9HpwqAI8BoAY1lps46Enkdqw6aRX0=
 github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf h1:WCnJxXZXx9c8gwz598wvdqmu+YTzB9wx2X1OovK3Le8=
 github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20220812150832-b6b31c6eeeaf/go.mod h1:CeKhh8xSs3WZAc50xABMxu+FlfAAd5PNumo7NfOv7EE=
-github.com/buildkite/agent/v3 v3.73.0 h1:6Syfbryj0PmksiJYMhXyP0G6qX8TDbSEno95w7Zm26c=
-github.com/buildkite/agent/v3 v3.73.0/go.mod h1:iOf0tiNfNwpkDbmiKXBD9EkInxJE8sTk/ofowFK9KJY=
+github.com/buildkite/agent/v3 v3.73.1 h1:Vvn7NijsVEV5QRW+JNK2uXeHdS23PJeJ+vWkpAf73kI=
+github.com/buildkite/agent/v3 v3.73.1/go.mod h1:m0v8jcfDW5SYPaWBdMM4mJUDek/zaAQxuxnWtS+KT84=
 github.com/buildkite/bintest/v3 v3.2.0 h1:1GqUILGGni5UViGPH/PbSq0MxB9gzY3J/P7vNVqCkX4=
 github.com/buildkite/bintest/v3 v3.2.0/go.mod h1:+AdQZcVlzCiW2UyZWeG63xeH5z011XUBW6kWcRdaMtU=
 github.com/buildkite/go-buildkite/v3 v3.11.0 h1:A43KDOuNczqrY8wqlsHNtPoYbgWXYC/slkB/2JYXr5E=
