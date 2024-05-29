@@ -6,6 +6,46 @@
 
 A Kubernetes controller that runs [Buildkite steps](https://buildkite.com/docs/pipelines/defining-steps) as [Kubernetes jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/).
 
+## How does it work
+
+The controller uses the [Buildkite GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled work that uses the `kubernetes` plugin.
+
+When a job is available, the controller will create a pod to acquire and run the job. It converts the [PodSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#podspec-v1-core) in the `kubernetes` plugin into a pod by:
+
+- adding an init container to:
+  - copy the agent binary onto the workspace volume
+- adding a container to run the buildkite agent
+- adding a container to clone the source repository
+- modifying the user-specified containers to:
+  - overwrite the entrypoint to the agent binary
+  - run with the working directory set to the workspace
+
+The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
+
+## Architecture
+
+```mermaid
+sequenceDiagram
+    participant bc as buildkite controller
+    participant gql as Buildkite GraphQL API
+    participant bapi as Buildkite API
+    participant kubernetes
+    bc->>gql: Get scheduled builds & jobs
+    gql-->>bc: {build: jobs: [{uuid: "abc"}]}
+    kubernetes->>pod: start
+    bc->>kubernetes: watch for pod completions
+    bc->>kubernetes: create pod with agent sidecar
+    kubernetes->>pod: create
+    pod->>bapi: agent accepts & starts job
+    pod->>pod: run sidecars
+    pod->>pod: agent bootstrap
+    pod->>pod: run user pods to completion
+    pod->>bapi: upload artifacts, exit code
+    pod->>pod: agent exit
+    kubernetes->>bc: pod completion event
+    bc->>kubernetes: cleanup finished pods
+```
+
 ## Installation
 
 ### Requirements
@@ -27,40 +67,19 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --set graphqlToken=<your Buildkite GraphQL-enabled API token>
 ```
 
+If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
+```yaml
+# values.yaml
+config:
+  cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
+```
+The cluster's UUID may be obtained by navigating to the [clusters page](https://buildkite.com/organizations/-/clusters), clicking on the relevant cluster and then clicking on "Settings". It will be in a section titled "GraphQL API Integration".
+
 We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
 which means you'll need Helm version 3.8.0 or newer.
 
 This will create an agent-stack-k8s installation that will listen to the `kubernetes` queue.
 See the `--tags` [option](#Options) for specifying a different queue.
-
-#### Externalize Secrets
-
-You can also have an external provider create a secret for you in the namespace before deploying the chart with helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
-
-```bash
---set agentStackSecret=<secret-name>
-```
-
-The format of the required secret can be found in [this file](./charts/agent-stack-k8s/templates/secrets.yaml.tpl).
-
-#### Other Installation Methods
-
-You can also use this chart as a dependency:
-
-```yaml
-dependencies:
-- name: agent-stack-k8s
-  version: "0.5.0"
-  repository: "oci://ghcr.io/buildkite/helm"
-```
-
-or use it as a template:
-
-```
-helm template oci://ghcr.io/buildkite/helm/agent-stack-k8s -f my-values.yaml
-```
-
-Available versions and their digests can be found on [the releases page](https://github.com/buildkite/agent-stack-k8s/releases).
 
 ### Options
 
@@ -95,7 +114,37 @@ Use "agent-stack-k8s [command] --help" for more information about a command.
 
 Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](examples) folder there is a sample [YAML config](examples/config.yaml) and a sample [dotenv config](examples/config.env).
 
-### Sample Buildkite Pipelines
+#### Externalize Secrets
+
+You can also have an external provider create a secret for you in the namespace before deploying the chart with helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
+
+```bash
+--set agentStackSecret=<secret-name>
+```
+
+The format of the required secret can be found in [this file](./charts/agent-stack-k8s/templates/secrets.yaml.tpl).
+
+#### Other Installation Methods
+
+You can also use this chart as a dependency:
+
+```yaml
+dependencies:
+- name: agent-stack-k8s
+  version: "0.5.0"
+  repository: "oci://ghcr.io/buildkite/helm"
+```
+
+or use it as a template:
+
+```
+helm template oci://ghcr.io/buildkite/helm/agent-stack-k8s -f my-values.yaml
+```
+
+Available versions and their digests can be found on [the releases page](https://github.com/buildkite/agent-stack-k8s/releases).
+
+## Sample Buildkite Pipelines
+
 For simple commands, you merely have to target the queue you configured agent-stack-k8s with.
 ```yaml
 steps:
@@ -147,6 +196,49 @@ steps:
 If you have a multi-line `command`, specifying the `args` as well could lead to confusion, so we recommend just using `command`.
 
 More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
+
+### Cloning repos via SSH
+
+To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
+Place this object under a `gitEnvFrom` key in the `kubernetes` plugin (see the example below).
+
+You should create a secret in your namespace with an environment variable name that's recognised by [`docker-ssh-env-config`](https://github.com/buildkite/docker-ssh-env-config).
+A script from this project is included in the default entrypoint of the default [`buildkite/agent`](https://hub.docker.com/r/buildkite/agent) Docker image.
+It will process the value of the secret and write out a private key to the `~/.ssh` directory of the checkout container.
+
+However this key will not be available in your job containers.
+If you need to use git ssh credentials in your job containers, we recommend one of the following options:
+1. Use a container image that's based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
+2. Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entrypoint for your job container image
+
+#### Example secret creation for ssh cloning
+You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
+
+Supposing a SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
+```bash
+kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_DSA_KEY="$HOME/.ssh/id_ecdsa"
+```
+
+Then the following pipeline will be able to clone a git repository that requires ssh credentials.
+```yaml
+steps:
+  - label: build image
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          gitEnvFrom:
+            - secretRef:
+                name: my-git-ssh-credentials # <----
+          podSpec:
+            containers:
+              - image: gradle:latest
+                command: [gradle]
+                args:
+                  - jib
+                  - --image=ttl.sh/example:1h
+```
+
 
 ### Pod Spec Patch
 Rather than defining the entire Pod Spec in a step, there is the option to define a [strategic merge patch](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/) in the controller.
@@ -286,15 +378,6 @@ steps:
   command: echo Hello World!
 ```
 
-### Buildkite Clusters
-If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
-```yaml
-# values.yaml
-config:
-  cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
-```
-The cluster's UUID may be obtained by navigating to the [clusters page](https://buildkite.com/organizations/-/clusters), clicking on the relevant cluster and then clicking on "Settings". It will be in a section titled "GraphQL API Integration".
-
 ### Sidecars
 
 Sidecar containers can be added to your job by specifying them under the top-level `sidecars` key. See [this example](internal/integration/fixtures/sidecars.yaml) for a simple job that runs `nginx` as a sidecar, and accesses the nginx server from the main job.
@@ -351,88 +434,6 @@ configuration.
 This currently can't prevent every sort of error, you might still have a reference to a Kubernetes volume that doesn't exist, or other errors of that sort, but it will validate that the fields match the API spec we expect.
 
 Our JSON schema can also be used with editors that support JSON Schema by configuring your editor to validate against the schema found [here](./cmd/linter/schema.json).
-
-### Cloning repos via SSH
-
-To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
-Place this object under a `gitEnvFrom` key in the `kubernetes` plugin (see the example below).
-
-You should create a secret in your namespace with an environment variable name that's recognised by [`docker-ssh-env-config`](https://github.com/buildkite/docker-ssh-env-config).
-A script from this project is included in the default entrypoint of the default [`buildkite/agent`](https://hub.docker.com/r/buildkite/agent) Docker image.
-It will process the value of the secret and write out a private key to the `~/.ssh` directory of the checkout container.
-
-However this key will not be available in your job containers.
-If you need to use git ssh credentials in your job containers, we recommend one of the following options:
-1. Use a container image that's based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
-2. Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entrypoint for your job container image
-
-#### Example secret creation for ssh cloning
-You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
-
-Supposing a SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
-```bash
-kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_DSA_KEY="$HOME/.ssh/id_ecdsa"
-```
-
-Then the following pipeline will be able to clone a git repository that requires ssh credentials.
-```yaml
-steps:
-  - label: build image
-    agents:
-      queue: kubernetes
-    plugins:
-      - kubernetes:
-          gitEnvFrom:
-            - secretRef:
-                name: my-git-ssh-credentials # <----
-          podSpec:
-            containers:
-              - image: gradle:latest
-                command: [gradle]
-                args:
-                  - jib
-                  - --image=ttl.sh/example:1h
-```
-
-## How does it work
-
-The controller uses the [Buildkite GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled work that uses the `kubernetes` plugin.
-
-When a job is available, the controller will create a pod to acquire and run the job. It converts the [PodSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#podspec-v1-core) in the `kubernetes` plugin into a pod by:
-
-- adding an init container to:
-  - copy the agent binary onto the workspace volume
-- adding a container to run the buildkite agent
-- adding a container to clone the source repository
-- modifying the user-specified containers to:
-  - overwrite the entrypoint to the agent binary
-  - run with the working directory set to the workspace
-
-The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
-
-## Architecture
-
-```mermaid
-sequenceDiagram
-    participant bc as buildkite controller
-    participant gql as Buildkite GraphQL API
-    participant bapi as Buildkite API
-    participant kubernetes
-    bc->>gql: Get scheduled builds & jobs
-    gql-->>bc: {build: jobs: [{uuid: "abc"}]}
-    kubernetes->>pod: start
-    bc->>kubernetes: watch for pod completions
-    bc->>kubernetes: create pod with agent sidecar
-    kubernetes->>pod: create
-    pod->>bapi: agent accepts & starts job
-    pod->>pod: run sidecars
-    pod->>pod: agent bootstrap
-    pod->>pod: run user pods to completion
-    pod->>bapi: upload artifacts, exit code
-    pod->>pod: agent exit
-    kubernetes->>bc: pod completion event
-    bc->>kubernetes: cleanup finished pods
-```
 
 ## Debugging
 Use the `log-collector` script in the `utils` folder to collect logs for agent-stack-k8s.
