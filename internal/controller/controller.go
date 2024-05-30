@@ -42,8 +42,8 @@ func Run(
 		ClusterUUID:  cfg.ClusterUUID,
 		MaxInFlight:  cfg.MaxInFlight,
 		PollInterval: cfg.PollInterval,
-		Tags:        	cfg.Tags,
-		Token:       	cfg.BuildkiteToken,
+		Tags:         cfg.Tags,
+		Token:        cfg.BuildkiteToken,
 	})
 	if err != nil {
 		logger.Fatal("failed to create monitor", zap.Error(err))

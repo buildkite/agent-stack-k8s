@@ -14,11 +14,11 @@ import (
 
 func TestInvalidOrg(t *testing.T) {
 	m, err := monitor.New(zap.Must(zap.NewDevelopment()), fake.NewSimpleClientset(), monitor.Config{
-		Token:       os.Getenv("BUILDKITE_TOKEN"),
-		MaxInFlight: 1,
+		Token:        os.Getenv("BUILDKITE_TOKEN"),
+		MaxInFlight:  1,
 		PollInterval: time.Second,
-		Org:         "foo",
-		Tags:        []string{"queue=default", "foo=bar"},
+		Org:          "foo",
+		Tags:         []string{"queue=default", "foo=bar"},
 	})
 	require.NoError(t, err)
 
