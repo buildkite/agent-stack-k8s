@@ -38,7 +38,7 @@ type JobHandler interface {
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
 	graphqlClient := api.NewClient(cfg.Token)
 
-	if cfg.PollInterval == 0 {
+	if cfg.PollInterval < time.Second {
 		cfg.PollInterval = time.Second
 	}
 
