@@ -70,7 +70,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 	cmd.Flags().Duration(
 		"poll-interval",
 		time.Second,
-		"time to wait between polling for new jobs",
+		"time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start",
 	)
 	cmd.Flags().String(
 		"cluster-uuid",
