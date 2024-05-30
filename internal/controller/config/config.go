@@ -53,6 +53,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddBool("debug", c.Debug)
 	enc.AddString("image", c.Image)
 	enc.AddDuration("job-ttl", c.JobTTL)
+	enc.AddDuration("poll-interval", c.PollInterval)
 	enc.AddInt("max-in-flight", c.MaxInFlight)
 	enc.AddString("namespace", c.Namespace)
 	enc.AddString("org", c.Org)

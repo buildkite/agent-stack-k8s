@@ -229,6 +229,7 @@
           "image": "",
           "debug": false,
           "job-ttl": "5m",
+          "poll-interval": "5s",
           "max-in-flight": 100,
           "org": "",
           "tags": []
