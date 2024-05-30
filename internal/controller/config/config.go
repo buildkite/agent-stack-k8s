@@ -24,6 +24,7 @@ var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
 type Config struct {
 	Debug                       bool            `json:"debug"`
 	JobTTL                      time.Duration   `json:"job-ttl"`
+	PollInterval                time.Duration   `json:"poll-interval"`
 	AgentTokenSecret            string          `json:"agent-token-secret"              validate:"required"`
 	BuildkiteToken              string          `json:"buildkite-token"                 validate:"required"`
 	Image                       string          `json:"image"                           validate:"required"`
@@ -52,6 +53,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddBool("debug", c.Debug)
 	enc.AddString("image", c.Image)
 	enc.AddDuration("job-ttl", c.JobTTL)
+	enc.AddDuration("poll-interval", c.PollInterval)
 	enc.AddInt("max-in-flight", c.MaxInFlight)
 	enc.AddString("namespace", c.Namespace)
 	enc.AddString("org", c.Org)

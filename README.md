@@ -95,19 +95,21 @@ Available Commands:
   version     Prints the version
 
 Flags:
-      --agent-token-secret string   name of the Buildkite agent token secret (default "buildkite-agent-token")
-      --buildkite-token string      Buildkite API token with GraphQL scopes
-      --cluster-uuid string         UUID of the Buildkite Cluster. The agent token must be for the Buildkite Cluster.
-  -f, --config string               config file path
-      --debug                       debug logs
-  -h, --help                        help for agent-stack-k8s
-      --image string                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent-stack-k8s/agent:latest")
-      --job-ttl duration            time to retain kubernetes jobs after completion (default 10m0s)
-      --max-in-flight int           max jobs in flight, 0 means no max (default 25)
-      --namespace string            kubernetes namespace to create resources in (default "default")
-      --org string                  Buildkite organization name to watch
-      --profiler-address string     Bind address to expose the pprof profiler (e.g. localhost:6060)
-      --tags strings                A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux") (default [queue=kubernetes])
+      --agent-token-secret string                  name of the Buildkite agent token secret (default "buildkite-agent-token")
+      --buildkite-token string                     Buildkite API token with GraphQL scopes
+      --cluster-uuid string                        UUID of the Buildkite Cluster. The agent token must be for the Buildkite Cluster.
+  -f, --config string                              config file path
+      --debug                                      debug logs
+  -h, --help                                       help for agent-stack-k8s
+      --image string                               The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent:3.73.1")
+      --image-pull-backoff-grace-period duration   Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled) (default 30s)
+      --job-ttl duration                           time to retain kubernetes jobs after completion (default 10m0s)
+      --max-in-flight int                          max jobs in flight, 0 means no max (default 25)
+      --namespace string                           kubernetes namespace to create resources in (default "default")
+      --org string                                 Buildkite organization name to watch
+      --poll-interval duration                     time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start (default 1s)
+      --profiler-address string                    Bind address to expose the pprof profiler (e.g. localhost:6060)
+      --tags strings                               A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux") (default [queue=kubernetes])
 
 Use "agent-stack-k8s [command] --help" for more information about a command.
 ```

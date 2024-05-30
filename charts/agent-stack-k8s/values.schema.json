@@ -183,6 +183,12 @@
           "title": "The max-in-flight Schema",
           "examples": [100]
         },
+        "poll-interval": {
+          "type": "string",
+          "default": "",
+          "title": "The poll-interval Schema",
+          "examples": ["1s", "1m"]
+        },
         "org": {
           "type": "string",
           "default": "",
@@ -223,6 +229,7 @@
           "image": "",
           "debug": false,
           "job-ttl": "5m",
+          "poll-interval": "5s",
           "max-in-flight": 100,
           "org": "",
           "tags": []
@@ -241,6 +248,7 @@
         "debug": false,
         "jobTTL": "",
         "maxInFlight": 100,
+        "pollInterval": "5s",
         "org": "",
         "tags": []
       }
