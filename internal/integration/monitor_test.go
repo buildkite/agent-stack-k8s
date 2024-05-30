@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/stretchr/testify/require"
@@ -15,6 +16,7 @@ func TestInvalidOrg(t *testing.T) {
 	m, err := monitor.New(zap.Must(zap.NewDevelopment()), fake.NewSimpleClientset(), monitor.Config{
 		Token:       os.Getenv("BUILDKITE_TOKEN"),
 		MaxInFlight: 1,
+		PollInterval: time.Second,
 		Org:         "foo",
 		Tags:        []string{"queue=default", "foo=bar"},
 	})

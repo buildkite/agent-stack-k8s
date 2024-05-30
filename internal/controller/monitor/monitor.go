@@ -22,12 +22,13 @@ type Monitor struct {
 }
 
 type Config struct {
-	Namespace   string
-	Token       string
-	ClusterUUID string
-	MaxInFlight int
-	Org         string
-	Tags        []string
+	Namespace    string
+	Token        string
+	ClusterUUID  string
+	MaxInFlight  int
+	PollInterval time.Duration
+	Org          string
+	Tags         []string
 }
 
 type JobHandler interface {
@@ -36,6 +37,10 @@ type JobHandler interface {
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
 	graphqlClient := api.NewClient(cfg.Token)
+
+	if cfg.PollInterval == 0 {
+		cfg.PollInterval = time.Second
+	}
 
 	return &Monitor{
 		gql:    graphqlClient,
@@ -119,7 +124,7 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 
 	go func() {
 		logger.Info("started")
-		ticker := time.NewTicker(time.Second)
+		ticker := time.NewTicker(m.cfg.PollInterval)
 		defer ticker.Stop()
 
 		first := make(chan struct{}, 1)

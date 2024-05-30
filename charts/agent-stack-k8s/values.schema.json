@@ -183,6 +183,12 @@
           "title": "The max-in-flight Schema",
           "examples": [100]
         },
+        "poll-interval": {
+          "type": "string",
+          "default": "",
+          "title": "The poll-interval Schema",
+          "examples": ["1s", "1m"]
+        },
         "org": {
           "type": "string",
           "default": "",

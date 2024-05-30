@@ -24,6 +24,7 @@ var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
 type Config struct {
 	Debug                       bool            `json:"debug"`
 	JobTTL                      time.Duration   `json:"job-ttl"`
+	PollInterval                time.Duration   `json:"poll-interval"`
 	AgentTokenSecret            string          `json:"agent-token-secret"              validate:"required"`
 	BuildkiteToken              string          `json:"buildkite-token"                 validate:"required"`
 	Image                       string          `json:"image"                           validate:"required"`
