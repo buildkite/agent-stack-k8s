@@ -24,6 +24,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		Image:                       "my.registry.dev/buildkite-agent:latest",
 		JobTTL:                      300 * time.Second,
 		ImagePullBackOffGradePeriod: 60 * time.Second,
+		PollInterval:                5 * time.Second,
 		MaxInFlight:                 100,
 		Namespace:                   "my-buildkite-ns",
 		Org:                         "my-buildkite-org",
