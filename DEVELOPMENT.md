@@ -94,13 +94,16 @@ The integration tests on the [`kubernetes-agent-stack`](https://buildkite.com/bu
 
 
 ## Cleanup
-These will be deleted automatically for successful tests, but for unsuccessful tests, then will remain after then end of the test job to allow you to debug them.
-However, this means they should be cleaned up manually. To do this run
+
+In general, pipelines and queues will be deleted automatically for successful tests, but for unsuccessful tests, then will remain after then end of the test job to allow you to debug them.
+
+To do clean them up:
+
 ```bash
-CLEANUP_PIPELINES=true just cleanup-orphans --org=buildkite-kubernetes-stack --buildkite-token=<buildkite-api-token>
+just cleanup-orphans
 ```
 
-The token will need to have graphql access as well as:
+The token will need to have GraphQL access as well as:
 - `read_artifacts`
 - `write_pipelines`
 
