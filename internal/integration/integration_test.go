@@ -22,8 +22,7 @@ func TestWalkingSkeleton(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)

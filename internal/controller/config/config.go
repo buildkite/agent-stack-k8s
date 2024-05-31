@@ -22,17 +22,19 @@ var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
 // mapstructure (the module) supports switching the struct tag to "json", viper does not. So we have
 // to have the `mapstructure` tag for viper and the `json` tag is used by the mapstructure!
 type Config struct {
-	Debug                       bool            `json:"debug"`
-	JobTTL                      time.Duration   `json:"job-ttl"`
-	PollInterval                time.Duration   `json:"poll-interval"`
-	AgentTokenSecret            string          `json:"agent-token-secret"              validate:"required"`
-	BuildkiteToken              string          `json:"buildkite-token"                 validate:"required"`
-	Image                       string          `json:"image"                           validate:"required"`
-	MaxInFlight                 int             `json:"max-in-flight"                   validate:"min=0"`
-	Namespace                   string          `json:"namespace"                       validate:"required"`
-	Org                         string          `json:"org"                             validate:"required"`
-	Tags                        stringSlice     `json:"tags"                            validate:"min=1"`
-	ProfilerAddress             string          `json:"profiler-address"                validate:"omitempty,hostname_port"`
+	Debug            bool          `json:"debug"`
+	JobTTL           time.Duration `json:"job-ttl"`
+	PollInterval     time.Duration `json:"poll-interval"`
+	AgentTokenSecret string        `json:"agent-token-secret"              validate:"required"`
+	BuildkiteToken   string        `json:"buildkite-token"                 validate:"required"`
+	Image            string        `json:"image"                           validate:"required"`
+	MaxInFlight      int           `json:"max-in-flight"                   validate:"min=0"`
+	Namespace        string        `json:"namespace"                       validate:"required"`
+	Org              string        `json:"org"                             validate:"required"`
+	Tags             stringSlice   `json:"tags"                            validate:"min=1"`
+	ProfilerAddress  string        `json:"profiler-address"                validate:"omitempty,hostname_port"`
+	// This field is mandatory for most new orgs.
+	// Some old orgs allows unclustered setup.
 	ClusterUUID                 string          `json:"cluster-uuid"                    validate:"omitempty"`
 	AdditionalRedactedVars      stringSlice     `json:"additional-redacted-vars"        validate:"omitempty"`
 	PodSpecPatch                *corev1.PodSpec `json:"pod-spec-patch"                  validate:"omitempty"`

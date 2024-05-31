@@ -40,6 +40,7 @@ func CleanupOnInterrupt(cleanup func()) {
 
 // EnsureCleanup will run the provided cleanup function when the test ends,
 // either via t.Cleanup or on interrupt via CleanupOnInterrupt.
+// But this can't cover test timeout case.
 func EnsureCleanup(t *testing.T, cleanup func()) {
 	t.Cleanup(cleanup)
 	CleanupOnInterrupt(cleanup)

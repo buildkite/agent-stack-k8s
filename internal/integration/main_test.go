@@ -20,9 +20,11 @@ const (
 )
 
 var (
-	branch            string
-	cfg               config.Config
-	cleanupPipelines  bool
+	branch           string
+	cfg              config.Config
+	cleanupPipelines bool
+	// Preserve pipelines even if the test passses.
+	// By default, failed pipeline will always be kept.
 	preservePipelines bool
 
 	//go:embed fixtures/*
