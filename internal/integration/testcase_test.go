@@ -74,31 +74,6 @@ func (t testcase) Init() testcase {
 	return t
 }
 
-func (t testcase) CreatePipeline(ctx context.Context) (string, func()) {
-	t.Helper()
-
-	tpl, err := template.ParseFS(fixtures, fmt.Sprintf("fixtures/%s", t.Fixture))
-	require.NoError(t, err)
-
-	var steps bytes.Buffer
-	require.NoError(t, tpl.Execute(&steps, map[string]string{"queue": t.ShortPipelineName()}))
-	pipeline, _, err := t.Buildkite.Pipelines.Create(cfg.Org, &buildkite.CreatePipeline{
-		Name:       t.PipelineName,
-		Repository: t.Repo,
-		ProviderSettings: &buildkite.GitHubSettings{
-			TriggerMode: strPtr("none"),
-		},
-		Configuration: steps.String(),
-	})
-	require.NoError(t, err)
-
-	return *pipeline.GraphQLID, func() {
-		if !preservePipelines && !t.Failed() {
-			t.deletePipeline(ctx)
-		}
-	}
-}
-
 // Create ephemeral test queues and pipelines, return pipeline's GraphQL ID.
 // Register their cleanup as test cleanup.
 // So when test ends, those queues and pipelines get deleted.
