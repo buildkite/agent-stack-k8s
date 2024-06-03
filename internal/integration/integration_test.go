@@ -22,8 +22,7 @@ func TestWalkingSkeleton(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
@@ -44,8 +43,7 @@ func TestPodSpecPatchInStep(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 
@@ -62,8 +60,7 @@ func TestPodSpecPatchInStepFailsWhenPatchingContainerCommands(t *testing.T) {
 	}.Init()
 
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -80,8 +77,7 @@ func TestPodSpecPatchInController(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	cfg := cfg
 	cfg.PodSpecPatch = &corev1.PodSpec{
 		Containers: []corev1.Container{
@@ -113,8 +109,7 @@ func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
 	}.Init()
 
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	cfg := cfg
 	cfg.Tags = append(cfg.Tags, "foo=bar") // job has queue=<something>, agent has queue=<something> and foo=bar
@@ -133,8 +128,7 @@ func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
 	}.Init()
 
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	cfg := cfg
 	cfg.AdditionalRedactedVars = []string{"ELEVEN_HERBS_AND_SPICES"}
@@ -157,8 +151,7 @@ func TestPrePostCheckoutHooksRun(t *testing.T) {
 	}.Init()
 
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -176,8 +169,7 @@ func TestChown(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
@@ -198,8 +190,7 @@ func TestSSHRepoClone(t *testing.T) {
 		Get(ctx, "agent-stack-k8s", metav1.GetOptions{})
 	require.NoError(t, err, "agent-stack-k8s secret must exist")
 
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
@@ -215,8 +206,7 @@ func TestPluginCloneFailsTests(t *testing.T) {
 
 	ctx := context.Background()
 
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
@@ -232,8 +222,7 @@ func TestMaxInFlightLimited(t *testing.T) {
 
 	ctx := context.Background()
 
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	cfg := cfg
 	cfg.MaxInFlight = 1
 	tc.StartController(ctx, cfg)
@@ -271,8 +260,7 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 
 	ctx := context.Background()
 
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	cfg := cfg
 	cfg.MaxInFlight = 0
 	tc.StartController(ctx, cfg)
@@ -315,8 +303,7 @@ func TestSidecars(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
@@ -331,8 +318,7 @@ func TestExtraVolumeMounts(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
@@ -346,8 +332,7 @@ func TestInvalidPodSpec(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
@@ -365,8 +350,7 @@ func TestInvalidPodJSON(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
@@ -384,8 +368,7 @@ func TestEnvVariables(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
@@ -400,8 +383,7 @@ func TestImagePullBackOffCancelled(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
@@ -416,8 +398,7 @@ func TestArtifactsUploadFailedJobs(t *testing.T) {
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
 	ctx := context.Background()
-	pipelineID, cleanup := tc.CreatePipeline(ctx)
-	t.Cleanup(cleanup)
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
