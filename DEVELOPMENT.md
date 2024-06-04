@@ -89,10 +89,6 @@ You'll also need to create an SSH secret in your cluster to run [this test pipel
 kubectl create secret generic agent-stack-k8s --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
 ```
 
-## Debugging
-The integration tests on the [`kubernetes-agent-stack`](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack) pipeline will create additional pipelines in the [`buildkite-kubernetes-stack`](https://buildkite.com/buildkite-kubernetes-stack) organization.
-
-
 ## Cleanup
 
 In general, pipelines and queues will be deleted automatically for successful tests, but for unsuccessful tests, then will remain after then end of the test job to allow you to debug them.
@@ -117,6 +113,8 @@ kubectl get -o jsonpath='{.items[*].metadata.name}' jobs | xargs -L1 kubectl del
 
 At the time of writing, the CI pipeline run in an EKS cluster, `agent-stack-k8s-ci` in the `buildkite-agent` AWS account.
 CI deployes the controller onto `buildkite` namespace in that cluster.
+
+The integration tests on the [`kubernetes-agent-stack`](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack) pipeline will create pipelines in the [`buildkite-kubernetes-stack`](https://buildkite.com/buildkite-kubernetes-stack) organization.
 
 # Run from source
 
