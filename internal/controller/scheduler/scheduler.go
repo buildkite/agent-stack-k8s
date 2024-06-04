@@ -78,31 +78,40 @@ type worker struct {
 func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 	logger := w.logger.With(zap.String("uuid", job.Uuid))
 	logger.Info("creating job")
-	jobWrapper := NewJobWrapper(w.logger, job, w.cfg).ParsePlugins()
+
+	jobWrapper := NewJobWrapper(w.logger, job, w.cfg)
+
+	if err := jobWrapper.ParsePlugins(); err != nil {
+		logger.Warn("Plugin parsing failed, creating failure job instead", zap.Error(err))
+		return w.buildAndCreateFallbackJob(ctx, jobWrapper, err)
+	}
+
 	kjob, err := jobWrapper.Build(false)
 	if err != nil {
 		logger.Warn("Job definition error detected, creating failure job instead", zap.Error(err))
-		kjob, err = jobWrapper.BuildFailureJob(err)
-		if err != nil {
-			return fmt.Errorf("job definition error and failure job definition error: %w", err)
-		}
+		return w.buildAndCreateFallbackJob(ctx, jobWrapper, err)
 	}
 
-	_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
+	err = w.createJob(ctx, kjob)
+	if kerrors.IsInvalid(err) {
+		logger.Warn("Job creation failed, creating failure job instead", zap.Error(err))
+		return w.buildAndCreateFallbackJob(ctx, jobWrapper, err)
+	}
+	return err
+}
+
+func (w *worker) buildAndCreateFallbackJob(ctx context.Context, jobWrapper *jobWrapper, err error) error {
+	kjob, ferr := jobWrapper.BuildFailureJob(err)
+	if ferr != nil {
+		return fmt.Errorf("job definition error and failure job definition error: %w", err)
+	}
+	return w.createJob(ctx, kjob)
+}
+
+func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job) error {
+	_, err := w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
-		if kerrors.IsInvalid(err) {
-			kjob, err = jobWrapper.BuildFailureJob(err)
-			if err != nil {
-				return fmt.Errorf("job registration error and failure job definition error: %w", err)
-			}
-			_, err = w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
-			if err != nil {
-				return fmt.Errorf("job registration error and failure job registration error: %w", err)
-			}
-			return nil
-		} else {
-			return err
-		}
+		return fmt.Errorf("failed to create job: %w", err)
 	}
 	return nil
 }
@@ -111,7 +120,6 @@ type jobWrapper struct {
 	logger       *zap.Logger
 	job          *api.CommandJob
 	envMap       map[string]string
-	err          error
 	k8sPlugin    KubernetesPlugin
 	otherPlugins []map[string]json.RawMessage
 	cfg          Config
@@ -126,7 +134,7 @@ func NewJobWrapper(logger *zap.Logger, job *api.CommandJob, config Config) *jobW
 	}
 }
 
-func (w *jobWrapper) ParsePlugins() *jobWrapper {
+func (w *jobWrapper) ParsePlugins() error {
 	for _, val := range w.job.Env {
 		parts := strings.SplitN(val, "=", 2)
 		w.envMap[parts[0]] = parts[1]
@@ -135,20 +143,17 @@ func (w *jobWrapper) ParsePlugins() *jobWrapper {
 	if pluginsJson, ok := w.envMap["BUILDKITE_PLUGINS"]; ok {
 		if err := json.Unmarshal([]byte(pluginsJson), &plugins); err != nil {
 			w.logger.Debug("invalid plugin spec", zap.String("json", pluginsJson))
-			w.err = fmt.Errorf("failed parsing plugins: %w", err)
-			return w
+			return fmt.Errorf("failed parsing plugins: %w", err)
 		}
 	}
 	w.logger.Info("parsing", zap.Any("plugins", plugins))
 	for _, plugin := range plugins {
 		if len(plugin) != 1 {
-			w.err = fmt.Errorf("found invalid plugin: %v", plugin)
-			return w
+			return fmt.Errorf("found invalid plugin: %v", plugin)
 		}
 		if val, ok := plugin["github.com/buildkite-plugins/kubernetes-buildkite-plugin"]; ok {
 			if err := json.Unmarshal(val, &w.k8sPlugin); err != nil {
-				w.err = fmt.Errorf("failed parsing Kubernetes plugin: %w", err)
-				return w
+				return fmt.Errorf("failed parsing Kubernetes plugin: %w", err)
 			}
 		} else {
 			for k, v := range plugin {
@@ -156,17 +161,12 @@ func (w *jobWrapper) ParsePlugins() *jobWrapper {
 			}
 		}
 	}
-	return w
+	return nil
 }
 
 // Build builds a job. The checkout container will be skipped either by passing
 // `true` or if the k8s plugin configuration is configured to skip it.
 func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
-	// if previous steps have failed, error immediately
-	if w.err != nil {
-		return nil, w.err
-	}
-
 	skipCheckout = skipCheckout || w.k8sPlugin.Checkout.Skip
 
 	kjob := &batchv1.Job{}
@@ -622,7 +622,6 @@ su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
 }
 
 func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
-	w.err = nil
 	w.k8sPlugin = KubernetesPlugin{
 		PodSpec: &corev1.PodSpec{
 			Containers: []corev1.Container{
