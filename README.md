@@ -16,7 +16,7 @@
   - [Sidecars](#Sidecars)
   - [Extra volume mounts](#Extra-volume-mounts)
   - [Skipping checkout](#Skipping-checkout)
-  - [Overriding flags for git clone/fetch](#Overriding-flags-for-git-clone--fetch)
+  - [Overriding flags for git clone/fetch](#Overriding-flags-for-git-clone-fetch)
   - [Validating your pipeline](#Validating-your-pipeline)
 - [How to setup agent hooks](#How-to-setup-agent-hooks)
 - [Debugging](#Debugging)
