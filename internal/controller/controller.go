@@ -55,6 +55,8 @@ func Run(
 		AgentToken:             cfg.AgentTokenSecret,
 		JobTTL:                 cfg.JobTTL,
 		AdditionalRedactedVars: cfg.AdditionalRedactedVars,
+		CheckoutEnvFrom:        cfg.CheckoutEnvFrom,
+		CommandEnvFrom:         cfg.CommandEnvFrom,
 		PodSpecPatch:           cfg.PodSpecPatch,
 	})
 	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)

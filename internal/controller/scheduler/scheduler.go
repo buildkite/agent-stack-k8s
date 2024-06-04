@@ -37,6 +37,7 @@ type Config struct {
 	AgentToken             string
 	JobTTL                 time.Duration
 	AdditionalRedactedVars []string
+	DefaultCheckout        *Checkout
 	PodSpecPatch           *corev1.PodSpec
 }
 
@@ -55,13 +56,16 @@ type KubernetesPlugin struct {
 	Sidecars          []corev1.Container     `json:"sidecars,omitempty"`
 	Metadata          Metadata               `json:"metadata,omitempty"`
 	ExtraVolumeMounts []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
-	Checkout          Checkout               `json:"checkout,omitempty"`
+	Checkout          *Checkout              `json:"checkout,omitempty"`
 }
 
+// Checkout contains parameters that provide additional control over the
+// checkout container.
 type Checkout struct {
-	Skip       bool   `json:"skip,omitempty"`
-	CloneFlags string `json:"cloneFlags,omitempty"`
-	FetchFlags string `json:"fetchFlags,omitempty"`
+	Skip       bool                   `json:"skip,omitempty"`
+	CloneFlags *string                `json:"cloneFlags,omitempty"`
+	FetchFlags *string                `json:"fetchFlags,omitempty"`
+	EnvFrom    []corev1.EnvFromSource `json:"envFrom,omitempty"`
 }
 
 type Metadata struct {
@@ -167,7 +171,7 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		return nil, w.err
 	}
 
-	skipCheckout = skipCheckout || w.k8sPlugin.Checkout.Skip
+	skipCheckout = skipCheckout || (w.k8sPlugin.Checkout != nil && w.k8sPlugin.Checkout.Skip)
 
 	kjob := &batchv1.Job{}
 	kjob.Name = kjobName(w.job)
@@ -549,16 +553,22 @@ func (w *jobWrapper) createCheckoutContainer(
 				Name:  "BUILDKITE_PLUGINS_PATH",
 				Value: "/workspace/plugins",
 			},
-			{
-				Name:  "BUILDKITE_GIT_CLONE_FLAGS",
-				Value: w.k8sPlugin.Checkout.CloneFlags,
-			},
-			{
-				Name:  "BUILDKITE_GIT_FETCH_FLAGS",
-				Value: w.k8sPlugin.Checkout.FetchFlags,
-			},
 		},
 		EnvFrom: w.k8sPlugin.GitEnvFrom,
+	}
+	if co := w.k8sPlugin.Checkout; co != nil {
+		if co.CloneFlags != nil {
+			checkoutContainer.Env = append(checkoutContainer.Env, corev1.EnvVar{
+				Name:  "BUILDKITE_GIT_CLONE_FLAGS",
+				Value: *co.CloneFlags,
+			})
+		}
+		if co.FetchFlags != nil {
+			checkoutContainer.Env = append(checkoutContainer.Env, corev1.EnvVar{
+				Name:  "BUILDKITE_GIT_FETCH_FLAGS",
+				Value: *co.FetchFlags,
+			})
+		}
 	}
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
 
