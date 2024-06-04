@@ -5,12 +5,19 @@
 ## Table of Contents
 - [Overview](#Overview)
 - [How does it work](#How-does-it-work)
+- [Architecture](#Architecture)
+- [Installation](#Installation)
   - [Requirements](#Requirements)
   - [Deploy with Helm](#Deploy-with-Helm)
   - [Options](#Options)   
-- [Architecture](#Architecture)
-- [Installation](#Installation)
 - [Sample Buildkite Pipeline](#Sample-Buildkite-Pipelines)
+  - [Cloning repos via SSH](#Cloning-repos-via-SSH)
+  - [Pod Spec Patch](#Pod-Spec-Patch)
+  - [Sidecars](#Sidecars)
+  - [Extra volume mounts](#Extra-volume-mounts)
+  - [Skipping checkout](#Skipping-checkout)
+  - [Overriding flags for git clone/fetch](#Overriding-flags-for-git-clone/fetch)
+  - [Validating your pipeline](#Validating-your-pipeline)
 - [How to setup agent hooks](#How-to-setup-agent-hooks)
 - [Debugging](#Debugging)
 - [Open Questions](#Open-Questions)
@@ -558,6 +565,16 @@ steps:
 
 This is because agent-hooks will be present in both containers and `environment` hook will run in both containers. Here is how the build output will look like:
 
+```
+Running global environment hook
+Running global pre-checkout hook
+Preparing working directory
+Running global post-checkout hook
+Running global environment hook
+Running commands
+Running global pre-exit hook
+```
+
 In scenarios where we want to `skip checkout` when running on `agent-stack-k8s`, it will cause checkout-related hooks such as pre-checkout, checkout and post-checkout not to run because `checkout` container will not be present when `skip checkout` is set.
 
 Here is the pipeline config where checkout is skipped:
@@ -590,6 +607,13 @@ steps:
 ```
 
 Now, if we look at the build output below, we can see that it only has `environment` and `pre-exit` that ran and no checkout-related hooks, unlike the earlier build output where checkout was not skipped.
+
+```
+Preparing working directory
+Running global environment hook
+Running commands
+Running global pre-exit hook
+```
 
 ## Debugging
 Use the `log-collector` script in the `utils` folder to collect logs for agent-stack-k8s.
