@@ -459,7 +459,7 @@ Our JSON schema can also be used with editors that support JSON Schema by config
 
 ## How to setup agent hooks
 
-This section explains how to setup agent hooks when running Agent Stack K8s. In order for the agent hooks to work, as we all know we need them to be present on the instances where the agent runs.
+This section explains how to setup agent hooks when running Agent Stack K8s. In order for the agent hooks to work, they must be present on the instances where the agent runs.
 
 In case of agent-stack-k8s, we need these hooks to be accessible to the kubernetes pod where the `checkout` and `command` containers will be running. Best way to make this happen is to create a configmap with the agent hooks and mount the configmap as volume to the containers.
 
