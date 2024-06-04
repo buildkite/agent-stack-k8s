@@ -74,14 +74,61 @@ func (t testcase) Init() testcase {
 	return t
 }
 
-func (t testcase) CreatePipeline(ctx context.Context) (string, func()) {
+// Create ephemeral test queues and pipelines, return pipeline's GraphQL ID.
+// Register their cleanup as test cleanup.
+// So when test ends, those queues and pipelines get deleted.
+func (t testcase) PrepareQueueAndPipelineWithCleanup(ctx context.Context) string {
+	t.Helper()
+
+	var queueName string
+	if cfg.ClusterUUID == "" {
+		// TODO: This condition will be removed by subsequent PRs because we aim to eliminate non-clustered accounts.
+		t.Log("No cluster-id is specified, assuming non clustered setup, skipping cluster queue creation...")
+	} else {
+		queue := t.createClusterQueueWithCleanup()
+		queueName = *queue.Key
+	}
+
+	if queueName == "" {
+		queueName = t.ShortPipelineName()
+	}
+	p := t.createPipelineWithCleanup(ctx, queueName)
+	return *p.GraphQLID
+}
+
+func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
+	t.Helper()
+
+	queueName := t.ShortPipelineName()
+	queue, _, err := t.Buildkite.ClusterQueues.Create(cfg.Org, cfg.ClusterUUID, &buildkite.ClusterQueueCreate{
+		Key: &queueName,
+	})
+	require.NoError(t, err)
+
+	EnsureCleanup(t.T, func() {
+		if t.preserveEphemeralObjects() {
+			return
+		}
+
+		_, err := t.Buildkite.ClusterQueues.Delete(cfg.Org, cfg.ClusterUUID, *queue.ID)
+		if err != nil {
+			t.Errorf("Unable to clean up cluster queue %s: %v", *queue.ID, err)
+			return
+		}
+		t.Logf("deleted cluster queue! %s", *queue.ID)
+	})
+
+	return queue
+}
+
+func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName string) *buildkite.Pipeline {
 	t.Helper()
 
 	tpl, err := template.ParseFS(fixtures, fmt.Sprintf("fixtures/%s", t.Fixture))
 	require.NoError(t, err)
 
 	var steps bytes.Buffer
-	require.NoError(t, tpl.Execute(&steps, map[string]string{"queue": t.ShortPipelineName()}))
+	require.NoError(t, tpl.Execute(&steps, map[string]string{"queue": queueName}))
 	pipeline, _, err := t.Buildkite.Pipelines.Create(cfg.Org, &buildkite.CreatePipeline{
 		Name:       t.PipelineName,
 		Repository: t.Repo,
@@ -89,14 +136,20 @@ func (t testcase) CreatePipeline(ctx context.Context) (string, func()) {
 			TriggerMode: strPtr("none"),
 		},
 		Configuration: steps.String(),
+		ClusterID:     cfg.ClusterUUID,
 	})
 	require.NoError(t, err)
-
-	return *pipeline.GraphQLID, func() {
-		if !preservePipelines && !t.Failed() {
+	EnsureCleanup(t.T, func() {
+		if !t.preserveEphemeralObjects() {
 			t.deletePipeline(ctx)
 		}
-	}
+	})
+
+	return pipeline
+}
+
+func (t testcase) preserveEphemeralObjects() bool {
+	return preservePipelines || t.Failed()
 }
 
 func (t testcase) StartController(ctx context.Context, cfg config.Config) {
@@ -105,6 +158,7 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config) {
 	runCtx, cancel := context.WithCancel(ctx)
 	EnsureCleanup(t.T, cancel)
 
+	// TODO: Use queue name created above
 	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.ShortPipelineName())}
 	cfg.Debug = true
 

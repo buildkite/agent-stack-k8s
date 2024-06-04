@@ -4,3 +4,6 @@ Brewfile.lock.json
 .vscode
 
 dist/
+
+# For all glorious direnv users.
+.envrc

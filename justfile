@@ -62,6 +62,13 @@ deploy *FLAGS:
     {{FLAGS}}
 
 # Invoke with CLEANUP_PIPELINES=true
-# pass in --org=<org slug of k8s pipeline> --buildkite-token=<graphql-token>
+# pass in --org=<org slug of k8s pipeline> --buildkite-token=<graphql-token> or use environment variables per development.md
 cleanup-orphans *FLAGS:
-  @go test -v -run TestCleanupOrphanedPipelines ./internal/integration {{FLAGS}}
+  #!/usr/bin/env bash
+  set -e
+  export CLEANUP_PIPELINES=true
+  go test -v \
+    -ldflags="-X github.com/buildkite/agent-stack-k8s/v2/internal/integration_test.branch=${GIT_BRANCH}" \
+    -run TestCleanupOrphanedPipelines \
+    ./internal/integration \
+    {{FLAGS}}
