@@ -5,9 +5,12 @@
 ## Table of Contents
 - [Overview](#Overview)
 - [How does it work](#How-does-it-work)
+  - [Requirements](#Requirements)
+  - [Deploy with Helm](#Deploy-with-Helm)
+  - [Options](#Options)   
 - [Architecture](#Architecture)
 - [Installation](#Installation)
-- [Sample Buildkite Pipeline](#Sample-Buildkite-Pipeline)
+- [Sample Buildkite Pipeline](#Sample-Buildkite-Pipelines)
 - [How to setup agent hooks](#How-to-setup-agent-hooks)
 - [Debugging](#Debugging)
 - [Open Questions](#Open-Questions)
