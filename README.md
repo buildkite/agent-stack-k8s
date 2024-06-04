@@ -2,6 +2,16 @@
 
 [![Build status](https://badge.buildkite.com/d58c90abfe8b48f8d8750dac8e911fc0b6afe026631b4dc97c.svg?branch=main)](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack)
 
+## Table of Contents
+- [Overview](#Overview)
+- [How does it work](#How-does-it-work)
+- [Architecture](#Architecture)
+- [Installation](#Installation)
+- [Sample Buildkite Pipeline](#Sample-Buildkite-Pipeline)
+- [How to setup agent hooks](#How-to-setup-agent-hooks)
+- [Debugging](#Debugging)
+- [Open Questions](#Open-Questions)
+
 ## Overview
 
 A Kubernetes controller that runs [Buildkite steps](https://buildkite.com/docs/pipelines/defining-steps) as [Kubernetes jobs](https://kubernetes.io/docs/concepts/workloads/controllers/job/).
