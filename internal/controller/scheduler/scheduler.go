@@ -29,6 +29,8 @@ const (
 	defaultTermGracePeriodSeconds = 60
 	agentTokenKey                 = "BUILDKITE_AGENT_TOKEN"
 	AgentContainerName            = "agent"
+	CopyAgentContainerName        = "copy-agent"
+	CheckoutContainerName         = "checkout"
 )
 
 type Config struct {
@@ -435,7 +437,7 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	}
 
 	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
-		Name:            "copy-agent",
+		Name:            CopyAgentContainerName,
 		Image:           w.cfg.Image,
 		ImagePullPolicy: corev1.PullAlways,
 		Command:         []string{"cp"},
@@ -523,7 +525,7 @@ func (w *jobWrapper) createCheckoutContainer(
 	volumeMounts []corev1.VolumeMount,
 ) corev1.Container {
 	checkoutContainer := corev1.Container{
-		Name:            "checkout",
+		Name:            CheckoutContainerName,
 		Image:           w.cfg.Image,
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
