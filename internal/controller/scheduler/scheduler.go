@@ -271,8 +271,13 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	containerEnv := append([]corev1.EnvVar{}, env...)
 	containerEnv = append(containerEnv, []corev1.EnvVar{
 		{
+			// Deprecated: agents v3.74.0 and newer use BUILDKITE_KUBERNETES_EXEC instead
 			Name:  "BUILDKITE_AGENT_EXPERIMENT",
 			Value: "kubernetes-exec",
+		},
+		{
+			Name:  "BUILDKITE_KUBERNETES_EXEC",
+			Value: "true",
 		},
 		{
 			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
@@ -390,8 +395,13 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		ImagePullPolicy: corev1.PullAlways,
 		Env: []corev1.EnvVar{
 			{
+				// Deprecated: agents v3.74.0 and newer use BUILDKITE_KUBERNETES_EXEC instead
 				Name:  "BUILDKITE_AGENT_EXPERIMENT",
 				Value: "kubernetes-exec",
+			},
+			{
+				Name:  "BUILDKITE_KUBERNETES_EXEC",
+				Value: "true",
 			},
 			{
 				Name:  "BUILDKITE_CONTAINER_COUNT",
@@ -530,8 +540,13 @@ func (w *jobWrapper) createCheckoutContainer(
 		ImagePullPolicy: corev1.PullAlways,
 		Env: []corev1.EnvVar{
 			{
+				// Deprecated: agents v3.74.0 and newer use BUILDKITE_KUBERNETES_EXEC instead
 				Name:  "BUILDKITE_AGENT_EXPERIMENT",
 				Value: "kubernetes-exec",
+			},
+			{
+				Name:  "BUILDKITE_KUBERNETES_EXEC",
+				Value: "true",
 			},
 			{
 				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
