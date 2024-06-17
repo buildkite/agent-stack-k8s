@@ -187,7 +187,7 @@ func TestSSHRepoClone(t *testing.T) {
 	ctx := context.Background()
 	_, err := tc.Kubernetes.CoreV1().
 		Secrets(cfg.Namespace).
-		Get(ctx, "agent-stack-k8s", metav1.GetOptions{})
+		Get(ctx, "integration-test-ssh-key", metav1.GetOptions{})
 	require.NoError(t, err, "agent-stack-k8s secret must exist")
 
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)

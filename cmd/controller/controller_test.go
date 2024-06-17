@@ -68,8 +68,9 @@ func TestReadAndParseConfig(t *testing.T) {
 	// container. As this is required, we set it here to avoid the validation error.
 	t.Setenv("BUILDKITE_TOKEN", "my-graphql-enabled-token")
 
-	// This needs to be unset to as it is set in CI which pollutes the test environment
+	// These need to be unset to as it is set in CI which pollutes the test environment
 	t.Setenv("IMAGE", "")
+	t.Setenv("NAMESPACE", "")
 
 	cmd := &cobra.Command{}
 	controller.AddConfigFlags(cmd)
