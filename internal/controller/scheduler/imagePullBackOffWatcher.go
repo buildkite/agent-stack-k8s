@@ -2,6 +2,8 @@ package scheduler
 
 import (
 	"context"
+	"regexp"
+	"slices"
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
@@ -111,6 +113,10 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 		if !shouldCancel(&containerStatus) {
 			continue
 		}
+		if !isSystemContainer(&containerStatus) {
+			log.Info("Ignoring sidecar container during ImagePullBackOff watch.", zap.String("name", containerStatus.Name))
+			continue
+		}
 
 		log.Info("Job has a container in ImagePullBackOff. Cancelling.")
 
@@ -146,4 +152,26 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 func shouldCancel(containerStatus *v1.ContainerStatus) bool {
 	return containerStatus.State.Waiting != nil &&
 		containerStatus.State.Waiting.Reason == "ImagePullBackOff"
+}
+
+// All container-\d containers will have the agent installed as their PID 1.
+// Therefore, their lifecycle is well monitored in our backend, allowing us to terminate them if they fail to start.
+//
+// However, sidecar containers are completely unmonitored.
+// We avoid terminating jobs due to sidecar image pull backoff watcher
+// to prevent customer confusion.
+//
+// Most importantly, the CI can still pass (in theory) even if sidecars fail.
+//
+// (The name "system container" is subject to more debate.)
+func isSystemContainer(containerStatus *v1.ContainerStatus) bool {
+	name := containerStatus.Name
+	if slices.Contains([]string{AgentContainerName, CopyAgentContainerName, CheckoutContainerName}, name) {
+		return true
+	}
+	// This will arguably cause some false positives, but:
+	//   1. The change is low.
+	//   2. we plan replace this soon.
+	matched, _ := regexp.MatchString(`container-\d+`, name)
+	return matched
 }

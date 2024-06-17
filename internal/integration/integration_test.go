@@ -390,6 +390,21 @@ func TestImagePullBackOffCancelled(t *testing.T) {
 	tc.AssertLogsContain(build, "other job has run")
 }
 
+// Asserting that we only kill jobs for image pullbackoff on our system containers.
+func TestImagePullBackOffOnSidecar(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "image-pull-back-off-sidecar.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+}
+
 func TestArtifactsUploadFailedJobs(t *testing.T) {
 	tc := testcase{
 		T:       t,
