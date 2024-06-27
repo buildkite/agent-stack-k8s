@@ -30,6 +30,36 @@ func TestReadAndParseConfig(t *testing.T) {
 		Org:                         "my-buildkite-org",
 		Tags:                        []string{"queue=my-queue", "priority=high"},
 		ClusterUUID:                 "beefcafe-abbe-baba-abba-deedcedecade",
+		DefaultCommandParams: &config.CommandParams{
+			EnvFrom: []corev1.EnvFromSource{{
+				Prefix: "DEPLOY_",
+				SecretRef: &corev1.SecretEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "deploy-secrets",
+					},
+				},
+			}},
+		},
+		DefaultCheckoutParams: &config.CheckoutParams{
+			EnvFrom: []corev1.EnvFromSource{{
+				Prefix: "GITHUB_",
+				SecretRef: &corev1.SecretEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "github-secrets",
+					},
+				},
+			}},
+		},
+		DefaultSidecarParams: &config.SidecarParams{
+			EnvFrom: []corev1.EnvFromSource{{
+				Prefix: "LOGGING_",
+				ConfigMapRef: &corev1.ConfigMapEnvSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "logging-config",
+					},
+				},
+			}},
+		},
 		PodSpecPatch: &corev1.PodSpec{
 			ServiceAccountName:           "buildkite-agent-sa",
 			AutomountServiceAccountToken: ptr(true),

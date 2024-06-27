@@ -39,6 +39,9 @@ type Config struct {
 	AdditionalRedactedVars      stringSlice     `json:"additional-redacted-vars"        validate:"omitempty"`
 	PodSpecPatch                *corev1.PodSpec `json:"pod-spec-patch"                  validate:"omitempty"`
 	ImagePullBackOffGradePeriod time.Duration   `json:"image-pull-backoff-grace-period" validate:"omitempty"`
+	DefaultCheckoutParams       *CheckoutParams `json:"default-checkout-params"                  validate:"omitempty"`
+	DefaultCommandParams        *CommandParams  `json:"default-command-params"                   validate:"omitempty"`
+	DefaultSidecarParams        *SidecarParams  `json:"default-sidecar-params"                   validate:"omitempty"`
 }
 
 type stringSlice []string
@@ -68,5 +71,68 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 		return err
 	}
 	enc.AddDuration("image-pull-backoff-grace-period", c.ImagePullBackOffGradePeriod)
+	if err := enc.AddReflected("default-checkout-params", c.DefaultCheckoutParams); err != nil {
+		return err
+	}
+	if err := enc.AddReflected("default-command-params", c.DefaultCommandParams); err != nil {
+		return err
+	}
+	if err := enc.AddReflected("default-sidecar-params", c.DefaultSidecarParams); err != nil {
+		return err
+	}
 	return enc.AddArray("tags", c.Tags)
+}
+
+// CommandParams contains parameters that provide additional control over all command
+// container(s).
+type CommandParams struct {
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
+}
+
+func (cmd *CommandParams) ApplyTo(ctr *corev1.Container) {
+	if cmd == nil || ctr == nil {
+		return
+	}
+	ctr.EnvFrom = append(ctr.EnvFrom, cmd.EnvFrom...)
+}
+
+// SidecarParams contains parameters that provide additional control over all sidecar
+// container(s).
+type SidecarParams struct {
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
+}
+
+func (sc *SidecarParams) ApplyTo(ctr *corev1.Container) {
+	if sc == nil || ctr == nil {
+		return
+	}
+	ctr.EnvFrom = append(ctr.EnvFrom, sc.EnvFrom...)
+}
+
+// CheckoutParams contains parameters that provide additional control over the
+// checkout container.
+type CheckoutParams struct {
+	Skip       bool                   `json:"skip,omitempty"`
+	CloneFlags *string                `json:"cloneFlags,omitempty"`
+	FetchFlags *string                `json:"fetchFlags,omitempty"`
+	EnvFrom    []corev1.EnvFromSource `json:"envFrom,omitempty"`
+}
+
+func (co *CheckoutParams) ApplyTo(ctr *corev1.Container) {
+	if co == nil || ctr == nil {
+		return
+	}
+	if co.CloneFlags != nil {
+		ctr.Env = append(ctr.Env, corev1.EnvVar{
+			Name:  "BUILDKITE_GIT_CLONE_FLAGS",
+			Value: *co.CloneFlags,
+		})
+	}
+	if co.FetchFlags != nil {
+		ctr.Env = append(ctr.Env, corev1.EnvVar{
+			Name:  "BUILDKITE_GIT_FETCH_FLAGS",
+			Value: *co.FetchFlags,
+		})
+	}
+	ctr.EnvFrom = append(ctr.EnvFrom, co.EnvFrom...)
 }

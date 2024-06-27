@@ -13,8 +13,29 @@ org: my-buildkite-org
 cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 
 tags:
-- queue=my-queue
-- priority=high
+  - queue=my-queue
+  - priority=high
+
+# Applies to the checkout container in all spawned pods
+default-checkout-params:
+  envFrom:
+    - prefix: GITHUB_
+      secretRef:
+        name: github-secrets
+
+# Applies to all command containers in all spawned pods
+default-command-params:
+  envFrom:
+    - prefix: DEPLOY_
+      secretRef:
+        name: deploy-secrets
+
+# Applies to all sidecar containers in all spawned pods
+default-sidecar-params:
+  envFrom:
+    - prefix: LOGGING_
+      configMapRef:
+        name: logging-config
 
 # This will be applied to the job's podSpec as a strategic merge patch
 # See https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch
@@ -22,16 +43,16 @@ pod-spec-patch:
   serviceAccountName: buildkite-agent-sa
   automountServiceAccountToken: true
   containers:
-  - name: container-0
-    env:
-    - name: GITHUB_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: github-secrets
-          key: github-token
-    resources:
-      requests:
-        cpu: 100m
-        mem: 50Mi
-      limits:
-        mem: 1Gi
+    - name: container-0
+      env:
+        - name: GITHUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: github-secrets
+              key: github-token
+      resources:
+        requests:
+          cpu: 100m
+          mem: 50Mi
+        limits:
+          mem: 1Gi
