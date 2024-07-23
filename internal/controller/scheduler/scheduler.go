@@ -168,10 +168,18 @@ func (w *jobWrapper) ParsePlugins() error {
 // Build builds a job. The checkout container will be skipped either by passing
 // `true` or if the k8s plugin configuration is configured to skip it.
 func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
-
-	skipCheckout = skipCheckout ||
-		(w.cfg.DefaultCheckoutParams != nil && w.cfg.DefaultCheckoutParams.Skip) ||
-		(w.k8sPlugin.CheckoutParams != nil && w.k8sPlugin.CheckoutParams.Skip)
+	// If Build was called with skipCheckout == false, then look at the config
+	// and plugin.
+	if !skipCheckout {
+		// Start with the default, if set
+		if co := w.cfg.DefaultCheckoutParams; co != nil && co.Skip != nil {
+			skipCheckout = *co.Skip
+		}
+		// The plugin overrides the default, if set
+		if co := w.k8sPlugin.CheckoutParams; co != nil && co.Skip != nil {
+			skipCheckout = *co.Skip
+		}
+	}
 
 	kjob := &batchv1.Job{}
 	kjob.Name = kjobName(w.job)

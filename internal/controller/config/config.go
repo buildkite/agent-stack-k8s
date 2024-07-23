@@ -112,7 +112,7 @@ func (sc *SidecarParams) ApplyTo(ctr *corev1.Container) {
 // CheckoutParams contains parameters that provide additional control over the
 // checkout container.
 type CheckoutParams struct {
-	Skip       bool                   `json:"skip,omitempty"`
+	Skip       *bool                  `json:"skip,omitempty"`
 	CloneFlags *string                `json:"cloneFlags,omitempty"`
 	FetchFlags *string                `json:"fetchFlags,omitempty"`
 	EnvFrom    []corev1.EnvFromSource `json:"envFrom,omitempty"`
