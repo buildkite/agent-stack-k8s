@@ -61,7 +61,9 @@
       "default": {},
       "title": "The labels Schema",
       "description": "label app is reserved, user input label app is not allowed",
-      "not": { "required": ["app"] },
+      "not": {
+        "required": ["app"]
+      },
       "additionalProperties": {
         "type": "string",
         "default": ""
@@ -78,7 +80,9 @@
       "default": {},
       "title": "The secretsmetadata Schema",
       "description": "secret name and namespace are reserved, user input secret name and namespace are not allowed",
-      "not": { "required": ["name", "namespace"] },
+      "not": {
+        "required": ["name", "namespace"]
+      },
       "additionalProperties": {
         "type": "object",
         "default": {}
@@ -96,7 +100,9 @@
       "default": {},
       "title": "The serviceaccountmetadata Schema",
       "description": "serviceaccount name and namespace are reserved, user input serviceaccount name and namespace are not allowed",
-      "not": { "required": ["name", "namespace"] },
+      "not": {
+        "required": ["name", "namespace"]
+      },
       "additionalProperties": {
         "type": "object",
         "default": {}
@@ -219,6 +225,66 @@
             "type": "string"
           },
           "examples": [["SECRET_RECIPE"]]
+        },
+        "default-checkout-params": {
+          "type": "object",
+          "default": null,
+          "title": "Default parameters for checkout containers",
+          "properties": {
+            "skip": {
+              "type": "boolean",
+              "default": null,
+              "title": "If true, skips building and running checkout containers"
+            },
+            "cloneFlags": {
+              "type": "string",
+              "default": null,
+              "title": "If set, appends the BUILDKITE_GIT_CLONE_FLAGS variable"
+            },
+            "fetchFlags": {
+              "type": "string",
+              "default": null,
+              "title": "If set, appends the BUILDKITE_GIT_FETCH_FLAGS variable"
+            },
+            "envFrom": {
+              "type": "array",
+              "default": [],
+              "title": "k8s envFrom sources to add",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
+              }
+            }
+          }
+        },
+        "default-command-params": {
+          "type": "object",
+          "default": null,
+          "title": "Default parameters for command containers",
+          "properties": {
+            "envFrom": {
+              "type": "array",
+              "default": [],
+              "title": "k8s envFrom sources to add",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
+              }
+            }
+          }
+        },
+        "default-sidecar-params": {
+          "type": "object",
+          "default": null,
+          "title": "Default parameters for sidecar containers",
+          "properties": {
+            "envFrom": {
+              "type": "array",
+              "default": [],
+              "title": "k8s envFrom sources to add",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
+              }
+            }
+          }
         },
         "pod-spec-patch": {
           "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
