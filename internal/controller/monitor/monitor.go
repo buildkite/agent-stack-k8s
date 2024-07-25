@@ -95,8 +95,13 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		return unclusteredJobResp(*resp), err
 	}
 
+	var agentQueryRule []string
+	if queue != "" {
+		agentQueryRule = append(agentQueryRule, fmt.Sprintf("queue=%s", queue))
+	}
+
 	resp, err := api.GetScheduledJobsClustered(
-		ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, encodeClusterGraphQLID(m.cfg.ClusterUUID),
+		ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID),
 	)
 	return clusteredJobResp(*resp), err
 }
