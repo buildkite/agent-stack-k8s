@@ -93,7 +93,7 @@ If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters)
 config:
   cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 ```
-The cluster's UUID may be obtained by navigating to the [clusters page](https://buildkite.com/organizations/-/clusters), clicking on the relevant cluster and then clicking on "Settings". It will be in a section titled "API Integration".
+The cluster's UUID may be obtained by navigating to the [clusters page](https://buildkite.com/organizations/-/clusters), clicking on the relevant cluster and then clicking on the section titled "API Integration".
 
 We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
 which means you'll need Helm version 3.8.0 or newer.
