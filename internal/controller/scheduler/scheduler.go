@@ -39,6 +39,9 @@ type Config struct {
 	AgentToken             string
 	JobTTL                 time.Duration
 	AdditionalRedactedVars []string
+	DefaultCheckoutParams  *config.CheckoutParams
+	DefaultCommandParams   *config.CommandParams
+	DefaultSidecarParams   *config.SidecarParams
 	PodSpecPatch           *corev1.PodSpec
 }
 
@@ -57,13 +60,9 @@ type KubernetesPlugin struct {
 	Sidecars          []corev1.Container     `json:"sidecars,omitempty"`
 	Metadata          Metadata               `json:"metadata,omitempty"`
 	ExtraVolumeMounts []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
-	Checkout          Checkout               `json:"checkout,omitempty"`
-}
-
-type Checkout struct {
-	Skip       bool   `json:"skip,omitempty"`
-	CloneFlags string `json:"cloneFlags,omitempty"`
-	FetchFlags string `json:"fetchFlags,omitempty"`
+	CheckoutParams    *config.CheckoutParams `json:"checkout,omitempty"`
+	CommandParams     *config.CommandParams  `json:"commandParams,omitempty"`
+	SidecarParams     *config.SidecarParams  `json:"sidecarParams,omitempty"`
 }
 
 type Metadata struct {
@@ -169,7 +168,18 @@ func (w *jobWrapper) ParsePlugins() error {
 // Build builds a job. The checkout container will be skipped either by passing
 // `true` or if the k8s plugin configuration is configured to skip it.
 func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
-	skipCheckout = skipCheckout || w.k8sPlugin.Checkout.Skip
+	// If Build was called with skipCheckout == false, then look at the config
+	// and plugin.
+	if !skipCheckout {
+		// Start with the default, if set
+		if co := w.cfg.DefaultCheckoutParams; co != nil && co.Skip != nil {
+			skipCheckout = *co.Skip
+		}
+		// The plugin overrides the default, if set
+		if co := w.k8sPlugin.CheckoutParams; co != nil && co.Skip != nil {
+			skipCheckout = *co.Skip
+		}
+	}
 
 	kjob := &batchv1.Job{}
 	kjob.Name = kjobName(w.job)
@@ -323,6 +333,9 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 			},
 		)
 
+		w.cfg.DefaultCommandParams.ApplyTo(&c)
+		w.k8sPlugin.CommandParams.ApplyTo(&c)
+
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
 		}
@@ -338,7 +351,8 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	containerCount := len(podSpec.Containers) + systemContainerCount
 
 	if len(podSpec.Containers) == 0 {
-		podSpec.Containers = append(podSpec.Containers, corev1.Container{
+		// Create a default command container named "container-0".
+		c := corev1.Container{
 			Name:            "container-0",
 			Image:           w.cfg.Image,
 			Command:         []string{"/workspace/buildkite-agent"},
@@ -356,8 +370,11 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 					Value: strconv.Itoa(0 + systemContainerCount),
 				},
 			),
-			EnvFrom: w.k8sPlugin.GitEnvFrom,
-		})
+		}
+		w.cfg.DefaultCommandParams.ApplyTo(&c)
+		w.k8sPlugin.CommandParams.ApplyTo(&c)
+		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
+		podSpec.Containers = append(podSpec.Containers, c)
 	}
 
 	for i, c := range w.k8sPlugin.Sidecars {
@@ -365,6 +382,8 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 			c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
 		}
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
+		w.cfg.DefaultSidecarParams.ApplyTo(&c)
+		w.k8sPlugin.SidecarParams.ApplyTo(&c)
 		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
 		podSpec.Containers = append(podSpec.Containers, c)
 	}
@@ -551,17 +570,14 @@ func (w *jobWrapper) createCheckoutContainer(
 				Name:  "BUILDKITE_PLUGINS_PATH",
 				Value: "/workspace/plugins",
 			},
-			{
-				Name:  "BUILDKITE_GIT_CLONE_FLAGS",
-				Value: w.k8sPlugin.Checkout.CloneFlags,
-			},
-			{
-				Name:  "BUILDKITE_GIT_FETCH_FLAGS",
-				Value: w.k8sPlugin.Checkout.FetchFlags,
-			},
 		},
-		EnvFrom: w.k8sPlugin.GitEnvFrom,
 	}
+
+	w.cfg.DefaultCheckoutParams.ApplyTo(&checkoutContainer)
+	w.k8sPlugin.CheckoutParams.ApplyTo(&checkoutContainer)
+
+	checkoutContainer.EnvFrom = append(checkoutContainer.EnvFrom, w.k8sPlugin.GitEnvFrom...)
+
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
 
 	podUser, podGroup := int64(0), int64(0)
