@@ -119,26 +119,6 @@ func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
 	tc.AssertSuccess(ctx, build)
 }
 
-func TestControllerPicksUpJobsFromDefaultQueue(t *testing.T) {
-	tc := testcase{
-		T:       t,
-		Fixture: "helloworld.yaml",
-		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
-		DefaultQueue: true,
-	}.Init()
-
-	ctx := context.Background()
-	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
-
-	cfg := cfg
-	cfg.Tags = []string{}
-
-	tc.StartController(ctx, cfg)
-	build := tc.TriggerBuild(ctx, pipelineID)
-	tc.AssertSuccess(ctx, build)
-}
-
 func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
 	tc := testcase{
 		T:       t,

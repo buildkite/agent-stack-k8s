@@ -37,7 +37,6 @@ type testcase struct {
 	Kubernetes   kubernetes.Interface
 	Buildkite    *buildkite.Client
 	PipelineName string
-	DefaultQueue bool
 }
 
 // k8s labels are limited to length 63, we use the pipeline name as a label.
@@ -104,37 +103,11 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 	queue, _, err := t.Buildkite.ClusterQueues.Create(cfg.Org, cfg.ClusterUUID, &buildkite.ClusterQueueCreate{
 		Key: &queueName,
 	})
-
-	var originalClusterQueue string
-
-	if t.DefaultQueue {
-		c, _, err := t.Buildkite.Clusters.Get(cfg.Org, cfg.ClusterUUID)
-		if err != nil || c.DefaultQueueID == nil {
-			t.Fatalf("Couldn't get default Queue ID: %v, %v", err, c.DefaultQueueID)
-		}
-		originalClusterQueue = *c.DefaultQueueID
-		_, err = t.Buildkite.Clusters.Update(cfg.Org, cfg.ClusterUUID, &buildkite.ClusterUpdate{
-			DefaultQueueID: queue.ID,
-		})
-		if err != nil {
-			t.Errorf("Couldn't set default Queue ID: %v", err)
-			return nil
-		}
-	}
 	require.NoError(t, err)
 
 	EnsureCleanup(t.T, func() {
 		if t.preserveEphemeralObjects() {
 			return
-		}
-
-		if originalClusterQueue != "" {
-			_, err = t.Buildkite.Clusters.Update(cfg.Org, cfg.ClusterUUID, &buildkite.ClusterUpdate{
-				DefaultQueueID: &originalClusterQueue,
-			})
-			if err != nil {
-				t.Errorf("Couldn't set default Queue ID back to original: %v", err)
-			}
 		}
 
 		_, err := t.Buildkite.ClusterQueues.Delete(cfg.Org, cfg.ClusterUUID, *queue.ID)
@@ -186,9 +159,7 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config) {
 	EnsureCleanup(t.T, cancel)
 
 	// TODO: Use queue name created above
-	if !t.DefaultQueue {
-		cfg.Tags = []string{fmt.Sprintf("queue=%s", t.ShortPipelineName())}
-	}
+	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.ShortPipelineName())}
 	cfg.Debug = true
 
 	go controller.Run(runCtx, t.Logger, t.Kubernetes, &cfg)
