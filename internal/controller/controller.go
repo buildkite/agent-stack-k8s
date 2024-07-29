@@ -59,6 +59,7 @@ func Run(
 		DefaultCommandParams:   cfg.DefaultCommandParams,
 		DefaultSidecarParams:   cfg.DefaultSidecarParams,
 		PodSpecPatch:           cfg.PodSpecPatch,
+		ProhibitK8sPlugin:      cfg.ProhibitKubernetesPlugin,
 	})
 	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)
 

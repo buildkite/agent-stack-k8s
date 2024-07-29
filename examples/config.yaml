@@ -16,6 +16,11 @@ tags:
   - queue=my-queue
   - priority=high
 
+# Causes the controller to prohibit the kubernetes plugin specified within jobs
+# (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail,
+# preventing the pipeline YAML from having any influence over the podSpec
+prohibit-kubernetes-plugin: true
+
 # Applies to the checkout container in all spawned pods
 default-checkout-params:
   envFrom:

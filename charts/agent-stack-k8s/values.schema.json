@@ -226,6 +226,12 @@
           },
           "examples": [["SECRET_RECIPE"]]
         },
+        "prohibit-kubernetes-plugin": {
+          "type": "boolean",
+          "default": false,
+          "title": "Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
+          "examples": [true]
+        },
         "default-checkout-params": {
           "type": "object",
           "default": null,
