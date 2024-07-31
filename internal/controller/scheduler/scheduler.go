@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
 	"strconv"
 	"strings"
@@ -33,6 +34,8 @@ const (
 	CheckoutContainerName         = "checkout"
 )
 
+var errK8sPluginProhibited = errors.New("the kubernetes plugin is prohibited by this controller, but was configured on this job")
+
 type Config struct {
 	Namespace              string
 	Image                  string
@@ -43,6 +46,7 @@ type Config struct {
 	DefaultCommandParams   *config.CommandParams
 	DefaultSidecarParams   *config.SidecarParams
 	PodSpecPatch           *corev1.PodSpec
+	ProhibitK8sPlugin      bool
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
@@ -80,29 +84,42 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 	logger := w.logger.With(zap.String("uuid", job.Uuid))
 	logger.Info("creating job")
 
-	jobWrapper := NewJobWrapper(w.logger, job, w.cfg)
-
-	if err := jobWrapper.ParsePlugins(); err != nil {
+	inputs, err := w.ParseJob(job)
+	if err != nil {
 		logger.Warn("Plugin parsing failed, creating failure job instead", zap.Error(err))
-		return w.buildAndCreateFallbackJob(ctx, jobWrapper, err)
+		return w.buildAndCreateFallbackJob(ctx, err, inputs)
 	}
 
-	kjob, err := jobWrapper.Build(false)
+	// Default command container using default image.
+	podSpec := &corev1.PodSpec{
+		Containers: []corev1.Container{
+			{
+				Image:   w.cfg.Image,
+				Command: []string{job.Command},
+			},
+		},
+	}
+	// Use the podSpec provided by the plugin, if allowed.
+	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpec != nil {
+		podSpec = inputs.k8sPlugin.PodSpec
+	}
+
+	kjob, err := w.Build(podSpec, false, inputs)
 	if err != nil {
 		logger.Warn("Job definition error detected, creating failure job instead", zap.Error(err))
-		return w.buildAndCreateFallbackJob(ctx, jobWrapper, err)
+		return w.buildAndCreateFallbackJob(ctx, err, inputs)
 	}
 
 	err = w.createJob(ctx, kjob)
 	if kerrors.IsInvalid(err) {
 		logger.Warn("Job creation failed, creating failure job instead", zap.Error(err))
-		return w.buildAndCreateFallbackJob(ctx, jobWrapper, err)
+		return w.buildAndCreateFallbackJob(ctx, err, inputs)
 	}
 	return err
 }
 
-func (w *worker) buildAndCreateFallbackJob(ctx context.Context, jobWrapper *jobWrapper, err error) error {
-	kjob, ferr := jobWrapper.BuildFailureJob(err)
+func (w *worker) buildAndCreateFallbackJob(ctx context.Context, err error, inputs buildInputs) error {
+	kjob, ferr := w.BuildFailureJob(err, inputs)
 	if ferr != nil {
 		return fmt.Errorf("job definition error and failure job definition error: %w", err)
 	}
@@ -117,57 +134,64 @@ func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job) error {
 	return nil
 }
 
-type jobWrapper struct {
-	logger       *zap.Logger
-	job          *api.CommandJob
+// buildInputs contains the relevant components of a CommandJob needed for Build.
+type buildInputs struct {
+	// Taken from the job directly.
+	uuid            string
+	command         string
+	agentQueryRules []string
+
+	// Involves some parsing of the job env / plugins map
 	envMap       map[string]string
-	k8sPlugin    KubernetesPlugin
+	k8sPlugin    *KubernetesPlugin
 	otherPlugins []map[string]json.RawMessage
-	cfg          Config
 }
 
-func NewJobWrapper(logger *zap.Logger, job *api.CommandJob, config Config) *jobWrapper {
-	return &jobWrapper{
-		logger: logger,
-		job:    job,
-		cfg:    config,
-		envMap: make(map[string]string),
+func (w *worker) ParseJob(job *api.CommandJob) (buildInputs, error) {
+	parsed := buildInputs{
+		uuid:            job.Uuid,
+		command:         job.Command,
+		agentQueryRules: job.AgentQueryRules,
+		envMap:          make(map[string]string),
 	}
-}
 
-func (w *jobWrapper) ParsePlugins() error {
-	for _, val := range w.job.Env {
+	for _, val := range job.Env {
 		parts := strings.SplitN(val, "=", 2)
-		w.envMap[parts[0]] = parts[1]
+		parsed.envMap[parts[0]] = parts[1]
 	}
 	var plugins []map[string]json.RawMessage
-	if pluginsJson, ok := w.envMap["BUILDKITE_PLUGINS"]; ok {
-		if err := json.Unmarshal([]byte(pluginsJson), &plugins); err != nil {
-			w.logger.Debug("invalid plugin spec", zap.String("json", pluginsJson))
-			return fmt.Errorf("failed parsing plugins: %w", err)
+	if pluginsJSON, ok := parsed.envMap["BUILDKITE_PLUGINS"]; ok {
+		if err := json.Unmarshal([]byte(pluginsJSON), &plugins); err != nil {
+			w.logger.Debug("invalid plugin spec", zap.String("json", pluginsJSON))
+			return parsed, fmt.Errorf("failed parsing plugins: %w", err)
 		}
 	}
 	w.logger.Info("parsing", zap.Any("plugins", plugins))
 	for _, plugin := range plugins {
 		if len(plugin) != 1 {
-			return fmt.Errorf("found invalid plugin: %v", plugin)
+			return parsed, fmt.Errorf("found invalid plugin: %v", plugin)
 		}
-		if val, ok := plugin["github.com/buildkite-plugins/kubernetes-buildkite-plugin"]; ok {
-			if err := json.Unmarshal(val, &w.k8sPlugin); err != nil {
-				return fmt.Errorf("failed parsing Kubernetes plugin: %w", err)
-			}
-		} else {
+		val, isK8sPlugin := plugin["github.com/buildkite-plugins/kubernetes-buildkite-plugin"]
+		if !isK8sPlugin {
 			for k, v := range plugin {
-				w.otherPlugins = append(w.otherPlugins, map[string]json.RawMessage{k: v})
+				parsed.otherPlugins = append(parsed.otherPlugins, map[string]json.RawMessage{k: v})
 			}
+			continue
+		}
+		// plugin is the k8s plugin. If the plugin is prohibited, fail.
+		if w.cfg.ProhibitK8sPlugin {
+			return parsed, errK8sPluginProhibited
+		}
+		if err := json.Unmarshal(val, &parsed.k8sPlugin); err != nil {
+			return parsed, fmt.Errorf("failed parsing Kubernetes plugin: %w", err)
 		}
 	}
-	return nil
+	return parsed, nil
 }
 
 // Build builds a job. The checkout container will be skipped either by passing
-// `true` or if the k8s plugin configuration is configured to skip it.
-func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
+// `true` or if the configuration is configured to skip it.
+func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildInputs) (*batchv1.Job, error) {
 	// If Build was called with skipCheckout == false, then look at the config
 	// and plugin.
 	if !skipCheckout {
@@ -176,46 +200,36 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 			skipCheckout = *co.Skip
 		}
 		// The plugin overrides the default, if set
-		if co := w.k8sPlugin.CheckoutParams; co != nil && co.Skip != nil {
-			skipCheckout = *co.Skip
+		if inputs.k8sPlugin != nil {
+			if co := inputs.k8sPlugin.CheckoutParams; co != nil && co.Skip != nil {
+				skipCheckout = *co.Skip
+			}
 		}
 	}
 
-	kjob := &batchv1.Job{}
-	kjob.Name = kjobName(w.job)
-
-	// Populate the job's podSpec from the step's k8s plugin, or use the command in the step
-	if w.k8sPlugin.PodSpec != nil {
-		kjob.Spec.Template.Spec = *w.k8sPlugin.PodSpec
-	} else {
-		kjob.Spec.Template.Spec.Containers = []corev1.Container{
-			{
-				Image:   w.cfg.Image,
-				Command: []string{w.job.Command},
-			},
-		}
+	kjob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        kjobName(inputs.uuid),
+			Labels:      make(map[string]string),
+			Annotations: make(map[string]string),
+		},
 	}
 
-	if w.k8sPlugin.Metadata.Labels == nil {
-		w.k8sPlugin.Metadata.Labels = map[string]string{}
+	if inputs.k8sPlugin != nil {
+		maps.Copy(kjob.Labels, inputs.k8sPlugin.Metadata.Labels)
+		maps.Copy(kjob.Annotations, inputs.k8sPlugin.Metadata.Annotations)
 	}
 
-	if w.k8sPlugin.Metadata.Annotations == nil {
-		w.k8sPlugin.Metadata.Annotations = map[string]string{}
-	}
-
-	w.k8sPlugin.Metadata.Labels[config.UUIDLabel] = w.job.Uuid
-	w.labelWithAgentTags()
-	w.k8sPlugin.Metadata.Annotations[config.BuildURLAnnotation] = w.envMap["BUILDKITE_BUILD_URL"]
-	w.annotateWithJobURL()
+	kjob.Labels[config.UUIDLabel] = inputs.uuid
+	w.labelWithAgentTags(kjob.Labels, inputs.agentQueryRules)
+	kjob.Annotations[config.BuildURLAnnotation] = inputs.envMap["BUILDKITE_BUILD_URL"]
+	w.annotateWithJobURL(kjob.Annotations, inputs.uuid, inputs.envMap)
 
 	// Prevent k8s cluster autoscaler from terminating the job before it finishes to scale down cluster
-	w.k8sPlugin.Metadata.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
+	kjob.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
 
-	kjob.Labels = w.k8sPlugin.Metadata.Labels
-	kjob.Spec.Template.Labels = w.k8sPlugin.Metadata.Labels
-	kjob.Annotations = w.k8sPlugin.Metadata.Annotations
-	kjob.Spec.Template.Annotations = w.k8sPlugin.Metadata.Annotations
+	kjob.Spec.Template.Labels = kjob.Labels
+	kjob.Spec.Template.Annotations = kjob.Annotations
 	kjob.Spec.BackoffLimit = ptr.To[int32](0)
 	kjob.Spec.Template.Spec.TerminationGracePeriodSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
 
@@ -239,20 +253,20 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		},
 		{
 			Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
-			Value: w.job.Uuid,
+			Value: inputs.uuid,
 		},
 	}
-	if w.otherPlugins != nil {
-		otherPluginsJson, err := json.Marshal(w.otherPlugins)
+	if len(inputs.otherPlugins) > 0 {
+		otherPluginsJSON, err := json.Marshal(inputs.otherPlugins)
 		if err != nil {
 			return nil, fmt.Errorf("failed to remarshal non-k8s plugins: %w", err)
 		}
 		env = append(env, corev1.EnvVar{
 			Name:  "BUILDKITE_PLUGINS",
-			Value: string(otherPluginsJson),
+			Value: string(otherPluginsJSON),
 		})
 	}
-	for k, v := range w.envMap {
+	for k, v := range inputs.envMap {
 		switch k {
 		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS": // noop
 		default:
@@ -268,7 +282,9 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	})
 
 	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
-	volumeMounts = append(volumeMounts, w.k8sPlugin.ExtraVolumeMounts...)
+	if inputs.k8sPlugin != nil {
+		volumeMounts = append(volumeMounts, inputs.k8sPlugin.ExtraVolumeMounts...)
+	}
 
 	systemContainerCount := 0
 	if !skipCheckout {
@@ -277,8 +293,6 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 
 	ttl := int32(w.cfg.JobTTL.Seconds())
 	kjob.Spec.TTLSecondsAfterFinished = &ttl
-
-	podSpec := &kjob.Spec.Template.Spec
 
 	containerEnv := append([]corev1.EnvVar{}, env...)
 	containerEnv = append(containerEnv, []corev1.EnvVar{
@@ -300,7 +314,7 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		},
 		{
 			Name:  "BUILDKITE_ARTIFACT_PATHS",
-			Value: w.envMap["BUILDKITE_ARTIFACT_PATHS"],
+			Value: inputs.envMap["BUILDKITE_ARTIFACT_PATHS"],
 		},
 		{
 			Name:  "BUILDKITE_PLUGINS_PATH",
@@ -314,7 +328,7 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 
 	for i, c := range podSpec.Containers {
 		// If the command is empty, use the command from the step
-		command := w.job.Command
+		command := inputs.command
 		if len(c.Command) > 0 {
 			command = strings.Join(append(c.Command, c.Args...), " ")
 		}
@@ -334,7 +348,9 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		)
 
 		w.cfg.DefaultCommandParams.ApplyTo(&c)
-		w.k8sPlugin.CommandParams.ApplyTo(&c)
+		if inputs.k8sPlugin != nil {
+			inputs.k8sPlugin.CommandParams.ApplyTo(&c)
+		}
 
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "container", i)
@@ -344,7 +360,9 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 			c.WorkingDir = "/workspace"
 		}
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
+		if inputs.k8sPlugin != nil {
+			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
+		}
 		podSpec.Containers[i] = c
 	}
 
@@ -363,7 +381,7 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 			Env: append(containerEnv,
 				corev1.EnvVar{
 					Name:  "BUILDKITE_COMMAND",
-					Value: w.job.Command,
+					Value: inputs.command,
 				},
 				corev1.EnvVar{
 					Name:  "BUILDKITE_CONTAINER_ID",
@@ -372,20 +390,24 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 			),
 		}
 		w.cfg.DefaultCommandParams.ApplyTo(&c)
-		w.k8sPlugin.CommandParams.ApplyTo(&c)
-		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
+		if inputs.k8sPlugin != nil {
+			inputs.k8sPlugin.CommandParams.ApplyTo(&c)
+			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
+		}
 		podSpec.Containers = append(podSpec.Containers, c)
 	}
 
-	for i, c := range w.k8sPlugin.Sidecars {
-		if c.Name == "" {
-			c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
+	if inputs.k8sPlugin != nil {
+		for i, c := range inputs.k8sPlugin.Sidecars {
+			if c.Name == "" {
+				c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
+			}
+			c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
+			w.cfg.DefaultSidecarParams.ApplyTo(&c)
+			inputs.k8sPlugin.SidecarParams.ApplyTo(&c)
+			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
+			podSpec.Containers = append(podSpec.Containers, c)
 		}
-		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-		w.cfg.DefaultSidecarParams.ApplyTo(&c)
-		w.k8sPlugin.SidecarParams.ApplyTo(&c)
-		c.EnvFrom = append(c.EnvFrom, w.k8sPlugin.GitEnvFrom...)
-		podSpec.Containers = append(podSpec.Containers, c)
 	}
 
 	agentTags := []agentTag{
@@ -395,8 +417,8 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 		},
 	}
 
-	if tags, err := agentTagsFromJob(w.job); err != nil {
-		w.logger.Warn("error parsing job tags", zap.String("job", w.job.Uuid))
+	if tags, err := agentTagsFromJob(inputs.agentQueryRules); err != nil {
+		w.logger.Warn("error parsing job tags", zap.String("job", inputs.uuid))
 	} else {
 		agentTags = append(agentTags, tags...)
 	}
@@ -452,7 +474,9 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	podSpec.Containers = append(podSpec.Containers, agentContainer)
 
 	if !skipCheckout {
-		podSpec.Containers = append(podSpec.Containers, w.createCheckoutContainer(kjob, env, volumeMounts))
+		podSpec.Containers = append(podSpec.Containers,
+			w.createCheckoutContainer(podSpec, env, volumeMounts, inputs.k8sPlugin),
+		)
 	}
 
 	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
@@ -482,21 +506,22 @@ func (w *jobWrapper) Build(skipCheckout bool) (*batchv1.Job, error) {
 	// Allow podSpec to be overridden by the agent configuration and the k8s plugin
 
 	// Patch from the agent is applied first
-	var err error
 	if w.cfg.PodSpecPatch != nil {
 		w.logger.Info("applying podSpec patch from agent")
-		podSpec, err = PatchPodSpec(podSpec, w.cfg.PodSpecPatch)
+		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
 		}
+		podSpec = patched
 	}
 
-	if w.k8sPlugin.PodSpecPatch != nil {
+	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpecPatch != nil {
 		w.logger.Info("applying podSpec patch from k8s plugin")
-		podSpec, err = PatchPodSpec(podSpec, w.k8sPlugin.PodSpecPatch)
+		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
 		}
+		podSpec = patched
 	}
 
 	kjob.Spec.Template.Spec = *podSpec
@@ -538,10 +563,11 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec) (*corev1.PodS
 	return &patchedSpec, nil
 }
 
-func (w *jobWrapper) createCheckoutContainer(
-	kjob *batchv1.Job,
+func (w *worker) createCheckoutContainer(
+	podSpec *corev1.PodSpec,
 	env []corev1.EnvVar,
 	volumeMounts []corev1.VolumeMount,
+	k8sPlugin *KubernetesPlugin,
 ) corev1.Container {
 	checkoutContainer := corev1.Container{
 		Name:            CheckoutContainerName,
@@ -574,19 +600,20 @@ func (w *jobWrapper) createCheckoutContainer(
 	}
 
 	w.cfg.DefaultCheckoutParams.ApplyTo(&checkoutContainer)
-	w.k8sPlugin.CheckoutParams.ApplyTo(&checkoutContainer)
-
-	checkoutContainer.EnvFrom = append(checkoutContainer.EnvFrom, w.k8sPlugin.GitEnvFrom...)
+	if k8sPlugin != nil {
+		k8sPlugin.CheckoutParams.ApplyTo(&checkoutContainer)
+		checkoutContainer.EnvFrom = append(checkoutContainer.EnvFrom, k8sPlugin.GitEnvFrom...)
+	}
 
 	checkoutContainer.Env = append(checkoutContainer.Env, env...)
 
 	podUser, podGroup := int64(0), int64(0)
-	if kjob.Spec.Template.Spec.SecurityContext != nil {
-		if kjob.Spec.Template.Spec.SecurityContext.RunAsUser != nil {
-			podUser = *(w.k8sPlugin.PodSpec.SecurityContext.RunAsUser)
+	if podSpec.SecurityContext != nil {
+		if podSpec.SecurityContext.RunAsUser != nil {
+			podUser = *(podSpec.SecurityContext.RunAsUser)
 		}
-		if kjob.Spec.Template.Spec.SecurityContext.RunAsGroup != nil {
-			podGroup = *(w.k8sPlugin.PodSpec.SecurityContext.RunAsGroup)
+		if podSpec.SecurityContext.RunAsGroup != nil {
+			podGroup = *(podSpec.SecurityContext.RunAsGroup)
 		}
 	}
 
@@ -639,39 +666,46 @@ su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
 	return checkoutContainer
 }
 
-func (w *jobWrapper) BuildFailureJob(err error) (*batchv1.Job, error) {
-	w.k8sPlugin = KubernetesPlugin{
-		PodSpec: &corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					// the configured agent image may be private. If there is an error in specifying the
-					// secrets for this image, we should still be able to run the failure job. So, we
-					// bypass the potentially private image and use a public one. We could use a
-					// thinner public image like `alpine:latest`, but it's generally unwise to depend
-					// on an image that's not published by us.
-					Image:   config.DefaultAgentImage,
-					Command: []string{fmt.Sprintf("echo %q && exit 1", err.Error())},
-				},
+func (w *worker) BuildFailureJob(err error, inputs buildInputs) (*batchv1.Job, error) {
+	command := fmt.Sprintf("echo %q && exit 1", err.Error())
+	podSpec := &corev1.PodSpec{
+		Containers: []corev1.Container{
+			{
+				// the configured agent image may be private. If there is an error in specifying the
+				// secrets for this image, we should still be able to run the failure job. So, we
+				// bypass the potentially private image and use a public one. We could use a
+				// thinner public image like `alpine:latest`, but it's generally unwise to depend
+				// on an image that's not published by us.
+				Image:   config.DefaultAgentImage,
+				Command: []string{command},
 			},
 		},
 	}
-	w.otherPlugins = nil
-	return w.Build(true)
+	// Command is overridden with the "print error and exit" command above.
+	// k8sPlugin and otherPlugins are disabled for the failure job.
+	return w.Build(podSpec, true, buildInputs{
+		uuid:            inputs.uuid,
+		command:         command,
+		agentQueryRules: inputs.agentQueryRules,
+		envMap:          inputs.envMap,
+		k8sPlugin:       nil,
+		otherPlugins:    nil,
+	})
 }
 
-func (w *jobWrapper) labelWithAgentTags() {
-	labels, errs := agenttags.ToLabels(w.job.AgentQueryRules)
+func (w *worker) labelWithAgentTags(dstLabels map[string]string, agentQueryRules []string) {
+	ls, errs := agenttags.ToLabels(agentQueryRules)
 	if len(errs) != 0 {
 		w.logger.Warn("converting all tags to labels", zap.Errors("errs", errs))
 	}
 
-	for k, v := range labels {
-		w.k8sPlugin.Metadata.Labels[k] = v
+	for k, v := range ls {
+		dstLabels[k] = v
 	}
 }
 
-func (w *jobWrapper) annotateWithJobURL() {
-	buildURL := w.envMap["BUILDKITE_BUILD_URL"]
+func (w *worker) annotateWithJobURL(dstAnnotations map[string]string, jobUUID string, envMap map[string]string) {
+	buildURL := envMap["BUILDKITE_BUILD_URL"]
 	u, err := url.Parse(buildURL)
 	if err != nil {
 		w.logger.Warn(
@@ -680,12 +714,12 @@ func (w *jobWrapper) annotateWithJobURL() {
 		)
 		return
 	}
-	u.Fragment = w.job.Uuid
-	w.k8sPlugin.Metadata.Annotations[config.JobURLAnnotation] = u.String()
+	u.Fragment = jobUUID
+	dstAnnotations[config.JobURLAnnotation] = u.String()
 }
 
-func kjobName(job *api.CommandJob) string {
-	return fmt.Sprintf("buildkite-%s", job.Uuid)
+func kjobName(jobUUID string) string {
+	return fmt.Sprintf("buildkite-%s", jobUUID)
 }
 
 type agentTag struct {
@@ -693,13 +727,9 @@ type agentTag struct {
 	Value string
 }
 
-func agentTagsFromJob(j *api.CommandJob) ([]agentTag, error) {
-	if j == nil {
-		return nil, fmt.Errorf("job is nil")
-	}
-
-	agentTags := make([]agentTag, 0, len(j.AgentQueryRules))
-	for _, tag := range j.AgentQueryRules {
+func agentTagsFromJob(agentQueryRules []string) ([]agentTag, error) {
+	agentTags := make([]agentTag, 0, len(agentQueryRules))
+	for _, tag := range agentQueryRules {
 		k, v, found := strings.Cut(tag, "=")
 		if !found {
 			return nil, fmt.Errorf("could not parse tag: %q", tag)

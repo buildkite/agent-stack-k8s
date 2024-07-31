@@ -148,26 +148,45 @@ func TestJobPluginConversion(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	input := &api.CommandJob{
+	job := &api.CommandJob{
 		Uuid:            "abc",
 		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	wrapper := scheduler.NewJobWrapper(
+	worker := scheduler.New(
 		zaptest.NewLogger(t),
-		input,
-		scheduler.Config{AgentToken: "token-secret"},
+		nil,
+		scheduler.Config{
+			AgentToken: "token-secret",
+		},
 	)
-	err = wrapper.ParsePlugins()
+	inputs, err := worker.ParseJob(job)
 	require.NoError(t, err)
-	result, err := wrapper.Build(false)
+	kjob, err := worker.Build(pluginConfig.PodSpec, false, inputs)
 	require.NoError(t, err)
 
-	assert.Len(t, result.Spec.Template.Spec.Containers, 3)
+	gotPodSpec := kjob.Spec.Template.Spec
 
-	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
-	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
-	assert.Equal(t, pluginConfig.PodSpec.Containers[0].Command[0], commandEnv.Value)
+	assert.Len(t, gotPodSpec.Containers, 3)
+
+	commandContainer := findContainer(t, gotPodSpec.Containers, "container-0")
+
+	// Command should be replaced with buildkite-agent.
+	// Args should be set to bootstrap.
+	// The original command should be placed in BUILDKITE_COMMAND.
+	wantCommand := []string{"/workspace/buildkite-agent"}
+	if diff := cmp.Diff(commandContainer.Command, wantCommand); diff != "" {
+		t.Errorf("kjob.Spec.Template.Spec.Containers[0].Command diff (-got +want):\n%s", diff)
+	}
+	wantArgs := []string{"bootstrap"}
+	if diff := cmp.Diff(commandContainer.Args, wantArgs); diff != "" {
+		t.Errorf("kjob.Spec.Template.Spec.Containers[0].Args diff (-got +want):\n%s", diff)
+	}
+
+	bkCommandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
+	if got, want := bkCommandEnv.Value, "hello world a=b=c"; got != want {
+		t.Errorf("commandContainer.Env[BUILDKITE_COMMAND].Value = %q, want %q", got, want)
+	}
 
 	var envFromNames []string
 	for _, envFrom := range commandContainer.EnvFrom {
@@ -183,7 +202,7 @@ func TestJobPluginConversion(t *testing.T) {
 	tokenEnv := findEnv(t, commandContainer.Env, "BUILDKITE_AGENT_TOKEN")
 	assert.Equal(t, "token-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
 
-	tagLabel := result.Labels["tag.buildkite.com/queue"]
+	tagLabel := kjob.Labels["tag.buildkite.com/queue"]
 	assert.Equal(t, tagLabel, "kubernetes")
 
 	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
@@ -213,18 +232,24 @@ func TestTagEnv(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	input := &api.CommandJob{
+	job := &api.CommandJob{
 		Uuid:            "abc",
 		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	wrapper := scheduler.NewJobWrapper(logger, input, scheduler.Config{AgentToken: "token-secret"})
-	err = wrapper.ParsePlugins()
+	worker := scheduler.New(
+		logger,
+		nil,
+		scheduler.Config{
+			AgentToken: "token-secret",
+		},
+	)
+	inputs, err := worker.ParseJob(job)
 	require.NoError(t, err)
-	result, err := wrapper.Build(false)
+	kjob, err := worker.Build(pluginConfig.PodSpec, false, inputs)
 	require.NoError(t, err)
 
-	container := findContainer(t, result.Spec.Template.Spec.Containers, "agent")
+	container := findContainer(t, kjob.Spec.Template.Spec.Containers, "agent")
 	assertEnvFieldPath(t, container, "BUILDKITE_K8S_NODE", "spec.nodeName")
 	assertEnvFieldPath(t, container, "BUILDKITE_K8S_NAMESPACE", "metadata.namespace")
 	assertEnvFieldPath(t, container, "BUILDKITE_K8S_SERVICE_ACCOUNT", "spec.serviceAccountName")
@@ -245,22 +270,22 @@ func assertEnvFieldPath(t *testing.T, container corev1.Container, envVarName, fi
 
 func TestJobWithNoKubernetesPlugin(t *testing.T) {
 	t.Parallel()
-	input := &api.CommandJob{
+	job := &api.CommandJob{
 		Uuid:            "abc",
 		Command:         "echo hello world",
 		AgentQueryRules: []string{},
 	}
-	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{})
-	err := wrapper.ParsePlugins()
+	worker := scheduler.New(zaptest.NewLogger(t), nil, scheduler.Config{})
+	inputs, err := worker.ParseJob(job)
 	require.NoError(t, err)
-	result, err := wrapper.Build(false)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
 	require.NoError(t, err)
 
-	require.Len(t, result.Spec.Template.Spec.Containers, 3)
+	require.Len(t, kjob.Spec.Template.Spec.Containers, 3)
 
-	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
+	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
 	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
-	require.Equal(t, input.Command, commandEnv.Value)
+	require.Equal(t, job.Command, commandEnv.Value)
 	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
 	require.Nil(t, pluginsEnv)
 }
@@ -277,14 +302,16 @@ func TestBuild(t *testing.T) {
 	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
 	require.NoError(t, err)
 
-	wrapper := scheduler.NewJobWrapper(
+	job := &api.CommandJob{
+		Uuid:            "abc",
+		Command:         "echo hello world",
+		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+		AgentQueryRules: []string{"queue=kubernetes"},
+	}
+
+	worker := scheduler.New(
 		zaptest.NewLogger(t),
-		&api.CommandJob{
-			Uuid:            "abc",
-			Command:         "echo hello world",
-			Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
-			AgentQueryRules: []string{"queue=kubernetes"},
-		},
+		nil,
 		scheduler.Config{
 			Namespace:  "buildkite",
 			Image:      "buildkite/agent:latest",
@@ -307,19 +334,19 @@ func TestBuild(t *testing.T) {
 			},
 		},
 	)
-	err = wrapper.ParsePlugins()
+	inputs, err := worker.ParseJob(job)
 	require.NoError(t, err)
-	job, err := wrapper.Build(false)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
 	require.NoError(t, err)
 
-	require.Len(t, job.Spec.Template.Spec.Containers, 3)
+	require.Len(t, kjob.Spec.Template.Spec.Containers, 3)
 
-	container0 := findContainer(t, job.Spec.Template.Spec.Containers, "container-0")
+	container0 := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
 	if diff := cmp.Diff(container0.Image, "alpine:latest"); diff != "" {
 		t.Errorf("unexpected container image (-want +got):\n%s", diff)
 	}
 
-	checkoutContainer := findContainer(t, job.Spec.Template.Spec.Containers, "checkout")
+	checkoutContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "checkout")
 	if diff := cmp.Diff(checkoutContainer.EnvFrom, []corev1.EnvFromSource{
 		{
 			SecretRef: &corev1.SecretEnvSource{
@@ -343,33 +370,35 @@ func TestBuildSkipCheckout(t *testing.T) {
 	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
 	require.NoError(t, err)
 
-	wrapper := scheduler.NewJobWrapper(
+	job := &api.CommandJob{
+		Uuid:            "abc",
+		Command:         "echo hello world",
+		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+		AgentQueryRules: []string{"queue=kubernetes"},
+	}
+
+	worker := scheduler.New(
 		zaptest.NewLogger(t),
-		&api.CommandJob{
-			Uuid:            "abc",
-			Command:         "echo hello world",
-			Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
-			AgentQueryRules: []string{"queue=kubernetes"},
-		},
+		nil,
 		scheduler.Config{
 			Namespace:  "buildkite",
 			Image:      "buildkite/agent:latest",
 			AgentToken: "bkcq_1234567890",
 		},
 	)
-	err = wrapper.ParsePlugins()
+	inputs, err := worker.ParseJob(job)
 	require.NoError(t, err)
-	job, err := wrapper.Build(false)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
 	require.NoError(t, err)
 
-	require.Len(t, job.Spec.Template.Spec.Containers, 2)
+	require.Len(t, kjob.Spec.Template.Spec.Containers, 2)
 
-	container0 := findContainer(t, job.Spec.Template.Spec.Containers, "container-0")
+	container0 := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
 	if diff := cmp.Diff(container0.Image, "buildkite/agent:latest"); diff != "" {
 		t.Errorf("unexpected container image (-want +got):\n%s", diff)
 	}
 
-	for _, container := range job.Spec.Template.Spec.Containers {
+	for _, container := range kjob.Spec.Template.Spec.Containers {
 		if container.Name == "checkout" {
 			t.Error("with `checkout: skip: true`: checkout container is present, want no checkout container")
 		}
@@ -385,19 +414,19 @@ func TestFailureJobs(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	input := &api.CommandJob{
+	job := &api.CommandJob{
 		Uuid:            "abc",
 		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	wrapper := scheduler.NewJobWrapper(zaptest.NewLogger(t), input, scheduler.Config{})
-	err = wrapper.ParsePlugins()
+	wrapper := scheduler.New(zaptest.NewLogger(t), nil, scheduler.Config{})
+	inputs, err := wrapper.ParseJob(job)
 	require.Error(t, err)
 
-	result, err := wrapper.BuildFailureJob(err)
+	kjob, err := wrapper.BuildFailureJob(err, inputs)
 	require.NoError(t, err)
 
-	commandContainer := findContainer(t, result.Spec.Template.Spec.Containers, "container-0")
+	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
 	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
 	assert.Equal(
 		t,
@@ -405,7 +434,43 @@ func TestFailureJobs(t *testing.T) {
 		commandEnv.Value,
 	)
 
-	for _, c := range result.Spec.Template.Spec.Containers {
+	for _, c := range kjob.Spec.Template.Spec.Containers {
+		assert.NotEqual(t, c.Name, "checkout")
+	}
+}
+
+func TestProhibitKubernetesPlugin(t *testing.T) {
+	t.Parallel()
+	pluginsJSON, err := json.Marshal([]map[string]any{
+		{
+			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": scheduler.KubernetesPlugin{},
+		},
+	})
+	require.NoError(t, err)
+
+	job := &api.CommandJob{
+		Uuid:            "abc",
+		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+		AgentQueryRules: []string{"queue=kubernetes"},
+	}
+	worker := scheduler.New(zaptest.NewLogger(t), nil, scheduler.Config{
+		ProhibitK8sPlugin: true,
+	})
+	inputs, err := worker.ParseJob(job)
+	require.Error(t, err)
+
+	kjob, err := worker.BuildFailureJob(err, inputs)
+	require.NoError(t, err)
+
+	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
+	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
+	assert.Equal(
+		t,
+		`echo "the kubernetes plugin is prohibited by this controller, but was configured on this job" && exit 1`,
+		commandEnv.Value,
+	)
+
+	for _, c := range kjob.Spec.Template.Spec.Containers {
 		assert.NotEqual(t, c.Name, "checkout")
 	}
 }

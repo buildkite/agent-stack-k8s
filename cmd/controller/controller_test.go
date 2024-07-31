@@ -30,6 +30,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		Org:                         "my-buildkite-org",
 		Tags:                        []string{"queue=my-queue", "priority=high"},
 		ClusterUUID:                 "beefcafe-abbe-baba-abba-deedcedecade",
+		ProhibitKubernetesPlugin:    true,
 		DefaultCommandParams: &config.CommandParams{
 			EnvFrom: []corev1.EnvFromSource{{
 				Prefix: "DEPLOY_",

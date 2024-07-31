@@ -39,9 +39,14 @@ type Config struct {
 	AdditionalRedactedVars      stringSlice     `json:"additional-redacted-vars"        validate:"omitempty"`
 	PodSpecPatch                *corev1.PodSpec `json:"pod-spec-patch"                  validate:"omitempty"`
 	ImagePullBackOffGradePeriod time.Duration   `json:"image-pull-backoff-grace-period" validate:"omitempty"`
-	DefaultCheckoutParams       *CheckoutParams `json:"default-checkout-params"                  validate:"omitempty"`
-	DefaultCommandParams        *CommandParams  `json:"default-command-params"                   validate:"omitempty"`
-	DefaultSidecarParams        *SidecarParams  `json:"default-sidecar-params"                   validate:"omitempty"`
+	DefaultCheckoutParams       *CheckoutParams `json:"default-checkout-params"         validate:"omitempty"`
+	DefaultCommandParams        *CommandParams  `json:"default-command-params"          validate:"omitempty"`
+	DefaultSidecarParams        *SidecarParams  `json:"default-sidecar-params"          validate:"omitempty"`
+
+	// ProhibitKubernetesPlugin can be used to prevent alterations to the pod
+	// from the job (the kubernetes "plugin" in pipeline.yml). If enabled,
+	// jobs with a "kubernetes" plugin will fail.
+	ProhibitKubernetesPlugin bool `json:"prohibit-kubernetes-plugin" validate:"omitempty"`
 }
 
 type stringSlice []string
@@ -64,6 +69,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("org", c.Org)
 	enc.AddString("profiler-address", c.ProfilerAddress)
 	enc.AddString("cluster-uuid", c.ClusterUUID)
+	enc.AddBool("prohibit-kubernetes-plugin", c.ProhibitKubernetesPlugin)
 	if err := enc.AddArray("additional-redacted-vars", c.AdditionalRedactedVars); err != nil {
 		return err
 	}

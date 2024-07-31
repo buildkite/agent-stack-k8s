@@ -87,6 +87,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultImagePullBackOffGracePeriod,
 		"Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled)",
 	)
+	cmd.Flags().Bool(
+		"prohibit-kubernetes-plugin",
+		false,
+		"Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
+	)
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.
