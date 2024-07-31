@@ -9,7 +9,7 @@
 - [Installation](#Installation)
   - [Requirements](#Requirements)
   - [Deploy with Helm](#Deploy-with-Helm)
-  - [Options](#Options)   
+  - [Options](#Options)
 - [Sample Buildkite Pipeline](#Sample-Buildkite-Pipelines)
   - [Cloning repos via SSH](#Cloning-repos-via-SSH)
   - [Pod Spec Patch](#Pod-Spec-Patch)
@@ -18,6 +18,8 @@
   - [Skipping checkout](#Skipping-checkout)
   - [Overriding flags for git clone/fetch](#Overriding-flags-for-git-clonefetch)
   - [Validating your pipeline](#Validating-your-pipeline)
+- [Securing the stack](#securing-the-stack)
+  - [Prohibiting the kubernetes plugin (v0.13.0 and later)](#prohibiting-the-kubernetes-plugin-v0130-and-later)
 - [How to setup agent hooks](#How-to-setup-agent-hooks)
 - [Debugging](#Debugging)
 - [Open Questions](#Open-Questions)
@@ -124,7 +126,7 @@ Flags:
   -f, --config string                              config file path
       --debug                                      debug logs
   -h, --help                                       help for agent-stack-k8s
-      --image string                               The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent:3.73.1")
+      --image string                               The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent:3.75.1")
       --image-pull-backoff-grace-period duration   Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled) (default 30s)
       --job-ttl duration                           time to retain kubernetes jobs after completion (default 10m0s)
       --max-in-flight int                          max jobs in flight, 0 means no max (default 25)
@@ -132,6 +134,7 @@ Flags:
       --org string                                 Buildkite organization name to watch
       --poll-interval duration                     time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start (default 1s)
       --profiler-address string                    Bind address to expose the pprof profiler (e.g. localhost:6060)
+      --prohibit-kubernetes-plugin                 Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec
       --tags strings                               A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux") (default [queue=kubernetes])
 
 Use "agent-stack-k8s [command] --help" for more information about a command.
@@ -447,7 +450,6 @@ steps:
         fetchFlags: -v --prune --tags
 ```
 
-
 ### Validating your pipeline
 
 With the unstructured nature of Buildkite plugin specs, it can be frustratingly
@@ -459,6 +461,25 @@ configuration.
 This currently can't prevent every sort of error, you might still have a reference to a Kubernetes volume that doesn't exist, or other errors of that sort, but it will validate that the fields match the API spec we expect.
 
 Our JSON schema can also be used with editors that support JSON Schema by configuring your editor to validate against the schema found [here](./cmd/linter/schema.json).
+
+## Securing the stack
+
+### Prohibiting the kubernetes plugin (v0.13.0 and later)
+
+Suppose you want to enforce the podSpec used for all jobs at the controller level, and prevent users from setting or overriding that podSpec (or various other parameters) through use of the kubernetes plugin.
+This can be achieved with `prohibit-kubernetes-plugin`, either as a controller flag or within the config `values.yaml`:
+
+```yaml
+# values.yaml
+...
+config:
+  prohibit-kubernetes-plugin: true
+  pod-spec-patch:
+    # Override the default podSpec here.
+  ...
+```
+
+With `prohibit-kubernetes-plugin` enabled, any job containing the kubernetes plugin will fail.
 
 ## How to setup agent hooks
 
@@ -472,7 +493,7 @@ Here is the command to create `configmap` which will have agent hooks in it:
 kubectl create configmap buildkite-agent-hooks --from-file=/tmp/hooks -n buildkite
 ```
 We have all the hooks under directory `/tmp/hooks` and we are creating `configmap` with name `buildkite-agent-hooks` in `buildkite`
-namespace in the k8s cluster. 
+namespace in the k8s cluster.
 
 Here is how to make these hooks in configmap available to the containers. Here is the pipeline config for setting up agent hooks:
 
@@ -505,15 +526,15 @@ steps:
 There are 3 main aspects we need to make sure that happen for hooks to be available to the containers in `agent-stack-k8s`.
 
 1. Define env `BUILDKITE_HOOKS_PATH` with the path `agent ` and `checkout` containers will look for hooks
-   
+
    ```
           env:
           - name: BUILDKITE_HOOKS_PATH
             value: /buildkite/hooks
    ```
-   
+
 2. Define `VolumeMounts` using `extraVolumeMounts` which will be the path where the hooks will be mounted to with in the containers
-   
+
    ```
          extraVolumeMounts:
         - mountPath: /buildkite/hooks
@@ -521,7 +542,7 @@ There are 3 main aspects we need to make sure that happen for hooks to be availa
    ```
 
 3. Define `volumes` where the configmap will be mounted
-   
+
    ```
            volumes:
           - configMap:
@@ -531,7 +552,7 @@ There are 3 main aspects we need to make sure that happen for hooks to be availa
    ```
    Note: Here defaultMode `493` is setting the Unix permissions to `755` which enables the hooks to be executable. Also another way to make this hooks directory available to containers is to use [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)
    mount but it is not a recommended approach for production environments.
-   
+
 Now when we run this pipeline agent hooks will be available to the container and will run them.
 
 Key difference we will notice with hooks execution with `agent-stack-k8s` is that environment hooks will execute twice, but checkout-related hooks such as `pre-checkout`, `checkout` and `post-checkout`
