@@ -74,10 +74,16 @@ just run --org $ORG --buildkite-token $BUILDKITE_TOKEN --debug --tags 'queue=,os
 
 # Testing Locally
 
-Before you start, check which kubernetes cluster your using by default.
+Before you start, check which kubernetes cluster configuration your using by default.
 
 ```
-kubectl cluster-info
+kubectl config current-context
+```
+
+To see the entire configuration.
+
+```
+kubectl config view
 ```
 
 Running all the unit tests locally is done as follows:
