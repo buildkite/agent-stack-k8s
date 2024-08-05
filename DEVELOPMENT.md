@@ -52,16 +52,44 @@ Concretely, to get the integration test running locally, you will need:
    cluster.
 3. Your organization name in Buildkite and your target Buildkite Cluster UUID.
 4. Depending on test cases, you may also need a SSH keys, please read below.
-5. Your shell environment will need CLI write access to a k8s cluster.
+5. Your shell environment will need CLI write access to a k8s cluster such as the one provided by https://orbstack.dev/.
 
 ### Use environment variables
 
-We found it's convenient to supply API token, organization name, and cluster UUID as environment variables.
+We found it's convenient to supply API token, organization name, and cluster UUID as environment variables. This can be done using an `.envrc` file loaded by using [direnv](https://direnv.net/).
 
 ```bash
 export BUILDKITE_TOKEN="bkua_**************"
 export ORG="your-cool-org-slug"
 export CLUSTER_UUID="UUID-UUID-UUID-UUID"
+```
+
+# Running Locally
+
+To run the controller locally, with the environment variables, note in this example I am overriding the queue to ensure jobs from the default queue which is "", are picked up by this agent.
+
+```
+just run --org $ORG --buildkite-token $BUILDKITE_TOKEN --debug --tags 'queue=,os=linux'
+```
+
+# Testing Locally
+
+Before you start, check which kubernetes cluster your using by default.
+
+```
+kubectl cluster-info
+```
+
+Running all the unit tests locally is done as follows:
+
+```
+go test -v -cover `go list ./... | grep -v internal/integration`
+```
+
+To run the integration tests, with the overrides from your environment, you can use the following command:
+
+```
+just test -timeout 10m -v ./internal/integration/... -args --org $ORG --buildkite-token $BUILDKITE_TOKEN
 ```
 
 ### Token Scopes
