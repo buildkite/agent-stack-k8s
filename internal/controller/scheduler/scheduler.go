@@ -15,7 +15,9 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
+
 	"github.com/buildkite/agent/v3/clicommand"
+
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -39,7 +41,7 @@ var errK8sPluginProhibited = errors.New("the kubernetes plugin is prohibited by 
 type Config struct {
 	Namespace              string
 	Image                  string
-	AgentToken             string
+	AgentTokenSecretName   string
 	JobTTL                 time.Duration
 	AdditionalRedactedVars []string
 	DefaultCheckoutParams  *config.CheckoutParams
@@ -86,8 +88,8 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 
 	inputs, err := w.ParseJob(job)
 	if err != nil {
-		logger.Warn("Plugin parsing failed, creating failure job instead", zap.Error(err))
-		return w.buildAndCreateFallbackJob(ctx, err, inputs)
+		logger.Warn("Job parsing failed, failing job", zap.Error(err))
+		return w.failJob(ctx, job.Uuid, fmt.Sprintf("agent-stack-k8s failed to parse the job: %v", err))
 	}
 
 	// Default command container using default image.
@@ -106,24 +108,16 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 
 	kjob, err := w.Build(podSpec, false, inputs)
 	if err != nil {
-		logger.Warn("Job definition error detected, creating failure job instead", zap.Error(err))
-		return w.buildAndCreateFallbackJob(ctx, err, inputs)
+		logger.Warn("Job definition error detected, failing job", zap.Error(err))
+		return w.failJob(ctx, job.Uuid, fmt.Sprintf("agent-stack-k8s failed to build a podSpec for the job: %v", err))
 	}
 
 	err = w.createJob(ctx, kjob)
 	if kerrors.IsInvalid(err) {
-		logger.Warn("Job creation failed, creating failure job instead", zap.Error(err))
-		return w.buildAndCreateFallbackJob(ctx, err, inputs)
+		logger.Warn("Job creation failed, failing job", zap.Error(err))
+		return w.failJob(ctx, job.Uuid, fmt.Sprintf("Kubernetes rejected the podSpec built by agent-stack-k8s: %v", err))
 	}
 	return err
-}
-
-func (w *worker) buildAndCreateFallbackJob(ctx context.Context, err error, inputs buildInputs) error {
-	kjob, ferr := w.BuildFailureJob(err, inputs)
-	if ferr != nil {
-		return fmt.Errorf("job definition error and failure job definition error: %w", err)
-	}
-	return w.createJob(ctx, kjob)
 }
 
 func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job) error {
@@ -246,7 +240,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			Name: agentTokenKey,
 			ValueFrom: &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.AgentToken},
+					LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.AgentTokenSecretName},
 					Key:                  agentTokenKey,
 				},
 			},
@@ -666,31 +660,15 @@ su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
 	return checkoutContainer
 }
 
-func (w *worker) BuildFailureJob(err error, inputs buildInputs) (*batchv1.Job, error) {
-	command := fmt.Sprintf("echo %q && exit 1", err.Error())
-	podSpec := &corev1.PodSpec{
-		Containers: []corev1.Container{
-			{
-				// the configured agent image may be private. If there is an error in specifying the
-				// secrets for this image, we should still be able to run the failure job. So, we
-				// bypass the potentially private image and use a public one. We could use a
-				// thinner public image like `alpine:latest`, but it's generally unwise to depend
-				// on an image that's not published by us.
-				Image:   config.DefaultAgentImage,
-				Command: []string{command},
-			},
-		},
+// failJob fails the job in Buildkite.
+func (w *worker) failJob(ctx context.Context, jobUUID, message string) error {
+	// Need to fetch the agent token ourselves.
+	agentToken, err := fetchAgentToken(ctx, w.logger, w.client, w.cfg.Namespace, w.cfg.AgentTokenSecretName)
+	if err != nil {
+		w.logger.Error("fetching agent token from secret", zap.Error(err))
+		return err
 	}
-	// Command is overridden with the "print error and exit" command above.
-	// k8sPlugin and otherPlugins are disabled for the failure job.
-	return w.Build(podSpec, true, buildInputs{
-		uuid:            inputs.uuid,
-		command:         command,
-		agentQueryRules: inputs.agentQueryRules,
-		envMap:          inputs.envMap,
-		k8sPlugin:       nil,
-		otherPlugins:    nil,
-	})
+	return failJob(ctx, w.logger, agentToken, jobUUID, message)
 }
 
 func (w *worker) labelWithAgentTags(dstLabels map[string]string, agentQueryRules []string) {
