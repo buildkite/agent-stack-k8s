@@ -29,11 +29,12 @@ import (
 )
 
 const (
-	defaultTermGracePeriodSeconds = 60
-	agentTokenKey                 = "BUILDKITE_AGENT_TOKEN"
-	AgentContainerName            = "agent"
-	CopyAgentContainerName        = "copy-agent"
-	CheckoutContainerName         = "checkout"
+	defaultTermGracePeriodSeconds     = 60
+	agentTokenKey                     = "BUILDKITE_AGENT_TOKEN"
+	AgentContainerName                = "agent"
+	CopyAgentContainerName            = "copy-agent"
+	ImagePullCheckContainerNamePrefix = "imagepullcheck-"
+	CheckoutContainerName             = "checkout"
 )
 
 var errK8sPluginProhibited = errors.New("the kubernetes plugin is prohibited by this controller, but was configured on this job")
@@ -89,7 +90,7 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 	inputs, err := w.ParseJob(job)
 	if err != nil {
 		logger.Warn("Job parsing failed, failing job", zap.Error(err))
-		return w.failJob(ctx, job.Uuid, fmt.Sprintf("agent-stack-k8s failed to parse the job: %v", err))
+		return w.failJob(ctx, inputs, fmt.Sprintf("agent-stack-k8s failed to parse the job: %v", err))
 	}
 
 	// Default command container using default image.
@@ -109,13 +110,13 @@ func (w *worker) Create(ctx context.Context, job *api.CommandJob) error {
 	kjob, err := w.Build(podSpec, false, inputs)
 	if err != nil {
 		logger.Warn("Job definition error detected, failing job", zap.Error(err))
-		return w.failJob(ctx, job.Uuid, fmt.Sprintf("agent-stack-k8s failed to build a podSpec for the job: %v", err))
+		return w.failJob(ctx, inputs, fmt.Sprintf("agent-stack-k8s failed to build a podSpec for the job: %v", err))
 	}
 
 	err = w.createJob(ctx, kjob)
 	if kerrors.IsInvalid(err) {
 		logger.Warn("Job creation failed, failing job", zap.Error(err))
-		return w.failJob(ctx, job.Uuid, fmt.Sprintf("Kubernetes rejected the podSpec built by agent-stack-k8s: %v", err))
+		return w.failJob(ctx, inputs, fmt.Sprintf("Kubernetes rejected the podSpec built by agent-stack-k8s: %v", err))
 	}
 	return err
 }
@@ -417,7 +418,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		agentTags = append(agentTags, tags...)
 	}
 
-	// agent server container
+	// Agent server container
+	// This runs the "upper layer" of the agent that is responsible for talking
+	// to Buildkite: acquiring the job, starting the job, uploading log chunks,
+	// finishing the job.
 	agentContainer := corev1.Container{
 		Name:            AgentContainerName,
 		Args:            []string{"start"},
@@ -473,22 +477,115 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		)
 	}
 
-	podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
-		Name:            CopyAgentContainerName,
-		Image:           w.cfg.Image,
-		ImagePullPolicy: corev1.PullAlways,
-		Command:         []string{"cp"},
-		Args: []string{
-			"/usr/local/bin/buildkite-agent",
-			"/workspace",
-		},
-		VolumeMounts: []corev1.VolumeMount{
-			{
+	// Init containers. These run in order before the regular containers.
+	// We run some init containers before any specified in the given podSpec.
+	//
+	// We use an init container to copy buildkite-agent into /workspace.
+	// We also use init containers to check that images can be pulled before
+	// any other containers run.
+	//
+	// Why not let Kubernetes worry about pulling images as needed? Well...
+	// If Kubernetes can't pull an image, the container stays in Waiting with
+	// ImagePullBackOff. But Kubernetes also tries to start containers ASAP.
+	// This behaviour is fine for when you are using Kubernetes to run services,
+	// such as a web server or database, because you are DevOps and are dealing
+	// with Kubernetes more directly.
+	// Since the agent, command, checkout etc are in separate containers, we can
+	// be in the awkward situation of having started a BK job with an agent
+	// running happily in the agent server container, but any of the other pod
+	// containers can still be waiting on an image that can't be pulled.
+	//
+	// Over here in the agent-stack-k8s controller, we can detect
+	// ImagePullBackOff using the k8s API (see imagePullBackOffWatcher.go) but
+	// our options for pulling the plug on a job that's already started are
+	// limited, because we can't steal responsibility for the job from the
+	// already-running agent.
+	//
+	// We can:
+	//  * kill the agent container (agent lost, which looks weird)
+	//  * use GraphQL to cancel the job, rely on the agent to count the
+	//    containers that connected to it through the socket, and spit out an
+	//    error in the log that is easy to miss. (This is what we used to do.)
+	// Both those options suck.
+	//
+	// So instead, we pull each required image in its own init container and
+	// set the entrypoint to the equivalent of "/bin/true".
+	// If the image pull fails, we can use agentcore to fail the job directly.
+	// This early detection approach is also useful in a CI/CD context since the
+	// user is more likely to be playing with pipeline configurations.
+	//
+	// The main downside to pre-pulling images with init containers is that
+	// init containers do not run in parallel, so Kubernetes might well decide
+	// not to pull them in parallel. Also there's no agent running to report
+	// that we're currently waiting for the image pull. (In the BK UI, the job
+	// will sit in "waiting for agent" for a bit.)
+	//
+	// TODO: investigate agent modifications to accept handover of a started
+	// job (i.e. make the controller acquire the job, log some k8s progress,
+	// then hand over the job token to the agent in the pod.)
+	initContainers := []corev1.Container{
+		{
+			// This container copies buildkite-agent into /workspace.
+			Name:            CopyAgentContainerName,
+			Image:           w.cfg.Image,
+			ImagePullPolicy: corev1.PullAlways,
+			Command:         []string{"cp"},
+			Args: []string{
+				"/usr/local/bin/buildkite-agent",
+				"/workspace",
+			},
+			VolumeMounts: []corev1.VolumeMount{{
 				Name:      "workspace",
 				MountPath: "/workspace",
-			},
+			}},
 		},
-	})
+	}
+
+	// Pre-pull these images. (Note that even when specifying PullAlways,
+	// layers can still be cached on the node.)
+	preflightImagePulls := map[string]struct{}{}
+	for _, c := range podSpec.Containers {
+		preflightImagePulls[c.Image] = struct{}{}
+	}
+	for _, c := range podSpec.EphemeralContainers {
+		preflightImagePulls[c.Image] = struct{}{}
+	}
+	// w.cfg.Image is the first init container, so we don't need to add another
+	// container specifically to check it can pull. Same goes for user-supplied
+	// init containers.
+	delete(preflightImagePulls, w.cfg.Image)
+	for _, c := range podSpec.InitContainers {
+		delete(preflightImagePulls, c.Image)
+	}
+
+	i := 0
+	for image := range preflightImagePulls {
+		name := ImagePullCheckContainerNamePrefix + strconv.Itoa(i)
+		w.logger.Info("creating preflight image pull init container", zap.String("name", name), zap.String("image", image))
+		initContainers = append(initContainers, corev1.Container{
+			Name:            name,
+			Image:           image,
+			ImagePullPolicy: corev1.PullAlways,
+			// We run `buildkite-agent --version` to exit the container
+			// immediately with success.
+			// Why not /bin/true or sh -c 'exit 0'? Because `true` and `sh`
+			// might not be present in the image (e.g. built from scratch).
+			// Why not, say, copy Busybox (from the agent image, based on alpine)
+			// into /workspace as `true`?
+			// Because Alpine Busybox is dynamically linked against musl, and
+			// musl might not be present.
+			Command: []string{"/workspace/buildkite-agent"},
+			Args:    []string{"--version"},
+			VolumeMounts: []corev1.VolumeMount{{
+				Name:      "workspace",
+				MountPath: "/workspace",
+			}},
+		})
+		i++
+	}
+
+	podSpec.InitContainers = append(initContainers, podSpec.InitContainers...)
+
 	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
 		Name: "workspace",
 		VolumeSource: corev1.VolumeSource{
@@ -661,14 +758,14 @@ su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
 }
 
 // failJob fails the job in Buildkite.
-func (w *worker) failJob(ctx context.Context, jobUUID, message string) error {
+func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string) error {
 	// Need to fetch the agent token ourselves.
 	agentToken, err := fetchAgentToken(ctx, w.logger, w.client, w.cfg.Namespace, w.cfg.AgentTokenSecretName)
 	if err != nil {
 		w.logger.Error("fetching agent token from secret", zap.Error(err))
 		return err
 	}
-	return failJob(ctx, w.logger, agentToken, jobUUID, message)
+	return failJob(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, message)
 }
 
 func (w *worker) labelWithAgentTags(dstLabels map[string]string, agentQueryRules []string) {

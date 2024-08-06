@@ -14,13 +14,25 @@ rules:
       - create
       - update
   - apiGroups:
-    - ""
+      - ""
     resources:
-    - pods
+      - pods
     verbs:
-    - get
-    - list
-    - watch
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - pods/eviction
+    verbs:
+      - create
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
