@@ -157,7 +157,7 @@ func TestJobPluginConversion(t *testing.T) {
 		zaptest.NewLogger(t),
 		nil,
 		scheduler.Config{
-			AgentToken: "token-secret",
+			AgentTokenSecretName: "token-secret",
 		},
 	)
 	inputs, err := worker.ParseJob(job)
@@ -241,7 +241,7 @@ func TestTagEnv(t *testing.T) {
 		logger,
 		nil,
 		scheduler.Config{
-			AgentToken: "token-secret",
+			AgentTokenSecretName: "token-secret",
 		},
 	)
 	inputs, err := worker.ParseJob(job)
@@ -313,9 +313,9 @@ func TestBuild(t *testing.T) {
 		zaptest.NewLogger(t),
 		nil,
 		scheduler.Config{
-			Namespace:  "buildkite",
-			Image:      "buildkite/agent:latest",
-			AgentToken: "bkcq_1234567890",
+			Namespace:            "buildkite",
+			Image:                "buildkite/agent:latest",
+			AgentTokenSecretName: "bkcq_1234567890",
 			PodSpecPatch: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
@@ -381,9 +381,9 @@ func TestBuildSkipCheckout(t *testing.T) {
 		zaptest.NewLogger(t),
 		nil,
 		scheduler.Config{
-			Namespace:  "buildkite",
-			Image:      "buildkite/agent:latest",
-			AgentToken: "bkcq_1234567890",
+			Namespace:            "buildkite",
+			Image:                "buildkite/agent:latest",
+			AgentTokenSecretName: "bkcq_1234567890",
 		},
 	)
 	inputs, err := worker.ParseJob(job)
@@ -420,23 +420,8 @@ func TestFailureJobs(t *testing.T) {
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	wrapper := scheduler.New(zaptest.NewLogger(t), nil, scheduler.Config{})
-	inputs, err := wrapper.ParseJob(job)
+	_, err = wrapper.ParseJob(job)
 	require.Error(t, err)
-
-	kjob, err := wrapper.BuildFailureJob(err, inputs)
-	require.NoError(t, err)
-
-	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
-	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
-	assert.Equal(
-		t,
-		`echo "failed parsing Kubernetes plugin: json: cannot unmarshal string into Go value of type scheduler.KubernetesPlugin" && exit 1`,
-		commandEnv.Value,
-	)
-
-	for _, c := range kjob.Spec.Template.Spec.Containers {
-		assert.NotEqual(t, c.Name, "checkout")
-	}
 }
 
 func TestProhibitKubernetesPlugin(t *testing.T) {
@@ -456,23 +441,8 @@ func TestProhibitKubernetesPlugin(t *testing.T) {
 	worker := scheduler.New(zaptest.NewLogger(t), nil, scheduler.Config{
 		ProhibitK8sPlugin: true,
 	})
-	inputs, err := worker.ParseJob(job)
+	_, err = worker.ParseJob(job)
 	require.Error(t, err)
-
-	kjob, err := worker.BuildFailureJob(err, inputs)
-	require.NoError(t, err)
-
-	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
-	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
-	assert.Equal(
-		t,
-		`echo "the kubernetes plugin is prohibited by this controller, but was configured on this job" && exit 1`,
-		commandEnv.Value,
-	)
-
-	for _, c := range kjob.Spec.Template.Spec.Containers {
-		assert.NotEqual(t, c.Name, "checkout")
-	}
 }
 
 func findContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {
