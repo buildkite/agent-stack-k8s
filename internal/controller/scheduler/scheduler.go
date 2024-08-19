@@ -708,6 +708,53 @@ func (w *worker) createCheckoutContainer(
 		}
 	}
 
+	// If configured, set up a volume mount of a secret containing a
+	// .git-credentials file. k8sPlugin (if allowed) supersedes the default.
+	gitCredsSecret := w.cfg.DefaultCheckoutParams.GitCredsSecret()
+	if k8sPlugin != nil {
+		gitCredsSecret = k8sPlugin.CheckoutParams.GitCredsSecret()
+	}
+	gitConfigCmd := "true"
+	if gitCredsSecret != nil {
+		podSpec.Volumes = append(podSpec.Volumes,
+			corev1.Volume{
+				Name:         "git-credentials-ro",
+				VolumeSource: corev1.VolumeSource{Secret: gitCredsSecret},
+			},
+			corev1.Volume{
+				Name: "git-credentials",
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: &corev1.EmptyDirVolumeSource{
+						Medium: "Memory",
+					},
+				},
+			},
+		)
+
+		checkoutContainer.VolumeMounts = append(checkoutContainer.VolumeMounts,
+			corev1.VolumeMount{
+				Name:      "git-credentials-ro",
+				MountPath: "/buildkite/git-credentials-ro",
+			},
+			corev1.VolumeMount{
+				Name:      "git-credentials",
+				MountPath: "/buildkite/git-credentials",
+			},
+		)
+
+		// Why copy the file between volumes instead of mounting it directly
+		// into place?
+		// K8s secret mounts are *always* read only, but the 'store' credential
+		// helper always tries to write back to the file.
+		// If we didn't do this, we'd get some alarming-looking log lines like:
+		// "fatal: unable to write credential store: Resource busy"
+		// (despite Git being a drama llama, the failure doesn't impact the
+		// checkout process in any meaningful way).
+		// TODO: replace this nonsense with a better git credential helper
+		gitConfigCmd = "cp /buildkite/git-credentials-ro/.git-credentials /buildkite/git-credentials && " +
+			"git config --global credential.helper 'store --file /buildkite/git-credentials/.git-credentials'"
+	}
+
 	// Ensure that the checkout occurs as the user/group specified in the pod's security context.
 	// we will create a buildkite-agent user/group in the checkout container as needed and switch
 	// to it. The created user/group will have the uid/gid specified in the pod's security context.
@@ -717,16 +764,17 @@ func (w *worker) createCheckoutContainer(
 		checkoutContainer.SecurityContext = &corev1.SecurityContext{
 			RunAsUser:    ptr.To[int64](0),
 			RunAsGroup:   ptr.To[int64](0),
-			RunAsNonRoot: ptr.To[bool](false),
+			RunAsNonRoot: ptr.To(false),
 		}
 
 		checkoutContainer.Command = []string{"ash", "-c"}
 		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
 addgroup -g %d buildkite-agent
 adduser -D -u %d -G buildkite-agent -h /workspace buildkite-agent
-su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
+su buildkite-agent -c "%s && buildkite-agent-entrypoint bootstrap"`,
 			podGroup,
 			podUser,
+			gitConfigCmd,
 		)}
 
 	case podUser != 0 && podGroup == 0:
@@ -740,8 +788,9 @@ su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
 		checkoutContainer.Command = []string{"ash", "-c"}
 		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
 adduser -D -u %d -G root -h /workspace buildkite-agent
-su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
+su buildkite-agent -c "%s && buildkite-agent-entrypoint bootstrap"`,
 			podUser,
+			gitConfigCmd,
 		)}
 
 	// If the group is not root, but the user is root, I don't think we NEED to do anything. It's fine
@@ -749,9 +798,11 @@ su buildkite-agent -c "buildkite-agent-entrypoint bootstrap"`,
 	// context has a non-root group.
 	default:
 		checkoutContainer.SecurityContext = nil
-		// these are the default, but that default is sepciifed in the agent repo, so lets make it explicit
-		checkoutContainer.Command = []string{"buildkite-agent-entrypoint"}
-		checkoutContainer.Args = []string{"bootstrap"}
+		checkoutContainer.Command = []string{"ash", "-c"}
+		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
+%s
+buildkite-agent-entrypoint bootstrap`,
+			gitConfigCmd)}
 	}
 
 	return checkoutContainer

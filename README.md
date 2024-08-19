@@ -12,6 +12,7 @@
   - [Options](#Options)
 - [Sample Buildkite Pipeline](#Sample-Buildkite-Pipelines)
   - [Cloning repos via SSH](#Cloning-repos-via-SSH)
+  - [Cloning repos via HTTPS](#Cloning-repos-via-HTTPS)
   - [Pod Spec Patch](#Pod-Spec-Patch)
   - [Sidecars](#Sidecars)
   - [Extra volume mounts](#Extra-volume-mounts)
@@ -267,6 +268,70 @@ steps:
                   - --image=ttl.sh/example:1h
 ```
 
+### Cloning repos via HTTPS
+
+To use HTTPS to clone private repos, you can use a `.git-credentials` file stored in a secret, and
+refer to this secret using the `gitCredentialsSecret` checkout parameter.
+
+By default, this secret is only attached, and Git is only configured to use it, within the
+`checkout` container. It will not necessarily be available in your job containers.
+If you need the `.git-credentials` file inside the other containers as well, you can add a volume
+mount for the `git-credentials` volume, and configure Git to use the file within it (e.g. with
+`git config credential.helper 'store --file ...'`)
+
+#### Example secret creation for HTTPS cloning
+Once again, this example is illustrative only.
+
+First, create a Kubernetes secret containing the key `.git-credentials`, formatted in the manner
+expected by [the `store` Git credendial helper](https://git-scm.com/docs/git-credential-store):
+
+```bash
+kubectl create secret generic my-git-credentials --from-file='.git-credentials'="$HOME/.git-credentials"
+```
+
+Then you can use the `checkout/gitCredentialsSecret` (in your pipeline) or
+`default-checkout-params/gitCredentialsSecret` (in values.yaml) to reference the secret volume
+source:
+
+```yaml
+# pipeline.yaml
+steps:
+  - label: build image
+    agents:
+      queue: kubernetes
+    plugins:
+      - kubernetes:
+          checkout:
+            gitCredentialsSecret:
+              secretName: my-git-credentials # <----
+          podSpec:
+            ...
+```
+
+```yaml
+# values.yaml
+...
+default-checkout-params:
+  gitCredentialsSecret:
+    secretName: my-git-credentials
+...
+```
+
+If you wish to use a different key within the secret than `.git-credentials`, you can
+[project it](https://kubernetes.io/docs/tasks/inject-data-application/distribute-credentials-secure/#project-secret-keys-to-specific-file-paths)
+to `.git-credentials` by using `items` within `gitCredentialsSecret`.
+
+```yaml
+# values.yaml
+...
+default-checkout-params:
+  gitCredentialsSecret:
+    secretName: my-git-credentials
+    items:
+    - key: funky-creds
+      path: .git-credentials
+...
+```
 
 ### Pod Spec Patch
 Rather than defining the entire Pod Spec in a step, there is the option to define a [strategic merge patch](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/) in the controller.
