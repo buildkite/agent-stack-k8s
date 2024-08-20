@@ -118,10 +118,11 @@ func (sc *SidecarParams) ApplyTo(ctr *corev1.Container) {
 // CheckoutParams contains parameters that provide additional control over the
 // checkout container.
 type CheckoutParams struct {
-	Skip       *bool                  `json:"skip,omitempty"`
-	CloneFlags *string                `json:"cloneFlags,omitempty"`
-	FetchFlags *string                `json:"fetchFlags,omitempty"`
-	EnvFrom    []corev1.EnvFromSource `json:"envFrom,omitempty"`
+	Skip                 *bool                      `json:"skip,omitempty"`
+	CloneFlags           *string                    `json:"cloneFlags,omitempty"`
+	FetchFlags           *string                    `json:"fetchFlags,omitempty"`
+	GitCredentialsSecret *corev1.SecretVolumeSource `json:"gitCredentialsSecret,omitempty"`
+	EnvFrom              []corev1.EnvFromSource     `json:"envFrom,omitempty"`
 }
 
 func (co *CheckoutParams) ApplyTo(ctr *corev1.Container) {
@@ -141,4 +142,11 @@ func (co *CheckoutParams) ApplyTo(ctr *corev1.Container) {
 		})
 	}
 	ctr.EnvFrom = append(ctr.EnvFrom, co.EnvFrom...)
+}
+
+func (co *CheckoutParams) GitCredsSecret() *corev1.SecretVolumeSource {
+	if co == nil {
+		return nil
+	}
+	return co.GitCredentialsSecret
 }

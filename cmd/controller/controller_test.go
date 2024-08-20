@@ -42,6 +42,9 @@ func TestReadAndParseConfig(t *testing.T) {
 			}},
 		},
 		DefaultCheckoutParams: &config.CheckoutParams{
+			GitCredentialsSecret: &corev1.SecretVolumeSource{
+				SecretName: "my-git-credentials",
+			},
 			EnvFrom: []corev1.EnvFromSource{{
 				Prefix: "GITHUB_",
 				SecretRef: &corev1.SecretEnvSource{

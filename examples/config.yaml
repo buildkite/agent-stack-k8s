@@ -23,6 +23,8 @@ prohibit-kubernetes-plugin: true
 
 # Applies to the checkout container in all spawned pods
 default-checkout-params:
+  gitCredentialsSecret:
+    secretName: "my-git-credentials"
   envFrom:
     - prefix: GITHUB_
       secretRef:

@@ -252,6 +252,9 @@
               "default": null,
               "title": "If set, appends the BUILDKITE_GIT_FETCH_FLAGS variable"
             },
+            "gitCredentialsSecret": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.SecretVolumeSource"
+            },
             "envFrom": {
               "type": "array",
               "default": [],
