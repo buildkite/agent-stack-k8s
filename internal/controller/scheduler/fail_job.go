@@ -23,13 +23,14 @@ func failJob(
 	zapLogger *zap.Logger,
 	agentToken string,
 	jobUUID string,
+	tags []string,
 	message string,
 ) error {
 	ctr, err := agentcore.NewController(
 		ctx,
 		agentToken,
 		kjobName(jobUUID),
-		nil, // Not bothering with tags, since we're acquiring the job
+		tags, // queue is required for acquire! maybe more
 		agentcore.WithUserAgent("agent-stack-k8s/"+version.Version()),
 		agentcore.WithLogger(logger.NewConsoleLogger(logger.NewTextPrinter(os.Stderr), func(int) {})),
 	)

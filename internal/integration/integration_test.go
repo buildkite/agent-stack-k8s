@@ -375,10 +375,10 @@ func TestEnvVariables(t *testing.T) {
 	tc.AssertLogsContain(build, "Testing some env variables: set")
 }
 
-func TestImagePullBackOffCancelled(t *testing.T) {
+func TestImagePullBackOffFailed(t *testing.T) {
 	tc := testcase{
 		T:       t,
-		Fixture: "image-pull-back-off-cancelled.yaml",
+		Fixture: "image-pull-back-off-failed.yaml",
 		Repo:    repoHTTP,
 		GraphQL: api.NewClient(cfg.BuildkiteToken),
 	}.Init()
@@ -388,21 +388,7 @@ func TestImagePullBackOffCancelled(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
 	tc.AssertLogsContain(build, "other job has run")
-}
-
-// Asserting that we only kill jobs for image pullbackoff on our system containers.
-func TestImagePullBackOffOnSidecar(t *testing.T) {
-	tc := testcase{
-		T:       t,
-		Fixture: "image-pull-back-off-sidecar.yaml",
-		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
-	}.Init()
-	ctx := context.Background()
-	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
-	tc.StartController(ctx, cfg)
-	build := tc.TriggerBuild(ctx, pipelineID)
-	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "The following container images couldn't be pulled:\n * buildkite/non-existant-image:latest")
 }
 
 func TestArtifactsUploadFailedJobs(t *testing.T) {
