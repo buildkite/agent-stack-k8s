@@ -9,4 +9,6 @@ steps:
             containers:
               - image: alpine:latest
                 command:
-                  - sleep 1
+                  - echo ⏱️
+                  - sleep 10
+                  - echo 🔔

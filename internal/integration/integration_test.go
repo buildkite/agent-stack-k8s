@@ -3,6 +3,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -232,21 +233,31 @@ func TestMaxInFlightLimited(t *testing.T) {
 		build, _, err := tc.Buildkite.Builds.Get(
 			cfg.Org,
 			tc.PipelineName,
-			fmt.Sprintf("%d", buildID),
+			strconv.Itoa(buildID),
 			nil,
 		)
-		require.NoError(t, err)
-		if *build.State == "running" {
-			require.LessOrEqual(t, *build.Pipeline.RunningJobsCount, cfg.MaxInFlight)
-		} else if *build.State == "passed" {
-			break
-		} else if *build.State == "scheduled" {
+		if err != nil {
+			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", cfg.Org, tc.PipelineName, build.Number, err)
+		}
+
+		switch *build.State {
+		case "running":
+			if got, want := *build.Pipeline.RunningJobsCount, cfg.MaxInFlight; got > want {
+				t.Fatalf("*build.Pipeline.RunningJobsCount = %d, want <= %d", got, want)
+			}
+
+		case "passed":
+			return
+
+		case "scheduled":
 			t.Log("waiting for build to start")
-			time.Sleep(time.Second)
-			continue
-		} else {
+
+		default:
 			t.Fatalf("unexpected build state: %v", *build.State)
 		}
+
+		// Don't want to hammer the API.
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -262,21 +273,26 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	cfg := cfg
-	cfg.MaxInFlight = 0
+	cfg.MaxInFlight = 0 // unlimited
 	tc.StartController(ctx, cfg)
-	buildID := tc.TriggerBuild(ctx, pipelineID).Number
+	build := tc.TriggerBuild(ctx, pipelineID)
 
-	var maxRunningJobs int
+	maxRunningJobs := 0
+fetchBuildStateLoop:
 	for {
 		build, _, err := tc.Buildkite.Builds.Get(
 			cfg.Org,
 			tc.PipelineName,
-			fmt.Sprintf("%d", buildID),
+			strconv.Itoa(build.Number),
 			nil,
 		)
-		require.NoError(t, err)
-		if *build.State == "running" {
-			var runningJobs int
+		if err != nil {
+			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", cfg.Org, tc.PipelineName, build.Number, err)
+		}
+
+		switch *build.State {
+		case "running":
+			runningJobs := 0
 			for _, job := range build.Jobs {
 				if *job.State == "running" {
 					runningJobs++
@@ -284,14 +300,27 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 			}
 			t.Logf("running, runningJobs: %d", runningJobs)
 			maxRunningJobs = max(maxRunningJobs, runningJobs)
-		} else if *build.State == "passed" {
-			require.Equal(t, 4, maxRunningJobs) // all jobs should have run at once
-			break
-		} else if *build.State == "scheduled" {
+
+		case "passed":
+			break fetchBuildStateLoop
+
+		case "scheduled":
 			t.Log("waiting for build to start")
-		} else {
+
+		default:
 			t.Fatalf("unexpected build state: %v", *build.State)
 		}
+
+		// Don't want to hammer the API.
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	// All jobs _can_ run at once... but there's no guarantee that will
+	// happen. There's no "fence" that could be used to block all the jobs
+	// until they're all running. Until we have something like that, this can
+	// flake.
+	if maxRunningJobs != 4 {
+		t.Errorf("maxRunningJobs = %d, want 4", maxRunningJobs)
 	}
 }
 
