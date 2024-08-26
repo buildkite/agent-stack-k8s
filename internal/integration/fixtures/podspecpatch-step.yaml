@@ -1,14 +1,15 @@
 steps:
   - label: ":wave:"
     agents:
-      queue: {{.queue}}
+      queue: "{{.queue}}"
     plugins:
       - kubernetes:
           podSpec:
             containers:
               - image: alpine:latest
                 name: mountains
-                command: [echo, '"value of MOUNTAIN is \$MOUNTAIN"']
+                command:
+                  - echo "value of MOUNTAIN is \$MOUNTAIN"
           podSpecPatch:
             containers:
               - name: mountains

@@ -1,7 +1,7 @@
 steps:
   - label: ":x:"
     agents:
-      queue: {{.queue}}
+      queue: "{{.queue}}"
     plugins:
       - kubernetes:
           podSpec:
@@ -11,13 +11,11 @@ steps:
                   - "true"
   - label: ":white_check_mark:"
     agents:
-      queue: {{.queue}}
+      queue: "{{.queue}}"
     plugins:
       - kubernetes:
           podSpec:
             containers:
               - image: alpine:3.17.2
                 command:
-                  - echo
-                args:
-                  - other job has run
+                  - echo 'other job has run'

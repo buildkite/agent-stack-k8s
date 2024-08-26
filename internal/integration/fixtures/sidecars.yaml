@@ -1,14 +1,14 @@
 steps:
   - label: ":wave:"
     agents:
-      queue: {{.queue}}
+      queue: "{{.queue}}"
     plugins:
       - kubernetes:
           sidecars:
-          - image: nginx:latest
+            - image: nginx:latest
           podSpec:
             containers:
               - image: curlimages/curl:latest
                 name: curl
-                command: [curl]
-                args: ["--retry 5", "--retry-all-errors", "localhost:80"]
+                command:
+                  - curl --retry 5 --retry-all-errors localhost:80

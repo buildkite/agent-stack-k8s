@@ -1,7 +1,7 @@
 steps:
   - label: ":wave:"
     agents:
-      queue: {{.queue}}
+      queue: "{{.queue}}"
     artifact_paths: "CODE_OF_CONDUCT.md"
     plugins:
       - kubernetes:
@@ -13,8 +13,8 @@ steps:
           podSpec:
             containers:
               - image: alpine:latest
-                command: [cat]
-                args: [README.md]
+                command:
+                  - cat README.md
               - image: buildkite/agent:latest
-                command: [buildkite-agent]
-                args: [artifact, upload, "README.md"]
+                command:
+                  - buildkite-agent artifact upload "README.md"
