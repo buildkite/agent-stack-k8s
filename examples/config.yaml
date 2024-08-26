@@ -32,6 +32,7 @@ default-checkout-params:
 
 # Applies to all command containers in all spawned pods
 default-command-params:
+  interposer: vector
   envFrom:
     - prefix: DEPLOY_
       secretRef:

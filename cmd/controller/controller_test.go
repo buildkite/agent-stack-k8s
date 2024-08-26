@@ -32,6 +32,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		ClusterUUID:                 "beefcafe-abbe-baba-abba-deedcedecade",
 		ProhibitKubernetesPlugin:    true,
 		DefaultCommandParams: &config.CommandParams{
+			Interposer: config.InterposerVector,
 			EnvFrom: []corev1.EnvFromSource{{
 				Prefix: "DEPLOY_",
 				SecretRef: &corev1.SecretEnvSource{

@@ -14,6 +14,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
+
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -170,6 +171,7 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 	// (Setting this option overrides the default.)
 	decodeHook := viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
 		stringToResourceQuantity,
+		config.StringToInterposer,
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
 	))
