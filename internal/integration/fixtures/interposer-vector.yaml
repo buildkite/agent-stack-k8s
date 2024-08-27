@@ -1,0 +1,19 @@
+steps:
+  - label: Hello World!
+    agents:
+      queue: "{{.queue}}"
+    plugins:
+      - kubernetes:
+          commandParams:
+            interposer: vector
+          podSpec:
+            containers:
+              - image: alpine:latest
+                command: ["ash"]
+                args:
+                  - "-c"
+                  - |-
+                    set -euo pipefail
+
+                    echo Hello World!
+                    echo Goodbye World!
