@@ -1,7 +1,7 @@
 steps:
   - label: ":earth_asia:"
     agents:
-      queue: {{.queue}}
+      queue: "{{.queue}}"
     env:
       BUILDKITE_SHELL: /bin/sh -ec
       # Note that this is example is a bit contrived, since environment
@@ -17,8 +17,4 @@ steps:
               # (that are empty, because only pre--checkout is set).
               - image: bash:latest
                 command:
-                - echo
-                args:
-                - >-
-                  Redaction should work in the command container:
-                  $${ELEVEN_HERBS_AND_SPICES}
+                  - 'echo "Redaction should work in the command container: $${ELEVEN_HERBS_AND_SPICES}"'

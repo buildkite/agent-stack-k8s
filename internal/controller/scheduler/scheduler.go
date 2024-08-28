@@ -322,13 +322,23 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	}...)
 
 	for i, c := range podSpec.Containers {
-		// If the command is empty, use the command from the step
+		// Default to the command from the pipeline step
 		command := inputs.command
+
+		// If the container's command is specified, use that
 		if len(c.Command) > 0 {
-			command = strings.Join(append(c.Command, c.Args...), " ")
+			// The plugin overrides the default, if set
+			if p := inputs.k8sPlugin; p != nil && p.CommandParams != nil && p.CommandParams.Interposer != "" {
+				command = p.CommandParams.Command(c.Command, c.Args)
+			} else {
+				command = w.cfg.DefaultCommandParams.Command(c.Command, c.Args)
+			}
 		}
+
+		// Substitute the container's entrypoint for buildkite-agent
 		c.Command = []string{"/workspace/buildkite-agent"}
 		c.Args = []string{"bootstrap"}
+
 		c.ImagePullPolicy = corev1.PullAlways
 		c.Env = append(c.Env, containerEnv...)
 		c.Env = append(c.Env,
@@ -347,13 +357,14 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			inputs.k8sPlugin.CommandParams.ApplyTo(&c)
 		}
 
+		// Supply more required defaults.
 		if c.Name == "" {
-			c.Name = fmt.Sprintf("%s-%d", "container", i)
+			c.Name = fmt.Sprintf("container-%d", i)
 		}
-
 		if c.WorkingDir == "" {
 			c.WorkingDir = "/workspace"
 		}
+
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 		if inputs.k8sPlugin != nil {
 			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)

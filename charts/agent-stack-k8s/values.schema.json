@@ -270,6 +270,12 @@
           "default": null,
           "title": "Default parameters for command containers",
           "properties": {
+            "interposer": {
+              "type": "string",
+              "default": "",
+              "title": "Changes the interpretation of podSpec/command and podSpec/args",
+              "examples": ["buildkite", "vector", "legacy"]
+            },
             "envFrom": {
               "type": "array",
               "default": [],

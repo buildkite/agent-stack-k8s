@@ -37,6 +37,7 @@ When a job is available, the controller will create a pod to acquire and run the
 
 - adding an init container to:
   - copy the agent binary onto the workspace volume
+  - check that other container images pull successfully before starting
 - adding a container to run the buildkite agent
 - adding a container to clone the source repository
 - modifying the user-specified containers to:
@@ -127,7 +128,7 @@ Flags:
   -f, --config string                              config file path
       --debug                                      debug logs
   -h, --help                                       help for agent-stack-k8s
-      --image string                               The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent:3.75.1")
+      --image string                               The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent:3.78.0")
       --image-pull-backoff-grace-period duration   Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled) (default 30s)
       --job-ttl duration                           time to retain kubernetes jobs after completion (default 10m0s)
       --max-in-flight int                          max jobs in flight, 0 means no max (default 25)
@@ -197,14 +198,33 @@ steps:
         containers:
         - image: alpine:latest
           command:
-          - echo
-          - Hello World!
+          - echo Hello World!
 ```
-Note that in a `podSpec`, a `command` should be YAML list that will be combined into a single command for a container to run.
 
 Almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
 
-It's also possible to specify an entire script as a `command`
+### PodSpec command and args interpretation
+
+In a `podSpec`, `command` **must** be a list of strings, since it is [defined by Kubernetes](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#entrypoint).
+However, agent-stack-k8s runs buildkite-agent instead of the container's default entrypoint.
+To run the command you want, it must _re-interpret_ `command` into input for buildkite-agent.
+By default, it treats `command` as a sequence of multiple commands, similar to a pipeline.yaml
+`steps: commands: ...`.
+This is different to Kubernetes' interpretation of `command` (as an entrypoint vector run without a
+shell as a single command).
+
+This "interposer" behaviour can be changed using `commandParams/interposer`:
+
+* `buildkite` is the default, in which agent-stack-k8s treats `command` as a sequence of multiple
+  commands and `args` as extra arguments added to the end of the last command, which is then
+  typically interpreted by the shell.
+* `vector` emulates the Kubernetes interpretation in which `command` and `args` specify components
+  of a single command intended to be run directly.
+* `legacy` is the 0.14.0 and earlier behaviour in which `command` and `args` were joined directly
+  into a single command with spaces.
+
+`buildkite` example:
+
 ```yaml
 steps:
 - label: Hello World!
@@ -212,19 +232,47 @@ steps:
     queue: kubernetes
   plugins:
   - kubernetes:
+      commandParams:
+        interposer: buildkite  # This is the default, and can be omitted.
       podSpec:
         containers:
         - image: alpine:latest
           command:
+          - set -euo pipefail
+          - |-       # <-- YAML block scalars work too
+            echo Hello World! > hello.txt
+            cat hello.txt | buildkite-agent annotate
+```
+
+If you have a multi-line `command`, specifying the `args` as well could lead to confusion, so we
+recommend just using `command`.
+
+`vector` example:
+
+```yaml
+steps:
+- label: Hello World!
+  agents:
+    queue: kubernetes
+  plugins:
+  - kubernetes:
+      commandParams:
+        interposer: vector
+      podSpec:
+        containers:
+        - image: alpine:latest
+          command: ['sh']
+          args:
+          - '-c'
           - |-
-            set -euo pipefail
+            set -eu
 
             echo Hello World! > hello.txt
             cat hello.txt | buildkite-agent annotate
 ```
-If you have a multi-line `command`, specifying the `args` as well could lead to confusion, so we recommend just using `command`.
 
-More samples can be found in the [integration test fixtures directory](internal/integration/fixtures).
+More samples can be found in the
+[integration test fixtures directory](internal/integration/fixtures).
 
 ### Cloning repos via SSH
 
@@ -575,8 +623,7 @@ steps:
       podSpec:
         containers:
         - command:
-          - echo
-          - hello-world
+          - echo hello-world
           image: alpine:latest
           env:
           - name: BUILDKITE_HOOKS_PATH

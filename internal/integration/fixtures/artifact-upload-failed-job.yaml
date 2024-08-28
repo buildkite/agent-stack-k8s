@@ -1,15 +1,15 @@
 steps:
-- label: Test artifact upload for failed job
-  agents:
-    queue: {{.queue}}
-  artifact_paths:
-  - artifact.txt
-  plugins:
-  - kubernetes:
-      podSpec:
-        containers:
-        - image: alpine:latest
-          command:
-          - |-
-            echo "Artifact Data" > artifact.txt
-            exit 1
+  - label: Test artifact upload for failed job
+    agents:
+      queue: "{{.queue}}"
+    artifact_paths:
+      - artifact.txt
+
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: alpine:latest
+                command:
+                  - echo "Artifact Data" > artifact.txt
+                  - exit 1

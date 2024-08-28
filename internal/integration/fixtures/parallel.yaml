@@ -2,11 +2,11 @@ steps:
   - label: ":wave:"
     parallelism: 4
     agents:
-      queue: {{.queue}}
+      queue: "{{.queue}}"
     plugins:
       - kubernetes:
           podSpec:
             containers:
               - image: alpine:latest
-                command: [sleep]
-                args: ["1"]
+                command:
+                  - sleep 1

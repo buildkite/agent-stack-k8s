@@ -405,3 +405,39 @@ func TestArtifactsUploadFailedJobs(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	tc.AssertArtifactsContain(build, "artifact.txt")
 }
+
+func TestInterposerBuildkite(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "interposer-buildkite.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	logs := tc.FetchLogs(build)
+	assert.Contains(t, logs, "Hello World!")
+	assert.Contains(t, logs, "Goodbye World!")
+	assert.NotContains(t, logs, "Hello World! echo Goodbye World!")
+
+}
+
+func TestInterposerVector(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "interposer-vector.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	logs := tc.FetchLogs(build)
+	assert.Contains(t, logs, "Hello World!")
+	assert.Contains(t, logs, "Goodbye World!")
+}

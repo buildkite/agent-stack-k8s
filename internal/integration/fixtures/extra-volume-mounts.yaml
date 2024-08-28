@@ -1,41 +1,40 @@
 agents:
-  queue: {{.queue}}
+  queue: "{{.queue}}"
 env:
   BUILDKITE_GIT_MIRRORS_PATH: /tmp/buildkite-git-mirrors
 steps:
-- label: ":git: Write File to Git Mirror Dir"
-  key: write-file-to-git-mirror-dir
-  plugins:
-  - kubernetes:
-      podSpec:
-        containers:
-        - image: alpine:latest
-          command: [touch]
-          args:
-          - /tmp/buildkite-git-mirrors/foo-$$(BUILDKITE_JOB_ID).txt
-        - image: alpine:latest
-          command:
-          - |-
-            COUNT=0
-            until [[ $$((COUNT++)) == 9 ]]; do
-              [[ -f "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt" ]] && break
-              echo "⚠️ Waiting for /tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt to be written..."
-              sleep 1
-            done
+  - label: ":git: Write File to Git Mirror Dir"
+    key: write-file-to-git-mirror-dir
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: alpine:latest
+                command:
+                  - touch /tmp/buildkite-git-mirrors/foo-$$(BUILDKITE_JOB_ID).txt
+              - image: alpine:latest
+                command:
+                  - |-
+                    COUNT=0
+                    until [[ $$((COUNT++)) == 9 ]]; do
+                      [[ -f "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt" ]] && break
+                      echo "⚠️ Waiting for /tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt to be written..."
+                      sleep 1
+                    done
 
-            if ! [[ -f "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt" ]]; then
-              echo "⛔ /tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt has not been written"
-              exit 1
-            fi
+                    if ! [[ -f "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt" ]]; then
+                      echo "⛔ /tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt has not been written"
+                      exit 1
+                    fi
 
-            echo "✅ /tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt has been written"
-            rm -f "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"
-        volumes:
-        - name: host-volume
-          hostPath:
-            path: /tmp/volumes/{{.queue}}
-            type: DirectoryOrCreate
-      extraVolumeMounts:
-      - name: host-volume
-        mountPath: /tmp/buildkite-git-mirrors
-        subPath: buildkite-git-mirrors
+                    echo "✅ /tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt has been written"
+                    rm -f "/tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt"
+            volumes:
+              - name: host-volume
+                hostPath:
+                  path: "/tmp/volumes/{{.queue}}"
+                  type: DirectoryOrCreate
+          extraVolumeMounts:
+            - name: host-volume
+              mountPath: /tmp/buildkite-git-mirrors
+              subPath: buildkite-git-mirrors
