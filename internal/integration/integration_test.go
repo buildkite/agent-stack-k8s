@@ -391,6 +391,22 @@ func TestImagePullBackOffFailed(t *testing.T) {
 	tc.AssertLogsContain(build, "The following container images couldn't be pulled:\n * buildkite/non-existant-image:latest")
 }
 
+func TestInvalidImageName(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "image-invalid-name-failed.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+	tc.AssertLogsContain(build, "other job has run")
+	tc.AssertLogsContain(build, "The following container images couldn't be pulled:\n * buildkite non-existant-image:latest")
+}
+
 func TestArtifactsUploadFailedJobs(t *testing.T) {
 	tc := testcase{
 		T:       t,

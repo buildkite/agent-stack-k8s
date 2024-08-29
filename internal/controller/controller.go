@@ -78,13 +78,13 @@ func Run(
 		logger.Fatal("failed to register completions informer", zap.Error(err))
 	}
 
-	imagePullBackOffWatcher := scheduler.NewImagePullBackOffWatcher(
-		logger.Named("imagePullBackoffWatcher"),
+	imageErrorWatcher := scheduler.NewImageErrorWatcher(
+		logger.Named("imageErrorWatcher"),
 		k8sClient,
 		cfg,
 	)
-	if err := imagePullBackOffWatcher.RegisterInformer(ctx, informerFactory); err != nil {
-		logger.Fatal("failed to register imagePullBackoffWatcher informer", zap.Error(err))
+	if err := imageErrorWatcher.RegisterInformer(ctx, informerFactory); err != nil {
+		logger.Fatal("failed to register imageErrorWatcher informer", zap.Error(err))
 	}
 
 	select {

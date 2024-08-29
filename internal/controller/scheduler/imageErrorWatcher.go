@@ -24,13 +24,13 @@ import (
 	_ "k8s.io/client-go/tools/cache"
 )
 
-type imagePullBackOffWatcher struct {
+type imageErrorWatcher struct {
 	logger *zap.Logger
 	k8s    kubernetes.Interface
 	gql    graphql.Client
 	cfg    *config.Config
 
-	// The imagePullBackOffWatcher waits at least this duration after pod
+	// The imageErrorWatcher waits at least this duration after pod
 	// creation before it cancels the job.
 	gracePeriod time.Duration
 
@@ -39,15 +39,15 @@ type imagePullBackOffWatcher struct {
 	ignoreJobs map[uuid.UUID]struct{}
 }
 
-// NewImagePullBackOffWatcher creates an informer that will use the Buildkite
+// NewImageErrorWatcher creates an informer that will use the Buildkite
 // GraphQL API to cancel jobs that have pods with containers in the
 // ImagePullBackOff state
-func NewImagePullBackOffWatcher(
+func NewImageErrorWatcher(
 	logger *zap.Logger,
 	k8s kubernetes.Interface,
 	cfg *config.Config,
-) *imagePullBackOffWatcher {
-	return &imagePullBackOffWatcher{
+) *imageErrorWatcher {
+	return &imageErrorWatcher{
 		logger:      logger,
 		k8s:         k8s,
 		gql:         api.NewClient(cfg.BuildkiteToken),
@@ -58,7 +58,7 @@ func NewImagePullBackOffWatcher(
 }
 
 // Creates a Pods informer and registers the handler on it
-func (w *imagePullBackOffWatcher) RegisterInformer(
+func (w *imageErrorWatcher) RegisterInformer(
 	ctx context.Context,
 	factory informers.SharedInformerFactory,
 ) error {
@@ -70,38 +70,39 @@ func (w *imagePullBackOffWatcher) RegisterInformer(
 	return nil
 }
 
-func (w *imagePullBackOffWatcher) OnDelete(obj any) {}
+func (w *imageErrorWatcher) OnDelete(obj any) {}
 
-func (w *imagePullBackOffWatcher) OnAdd(maybePod any, isInInitialList bool) {
+func (w *imageErrorWatcher) OnAdd(maybePod any, isInInitialList bool) {
 	pod, wasPod := maybePod.(*corev1.Pod)
 	if !wasPod {
 		return
 	}
 
-	w.cancelImagePullBackOff(context.Background(), pod)
+	w.cancelImageError(context.Background(), pod)
 }
 
-func (w *imagePullBackOffWatcher) OnUpdate(oldMaybePod, newMaybePod any) {
+func (w *imageErrorWatcher) OnUpdate(oldMaybePod, newMaybePod any) {
 	oldPod, oldWasPod := newMaybePod.(*corev1.Pod)
 	newPod, newWasPod := newMaybePod.(*corev1.Pod)
 
 	// This nonsense statement is only necessary because the types are too loose.
 	// Most likely both old and new are going to be Pods.
 	if newWasPod {
-		w.cancelImagePullBackOff(context.Background(), newPod)
+		w.cancelImageError(context.Background(), newPod)
 	} else if oldWasPod {
-		w.cancelImagePullBackOff(context.Background(), oldPod)
+		w.cancelImageError(context.Background(), oldPod)
 	}
 }
 
-func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, pod *corev1.Pod) {
+func (w *imageErrorWatcher) cancelImageError(ctx context.Context, pod *corev1.Pod) {
 	log := w.logger.With(zap.String("namespace", pod.Namespace), zap.String("podName", pod.Name))
-	log.Debug("Checking pod for ImagePullBackOff")
+	log.Debug("Checking pod for ImageErrors")
 
 	if pod.Status.StartTime == nil {
 		// Status could be unpopulated, or it hasn't started yet.
 		return
 	}
+
 	startedAt := pod.Status.StartTime.Time
 	if startedAt.IsZero() || time.Since(startedAt) < w.gracePeriod {
 		// Not started yet, or started recently
@@ -146,7 +147,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 			continue
 		}
 		if !isSystemContainer(&containerStatus) {
-			log.Info("Ignoring container during ImagePullBackOff watch.", zap.String("name", containerStatus.Name))
+			log.Info("Ignoring container during ImageError watch.", zap.String("name", containerStatus.Name))
 			continue
 		}
 		images[containerStatus.Image] = struct{}{}
@@ -199,7 +200,7 @@ func (w *imagePullBackOffWatcher) cancelImagePullBackOff(ctx context.Context, po
 	}
 }
 
-func (w *imagePullBackOffWatcher) failJob(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID, images map[string]struct{}) {
+func (w *imageErrorWatcher) failJob(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID, images map[string]struct{}) {
 	agentToken, err := fetchAgentToken(ctx, w.logger, w.k8s, w.cfg.Namespace, w.cfg.AgentTokenSecret)
 	if err != nil {
 		log.Error("Couldn't fetch agent token in order to fail the job", zap.Error(err))
@@ -253,7 +254,7 @@ func (w *imagePullBackOffWatcher) failJob(ctx context.Context, log *zap.Logger, 
 	w.ignoreJobs[jobUUID] = struct{}{}
 }
 
-func (w *imagePullBackOffWatcher) cancelJob(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
+func (w *imageErrorWatcher) cancelJob(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
 	_, err := api.CancelCommandJob(ctx, w.gql, api.JobTypeCommandCancelInput{
 		ClientMutationId: pod.Name,
 		Id:               jobUUID.String(),
@@ -278,8 +279,16 @@ func (w *imagePullBackOffWatcher) cancelJob(ctx context.Context, log *zap.Logger
 }
 
 func shouldCancel(containerStatus *corev1.ContainerStatus) bool {
-	return containerStatus.State.Waiting != nil &&
-		containerStatus.State.Waiting.Reason == "ImagePullBackOff"
+	if containerStatus.State.Waiting == nil {
+		return false
+	}
+
+	switch containerStatus.State.Waiting.Reason {
+	case "ImagePullBackOff", "InvalidImageName":
+		return true
+	}
+
+	return false
 }
 
 // All container-\d containers will have the agent installed as their PID 1.

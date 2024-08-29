@@ -507,7 +507,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// containers can still be waiting on an image that can't be pulled.
 	//
 	// Over here in the agent-stack-k8s controller, we can detect
-	// ImagePullBackOff using the k8s API (see imagePullBackOffWatcher.go) but
+	// ImagePullBackOff using the k8s API (see imageErrorWatcher.go) but
 	// our options for pulling the plug on a job that's already started are
 	// limited, because we can't steal responsibility for the job from the
 	// already-running agent.
