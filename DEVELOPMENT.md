@@ -98,6 +98,12 @@ To run the integration tests, with the overrides from your environment, you can 
 just test -timeout 10m -v ./internal/integration/... -args --org $ORG --buildkite-token $BUILDKITE_TOKEN
 ```
 
+To run a single test, following goes `-run` convention will provide this capability:
+
+```
+just test -timeout 10m -v ./internal/integration/... -run TestImagePullBackOffFailed -args --org $ORG --buildkite-token $BUILDKITE_TOKEN
+```
+
 ### Token Scopes
 
 Required Buildkite API token scopes:
@@ -120,16 +126,39 @@ kubectl create secret generic buildkite-agent-token --from-literal=BUILDKITE_AGE
 You'll also need to create an SSH secret in your cluster to run [this test pipeline](internal/integration/fixtures/secretref.yaml). This SSH key needs to be associated with your GitHub account to be able to clone this public repo, and must be in a form acceptable to OpenSSH (aka `BEGIN OPENSSH PRIVATE KEY`, not `BEGIN PRIVATE KEY`).
 
 ```bash
-kubectl create secret generic agent-stack-k8s --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
+kubectl create secret generic integration-test-ssh-key --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
 ```
 
 ## Debugging
+
 The integration tests on the [`kubernetes-agent-stack`](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack) pipeline will create additional pipelines in the [`buildkite-kubernetes-stack`](https://buildkite.com/buildkite-kubernetes-stack) organization.
 
+### Agent unable to connect
+
+In circumstances where the Buildkite token is allowing jobs to be picked up, and each job
+continuously fails with a HTTP 422 error, this is likely the stored agent token being invalid.
+Validate that the token is indeed the value as expected:
+
+```bash
+kubectl get secret buildkite-agent-token -o jsonpath='{.data.BUILDKITE_AGENT_TOKEN}' \
+    | base64 -d \
+    | xxd
+```
+
+Different shells behave differently, if a newline is being added to the value before it is being
+encoded, using the following could be helpful:
+
+```bash
+echo -n ${BUILDKITE_AGENT_TOKEN} | base64
+kubectl edit secret buildkite-agent-token
+```
+
+The `edit secret` command will open `$EDITOR` with the spec of the secret. The output from the
+previous command can be copied into the spec as the new value for the secret.
 
 ## Cleanup
 
-In general, pipelines and queues will be deleted automatically for successful tests, but for unsuccessful tests, then will remain after then end of the test job to allow you to debug them.
+In general, pipelines will be deleted automatically for successful tests, but for unsuccessful tests, then will remain after then end of the test job to allow you to debug them.
 
 To do clean them up:
 
@@ -138,11 +167,13 @@ just cleanup-orphans
 ```
 
 The token will need to have GraphQL access as well as:
+
 - `read_artifacts`
 - `write_pipelines`
 
 This is usually enough, but there is another situation where the cluster could be clogged with K8s jobs.
 To clean these out you should run the following in a kubernetes context in the namespace containing the controller used to run the CI pipeline.
+
 ```bash
 kubectl get -o jsonpath='{.items[*].metadata.name}' jobs | xargs -L1 kubectl delete job
 ```
@@ -159,8 +190,8 @@ running a integration test.
 
 In this case, you can choose to supply some inputs via CLI parameters instead of environment variable.
 
-```bash!
-just run --org my-org --buildkite-token my-api-token --debug
+```bash
+just run --org my-org --buildkite-token my-api-token --debug --cluster-uuid my-cluster-uuid
 ```
 
 ## Local Deployment with Helm
@@ -193,21 +224,28 @@ config:
 The `config` key contains configuration passed directly to the binary, and so supports all the keys documented in [the example](examples/config.yaml).
 
 # Release
+
 1. Make sure you're on the main branch!
 1. Create a tag
-```bash
-git tag -sm v0.x.x v0.x.x
-```
+
+    ```bash
+    git tag -sm v0.x.x v0.x.x
+    ```
+
 1. Push your tag
-```bash
-git push --tags
-```
+
+    ```bash
+    git push --tags
+    ```
+
 1. A build will start at https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack/builds?branch=v0.x.x. It will create a draft release with a changelog. Edit the changelog to group the PRs in to sections like
-```
-# Added
-# Fixed
-# Changed
-# Security
-# Internal
-```
+
+    ```markdown
+    # Added
+    # Fixed
+    # Changed
+    # Security
+    # Internal
+    ```
+
 1. Publish the release 🎉
