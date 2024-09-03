@@ -227,13 +227,25 @@ The `config` key contains configuration passed directly to the binary, and so su
 
 1. Make sure you're on the main branch!
 1. Create a tag
+
+    ```bash
     git tag -sm v0.x.x v0.x.x
+    ```
+
 1. Push your tag
+
+    ```bash
     git push --tags
+    ```
+
 1. A build will start at https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack/builds?branch=v0.x.x. It will create a draft release with a changelog. Edit the changelog to group the PRs in to sections like
+
+    ```markdown
     # Added
     # Fixed
     # Changed
     # Security
     # Internal
+    ```
+
 1. Publish the release 🎉
