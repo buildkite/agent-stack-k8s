@@ -53,7 +53,7 @@ steps:
       - kubernetes:
           podSpec:
             containers:
-              - image: golangci/golangci-lint:v1.56.1
+              - image: golangci/golangci-lint:latest
                 command:
                   - golangci-lint run -v ./...
                 resources:
