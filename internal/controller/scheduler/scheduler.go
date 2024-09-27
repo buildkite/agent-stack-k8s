@@ -617,21 +617,21 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	// Patch from the agent is applied first
 	if w.cfg.PodSpecPatch != nil {
-		w.logger.Info("applying podSpec patch from agent")
 		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
 		}
 		podSpec = patched
+		w.logger.Debug("Applied podSpec patch from agent", zap.Any("patched", patched))
 	}
 
 	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpecPatch != nil {
-		w.logger.Info("applying podSpec patch from k8s plugin")
 		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
 		}
 		podSpec = patched
+		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
 	}
 
 	kjob.Spec.Template.Spec = *podSpec
