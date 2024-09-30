@@ -8,6 +8,11 @@ max-in-flight: 100
 namespace: my-buildkite-ns
 org: my-buildkite-org
 
+# Setting a custom GraphQL endpoint and Agent REST API endpoint is usually only
+# useful if you have a different instance of Buildkite itself available to run.
+graphql-endpoint: http://graphql.buildkite.localhost/v1
+agent-endpoint: http://agent.buildkite.localhost/v3
+
 # only set cluster-uuid if the pipelines are in a cluster
 # the UUID may be found in the cluster settings
 cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade

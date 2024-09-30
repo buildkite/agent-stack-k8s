@@ -38,13 +38,14 @@ func Run(
 	}
 
 	m, err := monitor.New(logger.Named("monitor"), k8sClient, monitor.Config{
-		Namespace:    cfg.Namespace,
-		Org:          cfg.Org,
-		ClusterUUID:  cfg.ClusterUUID,
-		MaxInFlight:  cfg.MaxInFlight,
-		PollInterval: cfg.PollInterval,
-		Tags:         cfg.Tags,
-		Token:        cfg.BuildkiteToken,
+		GraphQLEndpoint: cfg.GraphQLEndpoint,
+		Namespace:       cfg.Namespace,
+		Org:             cfg.Org,
+		ClusterUUID:     cfg.ClusterUUID,
+		MaxInFlight:     cfg.MaxInFlight,
+		PollInterval:    cfg.PollInterval,
+		Tags:            cfg.Tags,
+		Token:           cfg.BuildkiteToken,
 	})
 	if err != nil {
 		logger.Fatal("failed to create monitor", zap.Error(err))
@@ -54,6 +55,7 @@ func Run(
 		Namespace:              cfg.Namespace,
 		Image:                  cfg.Image,
 		AgentTokenSecretName:   cfg.AgentTokenSecret,
+		AgentEndpoint:          cfg.AgentEndpoint,
 		JobTTL:                 cfg.JobTTL,
 		AdditionalRedactedVars: cfg.AdditionalRedactedVars,
 		DefaultCheckoutParams:  cfg.DefaultCheckoutParams,

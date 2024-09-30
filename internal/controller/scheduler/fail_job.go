@@ -25,15 +25,15 @@ func failJob(
 	jobUUID string,
 	tags []string,
 	message string,
+	options ...agentcore.ControllerOption,
 ) error {
-	ctr, err := agentcore.NewController(
-		ctx,
-		agentToken,
-		kjobName(jobUUID),
-		tags, // queue is required for acquire! maybe more
-		agentcore.WithUserAgent("agent-stack-k8s/"+version.Version()),
+	opts := append([]agentcore.ControllerOption{
+		agentcore.WithUserAgent("agent-stack-k8s/" + version.Version()),
 		agentcore.WithLogger(logger.NewConsoleLogger(logger.NewTextPrinter(os.Stderr), func(int) {})),
-	)
+	}, options...)
+
+	// queue is required for acquire! maybe more
+	ctr, err := agentcore.NewController(ctx, agentToken, kjobName(jobUUID), tags, opts...)
 	if err != nil {
 		zapLogger.Error("registering or connecting ephemeral agent", zap.Error(err))
 		return fmt.Errorf("registering or connecting ephemeral agent: %w", err)

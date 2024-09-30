@@ -20,7 +20,7 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	graphqlClient := api.NewClient(cfg.BuildkiteToken)
+	graphqlClient := api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint)
 
 	pipelines, err := api.SearchPipelines(ctx, graphqlClient, cfg.Org, "test-", 100)
 	require.NoError(t, err)
@@ -53,7 +53,7 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 
 			tc := testcase{
 				T:            t,
-				GraphQL:      api.NewClient(cfg.BuildkiteToken),
+				GraphQL:      api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 				PipelineName: pipeline.Node.Name,
 			}.Init()
 			tc.deletePipeline(ctx)

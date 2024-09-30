@@ -20,7 +20,7 @@ func TestWalkingSkeleton(t *testing.T) {
 		T:       t,
 		Fixture: "helloworld.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -41,7 +41,7 @@ func TestPodSpecPatchInStep(t *testing.T) {
 		T:       t,
 		Fixture: "podspecpatch-step.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -57,7 +57,7 @@ func TestPodSpecPatchInStepFailsWhenPatchingContainerCommands(t *testing.T) {
 		T:       t,
 		Fixture: "podspecpatch-command-step.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
 	ctx := context.Background()
@@ -75,7 +75,7 @@ func TestPodSpecPatchInController(t *testing.T) {
 		T:       t,
 		Fixture: "mountain.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -106,7 +106,7 @@ func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
 		T:       t,
 		Fixture: "helloworld.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
 	ctx := context.Background()
@@ -125,7 +125,7 @@ func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
 		T:       t,
 		Fixture: "redacted-vars.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
 	ctx := context.Background()
@@ -148,7 +148,7 @@ func TestPrePostCheckoutHooksRun(t *testing.T) {
 		T:       t,
 		Fixture: "plugin-checkout-hook.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
 	ctx := context.Background()
@@ -167,7 +167,7 @@ func TestChown(t *testing.T) {
 		T:       t,
 		Fixture: "chown.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -182,7 +182,7 @@ func TestSSHRepoClone(t *testing.T) {
 		T:       t,
 		Fixture: "secretref.yaml",
 		Repo:    repoSSH,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
 	ctx := context.Background()
@@ -202,7 +202,7 @@ func TestPluginCloneFailsTests(t *testing.T) {
 		T:       t,
 		Fixture: "unknown-plugin.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
 	ctx := context.Background()
@@ -218,7 +218,7 @@ func TestMaxInFlightLimited(t *testing.T) {
 		T:       t,
 		Fixture: "parallel.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
 	ctx := context.Background()
@@ -266,7 +266,7 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 		T:       t,
 		Fixture: "parallel.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
 	ctx := context.Background()
@@ -329,7 +329,7 @@ func TestSidecars(t *testing.T) {
 		T:       t,
 		Fixture: "sidecars.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -344,7 +344,7 @@ func TestExtraVolumeMounts(t *testing.T) {
 		T:       t,
 		Fixture: "extra-volume-mounts.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -358,7 +358,7 @@ func TestInvalidPodSpec(t *testing.T) {
 		T:       t,
 		Fixture: "invalid.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -376,7 +376,7 @@ func TestInvalidPodJSON(t *testing.T) {
 		T:       t,
 		Fixture: "invalid2.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -394,7 +394,7 @@ func TestEnvVariables(t *testing.T) {
 		T:       t,
 		Fixture: "env.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -409,7 +409,7 @@ func TestImagePullBackOffFailed(t *testing.T) {
 		T:       t,
 		Fixture: "image-pull-back-off-failed.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -425,7 +425,7 @@ func TestArtifactsUploadFailedJobs(t *testing.T) {
 		T:       t,
 		Fixture: "artifact-upload-failed-job.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -440,7 +440,7 @@ func TestInterposerBuildkite(t *testing.T) {
 		T:       t,
 		Fixture: "interposer-buildkite.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
@@ -459,7 +459,7 @@ func TestInterposerVector(t *testing.T) {
 		T:       t,
 		Fixture: "interposer-vector.yaml",
 		Repo:    repoHTTP,
-		GraphQL: api.NewClient(cfg.BuildkiteToken),
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)

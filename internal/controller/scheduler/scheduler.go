@@ -17,6 +17,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 
 	"github.com/buildkite/agent/v3/clicommand"
+	agentcore "github.com/buildkite/agent/v3/core"
 
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
@@ -43,6 +44,7 @@ type Config struct {
 	Namespace              string
 	Image                  string
 	AgentTokenSecretName   string
+	AgentEndpoint          string
 	JobTTL                 time.Duration
 	AdditionalRedactedVars []string
 	DefaultCheckoutParams  *config.CheckoutParams
@@ -479,6 +481,12 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			},
 		},
 	}
+	if w.cfg.AgentEndpoint != "" {
+		agentContainer.Env = append(agentContainer.Env, corev1.EnvVar{
+			Name:  "BUILDKITE_AGENT_ENDPOINT",
+			Value: w.cfg.AgentEndpoint,
+		})
+	}
 	agentContainer.Env = append(agentContainer.Env, env...)
 	podSpec.Containers = append(podSpec.Containers, agentContainer)
 
@@ -827,7 +835,12 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 		w.logger.Error("fetching agent token from secret", zap.Error(err))
 		return err
 	}
-	return failJob(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, message)
+
+	var opts []agentcore.ControllerOption
+	if w.cfg.AgentEndpoint != "" {
+		opts = append(opts, agentcore.WithEndpoint(w.cfg.AgentEndpoint))
+	}
+	return failJob(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, message, opts...)
 }
 
 func (w *worker) labelWithAgentTags(dstLabels map[string]string, agentQueryRules []string) {
