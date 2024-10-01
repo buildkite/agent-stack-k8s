@@ -13,7 +13,7 @@ echo "Using agent version ${agent_version} as image tag"
 buildkite-agent meta-data set agent-version "${agent_version}"
 
 echo --- :docker: Inspecting agent docker image manifest
-digest=$(skopeo inspect "docker://${repo}:${agent_version}" --format {{.Digest}})
+digest="$(skopeo inspect "docker://${repo}:${agent_version}" --format {{.Digest}})"
 
 agent_image="${repo}@${digest}"
 echo Choosing image "${agent_image}"
@@ -21,9 +21,9 @@ buildkite-agent meta-data set agent-image "${agent_image}"
 
 buildkite-agent annotate --style success --append <<EOF
 ### Agent
----------------------------------------------------
-| Version        | Image                          |
-|----------------|--------------------------------|
-| $agent_version | $agent_image                   |
----------------------------------------------------
+-----------------------------------------------------
+| Version          | Image                          |
+|------------------|--------------------------------|
+| ${agent_version} | ${agent_image}                 |
+-----------------------------------------------------
 EOF
