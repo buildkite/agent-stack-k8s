@@ -6,6 +6,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -31,6 +32,8 @@ func TestReadAndParseConfig(t *testing.T) {
 		Tags:                        []string{"queue=my-queue", "priority=high"},
 		ClusterUUID:                 "beefcafe-abbe-baba-abba-deedcedecade",
 		ProhibitKubernetesPlugin:    true,
+		GraphQLEndpoint:             "http://graphql.buildkite.localhost/v1",
+		AgentEndpoint:               "http://agent.buildkite.localhost/v3",
 		DefaultCommandParams: &config.CommandParams{
 			Interposer: config.InterposerVector,
 			EnvFrom: []corev1.EnvFromSource{{
@@ -115,5 +118,8 @@ func TestReadAndParseConfig(t *testing.T) {
 
 	actual, err := controller.ParseAndValidateConfig(v)
 	require.NoError(t, err)
-	require.Equal(t, expected, *actual)
+
+	if diff := cmp.Diff(*actual, expected); diff != "" {
+		t.Errorf("parsed config diff (-got +want):\n%s", diff)
+	}
 }

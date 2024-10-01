@@ -25,14 +25,16 @@ type Config struct {
 	Debug            bool          `json:"debug"`
 	JobTTL           time.Duration `json:"job-ttl"`
 	PollInterval     time.Duration `json:"poll-interval"`
-	AgentTokenSecret string        `json:"agent-token-secret"              validate:"required"`
-	BuildkiteToken   string        `json:"buildkite-token"                 validate:"required"`
-	Image            string        `json:"image"                           validate:"required"`
-	MaxInFlight      int           `json:"max-in-flight"                   validate:"min=0"`
-	Namespace        string        `json:"namespace"                       validate:"required"`
-	Org              string        `json:"org"                             validate:"required"`
-	Tags             stringSlice   `json:"tags"                            validate:"min=1"`
-	ProfilerAddress  string        `json:"profiler-address"                validate:"omitempty,hostname_port"`
+	AgentTokenSecret string        `json:"agent-token-secret" validate:"required"`
+	BuildkiteToken   string        `json:"buildkite-token"    validate:"required"`
+	Image            string        `json:"image"              validate:"required"`
+	MaxInFlight      int           `json:"max-in-flight"      validate:"min=0"`
+	Namespace        string        `json:"namespace"          validate:"required"`
+	Org              string        `json:"org"                validate:"required"`
+	Tags             stringSlice   `json:"tags"               validate:"min=1"`
+	ProfilerAddress  string        `json:"profiler-address"   validate:"omitempty,hostname_port"`
+	GraphQLEndpoint  string        `json:"graphql-endpoint"   validate:"omitempty"`
+	AgentEndpoint    string        `json:"agent-endpoint"     validate:"omitempty"`
 	// This field is mandatory for most new orgs.
 	// Some old orgs allows unclustered setup.
 	ClusterUUID                 string          `json:"cluster-uuid"                    validate:"omitempty"`

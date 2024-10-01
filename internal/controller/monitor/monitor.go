@@ -22,13 +22,14 @@ type Monitor struct {
 }
 
 type Config struct {
-	Namespace    string
-	Token        string
-	ClusterUUID  string
-	MaxInFlight  int
-	PollInterval time.Duration
-	Org          string
-	Tags         []string
+	GraphQLEndpoint string
+	Namespace       string
+	Token           string
+	ClusterUUID     string
+	MaxInFlight     int
+	PollInterval    time.Duration
+	Org             string
+	Tags            []string
 }
 
 type JobHandler interface {
@@ -36,7 +37,7 @@ type JobHandler interface {
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
-	graphqlClient := api.NewClient(cfg.Token)
+	graphqlClient := api.NewClient(cfg.Token, cfg.GraphQLEndpoint)
 
 	if cfg.PollInterval < time.Second {
 		cfg.PollInterval = time.Second

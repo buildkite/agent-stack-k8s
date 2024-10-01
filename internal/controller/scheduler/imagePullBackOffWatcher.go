@@ -50,7 +50,7 @@ func NewImagePullBackOffWatcher(
 	return &imagePullBackOffWatcher{
 		logger:      logger,
 		k8s:         k8s,
-		gql:         api.NewClient(cfg.BuildkiteToken),
+		gql:         api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 		cfg:         cfg,
 		gracePeriod: cfg.ImagePullBackOffGradePeriod,
 		ignoreJobs:  make(map[uuid.UUID]struct{}),
@@ -228,7 +228,12 @@ func (w *imagePullBackOffWatcher) failJob(ctx context.Context, log *zap.Logger, 
 		tags = append(tags, fmt.Sprintf("%s=%s", k, value))
 	}
 
-	if err := failJob(ctx, w.logger, agentToken, jobUUID.String(), tags, message.String()); err != nil {
+	var opts []agentcore.ControllerOption
+	if w.cfg.AgentEndpoint != "" {
+		opts = append(opts, agentcore.WithEndpoint(w.cfg.AgentEndpoint))
+	}
+
+	if err := failJob(ctx, w.logger, agentToken, jobUUID.String(), tags, message.String(), opts...); err != nil {
 		log.Error("Couldn't fail the job", zap.Error(err))
 		// If the error was because BK rejected the acquisition, then its moved
 		// on to a state where we need to cancel instead.

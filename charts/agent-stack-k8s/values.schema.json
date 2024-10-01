@@ -165,6 +165,18 @@
       "title": "The config Schema",
       "required": ["org"],
       "properties": {
+        "agent-endpoint": {
+          "type": "string",
+          "default": "",
+          "title": "The Agent REST API endpoint URL",
+          "examples": [""]
+        },
+        "graphql-endpoint": {
+          "type": "string",
+          "default": "",
+          "title": "The GraphQL endpoint URL",
+          "examples": [""]
+        },
         "image": {
           "type": "string",
           "default": "",
