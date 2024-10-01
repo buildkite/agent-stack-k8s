@@ -92,8 +92,8 @@ func (l *MaxInFlightLimiter) Create(ctx context.Context, job monitor.Job) error 
 		return nil
 	}
 
-	// Block until there's a token in the bucket, or the job information becomes
-	// too stale.
+	// Block until there's a token in the bucket, or cancel if the job
+	// information becomes too stale.
 	select {
 	case <-ctx.Done():
 		return context.Cause(ctx)
