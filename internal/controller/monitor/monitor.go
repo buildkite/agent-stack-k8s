@@ -32,8 +32,16 @@ type Config struct {
 	Tags            []string
 }
 
+type Job struct {
+	// The job information.
+	*api.CommandJob
+
+	// Closed when the job information becomes stale.
+	StaleCh <-chan struct{}
+}
+
 type JobHandler interface {
-	Create(context.Context, *api.CommandJob) error
+	Create(context.Context, Job) error
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
@@ -161,29 +169,49 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 
 			jobs := resp.CommandJobs()
 
-			// TODO: sort by ScheduledAt in the API
-			sort.Slice(jobs, func(i, j int) bool {
-				return jobs[i].ScheduledAt.Before(jobs[j].ScheduledAt)
-			})
+			// Wrapped so staleCancel is called before the next loop iteration.
+			func() {
+				// A sneaky way to create a channel that is closed after a duration.
+				// Why not pass directly to handler.Create? Because that might
+				// interrupt scheduling a pod, when all we want is to bound the
+				// time spent waiting for the limiter.
+				staleCtx, staleCancel := context.WithTimeout(ctx, m.cfg.PollInterval)
+				defer staleCancel()
 
-			for _, job := range jobs {
-				jobTags := toMapAndLogErrors(logger, job.AgentQueryRules)
+				// TODO: sort by ScheduledAt in the API
+				sort.Slice(jobs, func(i, j int) bool {
+					return jobs[i].ScheduledAt.Before(jobs[j].ScheduledAt)
+				})
 
-				// The api returns jobs that match ANY agent tags (the agent query rules)
-				// However, we can only acquire jobs that match ALL agent tags
-				if !agenttags.JobTagsMatchAgentTags(jobTags, agentTags) {
-					logger.Debug("skipping job because it did not match all tags", zap.Any("job", job))
-					continue
-				}
-
-				logger.Debug("creating job", zap.String("uuid", job.Uuid))
-				if err := handler.Create(ctx, &job.CommandJob); err != nil {
-					if ctx.Err() != nil {
+				for _, j := range jobs {
+					if staleCtx.Err() != nil {
+						// Results already stale; try again later.
 						return
 					}
-					logger.Error("failed to create job", zap.Error(err))
+
+					jobTags := toMapAndLogErrors(logger, j.AgentQueryRules)
+
+					// The api returns jobs that match ANY agent tags (the agent query rules)
+					// However, we can only acquire jobs that match ALL agent tags
+					if !agenttags.JobTagsMatchAgentTags(jobTags, agentTags) {
+						logger.Debug("skipping job because it did not match all tags", zap.Any("job", j))
+						continue
+					}
+
+					job := Job{
+						CommandJob: &j.CommandJob,
+						StaleCh:    staleCtx.Done(),
+					}
+
+					logger.Debug("creating job", zap.String("uuid", j.Uuid))
+					if err := handler.Create(ctx, job); err != nil {
+						if ctx.Err() != nil {
+							return
+						}
+						logger.Error("failed to create job", zap.Error(err))
+					}
 				}
-			}
+			}()
 		}
 	}()
 

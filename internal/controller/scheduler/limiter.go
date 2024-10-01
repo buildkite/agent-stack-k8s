@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 
@@ -78,7 +77,7 @@ func (l *MaxInFlightLimiter) RegisterInformer(ctx context.Context, factory infor
 
 // Create either creates the job immediately, or blocks until there is capacity.
 // It may also ignore the job if it is already in flight.
-func (l *MaxInFlightLimiter) Create(ctx context.Context, job *api.CommandJob) error {
+func (l *MaxInFlightLimiter) Create(ctx context.Context, job monitor.Job) error {
 	uuid, err := uuid.Parse(job.Uuid)
 	if err != nil {
 		l.logger.Error("invalid UUID in CommandJob", zap.Error(err))
@@ -93,7 +92,8 @@ func (l *MaxInFlightLimiter) Create(ctx context.Context, job *api.CommandJob) er
 		return nil
 	}
 
-	// Block until there's a token in the bucket.
+	// Block until there's a token in the bucket, or the job information becomes
+	// too stale.
 	select {
 	case <-ctx.Done():
 		return context.Cause(ctx)
@@ -103,6 +103,16 @@ func (l *MaxInFlightLimiter) Create(ctx context.Context, job *api.CommandJob) er
 			zap.String("uuid", uuid.String()),
 			zap.Int("available-tokens", len(l.tokenBucket)),
 		)
+
+	case <-job.StaleCh:
+		// The job is _not_ about to be in-flight.
+		numInFlight, _ := l.casa(uuid, false)
+		l.logger.Debug("Create: timed out waiting for token",
+			zap.String("uuid", uuid.String()),
+			zap.Int("num-in-flight", numInFlight),
+			zap.Int("available-tokens", len(l.tokenBucket)),
+		)
+		return nil
 	}
 
 	// We got a token from the bucket above! Proceed to schedule the pod.
