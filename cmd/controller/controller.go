@@ -84,7 +84,6 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)",
 	)
 	cmd.Flags().String("graphql-endpoint", "", "Buildkite GraphQL endpoint URL")
-	cmd.Flags().String("agent-endpoint", "", "Buildkite Agent REST API endpoint URL")
 
 	cmd.Flags().Duration(
 		"image-pull-backoff-grace-period",

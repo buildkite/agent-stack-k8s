@@ -228,10 +228,7 @@ func (w *imagePullBackOffWatcher) failJob(ctx context.Context, log *zap.Logger, 
 		tags = append(tags, fmt.Sprintf("%s=%s", k, value))
 	}
 
-	var opts []agentcore.ControllerOption
-	if w.cfg.AgentEndpoint != "" {
-		opts = append(opts, agentcore.WithEndpoint(w.cfg.AgentEndpoint))
-	}
+	opts := w.cfg.AgentConfig.ControllerOptions()
 
 	if err := failJob(ctx, w.logger, agentToken, jobUUID.String(), tags, message.String(), opts...); err != nil {
 		log.Error("Couldn't fail the job", zap.Error(err))

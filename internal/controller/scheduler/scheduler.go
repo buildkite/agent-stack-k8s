@@ -18,7 +18,6 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 
 	"github.com/buildkite/agent/v3/clicommand"
-	agentcore "github.com/buildkite/agent/v3/core"
 
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
@@ -45,9 +44,9 @@ type Config struct {
 	Namespace              string
 	Image                  string
 	AgentTokenSecretName   string
-	AgentEndpoint          string
 	JobTTL                 time.Duration
 	AdditionalRedactedVars []string
+	AgentConfig            *config.AgentConfig
 	DefaultCheckoutParams  *config.CheckoutParams
 	DefaultCommandParams   *config.CommandParams
 	DefaultSidecarParams   *config.SidecarParams
@@ -355,6 +354,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			},
 		)
 
+		w.cfg.AgentConfig.ApplyToCommand(&c)
 		w.cfg.DefaultCommandParams.ApplyTo(&c)
 		if inputs.k8sPlugin != nil {
 			inputs.k8sPlugin.CommandParams.ApplyTo(&c)
@@ -398,6 +398,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				},
 			),
 		}
+		w.cfg.AgentConfig.ApplyToCommand(&c)
 		w.cfg.DefaultCommandParams.ApplyTo(&c)
 		if inputs.k8sPlugin != nil {
 			inputs.k8sPlugin.CommandParams.ApplyTo(&c)
@@ -482,12 +483,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			},
 		},
 	}
-	if w.cfg.AgentEndpoint != "" {
-		agentContainer.Env = append(agentContainer.Env, corev1.EnvVar{
-			Name:  "BUILDKITE_AGENT_ENDPOINT",
-			Value: w.cfg.AgentEndpoint,
-		})
-	}
+
+	w.cfg.AgentConfig.ApplyToAgentStart(&agentContainer)
 	agentContainer.Env = append(agentContainer.Env, env...)
 	podSpec.Containers = append(podSpec.Containers, agentContainer)
 
@@ -612,6 +609,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 	})
+	w.cfg.AgentConfig.ApplyVolumesTo(podSpec)
+
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
 
 	// Allow podSpec to be overridden by the agent configuration and the k8s plugin
@@ -710,9 +709,10 @@ func (w *worker) createCheckoutContainer(
 		},
 	}
 
-	w.cfg.DefaultCheckoutParams.ApplyTo(&checkoutContainer)
+	w.cfg.AgentConfig.ApplyToCheckout(&checkoutContainer)
+	w.cfg.DefaultCheckoutParams.ApplyTo(podSpec, &checkoutContainer)
 	if k8sPlugin != nil {
-		k8sPlugin.CheckoutParams.ApplyTo(&checkoutContainer)
+		k8sPlugin.CheckoutParams.ApplyTo(podSpec, &checkoutContainer)
 		checkoutContainer.EnvFrom = append(checkoutContainer.EnvFrom, k8sPlugin.GitEnvFrom...)
 	}
 
@@ -837,10 +837,7 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 		return err
 	}
 
-	var opts []agentcore.ControllerOption
-	if w.cfg.AgentEndpoint != "" {
-		opts = append(opts, agentcore.WithEndpoint(w.cfg.AgentEndpoint))
-	}
+	opts := w.cfg.AgentConfig.ControllerOptions()
 	return failJob(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, message, opts...)
 }
 
