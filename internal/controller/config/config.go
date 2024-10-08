@@ -112,8 +112,18 @@ func appendToEnvOpt(ctr *corev1.Container, name string, value *string) {
 	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: *value})
 }
 
-func appendBoolToEnv(ctr *corev1.Container, name string, value bool) {
-	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: strconv.FormatBool(value)})
+func appendBoolToEnvOpt(ctr *corev1.Container, name string, value *bool) {
+	if value == nil {
+		return
+	}
+	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: strconv.FormatBool(*value)})
+}
+
+func appendNegatedToEnvOpt(ctr *corev1.Container, name string, value *bool) {
+	if value == nil {
+		return
+	}
+	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: strconv.FormatBool(!*value)})
 }
 
 func appendCommaSepToEnv(ctr *corev1.Container, name string, values []string) {

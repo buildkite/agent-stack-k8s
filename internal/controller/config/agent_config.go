@@ -16,25 +16,25 @@ import (
 type AgentConfig struct {
 	// Applies to agents within the k8s controller and within the pod
 	Endpoint *string `json:"endpoint,omitempty"` // BUILDKITE_AGENT_ENDPOINT
-	NoHTTP2  bool    `json:"no-http2,omitempty"` // BUILDKITE_NO_HTTP2
+	NoHTTP2  *bool   `json:"no-http2,omitempty"` // BUILDKITE_NO_HTTP2
 
 	// Only applies to agents within the pod
 	Experiments               []string `json:"experiment,omitempty"`                   // BUILDKITE_AGENT_EXPERIMENT
 	Shell                     *string  `json:"shell,omitempty"`                        // BUILDKITE_SHELL
-	NoColor                   bool     `json:"no-color,omitempty"`                     // BUILDKITE_AGENT_NO_COLOR
-	StrictSingleHooks         bool     `json:"strict-single-hooks,omitempty"`          // BUILDKITE_STRICT_SINGLE_HOOKS
-	NoMultipartArtifactUpload bool     `json:"no-multipart-artifact-upload,omitempty"` // BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD
+	NoColor                   *bool    `json:"no-color,omitempty"`                     // BUILDKITE_AGENT_NO_COLOR
+	StrictSingleHooks         *bool    `json:"strict-single-hooks,omitempty"`          // BUILDKITE_STRICT_SINGLE_HOOKS
+	NoMultipartArtifactUpload *bool    `json:"no-multipart-artifact-upload,omitempty"` // BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD
 	TraceContextEncoding      *string  `json:"trace-context-encoding,omitempty"`       // BUILDKITE_TRACE_CONTEXT_ENCODING
 	DisableWarningsFor        []string `json:"disable-warnings-for,omitempty"`         // BUILDKITE_AGENT_DISABLE_WARNINGS_FOR
-	DebugSigning              bool     `json:"debug-signing,omitempty"`                // BUILDKITE_AGENT_DEBUG_SIGNING
+	DebugSigning              *bool    `json:"debug-signing,omitempty"`                // BUILDKITE_AGENT_DEBUG_SIGNING
 
 	// Applies differently depending on the container
 	//                                                         // agent start                    / bootstrap
-	NoPTY            bool `json:"no-pty,omitempty"`            // BUILDKITE_NO_PTY               / BUILDKITE_PTY
-	NoCommandEval    bool `json:"no-command-eval,omitempty"`   // BUILDKITE_NO_COMMAND_EVAL      / BUILDKITE_COMMAND_EVAL
-	NoLocalHooks     bool `json:"no-local-hooks,omitempty"`    // BUILDKITE_NO_LOCAL_HOOKS       / BUILDKITE_LOCAL_HOOKS_ENABLED
-	NoPlugins        bool `json:"no-plugins,omitempty"`        // BUILDKITE_NO_PLUGINS           / BUILDKITE_PLUGINS_ENABLED
-	PluginValidation bool `json:"plugin-validation,omitempty"` // BUILDKITE_NO_PLUGIN_VALIDATION / BUILDKITE_PLUGIN_VALIDATION
+	NoPTY            *bool `json:"no-pty,omitempty"`            // BUILDKITE_NO_PTY               / BUILDKITE_PTY
+	NoCommandEval    *bool `json:"no-command-eval,omitempty"`   // BUILDKITE_NO_COMMAND_EVAL      / BUILDKITE_COMMAND_EVAL
+	NoLocalHooks     *bool `json:"no-local-hooks,omitempty"`    // BUILDKITE_NO_LOCAL_HOOKS       / BUILDKITE_LOCAL_HOOKS_ENABLED
+	NoPlugins        *bool `json:"no-plugins,omitempty"`        // BUILDKITE_NO_PLUGINS           / BUILDKITE_PLUGINS_ENABLED
+	PluginValidation *bool `json:"plugin-validation,omitempty"` // BUILDKITE_NO_PLUGIN_VALIDATION / BUILDKITE_PLUGIN_VALIDATION
 
 	// Like the above, but signing keys can be supplied directly to the command container.
 	//                                                                      // agent start                         / pipeline upload or agent tool sign
@@ -63,8 +63,8 @@ func (a *AgentConfig) ControllerOptions() []agentcore.ControllerOption {
 	if a.Endpoint != nil {
 		opts = append(opts, agentcore.WithEndpoint(*a.Endpoint))
 	}
-	if a.NoHTTP2 {
-		opts = append(opts, agentcore.WithAllowHTTP2(false))
+	if a.NoHTTP2 != nil {
+		opts = append(opts, agentcore.WithAllowHTTP2(*a.NoHTTP2))
 	}
 	return opts
 }
@@ -92,15 +92,15 @@ func (a *AgentConfig) ApplyVolumesTo(podSpec *corev1.PodSpec) {
 // containers that run buildkite-agent in some form.
 func (a *AgentConfig) applyCommonTo(ctr *corev1.Container) {
 	appendToEnvOpt(ctr, "BUILDKITE_AGENT_ENDPOINT", a.Endpoint)
-	appendBoolToEnv(ctr, "BUILDKITE_NO_HTTP2", a.NoHTTP2)
+	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_HTTP2", a.NoHTTP2)
 	appendCommaSepToEnv(ctr, "BUILDKITE_AGENT_EXPERIMENT", a.Experiments)
 	appendToEnvOpt(ctr, "BUILDKITE_SHELL", a.Shell)
-	appendBoolToEnv(ctr, "BUILDKITE_AGENT_NO_COLOR", a.NoColor)
-	appendBoolToEnv(ctr, "BUILDKITE_STRICT_SINGLE_HOOKS", a.StrictSingleHooks)
-	appendBoolToEnv(ctr, "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", a.NoMultipartArtifactUpload)
+	appendBoolToEnvOpt(ctr, "BUILDKITE_AGENT_NO_COLOR", a.NoColor)
+	appendBoolToEnvOpt(ctr, "BUILDKITE_STRICT_SINGLE_HOOKS", a.StrictSingleHooks)
+	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", a.NoMultipartArtifactUpload)
 	appendToEnvOpt(ctr, "BUILDKITE_TRACE_CONTEXT_ENCODING", a.TraceContextEncoding)
 	appendCommaSepToEnv(ctr, "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", a.DisableWarningsFor)
-	appendBoolToEnv(ctr, "BUILDKITE_AGENT_DEBUG_SIGNING", a.DebugSigning)
+	appendBoolToEnvOpt(ctr, "BUILDKITE_AGENT_DEBUG_SIGNING", a.DebugSigning)
 
 	if a.HooksVolume != nil {
 		hooksPath := "/buildkite/hooks"
@@ -134,11 +134,11 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	}
 	a.applyCommonTo(ctr)
 
-	appendBoolToEnv(ctr, "BUILDKITE_NO_PTY", a.NoPTY)
-	appendBoolToEnv(ctr, "BUILDKITE_NO_COMMAND_EVAL", a.NoCommandEval)
-	appendBoolToEnv(ctr, "BUILDKITE_NO_LOCAL_HOOKS", a.NoLocalHooks)
-	appendBoolToEnv(ctr, "BUILDKITE_NO_PLUGINS", a.NoPlugins)
-	appendBoolToEnv(ctr, "BUILDKITE_NO_PLUGIN_VALIDATION", !a.PluginValidation)
+	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_PTY", a.NoPTY)
+	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_COMMAND_EVAL", a.NoCommandEval)
+	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_LOCAL_HOOKS", a.NoLocalHooks)
+	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_PLUGINS", a.NoPlugins)
+	appendNegatedToEnvOpt(ctr, "BUILDKITE_NO_PLUGIN_VALIDATION", a.PluginValidation)
 
 	if a.VerificationJWKSVolume != nil {
 		dir, file := "/buildkite/verification-jwks", "key"
@@ -173,11 +173,11 @@ func (a *AgentConfig) applyToBootstrap(ctr *corev1.Container) {
 	// Note that these "buildkite-agent start"-like options are applied to
 	// containers running "buildkite-agent bootstrap". So e.g. noPTY:true must
 	// be inverted to pty:false, as the agent would normally.
-	appendBoolToEnv(ctr, "BUILDKITE_PTY", !a.NoPTY)
-	appendBoolToEnv(ctr, "BUILDKITE_COMMAND_EVAL", !a.NoCommandEval)
-	appendBoolToEnv(ctr, "BUILDKITE_LOCAL_HOOKS_ENABLED", !a.NoLocalHooks)
-	appendBoolToEnv(ctr, "BUILDKITE_PLUGINS_ENABLED", !a.NoPlugins)
-	appendBoolToEnv(ctr, "BUILDKITE_PLUGIN_VALIDATION", a.PluginValidation)
+	appendNegatedToEnvOpt(ctr, "BUILDKITE_PTY", a.NoPTY)
+	appendNegatedToEnvOpt(ctr, "BUILDKITE_COMMAND_EVAL", a.NoCommandEval)
+	appendNegatedToEnvOpt(ctr, "BUILDKITE_LOCAL_HOOKS_ENABLED", a.NoLocalHooks)
+	appendNegatedToEnvOpt(ctr, "BUILDKITE_PLUGINS_ENABLED", a.NoPlugins)
+	appendBoolToEnvOpt(ctr, "BUILDKITE_PLUGIN_VALIDATION", a.PluginValidation)
 }
 
 // ApplyToCheckout adds env vars assuming ctr is a checkout container.
