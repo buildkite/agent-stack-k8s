@@ -231,6 +231,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	kjob.Spec.BackoffLimit = ptr.To[int32](0)
 	kjob.Spec.Template.Spec.TerminationGracePeriodSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
 
+	// Shared among all containers that run buildkite-agent start or bootstrap.
 	env := []corev1.EnvVar{
 		{
 			Name:  "BUILDKITE_BUILD_PATH",
@@ -253,6 +254,12 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
 			Value: inputs.uuid,
 		},
+		{
+			// Suppress the ignored env vars message for now.
+			// TODO: remove this when k8s exposes more agent config, e.g. PR#391
+			Name:  "BUILDKITE_IGNORED_ENV",
+			Value: "",
+		},
 	}
 	if len(inputs.otherPlugins) > 0 {
 		otherPluginsJSON, err := json.Marshal(inputs.otherPlugins)
@@ -264,6 +271,9 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			Value: string(otherPluginsJSON),
 		})
 	}
+	// TODO: revisit the next loop, since it sets **all env vars from the job**
+	// on the checkout and command containers, bypassing the "protected env
+	// vars" agent logic (that supplies many vars from configuration instead).
 	for k, v := range inputs.envMap {
 		switch k {
 		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS": // noop
@@ -292,6 +302,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	ttl := int32(w.cfg.JobTTL.Seconds())
 	kjob.Spec.TTLSecondsAfterFinished = &ttl
 
+	// Env vars used for command containers
 	containerEnv := append([]corev1.EnvVar{}, env...)
 	containerEnv = append(containerEnv, []corev1.EnvVar{
 		{
