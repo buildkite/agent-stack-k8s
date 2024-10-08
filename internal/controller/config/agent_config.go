@@ -37,22 +37,22 @@ type AgentConfig struct {
 	PluginValidation bool `json:"plugin-validation,omitempty"` // BUILDKITE_NO_PLUGIN_VALIDATION / BUILDKITE_PLUGIN_VALIDATION
 
 	// Like the above, but signing keys can be supplied directly to the command container.
-	//           																		// agent start                         / pipeline upload or agent tool sign
-	SigningJWKSFile         *string              `json:"signing-jwks-file,omitempty"`   // BUILDKITE_AGENT_SIGNING_JWKS_FILE   / BUILDKITE_AGENT_JWKS_FILE
-	SigningJWKSKeyID        *string              `json:"signing-jwks-key-id,omitempty"` // BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID / BUILDKITE_AGENT_JWKS_KEY_ID
-	SigningJWKSVolumeSource *corev1.VolumeSource `json:"signingJWKSVolumeSource,omitempty"`
+	//                                                                      // agent start                         / pipeline upload or agent tool sign
+	SigningJWKSFile   *string        `json:"signing-jwks-file,omitempty"`   // BUILDKITE_AGENT_SIGNING_JWKS_FILE   / BUILDKITE_AGENT_JWKS_FILE
+	SigningJWKSKeyID  *string        `json:"signing-jwks-key-id,omitempty"` // BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID / BUILDKITE_AGENT_JWKS_KEY_ID
+	SigningJWKSVolume *corev1.Volume `json:"signingJWKSVolume,omitempty"`
 
 	// Hooks and plugins can be supplied with a volume source.
-	HooksPath           *string              `json:"hooks-path,omitempty"` // BUILDKITE_HOOKS_PATH
-	HooksVolumeSource   *corev1.VolumeSource `json:"hooksVolumeSource,omitempty"`
-	PluginsPath         *string              `json:"plugins-path,omitempty"` // BUILDKITE_PLUGINS_PATH
-	PluginsVolumeSource *corev1.VolumeSource `json:"pluginsVolumeSource,omitempty"`
+	HooksPath     *string        `json:"hooks-path,omitempty"` // BUILDKITE_HOOKS_PATH
+	HooksVolume   *corev1.Volume `json:"hooksVolume,omitempty"`
+	PluginsPath   *string        `json:"plugins-path,omitempty"` // BUILDKITE_PLUGINS_PATH
+	PluginsVolume *corev1.Volume `json:"pluginsVolume,omitempty"`
 
 	// Applies only to the "buildkite-agent start" container.
 	// Keys can be supplied with a volume.
-	VerificationJWKSFile         *string              `json:"verification-jwks-file,omitempty"`        // BUILDKITE_AGENT_VERIFICATION_JWKS_FILE
-	VerificationFailureBehavior  *string              `json:"verification-failure-behavior,omitempty"` // BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR
-	VerificationJWKSVolumeSource *corev1.VolumeSource `json:"verificationJWKSVolumeSource,omitempty"`
+	VerificationJWKSFile        *string        `json:"verification-jwks-file,omitempty"`        // BUILDKITE_AGENT_VERIFICATION_JWKS_FILE
+	VerificationFailureBehavior *string        `json:"verification-failure-behavior,omitempty"` // BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR
+	VerificationJWKSVolume      *corev1.Volume `json:"verificationJWKSVolume,omitempty"`
 }
 
 func (a *AgentConfig) ControllerOptions() []agentcore.ControllerOption {
@@ -74,15 +74,18 @@ func (a *AgentConfig) ApplyVolumesTo(podSpec *corev1.PodSpec) {
 	if a == nil || podSpec == nil {
 		return
 	}
-	appendVolume := func(name string, vs *corev1.VolumeSource) {
-		if vs != nil {
-			podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{Name: name, VolumeSource: *vs})
-		}
+	if a.HooksVolume != nil {
+		podSpec.Volumes = append(podSpec.Volumes, *a.HooksVolume)
 	}
-	appendVolume("buildkite-hooks", a.HooksVolumeSource)
-	appendVolume("buildkite-plugins", a.PluginsVolumeSource)
-	appendVolume("buildkite-signing-jwks", a.SigningJWKSVolumeSource)
-	appendVolume("buildkite-verification-jwks", a.VerificationJWKSVolumeSource)
+	if a.PluginsVolume != nil {
+		podSpec.Volumes = append(podSpec.Volumes, *a.PluginsVolume)
+	}
+	if a.SigningJWKSVolume != nil {
+		podSpec.Volumes = append(podSpec.Volumes, *a.SigningJWKSVolume)
+	}
+	if a.VerificationJWKSVolume != nil {
+		podSpec.Volumes = append(podSpec.Volumes, *a.VerificationJWKSVolume)
+	}
 }
 
 // applyCommonTo applies env vars and volume mounts that are the same among all
@@ -99,25 +102,25 @@ func (a *AgentConfig) applyCommonTo(ctr *corev1.Container) {
 	appendCommaSepToEnv(ctr, "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", a.DisableWarningsFor)
 	appendBoolToEnv(ctr, "BUILDKITE_AGENT_DEBUG_SIGNING", a.DebugSigning)
 
-	if a.HooksVolumeSource != nil {
+	if a.HooksVolume != nil {
 		hooksPath := "/buildkite/hooks"
 		if a.HooksPath == nil {
 			a.HooksPath = &hooksPath
 		}
 		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
-			Name:      "buildkite-hooks",
+			Name:      a.HooksVolume.Name,
 			MountPath: *a.HooksPath,
 		})
 	}
 	appendToEnvOpt(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)
 
-	if a.PluginsVolumeSource != nil {
+	if a.PluginsVolume != nil {
 		pluginsPath := "/buildkite/plugins"
 		if a.PluginsPath == nil {
 			a.PluginsPath = &pluginsPath
 		}
 		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
-			Name:      "buildkite-plugins",
+			Name:      a.HooksVolume.Name,
 			MountPath: *a.PluginsPath,
 		})
 	}
@@ -137,7 +140,7 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	appendBoolToEnv(ctr, "BUILDKITE_NO_PLUGINS", a.NoPlugins)
 	appendBoolToEnv(ctr, "BUILDKITE_NO_PLUGIN_VALIDATION", !a.PluginValidation)
 
-	if a.VerificationJWKSVolumeSource != nil {
+	if a.VerificationJWKSVolume != nil {
 		dir, file := "/buildkite/verification-jwks", "key"
 		if a.VerificationJWKSFile == nil {
 			a.VerificationJWKSFile = &file
@@ -148,7 +151,7 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 			*a.VerificationJWKSFile = filepath.Join(dir, *a.VerificationJWKSFile)
 		}
 		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
-			Name:      "buildkite-verification-jwks",
+			Name:      a.VerificationJWKSVolume.Name,
 			MountPath: dir,
 		})
 	}
@@ -204,7 +207,7 @@ func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {
 	// volume.
 	// If there is no volume source for a key, it's up to the user whether they
 	// use signing with an absolute path, or not use signing (nil).
-	if a.SigningJWKSVolumeSource != nil {
+	if a.SigningJWKSVolume != nil {
 		dir, file := "/buildkite/signing-jwks", "key"
 		if a.SigningJWKSFile == nil {
 			a.SigningJWKSFile = &file
@@ -215,7 +218,7 @@ func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {
 			*a.SigningJWKSFile = filepath.Join(dir, *a.SigningJWKSFile)
 		}
 		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
-			Name:      "buildkite-signing-jwks",
+			Name:      a.SigningJWKSVolume.Name,
 			MountPath: dir,
 		})
 	}

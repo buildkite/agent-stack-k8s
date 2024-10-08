@@ -306,11 +306,11 @@
             "plugins-path": {
               "type": "string"
             },
-            "hooksVolumeSource": {
-              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeSource"
+            "hooksVolume": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
             },
-            "pluginsVolumeSource": {
-              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeSource"
+            "pluginsVolume": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
             },
             "debug-signing": {
               "type": "boolean"
@@ -321,8 +321,8 @@
             "signing-jwks-key-id": {
               "type": "string"
             },
-            "signingJWKSVolumeSource": {
-              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeSource"
+            "signingJWKSVolume": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
             },
             "verification-jwks-file": {
               "type": "string"
@@ -330,8 +330,8 @@
             "verification-failure-behavior": {
               "type": "string"
             },
-            "verificationJWKSVolumeSource": {
-              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeSource"
+            "verificationJWKSVolume": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
             }
           }
         },
