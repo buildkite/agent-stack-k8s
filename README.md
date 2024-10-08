@@ -703,8 +703,6 @@ The `agent-config` block within `values.yaml` accepts most of the
 
 Additionally, volume sources for signing and verification keys can be specified,
 and automatically attached to the right containers.
-If used, the corresponding volumes are named `buildkite-signing-jwks` and
-`buildkite-verification-jwks`.
 
 Any volume source can be specified for keys, but a common choice is to use a
 `secret` source. Keys are generally small, distributed across the cluster,
@@ -726,13 +724,15 @@ and ideally are never shown in plain text.
         # used by 'buildkite-agent pipeline upload'.
         signing-jwks-file: key # optional if the file within the volume is called "key"
         signing-jwks-key-id: llamas # optional
-        signing-jwks-volume-source:
+        signingJWKSVolume:
+          name: buildkite-signing-jwks
           secret:
             secretName: my-signing-key
         # The verification key will be attached to the 'agent start' container.
         verification-jwks-file: key # optional if the file within the volume is called "key"
-        verification-failure-behavior: warn # for testing, 'block' to enforce
-        verification-jwks-volume-source:
+        verification-failure-behavior: warn # for testing/incremental rollout, use 'block' to enforce
+        verificationJWKSVolume:
+          name: buildkite-verification-jwks
           secret:
             secretName: my-verification-key
     ```
@@ -741,6 +741,8 @@ and ideally are never shown in plain text.
 Note that `signing-jwks-file` and `verification-jwks-file` agent config options
 can be used to either change the mount point of the corresponding volume (with
 an absolute path) or specify a file within the volume (with a relative path).
+The default mount points are `/buildkite/signing-jwks` and
+`/buildkite/verification-jwks`.
 
 ## How to set up agent hooks and plugins (v0.16.0 and later)
 
@@ -763,7 +765,8 @@ config maps are made available across the cluster.
     # values.yaml
     config:
       agent-config:
-        hooksVolumeSource:
+        hooksVolume:
+          name: buildkite-hooks
           configMap:
             defaultMode: 493
             name: buildkite-agent-hooks
@@ -776,14 +779,16 @@ config maps are made available across the cluster.
     # values.yaml
     config:
       agent-config:
-        pluginsVolumeSource:
+        pluginsVolume:
+          name: buildkite-plugins
           hostPath:
             type: Directory
             path: /etc/buildkite-agent/plugins
     ```
 
 Note that `hooks-path` and `plugins-path` agent config options can be used to
-change the mount point of the corresponding volume.
+change the mount point of the corresponding volume. The default mount points are
+`/buildkite/hooks` and `/buildkite/plugins`.
 
 ## How to set up agent hooks (v0.15.0 and earlier)
 
