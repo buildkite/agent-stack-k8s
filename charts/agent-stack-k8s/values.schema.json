@@ -389,7 +389,7 @@
                   "default": null
                 },
                 "skipUpdate": {
-                  "type": "bool",
+                  "type": "boolean",
                   "default": null
                 }
               }
