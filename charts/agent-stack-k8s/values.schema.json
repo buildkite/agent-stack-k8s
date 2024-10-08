@@ -165,12 +165,6 @@
       "title": "The config Schema",
       "required": ["org"],
       "properties": {
-        "agent-endpoint": {
-          "type": "string",
-          "default": "",
-          "title": "The Agent REST API endpoint URL",
-          "examples": [""]
-        },
         "graphql-endpoint": {
           "type": "string",
           "default": "",
@@ -244,6 +238,103 @@
           "title": "Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
           "examples": [true]
         },
+        "agent-config": {
+          "type": "object",
+          "default": null,
+          "title": "Agent configuration",
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "default": "",
+              "title": "The Agent REST API endpoint URL",
+              "examples": [""]
+            },
+            "no-http2": {
+              "type": "boolean",
+              "default": false,
+              "title": "Disables HTTP/2 within the agent"
+            },
+            "experiment": {
+              "type": "array",
+              "default": [],
+              "items": {
+                "type": "string"
+              }
+            },
+            "shell": {
+              "type": "string",
+              "default": "/bin/sh -ec",
+              "title": "Shell used by the agent to execute commands"
+            },
+            "no-color": {
+              "type": "boolean"
+            },
+            "strict-single-hooks": {
+              "type": "boolean"
+            },
+            "no-multipart-artifact-upload": {
+              "type": "boolean"
+            },
+            "trace-context-encoding": {
+              "type": "string"
+            },
+            "disable-warnings-for": {
+              "type": "array",
+              "default": [],
+              "items": {
+                "type": "string"
+              }
+            },
+            "no-pty": {
+              "type": "boolean"
+            },
+            "no-command-eval": {
+              "type": "boolean"
+            },
+            "no-local-hooks": {
+              "type": "boolean"
+            },
+            "no-plugins": {
+              "type": "boolean"
+            },
+            "plugin-validation": {
+              "type": "boolean"
+            },
+            "hooks-path": {
+              "type": "string"
+            },
+            "plugins-path": {
+              "type": "string"
+            },
+            "hooksVolumeSource": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeSource"
+            },
+            "pluginsVolumeSource": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeSource"
+            },
+            "debug-signing": {
+              "type": "boolean"
+            },
+            "signing-jwks-file": {
+              "type": "string"
+            },
+            "signing-jwks-key-id": {
+              "type": "string"
+            },
+            "signingJWKSVolumeSource": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeSource"
+            },
+            "verification-jwks-file": {
+              "type": "string"
+            },
+            "verification-failure-behavior": {
+              "type": "string"
+            },
+            "verificationJWKSVolumeSource": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeSource"
+            }
+          }
+        },
         "default-checkout-params": {
           "type": "object",
           "default": null,
@@ -254,6 +345,11 @@
               "default": null,
               "title": "If true, skips building and running checkout containers"
             },
+            "cleanFlags": {
+              "type": "string",
+              "default": null,
+              "title": "If set, appends the BUILDKITE_GIT_CLEAN_FLAGS variable"
+            },
             "cloneFlags": {
               "type": "string",
               "default": null,
@@ -263,6 +359,40 @@
               "type": "string",
               "default": null,
               "title": "If set, appends the BUILDKITE_GIT_FETCH_FLAGS variable"
+            },
+            "noSubmodules": {
+              "type": "boolean",
+              "default": null,
+              "title": "If set, disables submodule support"
+            },
+            "submoduleCloneConfig": {
+              "type": "array",
+              "default": [],
+              "title": "Key=value config options passed to git submodule clone"
+            },
+            "gitMirrors": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "default": null
+                },
+                "volume": {
+                  "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+                },
+                "cloneFlags": {
+                  "type": "string",
+                  "default": null
+                },
+                "lockTimeout": {
+                  "type": "integer",
+                  "default": null
+                },
+                "skipUpdate": {
+                  "type": "bool",
+                  "default": null
+                }
+              }
             },
             "gitCredentialsSecret": {
               "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.SecretVolumeSource"

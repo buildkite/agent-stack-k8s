@@ -1,6 +1,8 @@
 package config
 
 import (
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/buildkite/agent/v3/version"
@@ -34,16 +36,19 @@ type Config struct {
 	Tags             stringSlice   `json:"tags"               validate:"min=1"`
 	ProfilerAddress  string        `json:"profiler-address"   validate:"omitempty,hostname_port"`
 	GraphQLEndpoint  string        `json:"graphql-endpoint"   validate:"omitempty"`
-	AgentEndpoint    string        `json:"agent-endpoint"     validate:"omitempty"`
-	// This field is mandatory for most new orgs.
+	// Agent endpoint is set in agent-config.
+
+	// ClusterUUID field is mandatory for most new orgs.
 	// Some old orgs allows unclustered setup.
 	ClusterUUID                 string          `json:"cluster-uuid"                    validate:"omitempty"`
 	AdditionalRedactedVars      stringSlice     `json:"additional-redacted-vars"        validate:"omitempty"`
 	PodSpecPatch                *corev1.PodSpec `json:"pod-spec-patch"                  validate:"omitempty"`
 	ImagePullBackOffGradePeriod time.Duration   `json:"image-pull-backoff-grace-period" validate:"omitempty"`
-	DefaultCheckoutParams       *CheckoutParams `json:"default-checkout-params"         validate:"omitempty"`
-	DefaultCommandParams        *CommandParams  `json:"default-command-params"          validate:"omitempty"`
-	DefaultSidecarParams        *SidecarParams  `json:"default-sidecar-params"          validate:"omitempty"`
+
+	AgentConfig           *AgentConfig    `json:"agent-config" validate:"omitempty"`
+	DefaultCheckoutParams *CheckoutParams `json:"default-checkout-params" validate:"omitempty"`
+	DefaultCommandParams  *CommandParams  `json:"default-command-params"  validate:"omitempty"`
+	DefaultSidecarParams  *SidecarParams  `json:"default-sidecar-params"  validate:"omitempty"`
 
 	// ProhibitKubernetesPlugin can be used to prevent alterations to the pod
 	// from the job (the kubernetes "plugin" in pipeline.yml). If enabled,
@@ -79,6 +84,9 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 		return err
 	}
 	enc.AddDuration("image-pull-backoff-grace-period", c.ImagePullBackOffGradePeriod)
+	if err := enc.AddReflected("agent-config", c.AgentConfig); err != nil {
+		return err
+	}
 	if err := enc.AddReflected("default-checkout-params", c.DefaultCheckoutParams); err != nil {
 		return err
 	}
@@ -89,4 +97,28 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 		return err
 	}
 	return enc.AddArray("tags", c.Tags)
+}
+
+// Helpers for applying configs / params to container env.
+
+func appendToEnv(ctr *corev1.Container, name, value string) {
+	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: value})
+}
+
+func appendToEnvOpt(ctr *corev1.Container, name string, value *string) {
+	if value == nil {
+		return
+	}
+	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: *value})
+}
+
+func appendBoolToEnv(ctr *corev1.Container, name string, value bool) {
+	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: strconv.FormatBool(value)})
+}
+
+func appendCommaSepToEnv(ctr *corev1.Container, name string, values []string) {
+	ctr.Env = append(ctr.Env, corev1.EnvVar{
+		Name:  name,
+		Value: strings.Join(values, ","),
+	})
 }

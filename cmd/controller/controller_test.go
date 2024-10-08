@@ -33,7 +33,10 @@ func TestReadAndParseConfig(t *testing.T) {
 		ClusterUUID:                 "beefcafe-abbe-baba-abba-deedcedecade",
 		ProhibitKubernetesPlugin:    true,
 		GraphQLEndpoint:             "http://graphql.buildkite.localhost/v1",
-		AgentEndpoint:               "http://agent.buildkite.localhost/v3",
+		AgentConfig: &config.AgentConfig{
+			Endpoint: ptr("http://agent.buildkite.localhost/v3"),
+		},
+
 		DefaultCommandParams: &config.CommandParams{
 			Interposer: config.InterposerVector,
 			EnvFrom: []corev1.EnvFromSource{{
