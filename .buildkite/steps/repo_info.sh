@@ -5,6 +5,11 @@ set -eufo pipefail
 
 tag=$(git describe)
 version=${tag#v}
+
+if [[ "${BUILDKITE_PULL_REQUEST:false}" != "false" ]]; then
+  version="${version}-PR-${BUILDKITE_PULL_REQUEST}"
+fi
+
 agent_image=$(buildkite-agent meta-data get agent-image)
 controller_image=$(buildkite-agent meta-data get controller-image)
 helm_repo="oci://ghcr.io/buildkite/helm"
