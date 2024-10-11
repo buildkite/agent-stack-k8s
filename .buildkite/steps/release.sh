@@ -8,38 +8,38 @@ if [[ -z "${BUILDKITE_TAG:-}" ]]; then
   exit 1
 fi
 
-ARCH=$(uname -m)
-GORELEASER_VERSION=1.19.2
-GORELEASER_URL=https://github.com/goreleaser/goreleaser/releases/download
+ARCH="$(uname -m)"
+GORELEASER_VERSION="1.19.2"
+GORELEASER_URL="https://github.com/goreleaser/goreleaser/releases/download"
 GORELEASER_FILE="goreleaser_${GORELEASER_VERSION}_${ARCH}.apk"
-GHCH_VERSION=0.11.0
+GHCH_VERSION="0.11.0"
 GHCH_URL="https://github.com/buildkite/ghch/releases/download/v${GHCH_VERSION}/ghch-$(go env GOARCH)"
 
 echo --- :hammer: Installing packages
 apk add --no-progress crane git
 wget -q "${GORELEASER_URL}/v${GORELEASER_VERSION}/${GORELEASER_FILE}"
-apk add --no-progress --allow-untrusted "$GORELEASER_FILE"
-rm "$GORELEASER_FILE"
-wget -qO- "$GHCH_URL" > /usr/bin/ghch
+apk add --no-progress --allow-untrusted "${GORELEASER_FILE}"
+rm "${GORELEASER_FILE}"
+wget -qO- "${GHCH_URL}" > /usr/bin/ghch
 chmod +x /usr/bin/ghch
 
 echo --- :git: Determining release version from tags
 # ensure we remove leading `v`
 version="${BUILDKITE_TAG#v}"
 # put it back
-tag="v$version"
-previous_tag=$(git describe --abbrev=0 --exclude "$tag")
-echo "Version: $version"
-echo "Tag: $tag"
-echo "Previous tag: $previous_tag"
+tag="v${version}"
+previous_tag="$(git describe --abbrev=0 --exclude "${tag}")"
+echo "Version: ${version}"
+echo "Tag: ${tag}"
+echo "Previous tag: ${previous_tag}"
 
 agent_version="$(buildkite-agent meta-data get agent-version)"
 echo "Agent version: ${agent_version}"
 
 echo --- :docker: Logging into ghcr.io
 crane auth login ghcr.io \
-  --username "$REGISTRY_USERNAME" \
-  --password "$REGISTRY_PASSWORD"
+  --username "${REGISTRY_USERNAME}" \
+  --password "${REGISTRY_PASSWORD}"
 
 echo --- :docker: Tagging latest images
 crane tag "ghcr.io/buildkite/helm/agent-stack-k8s:${version}" latest
@@ -58,15 +58,15 @@ footer="
 ## Images
 ### Helm chart
 Image: \`ghcr.io/buildkite/helm/agent-stack-k8s:${version}\`
-Digest: \`$chart_digest\`
+Digest: \`${chart_digest}\`
 
 ### Controller
 Image: \`ghcr.io/buildkite/agent-stack-k8s/controller:${version}\`
-Digest: \`$controller_digest\`
+Digest: \`${controller_digest}\`
 
 ### Agent
 Image: \`ghcr.io/buildkite/agent:${agent_version}\`
-Digest: \`$agent_digest\`
+Digest: \`${agent_digest}\`
 "
 
-goreleaser release --clean --release-notes <(printf "%s\n\n\n%s" "$changelog" "$footer")
+goreleaser release --clean --release-notes <(printf "%s\n\n\n%s" "${changelog}" "${footer}")
