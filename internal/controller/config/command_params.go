@@ -13,8 +13,17 @@ import (
 // CommandParams contains parameters that provide additional control over all
 // command container(s).
 type CommandParams struct {
-	Interposer Interposer             `json:"interposer,omitempty"`
-	EnvFrom    []corev1.EnvFromSource `json:"envFrom,omitempty"`
+	// Interposer controls how the command and args container fields are
+	// interpreted into a BUILDKITE_COMMAND.
+	Interposer Interposer `json:"interposer,omitempty"`
+
+	// Parallel controls whether command containers are allowed to start running
+	// commands in parallel with each other. By default each command container
+	// waits until the previous command container has finished its command.
+	Parallel *bool `json:"parallel,omitempty"`
+
+	// EnvFrom adds environment variables to command containers from a source.
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
 }
 
 func (cmd *CommandParams) ApplyTo(ctr *corev1.Container) {
@@ -22,6 +31,15 @@ func (cmd *CommandParams) ApplyTo(ctr *corev1.Container) {
 		return
 	}
 	ctr.EnvFrom = append(ctr.EnvFrom, cmd.EnvFrom...)
+}
+
+// RunInParallel returns nil if the receiver is nil, otherwise it returns
+// the Parallel field.
+func (cmd *CommandParams) RunInParallel() *bool {
+	if cmd == nil {
+		return nil
+	}
+	return cmd.Parallel
 }
 
 // Command interprets the command and args fields of the container into a

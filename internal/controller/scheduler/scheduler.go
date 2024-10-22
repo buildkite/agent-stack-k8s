@@ -414,6 +414,45 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// This runs the "upper layer" of the agent that is responsible for talking
 	// to Buildkite: acquiring the job, starting the job, uploading log chunks,
 	// finishing the job.
+	//
+	// If the commands are allowed to be parallel, figure out the dependency
+	// graph and pass that to the agent, which is responsible for allowing which
+	// container to run commands when. The default is serial mode: container N
+	// only starts after container N-1 is finished.
+	// containerDeps := semicolon separated list of dependency lists
+	// dependency list := comma separated list of container IDs (may be empty)
+	// For now all dependency lists are either empty or a single ID, but this
+	// format is flexible enough to implement more complex configs one day.
+	containerDeps := ""
+	parallel := coalesce(
+		inputs.k8sPlugin.commandParams().RunInParallel(),
+		w.cfg.DefaultCommandParams.RunInParallel(),
+	)
+	if parallel {
+		depLists := make([]string, systemContainerCount+len(podSpec.Containers))
+
+		// Ensure the command containers only run after system containers
+		// (checkout, etc). System containers always run serially.
+		for id := range systemContainerCount {
+			if id > 0 {
+				depLists[id] = strconv.Itoa(id - 1)
+			}
+		}
+
+		// All subsequent containers are command containers. Since the system
+		// containers ran serially, they only depend on the last one - if there
+		// were any.
+		lastSysCtr := ""
+		if systemContainerCount > 0 {
+			lastSysCtr = strconv.Itoa(systemContainerCount - 1)
+		}
+		for id := range podSpec.Containers {
+			depLists[id+systemContainerCount] = lastSysCtr
+		}
+
+		containerDeps = strings.Join(depLists, ";")
+	}
+
 	agentContainer := corev1.Container{
 		Name:            AgentContainerName,
 		Args:            []string{"start"},
@@ -429,6 +468,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			{
 				Name:  "BUILDKITE_CONTAINER_COUNT",
 				Value: strconv.Itoa(containerCount),
+			},
+			{
+				Name:  "BUILDKITE_CONTAINER_DEPS",
+				Value: containerDeps,
 			},
 			{
 				Name:  "BUILDKITE_AGENT_TAGS",
