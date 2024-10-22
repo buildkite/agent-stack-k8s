@@ -33,6 +33,13 @@ func (co *CheckoutParams) ApplyTo(podSpec *corev1.PodSpec, ctr *corev1.Container
 	ctr.EnvFrom = append(ctr.EnvFrom, co.EnvFrom...)
 }
 
+func (co *CheckoutParams) ShouldSkip() *bool {
+	if co == nil {
+		return nil
+	}
+	return co.Skip
+}
+
 func (co *CheckoutParams) GitCredsSecret() *corev1.SecretVolumeSource {
 	if co == nil {
 		return nil

@@ -62,23 +62,6 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 	}
 }
 
-type KubernetesPlugin struct {
-	PodSpec           *corev1.PodSpec        `json:"podSpec,omitempty"`
-	PodSpecPatch      *corev1.PodSpec        `json:"podSpecPatch,omitempty"`
-	GitEnvFrom        []corev1.EnvFromSource `json:"gitEnvFrom,omitempty"`
-	Sidecars          []corev1.Container     `json:"sidecars,omitempty"`
-	Metadata          Metadata               `json:"metadata,omitempty"`
-	ExtraVolumeMounts []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
-	CheckoutParams    *config.CheckoutParams `json:"checkout,omitempty"`
-	CommandParams     *config.CommandParams  `json:"commandParams,omitempty"`
-	SidecarParams     *config.SidecarParams  `json:"sidecarParams,omitempty"`
-}
-
-type Metadata struct {
-	Annotations map[string]string
-	Labels      map[string]string
-}
-
 type worker struct {
 	cfg    Config
 	client kubernetes.Interface
@@ -192,16 +175,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// If Build was called with skipCheckout == false, then look at the config
 	// and plugin.
 	if !skipCheckout {
-		// Start with the default, if set
-		if co := w.cfg.DefaultCheckoutParams; co != nil && co.Skip != nil {
-			skipCheckout = *co.Skip
-		}
-		// The plugin overrides the default, if set
-		if inputs.k8sPlugin != nil {
-			if co := inputs.k8sPlugin.CheckoutParams; co != nil && co.Skip != nil {
-				skipCheckout = *co.Skip
-			}
-		}
+		// The k8s plugin has highest precedence, followed by the config default
+		skipCheckout = coalesce(
+			inputs.k8sPlugin.checkoutParams().ShouldSkip(),
+			w.cfg.DefaultCheckoutParams.ShouldSkip(),
+		)
 	}
 
 	kjob := &batchv1.Job{
@@ -212,10 +190,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		},
 	}
 
-	if inputs.k8sPlugin != nil {
-		maps.Copy(kjob.Labels, inputs.k8sPlugin.Metadata.Labels)
-		maps.Copy(kjob.Annotations, inputs.k8sPlugin.Metadata.Annotations)
-	}
+	maps.Copy(kjob.Labels, inputs.k8sPlugin.metadata().Labels)
+	maps.Copy(kjob.Annotations, inputs.k8sPlugin.metadata().Annotations)
 
 	kjob.Labels[config.UUIDLabel] = inputs.uuid
 	w.labelWithAgentTags(kjob.Labels, inputs.agentQueryRules)
@@ -289,9 +265,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	})
 
 	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
-	if inputs.k8sPlugin != nil {
-		volumeMounts = append(volumeMounts, inputs.k8sPlugin.ExtraVolumeMounts...)
-	}
+	volumeMounts = append(volumeMounts, inputs.k8sPlugin.extraVolumeMounts()...)
 
 	systemContainerCount := 0
 	if !skipCheckout {
@@ -367,9 +341,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 		w.cfg.AgentConfig.ApplyToCommand(&c)
 		w.cfg.DefaultCommandParams.ApplyTo(&c)
-		if inputs.k8sPlugin != nil {
-			inputs.k8sPlugin.CommandParams.ApplyTo(&c)
-		}
+		inputs.k8sPlugin.commandParams().ApplyTo(&c)
 
 		// Supply more required defaults.
 		if c.Name == "" {
@@ -380,9 +352,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		}
 
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-		if inputs.k8sPlugin != nil {
-			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
-		}
+		c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.gitEnvFrom()...)
 		podSpec.Containers[i] = c
 	}
 
@@ -411,24 +381,20 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		}
 		w.cfg.AgentConfig.ApplyToCommand(&c)
 		w.cfg.DefaultCommandParams.ApplyTo(&c)
-		if inputs.k8sPlugin != nil {
-			inputs.k8sPlugin.CommandParams.ApplyTo(&c)
-			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
-		}
+		inputs.k8sPlugin.commandParams().ApplyTo(&c)
+		c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.gitEnvFrom()...)
 		podSpec.Containers = append(podSpec.Containers, c)
 	}
 
-	if inputs.k8sPlugin != nil {
-		for i, c := range inputs.k8sPlugin.Sidecars {
-			if c.Name == "" {
-				c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
-			}
-			c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-			w.cfg.DefaultSidecarParams.ApplyTo(&c)
-			inputs.k8sPlugin.SidecarParams.ApplyTo(&c)
-			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
-			podSpec.Containers = append(podSpec.Containers, c)
+	for i, c := range inputs.k8sPlugin.sidecars() {
+		if c.Name == "" {
+			c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
 		}
+		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
+		w.cfg.DefaultSidecarParams.ApplyTo(&c)
+		inputs.k8sPlugin.sidecarParams().ApplyTo(&c)
+		c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
+		podSpec.Containers = append(podSpec.Containers, c)
 	}
 
 	agentTags := []agentTag{
@@ -497,6 +463,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	w.cfg.AgentConfig.ApplyToAgentStart(&agentContainer)
 	agentContainer.Env = append(agentContainer.Env, env...)
+
 	podSpec.Containers = append(podSpec.Containers, agentContainer)
 
 	if !skipCheckout {
@@ -910,4 +877,16 @@ func createAgentTagString(tags []agentTag) string {
 		}
 	}
 	return sb.String()
+}
+
+// coalesce returns the first non-nil arg, or the zero value for T if all were
+// nil.
+func coalesce[T any](ps ...*T) T {
+	for _, p := range ps {
+		if p != nil {
+			return *p
+		}
+	}
+	var z T
+	return z
 }
