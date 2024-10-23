@@ -308,7 +308,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		},
 	}...)
 
-	for i, c := range podSpec.Containers {
+	commandContainers := podSpec.Containers
+
+	for i := range commandContainers {
+		c := &commandContainers[i]
+
 		// Default to the command from the pipeline step
 		command := inputs.command
 
@@ -339,9 +343,9 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			},
 		)
 
-		w.cfg.AgentConfig.ApplyToCommand(&c)
-		w.cfg.DefaultCommandParams.ApplyTo(&c)
-		inputs.k8sPlugin.commandParams().ApplyTo(&c)
+		w.cfg.AgentConfig.ApplyToCommand(c)
+		w.cfg.DefaultCommandParams.ApplyTo(c)
+		inputs.k8sPlugin.commandParams().ApplyTo(c)
 
 		// Supply more required defaults.
 		if c.Name == "" {
@@ -353,12 +357,12 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 		c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.gitEnvFrom()...)
-		podSpec.Containers[i] = c
+		//podSpec.Containers[i] = c
 	}
 
-	containerCount := len(podSpec.Containers) + systemContainerCount
+	containerCount := len(commandContainers) + systemContainerCount
 
-	if len(podSpec.Containers) == 0 {
+	if len(commandContainers) == 0 {
 		// Create a default command container named "container-0".
 		c := corev1.Container{
 			Name:            "container-0",
@@ -383,9 +387,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		w.cfg.DefaultCommandParams.ApplyTo(&c)
 		inputs.k8sPlugin.commandParams().ApplyTo(&c)
 		c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.gitEnvFrom()...)
-		podSpec.Containers = append(podSpec.Containers, c)
+		commandContainers = append(commandContainers, c)
 	}
 
+	var sidecarContainers []corev1.Container
 	for i, c := range inputs.k8sPlugin.sidecars() {
 		if c.Name == "" {
 			c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
@@ -394,7 +399,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		w.cfg.DefaultSidecarParams.ApplyTo(&c)
 		inputs.k8sPlugin.sidecarParams().ApplyTo(&c)
 		c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
-		podSpec.Containers = append(podSpec.Containers, c)
+
+		// Sidecar containers are now actual sidecar containers!
+		c.RestartPolicy = ptr.To(corev1.ContainerRestartPolicyAlways)
+		sidecarContainers = append(sidecarContainers, c)
 	}
 
 	agentTags := []agentTag{
@@ -421,6 +429,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
 		ImagePullPolicy: corev1.PullAlways,
+		RestartPolicy:   ptr.To(corev1.ContainerRestartPolicyAlways),
 		Env: []corev1.EnvVar{
 			{
 				Name:  "BUILDKITE_KUBERNETES_EXEC",
@@ -464,12 +473,12 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	w.cfg.AgentConfig.ApplyToAgentStart(&agentContainer)
 	agentContainer.Env = append(agentContainer.Env, env...)
 
-	podSpec.Containers = append(podSpec.Containers, agentContainer)
+	//podSpec.Containers = append(podSpec.Containers, agentContainer)
 
+	var checkoutContainer corev1.Container
 	if !skipCheckout {
-		podSpec.Containers = append(podSpec.Containers,
-			w.createCheckoutContainer(podSpec, env, volumeMounts, inputs.k8sPlugin),
-		)
+		checkoutContainer = w.createCheckoutContainer(podSpec, env, volumeMounts, inputs.k8sPlugin)
+		//podSpec.Containers = append(podSpec.Containers, checkoutContainer)
 	}
 
 	// Init containers. These run in order before the regular containers.
@@ -539,12 +548,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// Pre-pull these images. (Note that even when specifying PullAlways,
 	// layers can still be cached on the node.)
 	preflightImagePulls := map[string]struct{}{}
-	for _, c := range podSpec.Containers {
+	for _, c := range commandContainers {
 		preflightImagePulls[c.Image] = struct{}{}
 	}
-	for _, c := range podSpec.EphemeralContainers {
-		preflightImagePulls[c.Image] = struct{}{}
-	}
+
 	// w.cfg.Image is the first init container, so we don't need to add another
 	// container specifically to check it can pull. Same goes for user-supplied
 	// init containers.
@@ -590,6 +597,22 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	w.cfg.AgentConfig.ApplyVolumesTo(podSpec)
 
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
+
+	// OOPS! ALL INIT CONTAINERS
+	// First start user-specified sidecars *as sidecars*
+	podSpec.InitContainers = append(podSpec.InitContainers, sidecarContainers...)
+	// Start the agent container, also as a sidecar
+	podSpec.InitContainers = append(podSpec.InitContainers, agentContainer)
+	if !skipCheckout {
+		// Perform the checkout as an init container
+		podSpec.InitContainers = append(podSpec.InitContainers, checkoutContainer)
+	}
+	// Then all the command containers - again, as init containers.
+	// Except use the final command container as "the" ordinary container to
+	// make k8s happy.
+	lastCC := len(commandContainers) - 1
+	podSpec.InitContainers = append(podSpec.InitContainers, commandContainers[:lastCC]...)
+	podSpec.Containers = commandContainers[lastCC:]
 
 	// Allow podSpec to be overridden by the agent configuration and the k8s plugin
 
