@@ -348,9 +348,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			}
 		}
 
-		// Substitute the container's entrypoint for buildkite-agent
-		c.Command = []string{"/workspace/buildkite-agent"}
-		c.Args = []string{"bootstrap"}
+		// Substitute the container's entrypoint for tini-static + buildkite-agent
+		// Note that tini-static (not plain tini) is needed because we don't
+		// know what libraries are available in the image.
+		c.Command = []string{"/workspace/tini-static"}
+		c.Args = []string{"--", "/workspace/buildkite-agent", "bootstrap"}
 
 		c.ImagePullPolicy = corev1.PullAlways
 		c.Env = append(c.Env, containerEnv...)
@@ -393,8 +395,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		c := corev1.Container{
 			Name:            "container-0",
 			Image:           w.cfg.Image,
-			Command:         []string{"/workspace/buildkite-agent"},
-			Args:            []string{"bootstrap"},
+			Command:         []string{"/workspace/tini-static"},
+			Args:            []string{"--", "/workspace/buildkite-agent", "bootstrap"},
 			WorkingDir:      "/workspace",
 			VolumeMounts:    volumeMounts,
 			ImagePullPolicy: corev1.PullAlways,
@@ -553,13 +555,15 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// then hand over the job token to the agent in the pod.)
 	initContainers := []corev1.Container{
 		{
-			// This container copies buildkite-agent into /workspace.
+			// This container copies buildkite-agent and tini-static into
+			// /workspace.
 			Name:            CopyAgentContainerName,
 			Image:           w.cfg.Image,
 			ImagePullPolicy: corev1.PullAlways,
 			Command:         []string{"cp"},
 			Args: []string{
 				"/usr/local/bin/buildkite-agent",
+				"/sbin/tini-static",
 				"/workspace",
 			},
 			VolumeMounts: []corev1.VolumeMount{{
@@ -594,15 +598,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			Name:            name,
 			Image:           image,
 			ImagePullPolicy: corev1.PullAlways,
-			// We run `buildkite-agent --version` to exit the container
-			// immediately with success.
-			// Why not /bin/true or sh -c 'exit 0'? Because `true` and `sh`
-			// might not be present in the image (e.g. built from scratch).
-			// Why not, say, copy Busybox (from the agent image, based on alpine)
-			// into /workspace as `true`?
-			// Because Alpine Busybox is dynamically linked against musl, and
-			// musl might not be present.
-			Command: []string{"/workspace/buildkite-agent"},
+			// `tini-static --version` is sorta like `true`, but:
+			// (a) always exists (we *just* copied it into /workspace), and
+			// (b) is statically compiled, so should be compatible with whatever
+			//     container image we're in - no assumption of glibc or musl.
+			Command: []string{"/workspace/tini-static"},
 			Args:    []string{"--version"},
 			VolumeMounts: []corev1.VolumeMount{{
 				Name:      "workspace",
