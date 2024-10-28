@@ -90,6 +90,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultImagePullBackOffGracePeriod,
 		"Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled)",
 	)
+	cmd.Flags().Duration(
+		"job-cancel-checker-poll-interval",
+		config.DefaultJobCancelCheckerPollInterval,
+		"Controls the interval between job state queries while a pod is still Pending",
+	)
 	cmd.Flags().Bool(
 		"prohibit-kubernetes-plugin",
 		false,

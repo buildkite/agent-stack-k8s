@@ -80,13 +80,13 @@ func Run(
 		logger.Fatal("failed to register completions informer", zap.Error(err))
 	}
 
-	imagePullBackOffWatcher := scheduler.NewImagePullBackOffWatcher(
-		logger.Named("imagePullBackoffWatcher"),
+	podWatcher := scheduler.NewPodWatcher(
+		logger.Named("podWatcher"),
 		k8sClient,
 		cfg,
 	)
-	if err := imagePullBackOffWatcher.RegisterInformer(ctx, informerFactory); err != nil {
-		logger.Fatal("failed to register imagePullBackoffWatcher informer", zap.Error(err))
+	if err := podWatcher.RegisterInformer(ctx, informerFactory); err != nil {
+		logger.Fatal("failed to register podWatcher informer", zap.Error(err))
 	}
 
 	select {
