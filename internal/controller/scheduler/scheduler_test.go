@@ -171,14 +171,14 @@ func TestJobPluginConversion(t *testing.T) {
 
 	commandContainer := findContainer(t, gotPodSpec.Containers, "container-0")
 
-	// Command should be replaced with buildkite-agent.
-	// Args should be set to bootstrap.
+	// Command should be replaced with tini-static.
+	// Args should be set to -- buildkite-agent bootstrap.
 	// The original command should be placed in BUILDKITE_COMMAND.
-	wantCommand := []string{"/workspace/buildkite-agent"}
+	wantCommand := []string{"/workspace/tini-static"}
 	if diff := cmp.Diff(commandContainer.Command, wantCommand); diff != "" {
 		t.Errorf("kjob.Spec.Template.Spec.Containers[0].Command diff (-got +want):\n%s", diff)
 	}
-	wantArgs := []string{"bootstrap"}
+	wantArgs := []string{"--", "/workspace/buildkite-agent", "bootstrap"}
 	if diff := cmp.Diff(commandContainer.Args, wantArgs); diff != "" {
 		t.Errorf("kjob.Spec.Template.Spec.Containers[0].Args diff (-got +want):\n%s", diff)
 	}
