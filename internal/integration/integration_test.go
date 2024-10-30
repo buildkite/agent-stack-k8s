@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -469,4 +471,32 @@ func TestInterposerVector(t *testing.T) {
 	logs := tc.FetchLogs(build)
 	assert.Contains(t, logs, "Hello World!")
 	assert.Contains(t, logs, "Goodbye World!")
+}
+
+func TestCancelCheckerEvictsPod(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "cancel-checker.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+
+	time.Sleep(10 * time.Second)
+
+	_, err := api.BuildCancel(ctx, tc.GraphQL, api.BuildCancelInput{
+		ClientMutationId: uuid.New().String(),
+		Id:               build.Id,
+	})
+	if err != nil {
+		t.Errorf("api.BuildCancel(... %q) error: %v", build.Id, err)
+	}
+	tc.AssertCancelled(ctx, build)
+	logs := tc.FetchLogs(build)
+	if strings.Contains(logs, "Received cancellation signal, interrupting") {
+		t.Error("The agent ran and handled cancellation")
+	}
 }

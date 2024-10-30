@@ -174,7 +174,7 @@
         "image": {
           "type": "string",
           "default": "",
-          "title": "The image Schema",
+          "title": "The container image used to obtain buildkite-agent, and for running commands without any k8s-specific configuration. The default for each release of agent-stack-k8s is set to a version tag of gchr.io/buildkite/agent matching agent-stack-k8s's go.mod file",
           "examples": [""]
         },
         "debug": {
@@ -231,6 +231,18 @@
             "type": "string"
           },
           "examples": [["SECRET_RECIPE"]]
+        },
+        "image-pull-backoff-grace-period": {
+          "type": "string",
+          "default": "30s",
+          "title": "Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled). Must be a Go duration string",
+          "examples": ["60s"]
+        },
+        "job-cancel-checker-poll-interval": {
+          "type": "string",
+          "default": "5s",
+          "title": "Controls the interval between job state queries while a pod is still Pending. Must be a Go duration string",
+          "examples": ["10s"]
         },
         "prohibit-kubernetes-plugin": {
           "type": "boolean",

@@ -11,11 +11,12 @@ import (
 )
 
 const (
-	UUIDLabel                          = "buildkite.com/job-uuid"
-	BuildURLAnnotation                 = "buildkite.com/build-url"
-	JobURLAnnotation                   = "buildkite.com/job-url"
-	DefaultNamespace                   = "default"
-	DefaultImagePullBackOffGracePeriod = 30 * time.Second
+	UUIDLabel                           = "buildkite.com/job-uuid"
+	BuildURLAnnotation                  = "buildkite.com/build-url"
+	JobURLAnnotation                    = "buildkite.com/job-url"
+	DefaultNamespace                    = "default"
+	DefaultImagePullBackOffGracePeriod  = 30 * time.Second
+	DefaultJobCancelCheckerPollInterval = 5 * time.Second
 )
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
@@ -40,10 +41,11 @@ type Config struct {
 
 	// ClusterUUID field is mandatory for most new orgs.
 	// Some old orgs allows unclustered setup.
-	ClusterUUID                 string          `json:"cluster-uuid"                    validate:"omitempty"`
-	AdditionalRedactedVars      stringSlice     `json:"additional-redacted-vars"        validate:"omitempty"`
-	PodSpecPatch                *corev1.PodSpec `json:"pod-spec-patch"                  validate:"omitempty"`
-	ImagePullBackOffGradePeriod time.Duration   `json:"image-pull-backoff-grace-period" validate:"omitempty"`
+	ClusterUUID                  string          `json:"cluster-uuid"                     validate:"omitempty"`
+	AdditionalRedactedVars       stringSlice     `json:"additional-redacted-vars"         validate:"omitempty"`
+	PodSpecPatch                 *corev1.PodSpec `json:"pod-spec-patch"                   validate:"omitempty"`
+	ImagePullBackOffGracePeriod  time.Duration   `json:"image-pull-backoff-grace-period"  validate:"omitempty"`
+	JobCancelCheckerPollInterval time.Duration   `json:"job-cancel-checker-poll-interval" validate:"omitempty"`
 
 	AgentConfig           *AgentConfig    `json:"agent-config" validate:"omitempty"`
 	DefaultCheckoutParams *CheckoutParams `json:"default-checkout-params" validate:"omitempty"`
@@ -83,7 +85,8 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	if err := enc.AddReflected("pod-spec-patch", c.PodSpecPatch); err != nil {
 		return err
 	}
-	enc.AddDuration("image-pull-backoff-grace-period", c.ImagePullBackOffGradePeriod)
+	enc.AddDuration("image-pull-backoff-grace-period", c.ImagePullBackOffGracePeriod)
+	enc.AddDuration("job-cancel-checker-poll-interval", c.JobCancelCheckerPollInterval)
 	if err := enc.AddReflected("agent-config", c.AgentConfig); err != nil {
 		return err
 	}
