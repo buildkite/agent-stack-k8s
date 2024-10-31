@@ -61,6 +61,8 @@ default-sidecar-params:
 pod-spec-patch:
   serviceAccountName: buildkite-agent-sa
   automountServiceAccountToken: true
+  nodeSelector:
+    selectors.example.com/my-selector: example-value
   containers:
     - name: container-0
       env:
