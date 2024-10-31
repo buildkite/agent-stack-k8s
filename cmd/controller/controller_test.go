@@ -75,6 +75,9 @@ func TestReadAndParseConfig(t *testing.T) {
 		PodSpecPatch: &corev1.PodSpec{
 			ServiceAccountName:           "buildkite-agent-sa",
 			AutomountServiceAccountToken: ptr(true),
+			NodeSelector: map[string]string{
+				"selectors.example.com/my-selector": "example-value",
+			},
 			Containers: []corev1.Container{
 				{
 					Name: "container-0",

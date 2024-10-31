@@ -115,9 +115,16 @@ func ReadConfigFromFileArgsAndEnv(cmd *cobra.Command, args []string) (*viper.Vip
 		configFile = os.Getenv("CONFIG")
 	}
 
-	v := viper.New()
+	// By default Viper unmarshals a key like "a.b.c" as nested maps:
+	//   map[string]any{"a": map[string]any{"b": map[string]any{"c": ... }}}
+	// which is frustrating, because `.` is commonly used in Kubernetes labels,
+	// annotations, and node selector keys (they tend to use domain names to
+	// "namespace" keys). So change Viper's delimiter to`::`.
+	v := viper.NewWithOptions(
+		viper.KeyDelimiter("::"),
+		viper.EnvKeyReplacer(strings.NewReplacer("-", "_")),
+	)
 	v.SetConfigFile(configFile)
-	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
 	// Bind the flags to the viper instance, but only those that can appear in the config file.
 	errs := []error{}
