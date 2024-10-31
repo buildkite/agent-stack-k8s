@@ -62,23 +62,6 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 	}
 }
 
-type KubernetesPlugin struct {
-	PodSpec           *corev1.PodSpec        `json:"podSpec,omitempty"`
-	PodSpecPatch      *corev1.PodSpec        `json:"podSpecPatch,omitempty"`
-	GitEnvFrom        []corev1.EnvFromSource `json:"gitEnvFrom,omitempty"`
-	Sidecars          []corev1.Container     `json:"sidecars,omitempty"`
-	Metadata          Metadata               `json:"metadata,omitempty"`
-	ExtraVolumeMounts []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
-	CheckoutParams    *config.CheckoutParams `json:"checkout,omitempty"`
-	CommandParams     *config.CommandParams  `json:"commandParams,omitempty"`
-	SidecarParams     *config.SidecarParams  `json:"sidecarParams,omitempty"`
-}
-
-type Metadata struct {
-	Annotations map[string]string
-	Labels      map[string]string
-}
-
 type worker struct {
 	cfg    Config
 	client kubernetes.Interface
@@ -192,16 +175,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// If Build was called with skipCheckout == false, then look at the config
 	// and plugin.
 	if !skipCheckout {
-		// Start with the default, if set
-		if co := w.cfg.DefaultCheckoutParams; co != nil && co.Skip != nil {
-			skipCheckout = *co.Skip
-		}
-		// The plugin overrides the default, if set
-		if inputs.k8sPlugin != nil {
-			if co := inputs.k8sPlugin.CheckoutParams; co != nil && co.Skip != nil {
-				skipCheckout = *co.Skip
-			}
-		}
+		// The k8s plugin has highest precedence, followed by the config default
+		skipCheckout = coalesce(
+			inputs.k8sPlugin.checkoutParams().ShouldSkip(),
+			w.cfg.DefaultCheckoutParams.ShouldSkip(),
+		)
 	}
 
 	kjob := &batchv1.Job{
@@ -212,10 +190,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		},
 	}
 
-	if inputs.k8sPlugin != nil {
-		maps.Copy(kjob.Labels, inputs.k8sPlugin.Metadata.Labels)
-		maps.Copy(kjob.Annotations, inputs.k8sPlugin.Metadata.Annotations)
-	}
+	maps.Copy(kjob.Labels, inputs.k8sPlugin.metadata().Labels)
+	maps.Copy(kjob.Annotations, inputs.k8sPlugin.metadata().Annotations)
 
 	kjob.Labels[config.UUIDLabel] = inputs.uuid
 	w.labelWithAgentTags(kjob.Labels, inputs.agentQueryRules)
@@ -289,9 +265,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	})
 
 	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
-	if inputs.k8sPlugin != nil {
-		volumeMounts = append(volumeMounts, inputs.k8sPlugin.ExtraVolumeMounts...)
-	}
+	volumeMounts = append(volumeMounts, inputs.k8sPlugin.extraVolumeMounts()...)
 
 	systemContainerCount := 0
 	if !skipCheckout {
@@ -334,7 +308,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		},
 	}...)
 
-	for i, c := range podSpec.Containers {
+	commandContainers := podSpec.Containers
+
+	for i := range commandContainers {
+		c := &commandContainers[i]
+
 		// Default to the command from the pipeline step
 		command := inputs.command
 
@@ -367,11 +345,9 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			},
 		)
 
-		w.cfg.AgentConfig.ApplyToCommand(&c)
-		w.cfg.DefaultCommandParams.ApplyTo(&c)
-		if inputs.k8sPlugin != nil {
-			inputs.k8sPlugin.CommandParams.ApplyTo(&c)
-		}
+		w.cfg.AgentConfig.ApplyToCommand(c)
+		w.cfg.DefaultCommandParams.ApplyTo(c)
+		inputs.k8sPlugin.commandParams().ApplyTo(c)
 
 		// Supply more required defaults.
 		if c.Name == "" {
@@ -382,15 +358,13 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		}
 
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-		if inputs.k8sPlugin != nil {
-			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
-		}
-		podSpec.Containers[i] = c
+		c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.gitEnvFrom()...)
+		//podSpec.Containers[i] = c
 	}
 
-	containerCount := len(podSpec.Containers) + systemContainerCount
+	containerCount := len(commandContainers) + systemContainerCount
 
-	if len(podSpec.Containers) == 0 {
+	if len(commandContainers) == 0 {
 		// Create a default command container named "container-0".
 		c := corev1.Container{
 			Name:            "container-0",
@@ -413,24 +387,24 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		}
 		w.cfg.AgentConfig.ApplyToCommand(&c)
 		w.cfg.DefaultCommandParams.ApplyTo(&c)
-		if inputs.k8sPlugin != nil {
-			inputs.k8sPlugin.CommandParams.ApplyTo(&c)
-			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
-		}
-		podSpec.Containers = append(podSpec.Containers, c)
+		inputs.k8sPlugin.commandParams().ApplyTo(&c)
+		c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.gitEnvFrom()...)
+		commandContainers = append(commandContainers, c)
 	}
 
-	if inputs.k8sPlugin != nil {
-		for i, c := range inputs.k8sPlugin.Sidecars {
-			if c.Name == "" {
-				c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
-			}
-			c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
-			w.cfg.DefaultSidecarParams.ApplyTo(&c)
-			inputs.k8sPlugin.SidecarParams.ApplyTo(&c)
-			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
-			podSpec.Containers = append(podSpec.Containers, c)
+	var sidecarContainers []corev1.Container
+	for i, c := range inputs.k8sPlugin.sidecars() {
+		if c.Name == "" {
+			c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
 		}
+		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
+		w.cfg.DefaultSidecarParams.ApplyTo(&c)
+		inputs.k8sPlugin.sidecarParams().ApplyTo(&c)
+		c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
+
+		// Sidecar containers are now actual sidecar containers!
+		c.RestartPolicy = ptr.To(corev1.ContainerRestartPolicyAlways)
+		sidecarContainers = append(sidecarContainers, c)
 	}
 
 	agentTags := []agentTag{
@@ -457,6 +431,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
 		ImagePullPolicy: corev1.PullAlways,
+		RestartPolicy:   ptr.To(corev1.ContainerRestartPolicyAlways),
 		Env: []corev1.EnvVar{
 			{
 				Name:  "BUILDKITE_KUBERNETES_EXEC",
@@ -499,12 +474,13 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	w.cfg.AgentConfig.ApplyToAgentStart(&agentContainer)
 	agentContainer.Env = append(agentContainer.Env, env...)
-	podSpec.Containers = append(podSpec.Containers, agentContainer)
 
+	//podSpec.Containers = append(podSpec.Containers, agentContainer)
+
+	var checkoutContainer corev1.Container
 	if !skipCheckout {
-		podSpec.Containers = append(podSpec.Containers,
-			w.createCheckoutContainer(podSpec, env, volumeMounts, inputs.k8sPlugin),
-		)
+		checkoutContainer = w.createCheckoutContainer(podSpec, env, volumeMounts, inputs.k8sPlugin)
+		//podSpec.Containers = append(podSpec.Containers, checkoutContainer)
 	}
 
 	// Init containers. These run in order before the regular containers.
@@ -576,12 +552,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// Pre-pull these images. (Note that even when specifying PullAlways,
 	// layers can still be cached on the node.)
 	preflightImagePulls := map[string]struct{}{}
-	for _, c := range podSpec.Containers {
+	for _, c := range commandContainers {
 		preflightImagePulls[c.Image] = struct{}{}
 	}
-	for _, c := range podSpec.EphemeralContainers {
-		preflightImagePulls[c.Image] = struct{}{}
-	}
+
 	// w.cfg.Image is the first init container, so we don't need to add another
 	// container specifically to check it can pull. Same goes for user-supplied
 	// init containers.
@@ -623,6 +597,22 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	w.cfg.AgentConfig.ApplyVolumesTo(podSpec)
 
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
+
+	// OOPS! ALL INIT CONTAINERS
+	// First start user-specified sidecars *as sidecars*
+	podSpec.InitContainers = append(podSpec.InitContainers, sidecarContainers...)
+	// Start the agent container, also as a sidecar
+	podSpec.InitContainers = append(podSpec.InitContainers, agentContainer)
+	if !skipCheckout {
+		// Perform the checkout as an init container
+		podSpec.InitContainers = append(podSpec.InitContainers, checkoutContainer)
+	}
+	// Then all the command containers - again, as init containers.
+	// Except use the final command container as "the" ordinary container to
+	// make k8s happy.
+	lastCC := len(commandContainers) - 1
+	podSpec.InitContainers = append(podSpec.InitContainers, commandContainers[:lastCC]...)
+	podSpec.Containers = commandContainers[lastCC:]
 
 	// Allow podSpec to be overridden by the agent configuration and the k8s plugin
 
@@ -910,4 +900,16 @@ func createAgentTagString(tags []agentTag) string {
 		}
 	}
 	return sb.String()
+}
+
+// coalesce returns the first non-nil arg, or the zero value for T if all were
+// nil.
+func coalesce[T any](ps ...*T) T {
+	for _, p := range ps {
+		if p != nil {
+			return *p
+		}
+	}
+	var z T
+	return z
 }
