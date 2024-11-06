@@ -354,7 +354,9 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		c.Command = []string{"/workspace/tini-static"}
 		c.Args = []string{"--", "/workspace/buildkite-agent", "bootstrap"}
 
-		c.ImagePullPolicy = corev1.PullAlways
+		// The image *should* be present since we just pulled it with an init
+		// container, but weirder things have happened.
+		c.ImagePullPolicy = corev1.PullIfNotPresent
 		c.Env = append(c.Env, containerEnv...)
 		c.Env = append(c.Env,
 			corev1.EnvVar{
@@ -399,7 +401,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			Args:            []string{"--", "/workspace/buildkite-agent", "bootstrap"},
 			WorkingDir:      "/workspace",
 			VolumeMounts:    volumeMounts,
-			ImagePullPolicy: corev1.PullAlways,
+			ImagePullPolicy: corev1.PullIfNotPresent,
 			Env: append(containerEnv,
 				corev1.EnvVar{
 					Name:  "BUILDKITE_COMMAND",
@@ -695,7 +697,7 @@ func (w *worker) createCheckoutContainer(
 		Image:           w.cfg.Image,
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
-		ImagePullPolicy: corev1.PullAlways,
+		ImagePullPolicy: corev1.PullIfNotPresent,
 		Env: []corev1.EnvVar{
 			{
 				Name:  "BUILDKITE_KUBERNETES_EXEC",
