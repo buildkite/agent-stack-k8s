@@ -455,6 +455,27 @@
             }
           }
         },
+        "default-metadata": {
+          "type": "object",
+          "default": null,
+          "title": "Default metadata (labels, annotations) for jobs",
+          "properties": {
+            "labels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "title": "Default labels to apply to jobs. Note the constraints on label names: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set"
+            },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "title": "Default annotations to apply to jobs. Note the constraints on annotation names: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/#syntax-and-character-set"
+            }
+          }
+        },
         "pod-spec-patch": {
           "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
         }
