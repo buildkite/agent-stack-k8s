@@ -56,6 +56,17 @@ default-sidecar-params:
       configMapRef:
         name: logging-config
 
+# Applied to all spawned jobs.
+default-metadata:
+  annotations:
+    # Note the constraints on annotation names:
+    # https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/#syntax-and-character-set
+    imageregistry: "https://hub.docker.com/"
+  labels:
+    # Note the constraints on label names:
+    # https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
+    argocd.argoproj.io/tracking-id: example-id-here
+
 # This will be applied to the job's podSpec as a strategic merge patch
 # See https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch
 pod-spec-patch:

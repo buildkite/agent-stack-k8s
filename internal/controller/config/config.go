@@ -47,10 +47,11 @@ type Config struct {
 	ImagePullBackOffGracePeriod  time.Duration   `json:"image-pull-backoff-grace-period"  validate:"omitempty"`
 	JobCancelCheckerPollInterval time.Duration   `json:"job-cancel-checker-poll-interval" validate:"omitempty"`
 
-	AgentConfig           *AgentConfig    `json:"agent-config" validate:"omitempty"`
+	AgentConfig           *AgentConfig    `json:"agent-config"            validate:"omitempty"`
 	DefaultCheckoutParams *CheckoutParams `json:"default-checkout-params" validate:"omitempty"`
 	DefaultCommandParams  *CommandParams  `json:"default-command-params"  validate:"omitempty"`
 	DefaultSidecarParams  *SidecarParams  `json:"default-sidecar-params"  validate:"omitempty"`
+	DefaultMetadata       Metadata        `json:"default-metadata"        validate:"omitempty"`
 
 	// ProhibitKubernetesPlugin can be used to prevent alterations to the pod
 	// from the job (the kubernetes "plugin" in pipeline.yml). If enabled,
@@ -76,6 +77,9 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt("max-in-flight", c.MaxInFlight)
 	enc.AddString("namespace", c.Namespace)
 	enc.AddString("org", c.Org)
+	if err := enc.AddArray("tags", c.Tags); err != nil {
+		return err
+	}
 	enc.AddString("profiler-address", c.ProfilerAddress)
 	enc.AddString("cluster-uuid", c.ClusterUUID)
 	enc.AddBool("prohibit-kubernetes-plugin", c.ProhibitKubernetesPlugin)
@@ -99,7 +103,10 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	if err := enc.AddReflected("default-sidecar-params", c.DefaultSidecarParams); err != nil {
 		return err
 	}
-	return enc.AddArray("tags", c.Tags)
+	if err := enc.AddReflected("default-metadata", c.DefaultMetadata); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Helpers for applying configs / params to container env.

@@ -61,6 +61,7 @@ func Run(
 		DefaultCheckoutParams:  cfg.DefaultCheckoutParams,
 		DefaultCommandParams:   cfg.DefaultCommandParams,
 		DefaultSidecarParams:   cfg.DefaultSidecarParams,
+		DefaultMetadata:        cfg.DefaultMetadata,
 		PodSpecPatch:           cfg.PodSpecPatch,
 		ProhibitK8sPlugin:      cfg.ProhibitKubernetesPlugin,
 	})

@@ -50,6 +50,7 @@ type Config struct {
 	DefaultCheckoutParams  *config.CheckoutParams
 	DefaultCommandParams   *config.CommandParams
 	DefaultSidecarParams   *config.SidecarParams
+	DefaultMetadata        config.Metadata
 	PodSpecPatch           *corev1.PodSpec
 	ProhibitK8sPlugin      bool
 }
@@ -67,16 +68,11 @@ type KubernetesPlugin struct {
 	PodSpecPatch      *corev1.PodSpec        `json:"podSpecPatch,omitempty"`
 	GitEnvFrom        []corev1.EnvFromSource `json:"gitEnvFrom,omitempty"`
 	Sidecars          []corev1.Container     `json:"sidecars,omitempty"`
-	Metadata          Metadata               `json:"metadata,omitempty"`
+	Metadata          config.Metadata        `json:"metadata,omitempty"`
 	ExtraVolumeMounts []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
 	CheckoutParams    *config.CheckoutParams `json:"checkout,omitempty"`
 	CommandParams     *config.CommandParams  `json:"commandParams,omitempty"`
 	SidecarParams     *config.SidecarParams  `json:"sidecarParams,omitempty"`
-}
-
-type Metadata struct {
-	Annotations map[string]string
-	Labels      map[string]string
 }
 
 type worker struct {
@@ -212,6 +208,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		},
 	}
 
+	maps.Copy(kjob.Labels, w.cfg.DefaultMetadata.Labels)
+	maps.Copy(kjob.Annotations, w.cfg.DefaultMetadata.Annotations)
 	if inputs.k8sPlugin != nil {
 		maps.Copy(kjob.Labels, inputs.k8sPlugin.Metadata.Labels)
 		maps.Copy(kjob.Annotations, inputs.k8sPlugin.Metadata.Annotations)

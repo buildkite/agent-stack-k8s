@@ -72,6 +72,14 @@ func TestReadAndParseConfig(t *testing.T) {
 				},
 			}},
 		},
+		DefaultMetadata: config.Metadata{
+			Annotations: map[string]string{
+				"imageregistry": "https://hub.docker.com/",
+			},
+			Labels: map[string]string{
+				"argocd.argoproj.io/tracking-id": "example-id-here",
+			},
+		},
 		PodSpecPatch: &corev1.PodSpec{
 			ServiceAccountName:           "buildkite-agent-sa",
 			AutomountServiceAccountToken: ptr(true),

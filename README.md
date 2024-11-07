@@ -381,6 +381,40 @@ default-checkout-params:
 ...
 ```
 
+### Default job metadata
+agent-stack-k8s can automatically add labels and annotations to the Kubernetes jobs it creates.
+Default labels and annotations can be set in `values.yaml` with `default-metadata`, e.g.:
+
+```yaml
+# config.yaml / values.yaml
+...
+default-metadata:
+  annotations:
+    imageregistry: "https://hub.docker.com/"
+    mycoolannotation: llamas
+  labels:
+    argocd.argoproj.io/tracking-id: example-id-here
+    mycoollabel: alpacas
+```
+
+Similarly they can be set for each step in a pipeline individually using the kubernetes plugin,
+e.g.:
+
+```yaml
+# pipeline.yaml
+...
+  plugins:
+    - kubernetes:
+        metadata:
+          annotations:
+            imageregistry: "https://hub.docker.com/"
+            mycoolannotation: llamas
+          labels:
+            argocd.argoproj.io/tracking-id: example-id-here
+            mycoollabel: alpacas
+```
+
+
 ### Pod Spec Patch
 Rather than defining the entire Pod Spec in a step, there is the option to define a [strategic merge patch](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/) in the controller.
 Agent Stack K8s will first generate a K8s Job with a PodSpec from a Buildkite Job and then apply the patch in the controller.
