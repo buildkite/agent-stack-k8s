@@ -22,14 +22,15 @@ type Monitor struct {
 }
 
 type Config struct {
-	GraphQLEndpoint string
-	Namespace       string
-	Token           string
-	ClusterUUID     string
-	MaxInFlight     int
-	PollInterval    time.Duration
-	Org             string
-	Tags            []string
+	GraphQLEndpoint     string
+	Namespace           string
+	Token               string
+	ClusterUUID         string
+	MaxInFlight         int
+	PollInterval        time.Duration
+	StaleJobDataTimeout time.Duration
+	Org                 string
+	Tags                []string
 }
 
 type Job struct {
@@ -47,8 +48,12 @@ type JobHandler interface {
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
 	graphqlClient := api.NewClient(cfg.Token, cfg.GraphQLEndpoint)
 
-	if cfg.PollInterval < time.Second {
-		cfg.PollInterval = time.Second
+	// Poll no more frequently than every 1s (please don't DoS us).
+	cfg.PollInterval = min(cfg.PollInterval, time.Second)
+
+	// Default StaleJobDataTimeout to 10s.
+	if cfg.StaleJobDataTimeout <= 0 {
+		cfg.StaleJobDataTimeout = 10 * time.Second
 	}
 
 	return &Monitor{
@@ -179,7 +184,7 @@ func (m *Monitor) createJobs(ctx context.Context, logger *zap.Logger, handler Jo
 	// Why not pass directly to handler.Create? Because that might
 	// interrupt scheduling a pod, when all we want is to bound the
 	// time spent waiting for the limiter.
-	staleCtx, staleCancel := context.WithTimeout(ctx, m.cfg.PollInterval)
+	staleCtx, staleCancel := context.WithTimeout(ctx, m.cfg.StaleJobDataTimeout)
 	defer staleCancel()
 
 	// TODO: sort by ScheduledAt in the API
@@ -209,6 +214,7 @@ func (m *Monitor) createJobs(ctx context.Context, logger *zap.Logger, handler Jo
 
 		logger.Debug("creating job", zap.String("uuid", j.Uuid))
 		if err := handler.Create(ctx, job); err != nil {
+			// Note: this check is for the original context, not staleCtx.
 			if ctx.Err() != nil {
 				return
 			}
