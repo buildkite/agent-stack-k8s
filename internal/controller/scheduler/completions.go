@@ -7,6 +7,7 @@ import (
 
 	"go.uber.org/zap"
 	v1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -42,15 +43,18 @@ func (w *completionsWatcher) RegisterInformer(
 }
 
 // ignored
-func (w *completionsWatcher) OnDelete(obj interface{}) {}
+func (w *completionsWatcher) OnDelete(obj any) {}
 
 // handle pods completed while the controller wasn't running
-func (w *completionsWatcher) OnAdd(obj interface{}, isInInitialList bool) {
+func (w *completionsWatcher) OnAdd(obj any, isInInitialList bool) {
+	completionWatcherOnAddEventCounter.Inc()
 	pod := obj.(*v1.Pod)
 	w.cleanupSidecars(pod)
 }
 
-func (w *completionsWatcher) OnUpdate(old interface{}, new interface{}) {
+func (w *completionsWatcher) OnUpdate(old any, new any) {
+	completionWatcherOnUpdateEventCounter.Inc()
+
 	oldPod := old.(*v1.Pod)
 	if terminated := getTermination(oldPod); terminated != nil {
 		// skip subsequent reconciles after we've already handled termination
@@ -61,35 +65,47 @@ func (w *completionsWatcher) OnUpdate(old interface{}, new interface{}) {
 	w.cleanupSidecars(newPod)
 }
 
+// cleanupSidecars first checks if the container status of the agent container
+// in the pod is Terminated. If so, it ensures the job is cleaned up by updating
+// it with an ActiveDeadlineSeconds value (defaultTermGracePeriodSeconds).
+// (So this is not actually sidecar-specific, but is needed because sidecars
+// would otherwise cause the pod to continue running.)
 func (w *completionsWatcher) cleanupSidecars(pod *v1.Pod) {
-	if terminated := getTermination(pod); terminated != nil {
-		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			ctx := context.TODO()
-			job, err := w.k8s.BatchV1().Jobs(pod.Namespace).Get(ctx, pod.Labels["job-name"], metav1.GetOptions{})
-			if err != nil {
-				return err
-			}
-			job.Spec.ActiveDeadlineSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
-			_, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(ctx, job, metav1.UpdateOptions{})
-			return err
-		}); err != nil {
-			w.logger.Error("failed to update job", zap.Error(err))
-		}
-		w.logger.Debug(
-			"agent finished",
-			zap.String("uuid", pod.Labels[config.UUIDLabel]),
-			zap.Int32("exit code", terminated.ExitCode),
-		)
+	terminated := getTermination(pod)
+	if terminated == nil {
+		return
 	}
+	w.logger.Debug(
+		"agent finished",
+		zap.String("uuid", pod.Labels[config.UUIDLabel]),
+		zap.Int32("exit code", terminated.ExitCode),
+	)
+
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		ctx := context.TODO()
+		job, err := w.k8s.BatchV1().Jobs(pod.Namespace).Get(ctx, pod.Labels["job-name"], metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		job.Spec.ActiveDeadlineSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
+		_, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(ctx, job, metav1.UpdateOptions{})
+		return err
+	}); err != nil {
+		completionWatcherJobCleanupErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
+		w.logger.Error("failed to update job with ActiveDeadlineSeconds", zap.Error(err))
+		return
+	}
+	completionWatcherJobCleanupsCounter.Inc()
 }
 
 func getTermination(pod *v1.Pod) *v1.ContainerStateTerminated {
 	for _, container := range pod.Status.ContainerStatuses {
-		if container.Name == AgentContainerName {
-			if container.State.Terminated != nil {
-				// oldPod is not terminated, but newPod is
-				return container.State.Terminated
-			}
+		if container.Name != AgentContainerName {
+			continue
+		}
+		if container.State.Terminated != nil {
+			// oldPod is not terminated, but newPod is
+			return container.State.Terminated
 		}
 	}
 	return nil

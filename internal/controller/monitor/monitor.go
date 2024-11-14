@@ -101,7 +101,16 @@ func (r clusteredJobResp) CommandJobs() []*api.JobJobTypeCommand {
 
 // getScheduledCommandJobs calls either the clustered or unclustered GraphQL API
 // methods, depending on if a cluster uuid was provided in the config
-func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jobResp, error) {
+func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jobResp jobResp, err error) {
+	jobQueryCounter.Inc()
+	start := time.Now()
+	defer func() {
+		jobQueryDurationHistogram.Observe(time.Since(start).Seconds())
+		if err != nil {
+			jobQueryErrorCounter.Inc()
+		}
+	}()
+
 	if m.cfg.ClusterUUID == "" {
 		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)})
 		return unclusteredJobResp(*resp), err
@@ -138,6 +147,9 @@ func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan er
 		logger.Info("started")
 		defer logger.Info("stopped")
 
+		monitorUpGauge.Set(1)
+		defer monitorUpGauge.Set(0)
+
 		ticker := time.NewTicker(m.cfg.PollInterval)
 		defer ticker.Stop()
 
@@ -151,6 +163,8 @@ func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan er
 			case <-ticker.C:
 			case <-first:
 			}
+
+			queriedAt := time.Now() // used for end-to-end durations
 
 			resp, err := m.getScheduledCommandJobs(ctx, queue)
 			if err != nil {
@@ -172,16 +186,25 @@ func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan er
 				continue
 			}
 
+			jobsReturnedCounter.Add(float64(len(jobs)))
+
 			// The next handler should be the Limiter (except in some tests).
 			// Limiter handles deduplicating jobs before passing to the scheduler.
-			m.passJobsToNextHandler(ctx, logger, handler, agentTags, jobs)
+			m.passJobsToNextHandler(ctx, logger, handler, agentTags, jobs, queriedAt)
 		}
 	}()
 
 	return errs
 }
 
-func (m *Monitor) passJobsToNextHandler(ctx context.Context, logger *zap.Logger, handler model.JobHandler, agentTags map[string]string, jobs []*api.JobJobTypeCommand) {
+func (m *Monitor) passJobsToNextHandler(
+	ctx context.Context,
+	logger *zap.Logger,
+	handler model.JobHandler,
+	agentTags map[string]string,
+	jobs []*api.JobJobTypeCommand,
+	queriedAt time.Time,
+) {
 	// A sneaky way to create a channel that is closed after a duration.
 	// Why not pass directly to handler.Handle? Because that might
 	// interrupt scheduling a pod, when all we want is to bound the
@@ -210,24 +233,32 @@ func (m *Monitor) passJobsToNextHandler(ctx context.Context, logger *zap.Logger,
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			jobHandlerWorker(ctx, staleCtx, logger, handler, agentTags, jobsCh)
+			jobHandlerWorker(ctx, staleCtx, logger, handler, agentTags, queriedAt, jobsCh)
 		}()
 	}
+	defer wg.Wait()
 
-	for _, job := range jobs {
+	for i, job := range jobs {
 		select {
 		case <-ctx.Done():
 			return
 		case <-staleCtx.Done():
+			// Every remaining job is stale.
+			staleJobsCounter.Add(float64(len(jobs) - i))
 			return
 		case jobsCh <- job:
 		}
 	}
-
-	wg.Wait()
 }
 
-func jobHandlerWorker(ctx, staleCtx context.Context, logger *zap.Logger, handler model.JobHandler, agentTags map[string]string, jobsCh <-chan *api.JobJobTypeCommand) {
+func jobHandlerWorker(
+	ctx, staleCtx context.Context,
+	logger *zap.Logger,
+	handler model.JobHandler,
+	agentTags map[string]string,
+	queriedAt time.Time,
+	jobsCh <-chan *api.JobJobTypeCommand,
+) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -238,6 +269,8 @@ func jobHandlerWorker(ctx, staleCtx context.Context, logger *zap.Logger, handler
 			if j == nil {
 				return
 			}
+			jobsReachedWorkerCounter.Inc()
+
 			jobTags, tagErrs := agenttags.TagMapFromTags(j.AgentQueryRules)
 			if len(tagErrs) != 0 {
 				logger.Warn("making a map of job tags", zap.Errors("err", tagErrs))
@@ -247,12 +280,14 @@ func jobHandlerWorker(ctx, staleCtx context.Context, logger *zap.Logger, handler
 			// However, we can only acquire jobs that match ALL agent tags
 			if !agenttags.JobTagsMatchAgentTags(maps.All(jobTags), agentTags) {
 				logger.Debug("skipping job because it did not match all tags", zap.Any("job", j))
+				jobsFilteredOutCounter.Inc()
 				continue
 			}
 
 			job := model.Job{
 				CommandJob: &j.CommandJob,
 				StaleCh:    staleCtx.Done(),
+				QueriedAt:  queriedAt,
 			}
 
 			// The next handler should be the deduper (except in some tests).
@@ -261,16 +296,20 @@ func jobHandlerWorker(ctx, staleCtx context.Context, logger *zap.Logger, handler
 				zap.Stringer("handler", reflect.TypeOf(handler)),
 				zap.String("uuid", j.Uuid),
 			)
+			jobHandlerCallsCounter.Inc()
 			// The next handler operates under the main ctx, but can optionally
 			// use staleCtx.Done() (stored in job) to skip work. (Only Limiter
 			// does this.)
 			switch err := handler.Handle(ctx, job); {
 			case errors.Is(err, model.ErrDuplicateJob):
 				// Job wasn't scheduled because it's already scheduled.
+				jobHandlerErrorCounter.WithLabelValues("duplicate").Inc()
 
 			case errors.Is(err, model.ErrStaleJob):
 				// Job wasn't scheduled because the data has become stale.
 				// Staleness is set within this function, so we can return early.
+				jobHandlerErrorCounter.WithLabelValues("stale").Inc()
+				staleJobsCounter.Inc() // also incremented elsewhere
 				return
 
 			case err != nil:
@@ -281,6 +320,7 @@ func jobHandlerWorker(ctx, staleCtx context.Context, logger *zap.Logger, handler
 					return
 				}
 				logger.Error("failed to create job", zap.Error(err))
+				jobHandlerErrorCounter.WithLabelValues("other").Inc()
 			}
 		}
 	}

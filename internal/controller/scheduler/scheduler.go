@@ -112,12 +112,19 @@ func (w *worker) Handle(ctx context.Context, job model.Job) error {
 		return w.failJob(ctx, inputs, fmt.Sprintf("agent-stack-k8s failed to build a podSpec for the job: %v", err))
 	}
 
-	err = w.createJob(ctx, kjob)
-	if kerrors.IsInvalid(err) {
-		logger.Warn("Job creation failed, failing job", zap.Error(err))
-		return w.failJob(ctx, inputs, fmt.Sprintf("Kubernetes rejected the podSpec built by agent-stack-k8s: %v", err))
+	jobCreateCallsCounter.Inc()
+	if err := w.createJob(ctx, kjob); err != nil {
+		jobCreateErrorCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
+
+		if kerrors.IsInvalid(err) {
+			logger.Warn("Job creation failed, failing job", zap.Error(err))
+			return w.failJob(ctx, inputs, fmt.Sprintf("Kubernetes rejected the podSpec built by agent-stack-k8s: %v", err))
+		}
+		return err
 	}
-	return err
+	jobCreateSuccessCounter.Inc()
+	jobEndToEndDurationHistogram.Observe(time.Since(job.QueriedAt).Seconds())
+	return nil
 }
 
 func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job) error {
@@ -870,7 +877,13 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 	}
 
 	opts := w.cfg.AgentConfig.ControllerOptions()
-	return failJob(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, message, opts...)
+	if err := failJob(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, message, opts...); err != nil {
+		w.logger.Error("failed to acquire and fail the job on Buildkite", zap.Error(err))
+		schedulerBuildkiteJobFailErrorsCounter.Inc()
+		return err
+	}
+	schedulerBuildkiteJobFailsCounter.Inc()
+	return nil
 }
 
 func (w *worker) jobURL(jobUUID string, buildURL string) (string, error) {

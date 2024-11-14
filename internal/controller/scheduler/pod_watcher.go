@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
@@ -84,7 +85,7 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, cfg *config.Con
 		logger.Warn("parsing agent tags", zap.Errors("errors", errs))
 	}
 
-	return &podWatcher{
+	pw := &podWatcher{
 		logger:                      logger,
 		k8s:                         k8s,
 		gql:                         api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
@@ -95,6 +96,12 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, cfg *config.Con
 		cancelCheckerChs:            make(map[uuid.UUID]*onceChan),
 		agentTags:                   agentTags,
 	}
+	jobCancelCheckerGaugeFunc = func() int {
+		pw.cancelCheckerChsMu.Lock()
+		defer pw.cancelCheckerChsMu.Unlock()
+		return len(pw.cancelCheckerChs)
+	}
+	return pw
 }
 
 // Creates a Pods informer and registers the handler on it
@@ -109,6 +116,8 @@ func (w *podWatcher) RegisterInformer(ctx context.Context, factory informers.Sha
 }
 
 func (w *podWatcher) OnDelete(maybePod any) {
+	podWatcherOnDeleteEventCounter.Inc()
+
 	pod, wasPod := maybePod.(*corev1.Pod)
 	if !wasPod {
 		return
@@ -123,6 +132,8 @@ func (w *podWatcher) OnDelete(maybePod any) {
 }
 
 func (w *podWatcher) OnAdd(maybePod any, isInInitialList bool) {
+	podWatcherOnAddEventCounter.Inc()
+
 	pod, wasPod := maybePod.(*corev1.Pod)
 	if !wasPod {
 		return
@@ -132,6 +143,8 @@ func (w *podWatcher) OnAdd(maybePod any, isInInitialList bool) {
 }
 
 func (w *podWatcher) OnUpdate(oldMaybePod, newMaybePod any) {
+	podWatcherOnUpdateEventCounter.Inc()
+
 	oldPod, oldWasPod := newMaybePod.(*corev1.Pod)
 	newPod, newWasPod := newMaybePod.(*corev1.Pod)
 
@@ -305,6 +318,7 @@ func (w *podWatcher) failJob(ctx context.Context, log *zap.Logger, pod *corev1.P
 
 	if err := failJob(ctx, w.logger, agentToken, jobUUID.String(), tags, message.String(), opts...); err != nil {
 		log.Error("Couldn't fail the job", zap.Error(err))
+		podWatcherBuildkiteJobFailErrorsCounter.Inc()
 		// If the error was because BK rejected the acquisition, then its moved
 		// on to a state where we need to cancel instead.
 		if errors.Is(err, agentcore.ErrJobAcquisitionRejected) {
@@ -313,14 +327,18 @@ func (w *podWatcher) failJob(ctx context.Context, log *zap.Logger, pod *corev1.P
 		}
 		return
 	}
+	podWatcherBuildkiteJobFailsCounter.Inc()
 
 	// Let's also evict the pod (request graceful termination).
 	eviction := &policyv1.Eviction{
 		ObjectMeta: pod.ObjectMeta,
 	}
 	if err := w.k8s.PolicyV1().Evictions(w.cfg.Namespace).Evict(ctx, eviction); err != nil {
+		podEvictionErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
 		log.Error("Couldn't evict pod", zap.Error(err))
+		return
 	}
+	podsEvictedCounter.WithLabelValues("image_pull_failure").Inc()
 
 	// Because eviction isn't instantaneous, the pod can continue to exist
 	// for a bit. Record that we've failed the job to avoid trying to fail
@@ -335,11 +353,13 @@ func (w *podWatcher) cancelJob(ctx context.Context, log *zap.Logger, pod *corev1
 	})
 	if err != nil {
 		log.Warn("Failed to cancel command job", zap.Error(err))
+		podWatcherBuildkiteJobCancelErrorsCounter.Inc()
 		// Could be network problems
 		// Could be in non-cancelable state
 		// Try again later?
 		return
 	}
+	podWatcherBuildkiteJobCancelsCounter.Inc()
 
 	// Evicting the pod might prevent the agent from logging its last-gasp
 	// "it could be ImagePullBackOff" message.
@@ -424,7 +444,10 @@ func (w *podWatcher) jobCancelChecker(ctx context.Context, stopCh <-chan struct{
 				eviction := &policyv1.Eviction{ObjectMeta: podMeta}
 				if err := w.k8s.PolicyV1().Evictions(w.cfg.Namespace).Evict(ctx, eviction); err != nil {
 					log.Error("Couldn't evict pod", zap.Error(err))
+					podEvictionErrorsCounter.WithLabelValues("bk_job_cancelled", string(kerrors.ReasonForError(err))).Inc()
+					continue
 				}
+				podsEvictedCounter.WithLabelValues("bk_job_cancelled").Inc()
 				return
 
 			case api.JobStatesScheduled:

@@ -36,6 +36,11 @@ spec:
             subPath: config.yaml
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
+        {{ with index .Values.config "prometheus-port" -}}
+        ports:
+          - name: metrics
+            containerPort: {{.}}
+        {{ end -}}
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

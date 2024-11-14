@@ -37,6 +37,12 @@ func New(logger *zap.Logger, handler model.JobHandler) *Deduper {
 		logger:   logger,
 		inFlight: make(map[uuid.UUID]bool),
 	}
+	// Provide the callback for numInFlightGauge.
+	jobsRunningGaugeFunc = func() int {
+		d.inFlightMu.Lock()
+		defer d.inFlightMu.Unlock()
+		return len(d.inFlight)
+	}
 	return d
 }
 
@@ -67,12 +73,14 @@ func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
 		return err
 	}
 	if numInFlight, ok := d.casa(uuid, true); !ok {
+		jobsAlreadyRunningCounter.WithLabelValues("handle").Inc()
 		d.logger.Debug("job is already in-flight",
 			zap.String("uuid", job.Uuid),
 			zap.Int("num-in-flight", numInFlight),
 		)
 		return model.ErrDuplicateJob
 	}
+	jobsMarkedRunningCounter.WithLabelValues("Handle").Inc()
 
 	// Not a duplicate: pass to the next handler, which could be either the
 	// limiter or the scheudler.
@@ -80,9 +88,18 @@ func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
 		zap.Stringer("handler", reflect.TypeOf(d.handler)),
 		zap.String("uuid", job.Uuid),
 	)
+	jobHandlerCallsCounter.Inc()
+
 	if err := d.handler.Handle(ctx, job); err != nil {
+		jobHandlerErrorCounter.Inc()
+
 		// Couldn't schedule the job. Oh well. Record as not-in-flight.
-		numInFlight, _ := d.casa(uuid, false)
+		numInFlight, ok := d.casa(uuid, false)
+		if ok {
+			jobsUnmarkedRunningCounter.WithLabelValues("Handle").Inc()
+		} else {
+			jobsAlreadyNotRunningCounter.WithLabelValues("Handle").Inc()
+		}
 
 		d.logger.Debug("next handler failed",
 			zap.String("uuid", job.Uuid),
@@ -96,6 +113,8 @@ func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
 
 // OnAdd is called by k8s to inform us a resource is added.
 func (d *Deduper) OnAdd(obj any, inInitialList bool) {
+	onAddEventCounter.Inc()
+
 	job, _ := obj.(*batchv1.Job)
 	if job == nil {
 		return
@@ -115,6 +134,8 @@ func (d *Deduper) OnAdd(obj any, inInitialList bool) {
 
 // OnUpdate is called by k8s to inform us a resource is updated.
 func (d *Deduper) OnUpdate(prev, curr any) {
+	onUpdateEventCounter.Inc()
+
 	prevState, _ := prev.(*batchv1.Job)
 	currState, _ := curr.(*batchv1.Job)
 	if prevState == nil || currState == nil {
@@ -137,6 +158,8 @@ func (d *Deduper) OnUpdate(prev, curr any) {
 
 // OnDelete is called by k8s to inform us a resource is deleted.
 func (d *Deduper) OnDelete(prev any) {
+	onDeleteEventCounter.Inc()
+
 	prevState, _ := prev.(*batchv1.Job)
 	if prevState == nil {
 		return
@@ -159,6 +182,7 @@ func (d *Deduper) markRunning(id uuid.UUID, source string) {
 	// Change state from not in-flight to in-flight.
 	numInFlight, ok := d.casa(id, true)
 	if !ok {
+		jobsAlreadyRunningCounter.WithLabelValues(source).Inc()
 		d.logger.Debug("job was already in inFlight!",
 			zap.String("uuid", id.String()),
 			zap.String("source", source),
@@ -167,6 +191,7 @@ func (d *Deduper) markRunning(id uuid.UUID, source string) {
 		return
 	}
 
+	jobsMarkedRunningCounter.WithLabelValues(source).Inc()
 	d.logger.Debug("added previous job to inFlight",
 		zap.String("uuid", id.String()),
 		zap.String("source", source),
@@ -184,6 +209,7 @@ func (d *Deduper) unmarkRunning(id uuid.UUID, source string) {
 			zap.String("source", source),
 			zap.Int("num-in-flight", numInFlight),
 		)
+		jobsAlreadyNotRunningCounter.WithLabelValues(source).Inc()
 		return
 	}
 
@@ -192,6 +218,7 @@ func (d *Deduper) unmarkRunning(id uuid.UUID, source string) {
 		zap.String("source", source),
 		zap.Int("num-in-flight", numInFlight),
 	)
+	jobsUnmarkedRunningCounter.WithLabelValues(source).Inc()
 }
 
 // casa is an atomic compare-and-swap-like primitive.

@@ -4,6 +4,7 @@ package model
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 
@@ -30,6 +31,9 @@ type Job struct {
 
 	// Closed when the job information becomes stale.
 	StaleCh <-chan struct{}
+
+	// When we began the Buildkite GraphQL query that returned this job.
+	QueriedAt time.Time
 }
 
 // JobFinished reports if the job has a Complete or Failed status condition.
