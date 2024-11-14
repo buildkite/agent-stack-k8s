@@ -71,14 +71,23 @@ func (f *FakeScheduler) complete(uuid string) {
 	f.Finished = append(f.Finished, uuid)
 	f.mu.Unlock()
 
-	f.EventHandler.OnUpdate(nil, &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Labels: map[string]string{config.UUIDLabel: uuid},
+	f.EventHandler.OnUpdate(
+		// Previous state
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{config.UUIDLabel: uuid},
+			},
+			// No status conditions
 		},
-		Status: batchv1.JobStatus{
-			Conditions: []batchv1.JobCondition{{Type: batchv1.JobComplete}},
-		},
-	})
+		// New state
+		&batchv1.Job{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: map[string]string{config.UUIDLabel: uuid},
+			},
+			Status: batchv1.JobStatus{
+				Conditions: []batchv1.JobCondition{{Type: batchv1.JobComplete}},
+			},
+		})
 	f.wg.Done()
 }
 
