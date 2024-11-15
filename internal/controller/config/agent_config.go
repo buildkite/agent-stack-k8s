@@ -43,10 +43,11 @@ type AgentConfig struct {
 	SigningJWKSVolume *corev1.Volume `json:"signingJWKSVolume,omitempty"`
 
 	// Hooks and plugins can be supplied with a volume source.
-	HooksPath     *string        `json:"hooks-path,omitempty"` // BUILDKITE_HOOKS_PATH
-	HooksVolume   *corev1.Volume `json:"hooksVolume,omitempty"`
-	PluginsPath   *string        `json:"plugins-path,omitempty"` // BUILDKITE_PLUGINS_PATH
-	PluginsVolume *corev1.Volume `json:"pluginsVolume,omitempty"`
+	HooksPath       *string        `json:"hooks-path,omitempty"` // BUILDKITE_HOOKS_PATH
+	HooksVolume     *corev1.Volume `json:"hooksVolume,omitempty"`
+	PluginsPath     *string        `json:"plugins-path,omitempty"` // BUILDKITE_PLUGINS_PATH
+	PluginsVolume   *corev1.Volume `json:"pluginsVolume,omitempty"`
+	WorkspaceVolume *corev1.Volume `json:"workspaceVolume,omitempty"`
 
 	// Applies only to the "buildkite-agent start" container.
 	// Keys can be supplied with a volume.
@@ -85,6 +86,9 @@ func (a *AgentConfig) ApplyVolumesTo(podSpec *corev1.PodSpec) {
 	}
 	if a.VerificationJWKSVolume != nil {
 		podSpec.Volumes = append(podSpec.Volumes, *a.VerificationJWKSVolume)
+	}
+	if a.WorkspaceVolume != nil {
+		podSpec.Volumes = append(podSpec.Volumes, *a.WorkspaceVolume)
 	}
 }
 

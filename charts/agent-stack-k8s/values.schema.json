@@ -324,6 +324,9 @@
             "pluginsVolume": {
               "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
             },
+            "workspaceVolume": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+            },
             "debug-signing": {
               "type": "boolean"
             },

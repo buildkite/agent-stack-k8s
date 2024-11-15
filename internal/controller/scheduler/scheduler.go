@@ -286,7 +286,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		Value: strings.Join(redactedVars, ","),
 	})
 
-	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
+	volumeMounts := []corev1.VolumeMount{{Name: w.cfg.AgentConfig.WorkspaceVolume.Name, MountPath: "/workspace"}}
 	if inputs.k8sPlugin != nil {
 		volumeMounts = append(volumeMounts, inputs.k8sPlugin.ExtraVolumeMounts...)
 	}
@@ -567,7 +567,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				"/workspace",
 			},
 			VolumeMounts: []corev1.VolumeMount{{
-				Name:      "workspace",
+				Name:      w.cfg.AgentConfig.WorkspaceVolume.Name,
 				MountPath: "/workspace",
 			}},
 		},
@@ -605,7 +605,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			Command: []string{"/workspace/tini-static"},
 			Args:    []string{"--version"},
 			VolumeMounts: []corev1.VolumeMount{{
-				Name:      "workspace",
+				Name:      w.cfg.AgentConfig.WorkspaceVolume.Name,
 				MountPath: "/workspace",
 			}},
 		})
@@ -614,12 +614,6 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	podSpec.InitContainers = append(initContainers, podSpec.InitContainers...)
 
-	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
-		Name: "workspace",
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
-		},
-	})
 	w.cfg.AgentConfig.ApplyVolumesTo(podSpec)
 
 	podSpec.RestartPolicy = corev1.RestartPolicyNever

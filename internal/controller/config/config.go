@@ -95,6 +95,14 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	if err := enc.AddReflected("agent-config", c.AgentConfig); err != nil {
 		return err
 	}
+	if c.AgentConfig.WorkspaceVolume == nil {
+		c.AgentConfig.WorkspaceVolume = &corev1.Volume{
+			Name: "workspace",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		}
+	}
 	if err := enc.AddReflected("default-checkout-params", c.DefaultCheckoutParams); err != nil {
 		return err
 	}
