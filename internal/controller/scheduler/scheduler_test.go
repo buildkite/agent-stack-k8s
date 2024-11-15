@@ -445,6 +445,51 @@ func TestProhibitKubernetesPlugin(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestCustomVolumePath(t *testing.T) {
+	t.Parallel()
+	job := &api.CommandJob{
+		Uuid:            "abc",
+		Command:         "echo hello world",
+		AgentQueryRules: []string{"queue=kubernetes"},
+		Env:             []string{},
+	}
+
+	customVolumePath := "/custom-volume-path"
+	worker := scheduler.New(
+		zaptest.NewLogger(t),
+		nil,
+		scheduler.Config{
+			Namespace:            "buildkite",
+			Image:                "buildkite/agent:latest",
+			AgentTokenSecretName: "token-secret",
+			VolumeMountPath:      customVolumePath,
+		},
+	)
+
+	inputs, err := worker.ParseJob(job)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	require.Len(t, kjob.Spec.Template.Spec.Containers, 3)
+
+	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
+	volumeMount := findVolumeMount(t, commandContainer.VolumeMounts, "workspace")
+	assert.Equal(t, customVolumePath, volumeMount.MountPath)
+}
+
+func findVolumeMount(t *testing.T, volumeMounts []corev1.VolumeMount, name string) *corev1.VolumeMount {
+	t.Helper()
+
+	for _, volumeMount := range volumeMounts {
+		if volumeMount.Name == name {
+			return &volumeMount
+		}
+	}
+
+	return nil
+}
+
 func findContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {
 	t.Helper()
 
