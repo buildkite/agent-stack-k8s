@@ -53,6 +53,7 @@ type Config struct {
 	DefaultMetadata        config.Metadata
 	PodSpecPatch           *corev1.PodSpec
 	ProhibitK8sPlugin      bool
+	VolumeMountPath        string
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
@@ -286,7 +287,13 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		Value: strings.Join(redactedVars, ","),
 	})
 
-	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
+	volumePath := w.cfg.VolumeMountPath
+
+	if volumePath == "" {
+		volumePath = "/workspace"
+	}
+
+	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: w.cfg.VolumeMountPath}}
 	if inputs.k8sPlugin != nil {
 		volumeMounts = append(volumeMounts, inputs.k8sPlugin.ExtraVolumeMounts...)
 	}
@@ -564,11 +571,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			Args: []string{
 				"/usr/local/bin/buildkite-agent",
 				"/sbin/tini-static",
-				"/workspace",
+				volumePath,
 			},
 			VolumeMounts: []corev1.VolumeMount{{
 				Name:      "workspace",
-				MountPath: "/workspace",
+				MountPath: volumePath,
 			}},
 		},
 	}
