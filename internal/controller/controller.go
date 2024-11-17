@@ -37,6 +37,8 @@ func Run(
 		}()
 	}
 
+	// Monitor polls Buildkite GraphQL for jobs. It passes them to Limiter.
+	// Job flow: monitor -> limiter -> scheduler.
 	m, err := monitor.New(logger.Named("monitor"), k8sClient, monitor.Config{
 		GraphQLEndpoint:     cfg.GraphQLEndpoint,
 		Namespace:           cfg.Namespace,
@@ -52,6 +54,8 @@ func Run(
 		logger.Fatal("failed to create monitor", zap.Error(err))
 	}
 
+	// Scheduler does the complicated work of converting a Buildkite job into
+	// a pod to run that job. It talks to the k8s API to create pods.
 	sched := scheduler.New(logger.Named("scheduler"), k8sClient, scheduler.Config{
 		Namespace:              cfg.Namespace,
 		Image:                  cfg.Image,
@@ -66,22 +70,33 @@ func Run(
 		PodSpecPatch:           cfg.PodSpecPatch,
 		ProhibitK8sPlugin:      cfg.ProhibitKubernetesPlugin,
 	})
-	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)
 
+	// Limiter has two roles:
+	// 1. Prevent scheduling more than cfg.MaxInFlight jobs at once
+	//    (if configured)
+	// 2. Deduplicate - prevent creating pods that have already been created.
+	// Once it figures out a job can be scheduled, it passes to the scheduler.
+	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)
 	informerFactory, err := NewInformerFactory(k8sClient, cfg.Namespace, cfg.Tags)
 	if err != nil {
 		logger.Fatal("failed to create informer", zap.Error(err))
 	}
-
 	if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Fatal("failed to register limiter informer", zap.Error(err))
 	}
 
+	// PodCompletionWatcher watches k8s for pods where the agent has terminated,
+	// in order to clean up the pod. This is necessary because "sidecars" are
+	// not internally managed by buildkite-agent, and would continue running
+	// forever, preventing the pod being cleaned up.
 	completions := scheduler.NewPodCompletionWatcher(logger.Named("completions"), k8sClient)
 	if err := completions.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Fatal("failed to register completions informer", zap.Error(err))
 	}
 
+	// PodWatcher watches for other conditions to clean up pods:
+	// * Pods where a container is in ImagePullBackOff for too long
+	// * Pods that are still pending, but the Buildkite job has been cancelled
 	podWatcher := scheduler.NewPodWatcher(
 		logger.Named("podWatcher"),
 		k8sClient,

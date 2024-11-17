@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
@@ -77,7 +78,7 @@ func (l *MaxInFlightLimiter) RegisterInformer(ctx context.Context, factory infor
 
 // Create either creates the job immediately, or blocks until there is capacity.
 // It may also ignore the job if it is already in flight.
-func (l *MaxInFlightLimiter) Create(ctx context.Context, job monitor.Job) error {
+func (l *MaxInFlightLimiter) Handle(ctx context.Context, job monitor.Job) error {
 	uuid, err := uuid.Parse(job.Uuid)
 	if err != nil {
 		l.logger.Error("invalid UUID in CommandJob", zap.Error(err))
@@ -116,7 +117,12 @@ func (l *MaxInFlightLimiter) Create(ctx context.Context, job monitor.Job) error 
 	}
 
 	// We got a token from the bucket above! Proceed to schedule the pod.
-	if err := l.scheduler.Create(ctx, job); err != nil {
+	// The next handler should be Scheduler (except in some tests).
+	l.logger.Debug("passing job to next handler",
+		zap.Stringer("handler", reflect.TypeOf(l.scheduler)),
+		zap.String("uuid", job.Uuid),
+	)
+	if err := l.scheduler.Handle(ctx, job); err != nil {
 		// Oh well. Return the token and un-record the job.
 		l.tryReturnToken()
 		numInFlight, _ := l.casa(uuid, false)

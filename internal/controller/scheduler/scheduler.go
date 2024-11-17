@@ -81,7 +81,7 @@ type worker struct {
 	logger *zap.Logger
 }
 
-func (w *worker) Create(ctx context.Context, job monitor.Job) error {
+func (w *worker) Handle(ctx context.Context, job monitor.Job) error {
 	logger := w.logger.With(zap.String("uuid", job.Uuid))
 	logger.Info("creating job")
 

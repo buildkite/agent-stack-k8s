@@ -37,7 +37,7 @@ type fakeScheduler struct {
 	errors   int
 }
 
-func (f *fakeScheduler) Create(_ context.Context, job monitor.Job) error {
+func (f *fakeScheduler) Handle(_ context.Context, job monitor.Job) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.err != nil {
@@ -104,7 +104,7 @@ func TestLimiter(t *testing.T) {
 	for range 50 {
 		go func() {
 			defer wg.Done()
-			err := limiter.Create(ctx, monitor.Job{CommandJob: &api.CommandJob{Uuid: uuid.New().String()}})
+			err := limiter.Handle(ctx, monitor.Job{CommandJob: &api.CommandJob{Uuid: uuid.New().String()}})
 			if err != nil {
 				t.Errorf("limiter.Create(ctx, &job) = %v", err)
 			}
@@ -141,7 +141,7 @@ func TestLimiter_SkipsDuplicateJobs(t *testing.T) {
 	uuid := uuid.New().String()
 
 	for range 50 {
-		if err := limiter.Create(ctx, monitor.Job{CommandJob: &api.CommandJob{Uuid: uuid}}); err != nil {
+		if err := limiter.Handle(ctx, monitor.Job{CommandJob: &api.CommandJob{Uuid: uuid}}); err != nil {
 			t.Errorf("limiter.Create(ctx, &job) = %v", err)
 		}
 	}
@@ -171,7 +171,7 @@ func TestLimiter_SkipsCreateErrors(t *testing.T) {
 	handler.limiter = limiter
 
 	for range 50 {
-		err := limiter.Create(ctx, monitor.Job{CommandJob: &api.CommandJob{Uuid: uuid.New().String()}})
+		err := limiter.Handle(ctx, monitor.Job{CommandJob: &api.CommandJob{Uuid: uuid.New().String()}})
 		if !errors.Is(err, handler.err) {
 			t.Errorf("limiter.Create(ctx, some-job) error = %v, want %v", err, handler.err)
 		}
