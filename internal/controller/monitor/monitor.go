@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"time"
 
@@ -42,7 +43,7 @@ type Job struct {
 }
 
 type JobHandler interface {
-	Create(context.Context, Job) error
+	Handle(context.Context, Job) error
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
@@ -143,6 +144,8 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 
 	go func() {
 		logger.Info("started")
+		defer logger.Info("stopped")
+
 		ticker := time.NewTicker(m.cfg.PollInterval)
 		defer ticker.Stop()
 
@@ -172,14 +175,16 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 				return
 			}
 
-			m.createJobs(ctx, logger, handler, agentTags, resp.CommandJobs())
+			// The next handler should be the Limiter (except in some tests).
+			// Limiter handles deduplicating jobs before passing to the scheduler.
+			m.passJobsToNextHandler(ctx, logger, handler, agentTags, resp.CommandJobs())
 		}
 	}()
 
 	return errs
 }
 
-func (m *Monitor) createJobs(ctx context.Context, logger *zap.Logger, handler JobHandler, agentTags map[string]string, jobs []*api.JobJobTypeCommand) {
+func (m *Monitor) passJobsToNextHandler(ctx context.Context, logger *zap.Logger, handler JobHandler, agentTags map[string]string, jobs []*api.JobJobTypeCommand) {
 	// A sneaky way to create a channel that is closed after a duration.
 	// Why not pass directly to handler.Create? Because that might
 	// interrupt scheduling a pod, when all we want is to bound the
@@ -212,8 +217,13 @@ func (m *Monitor) createJobs(ctx context.Context, logger *zap.Logger, handler Jo
 			StaleCh:    staleCtx.Done(),
 		}
 
-		logger.Debug("creating job", zap.String("uuid", j.Uuid))
-		if err := handler.Create(ctx, job); err != nil {
+		// The next handler should be the Limiter (except in some tests).
+		// Limiter handles deduplicating jobs before passing to the scheduler.
+		logger.Debug("passing job to next handler",
+			zap.Stringer("handler", reflect.TypeOf(handler)),
+			zap.String("uuid", j.Uuid),
+		)
+		if err := handler.Handle(ctx, job); err != nil {
 			// Note: this check is for the original context, not staleCtx.
 			if ctx.Err() != nil {
 				return
