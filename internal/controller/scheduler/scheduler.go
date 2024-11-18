@@ -14,7 +14,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 
 	"github.com/buildkite/agent/v3/clicommand"
@@ -81,7 +81,7 @@ type worker struct {
 	logger *zap.Logger
 }
 
-func (w *worker) Handle(ctx context.Context, job monitor.Job) error {
+func (w *worker) Handle(ctx context.Context, job model.Job) error {
 	logger := w.logger.With(zap.String("uuid", job.Uuid))
 	logger.Info("creating job")
 

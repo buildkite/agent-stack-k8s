@@ -12,6 +12,7 @@ import (
 	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 )
@@ -32,18 +33,6 @@ type Config struct {
 	StaleJobDataTimeout time.Duration
 	Org                 string
 	Tags                []string
-}
-
-type Job struct {
-	// The job information.
-	*api.CommandJob
-
-	// Closed when the job information becomes stale.
-	StaleCh <-chan struct{}
-}
-
-type JobHandler interface {
-	Handle(context.Context, Job) error
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
@@ -129,7 +118,7 @@ func toMapAndLogErrors(logger *zap.Logger, tags []string) map[string]string {
 	return agentTags
 }
 
-func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
+func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan error {
 	logger := m.logger.With(zap.String("org", m.cfg.Org))
 	errs := make(chan error, 1)
 
@@ -184,9 +173,9 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 	return errs
 }
 
-func (m *Monitor) passJobsToNextHandler(ctx context.Context, logger *zap.Logger, handler JobHandler, agentTags map[string]string, jobs []*api.JobJobTypeCommand) {
+func (m *Monitor) passJobsToNextHandler(ctx context.Context, logger *zap.Logger, handler model.JobHandler, agentTags map[string]string, jobs []*api.JobJobTypeCommand) {
 	// A sneaky way to create a channel that is closed after a duration.
-	// Why not pass directly to handler.Create? Because that might
+	// Why not pass directly to handler.Handle? Because that might
 	// interrupt scheduling a pod, when all we want is to bound the
 	// time spent waiting for the limiter.
 	staleCtx, staleCancel := context.WithTimeout(ctx, m.cfg.StaleJobDataTimeout)
@@ -212,7 +201,7 @@ func (m *Monitor) passJobsToNextHandler(ctx context.Context, logger *zap.Logger,
 			continue
 		}
 
-		job := Job{
+		job := model.Job{
 			CommandJob: &j.CommandJob,
 			StaleCh:    staleCtx.Done(),
 		}
@@ -223,8 +212,19 @@ func (m *Monitor) passJobsToNextHandler(ctx context.Context, logger *zap.Logger,
 			zap.Stringer("handler", reflect.TypeOf(handler)),
 			zap.String("uuid", j.Uuid),
 		)
-		if err := handler.Handle(ctx, job); err != nil {
-			// Note: this check is for the original context, not staleCtx.
+		switch err := handler.Handle(ctx, job); {
+		case errors.Is(err, model.ErrDuplicateJob):
+			// Job wasn't scheduled because it's already scheduled.
+
+		case errors.Is(err, model.ErrStaleJob):
+			// Job wasn't scheduled because the data has become stale.
+			// Staleness is set within this function, so we can return early.
+			return
+
+		case err != nil:
+			// Note: this check is for the original context, not staleCtx,
+			// in order to avoid the log when the context is cancelled
+			// (particularly during tests).
 			if ctx.Err() != nil {
 				return
 			}
