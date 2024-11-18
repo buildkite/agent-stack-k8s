@@ -10,6 +10,9 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/deduper"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/limiter"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 
@@ -37,8 +40,8 @@ func Run(
 		}()
 	}
 
-	// Monitor polls Buildkite GraphQL for jobs. It passes them to Limiter.
-	// Job flow: monitor -> limiter -> scheduler.
+	// Monitor polls Buildkite GraphQL for jobs. It passes them to Deduper.
+	// Job flow: monitor -> deduper -> limiter -> scheduler.
 	m, err := monitor.New(logger.Named("monitor"), k8sClient, monitor.Config{
 		GraphQLEndpoint:     cfg.GraphQLEndpoint,
 		Namespace:           cfg.Namespace,
@@ -71,18 +74,29 @@ func Run(
 		ProhibitK8sPlugin:      cfg.ProhibitKubernetesPlugin,
 	})
 
-	// Limiter has two roles:
-	// 1. Prevent scheduling more than cfg.MaxInFlight jobs at once
-	//    (if configured)
-	// 2. Deduplicate - prevent creating pods that have already been created.
-	// Once it figures out a job can be scheduled, it passes to the scheduler.
-	limiter := scheduler.NewLimiter(logger.Named("limiter"), sched, cfg.MaxInFlight)
 	informerFactory, err := NewInformerFactory(k8sClient, cfg.Namespace, cfg.Tags)
 	if err != nil {
 		logger.Fatal("failed to create informer", zap.Error(err))
 	}
-	if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
-		logger.Fatal("failed to register limiter informer", zap.Error(err))
+
+	nextHandler := model.JobHandler(sched)
+	if cfg.MaxInFlight > 0 {
+		// Limiter prevents scheduling more than cfg.MaxInFlight jobs at once
+		//    (if configured)
+		// Once it figures out a job can be scheduled, it passes to the scheduler.
+		limiter := limiter.New(logger.Named("limiter"), sched, cfg.MaxInFlight)
+		if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
+			logger.Fatal("failed to register limiter informer", zap.Error(err))
+		}
+		nextHandler = limiter
+	}
+
+	// Deduper prevents multiple pods being scheduled for the same job.
+	// It passes jobs to the limiter if there is a limit, or directly to the
+	// scheduler if there is no limit.
+	deduper := deduper.New(logger.Named("deduper"), nextHandler)
+	if err := deduper.RegisterInformer(ctx, informerFactory); err != nil {
+		logger.Fatal("failed to register deduper informer", zap.Error(err))
 	}
 
 	// PodCompletionWatcher watches k8s for pods where the agent has terminated,
@@ -109,7 +123,7 @@ func Run(
 	select {
 	case <-ctx.Done():
 		logger.Info("controller exiting", zap.Error(ctx.Err()))
-	case err := <-m.Start(ctx, limiter):
+	case err := <-m.Start(ctx, deduper):
 		logger.Info("monitor failed", zap.Error(err))
 	}
 }
