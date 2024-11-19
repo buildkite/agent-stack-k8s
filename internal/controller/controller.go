@@ -66,6 +66,7 @@ func Run(
 		AgentTokenSecretName:   cfg.AgentTokenSecret,
 		JobTTL:                 cfg.JobTTL,
 		AdditionalRedactedVars: cfg.AdditionalRedactedVars,
+		WorkspaceVolume:        cfg.WorkspaceVolume,
 		AgentConfig:            cfg.AgentConfig,
 		DefaultCheckoutParams:  cfg.DefaultCheckoutParams,
 		DefaultCommandParams:   cfg.DefaultCommandParams,

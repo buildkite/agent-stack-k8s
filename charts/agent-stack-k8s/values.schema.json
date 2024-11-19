@@ -262,6 +262,9 @@
           "title": "Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
           "examples": [true]
         },
+        "workspaceVolume": {
+          "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+        },
         "agent-config": {
           "type": "object",
           "default": null,
