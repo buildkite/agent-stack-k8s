@@ -28,6 +28,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		JobCancelCheckerPollInterval: 10 * time.Second,
 		PollInterval:                 5 * time.Second,
 		StaleJobDataTimeout:          10 * time.Second,
+		JobCreationConcurrency:       5,
 		MaxInFlight:                  100,
 		Namespace:                    "my-buildkite-ns",
 		Org:                          "my-buildkite-org",

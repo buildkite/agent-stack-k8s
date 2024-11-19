@@ -25,19 +25,20 @@ var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
 // mapstructure (the module) supports switching the struct tag to "json", viper does not. So we have
 // to have the `mapstructure` tag for viper and the `json` tag is used by the mapstructure!
 type Config struct {
-	Debug               bool          `json:"debug"`
-	JobTTL              time.Duration `json:"job-ttl"`
-	PollInterval        time.Duration `json:"poll-interval"`
-	StaleJobDataTimeout time.Duration `json:"stale-job-data-timeout" validate:"omitempty"`
-	AgentTokenSecret    string        `json:"agent-token-secret"     validate:"required"`
-	BuildkiteToken      string        `json:"buildkite-token"        validate:"required"`
-	Image               string        `json:"image"                  validate:"required"`
-	MaxInFlight         int           `json:"max-in-flight"          validate:"min=0"`
-	Namespace           string        `json:"namespace"              validate:"required"`
-	Org                 string        `json:"org"                    validate:"required"`
-	Tags                stringSlice   `json:"tags"                   validate:"min=1"`
-	ProfilerAddress     string        `json:"profiler-address"       validate:"omitempty,hostname_port"`
-	GraphQLEndpoint     string        `json:"graphql-endpoint"       validate:"omitempty"`
+	Debug                  bool          `json:"debug"`
+	JobTTL                 time.Duration `json:"job-ttl"`
+	PollInterval           time.Duration `json:"poll-interval"`
+	StaleJobDataTimeout    time.Duration `json:"stale-job-data-timeout"   validate:"omitempty"`
+	JobCreationConcurrency int           `json:"job-creation-concurrency" validate:"omitempty"`
+	AgentTokenSecret       string        `json:"agent-token-secret"       validate:"required"`
+	BuildkiteToken         string        `json:"buildkite-token"          validate:"required"`
+	Image                  string        `json:"image"                    validate:"required"`
+	MaxInFlight            int           `json:"max-in-flight"            validate:"min=0"`
+	Namespace              string        `json:"namespace"                validate:"required"`
+	Org                    string        `json:"org"                      validate:"required"`
+	Tags                   stringSlice   `json:"tags"                     validate:"min=1"`
+	ProfilerAddress        string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
+	GraphQLEndpoint        string        `json:"graphql-endpoint"         validate:"omitempty"`
 	// Agent endpoint is set in agent-config.
 
 	// ClusterUUID field is mandatory for most new orgs.
@@ -76,6 +77,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("job-ttl", c.JobTTL)
 	enc.AddDuration("poll-interval", c.PollInterval)
 	enc.AddDuration("stale-job-data-timeout", c.StaleJobDataTimeout)
+	enc.AddInt("job-creation-concurrency", c.JobCreationConcurrency)
 	enc.AddInt("max-in-flight", c.MaxInFlight)
 	enc.AddString("namespace", c.Namespace)
 	enc.AddString("org", c.Org)

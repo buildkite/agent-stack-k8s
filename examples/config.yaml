@@ -6,6 +6,7 @@ image-pull-backoff-grace-period: 60s
 job-cancel-checker-poll-interval: 10s
 poll-interval: 5s
 stale-job-data-timeout: 10s
+job-creation-concurrency: 5
 max-in-flight: 100
 namespace: my-buildkite-ns
 org: my-buildkite-org
