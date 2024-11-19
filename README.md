@@ -559,6 +559,26 @@ Sidecar containers can be added to your job by specifying them under the top-lev
 
 There is no guarantee that your sidecars will have started before your job, so using retries or a tool like [wait-for-it](https://github.com/vishnubob/wait-for-it) is a good idea to avoid flaky tests.
 
+### The workspace volume
+
+By default the workspace directory (`/workspace`) is mounted as an `emptyDir` ephemeral volume. Other volumes may be more desirable (e.g. a volume claim backed by an NVMe device).
+The default workspace volume can be set as stack configuration, e.g.
+
+```yaml
+# values.yaml
+config:
+  workspace-volume:
+    name: workspace-2-the-reckoning
+    ephemeral:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          storageClassName: my-special-storage-class
+          resources:
+            requests:
+              storage: 1Gi
+```
+
 ### Extra volume mounts
 
 In some situations, for example if you want to use [git mirrors](https://buildkite.com/docs/agent/v3#promoted-experiments-git-mirrors) you may want to attach extra volume mounts (in addition to the `/workspace` one) in all the pod containers.

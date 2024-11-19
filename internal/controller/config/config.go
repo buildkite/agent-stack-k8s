@@ -49,6 +49,10 @@ type Config struct {
 	ImagePullBackOffGracePeriod  time.Duration   `json:"image-pull-backoff-grace-period"  validate:"omitempty"`
 	JobCancelCheckerPollInterval time.Duration   `json:"job-cancel-checker-poll-interval" validate:"omitempty"`
 
+	// WorkspaceVolume allows supplying a volume for /workspace. By default
+	// an EmptyDir volume is created for it.
+	WorkspaceVolume *corev1.Volume `json:"workspace-volume" validate:"omitempty"`
+
 	AgentConfig           *AgentConfig    `json:"agent-config"            validate:"omitempty"`
 	DefaultCheckoutParams *CheckoutParams `json:"default-checkout-params" validate:"omitempty"`
 	DefaultCommandParams  *CommandParams  `json:"default-command-params"  validate:"omitempty"`

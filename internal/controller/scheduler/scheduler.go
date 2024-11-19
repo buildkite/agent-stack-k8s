@@ -46,6 +46,7 @@ type Config struct {
 	AgentTokenSecretName   string
 	JobTTL                 time.Duration
 	AdditionalRedactedVars []string
+	WorkspaceVolume        *corev1.Volume
 	AgentConfig            *config.AgentConfig
 	DefaultCheckoutParams  *config.CheckoutParams
 	DefaultCommandParams   *config.CommandParams
@@ -286,7 +287,25 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		Value: strings.Join(redactedVars, ","),
 	})
 
-	volumeMounts := []corev1.VolumeMount{{Name: "workspace", MountPath: "/workspace"}}
+	// workspaceVolume is shared among most containers, so set it up first.
+	workspaceVolume := w.cfg.WorkspaceVolume
+	if workspaceVolume == nil {
+		// The default workspace volume is an empty dir volume.
+		workspaceVolume = &corev1.Volume{
+			Name: "workspace",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		}
+	}
+	podSpec.Volumes = append(podSpec.Volumes, *workspaceVolume)
+
+	// Set up other volumes (hooks, plugins, keys).
+	w.cfg.AgentConfig.ApplyVolumesTo(podSpec)
+
+	// Volume mounts shared among most containers: the workspace volume, and
+	// any others supplied with ExtraVolumeMounts.
+	volumeMounts := []corev1.VolumeMount{{Name: workspaceVolume.Name, MountPath: "/workspace"}}
 	if inputs.k8sPlugin != nil {
 		volumeMounts = append(volumeMounts, inputs.k8sPlugin.ExtraVolumeMounts...)
 	}
@@ -614,14 +633,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	podSpec.InitContainers = append(initContainers, podSpec.InitContainers...)
 
-	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
-		Name: "workspace",
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
-		},
-	})
-	w.cfg.AgentConfig.ApplyVolumesTo(podSpec)
-
+	// Only attempt the job once.
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
 
 	// Allow podSpec to be overridden by the agent configuration and the k8s plugin

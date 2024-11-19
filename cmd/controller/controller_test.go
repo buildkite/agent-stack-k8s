@@ -36,10 +36,28 @@ func TestReadAndParseConfig(t *testing.T) {
 		ClusterUUID:                  "beefcafe-abbe-baba-abba-deedcedecade",
 		ProhibitKubernetesPlugin:     true,
 		GraphQLEndpoint:              "http://graphql.buildkite.localhost/v1",
+
+		WorkspaceVolume: &corev1.Volume{
+			Name: "workspace-2-the-reckoning",
+			VolumeSource: corev1.VolumeSource{
+				Ephemeral: &corev1.EphemeralVolumeSource{
+					VolumeClaimTemplate: &corev1.PersistentVolumeClaimTemplate{
+						Spec: corev1.PersistentVolumeClaimSpec{
+							AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+							StorageClassName: ptr("my-special-storage-class"),
+							Resources: corev1.VolumeResourceRequirements{
+								Requests: corev1.ResourceList{
+									"storage": resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 		AgentConfig: &config.AgentConfig{
 			Endpoint: ptr("http://agent.buildkite.localhost/v3"),
 		},
-
 		DefaultCommandParams: &config.CommandParams{
 			Interposer: config.InterposerVector,
 			EnvFrom: []corev1.EnvFromSource{{
