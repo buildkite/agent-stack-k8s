@@ -586,7 +586,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				"/workspace",
 			},
 			VolumeMounts: []corev1.VolumeMount{{
-				Name:      "workspace",
+				Name:      workspaceVolume.Name,
 				MountPath: "/workspace",
 			}},
 		},
@@ -624,7 +624,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			Command: []string{"/workspace/tini-static"},
 			Args:    []string{"--version"},
 			VolumeMounts: []corev1.VolumeMount{{
-				Name:      "workspace",
+				Name:      workspaceVolume.Name,
 				MountPath: "/workspace",
 			}},
 		})
