@@ -43,15 +43,16 @@ func Run(
 	// Monitor polls Buildkite GraphQL for jobs. It passes them to Deduper.
 	// Job flow: monitor -> deduper -> limiter -> scheduler.
 	m, err := monitor.New(logger.Named("monitor"), k8sClient, monitor.Config{
-		GraphQLEndpoint:     cfg.GraphQLEndpoint,
-		Namespace:           cfg.Namespace,
-		Org:                 cfg.Org,
-		ClusterUUID:         cfg.ClusterUUID,
-		MaxInFlight:         cfg.MaxInFlight,
-		PollInterval:        cfg.PollInterval,
-		StaleJobDataTimeout: cfg.StaleJobDataTimeout,
-		Tags:                cfg.Tags,
-		Token:               cfg.BuildkiteToken,
+		GraphQLEndpoint:        cfg.GraphQLEndpoint,
+		Namespace:              cfg.Namespace,
+		Org:                    cfg.Org,
+		ClusterUUID:            cfg.ClusterUUID,
+		MaxInFlight:            cfg.MaxInFlight,
+		PollInterval:           cfg.PollInterval,
+		StaleJobDataTimeout:    cfg.StaleJobDataTimeout,
+		JobCreationConcurrency: cfg.JobCreationConcurrency,
+		Tags:                   cfg.Tags,
+		Token:                  cfg.BuildkiteToken,
 	})
 	if err != nil {
 		logger.Fatal("failed to create monitor", zap.Error(err))

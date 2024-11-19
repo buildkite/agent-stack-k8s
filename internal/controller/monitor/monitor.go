@@ -5,8 +5,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"reflect"
-	"sort"
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
@@ -24,15 +24,16 @@ type Monitor struct {
 }
 
 type Config struct {
-	GraphQLEndpoint     string
-	Namespace           string
-	Token               string
-	ClusterUUID         string
-	MaxInFlight         int
-	PollInterval        time.Duration
-	StaleJobDataTimeout time.Duration
-	Org                 string
-	Tags                []string
+	GraphQLEndpoint        string
+	Namespace              string
+	Token                  string
+	ClusterUUID            string
+	MaxInFlight            int
+	JobCreationConcurrency int
+	PollInterval           time.Duration
+	StaleJobDataTimeout    time.Duration
+	Org                    string
+	Tags                   []string
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
@@ -44,6 +45,11 @@ func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, er
 	// Default StaleJobDataTimeout to 10s.
 	if cfg.StaleJobDataTimeout <= 0 {
 		cfg.StaleJobDataTimeout = 10 * time.Second
+	}
+
+	// Default CreationConcurrency to 5.
+	if cfg.JobCreationConcurrency <= 0 {
+		cfg.JobCreationConcurrency = 5
 	}
 
 	return &Monitor{
@@ -164,9 +170,14 @@ func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan er
 				return
 			}
 
+			jobs := resp.CommandJobs()
+			if len(jobs) == 0 {
+				continue
+			}
+
 			// The next handler should be the Limiter (except in some tests).
 			// Limiter handles deduplicating jobs before passing to the scheduler.
-			m.passJobsToNextHandler(ctx, logger, handler, agentTags, resp.CommandJobs())
+			m.passJobsToNextHandler(ctx, logger, handler, agentTags, jobs)
 		}
 	}()
 
@@ -181,54 +192,89 @@ func (m *Monitor) passJobsToNextHandler(ctx context.Context, logger *zap.Logger,
 	staleCtx, staleCancel := context.WithTimeout(ctx, m.cfg.StaleJobDataTimeout)
 	defer staleCancel()
 
-	// TODO: sort by ScheduledAt in the API
-	sort.Slice(jobs, func(i, j int) bool {
-		return jobs[i].ScheduledAt.Before(jobs[j].ScheduledAt)
+	// Why shuffle the jobs? Suppose we sort the jobs to prefer, say, oldest.
+	// The first job we'll always try to schedule will then be the oldest, which
+	// sounds reasonable. But if that job is not able to be accepted by the
+	// cluster for some reason (e.g. there are multiple stack controllers on the
+	// same BK queue, and the job is already created by another controller),
+	// and the k8s API is slow, then we'll live-lock between grabbing jobs,
+	// trying to run the same oldest one, failing, then timing out (staleness).
+	// Shuffling increases the odds of making progress.
+	rand.Shuffle(len(jobs), func(i, j int) {
+		jobs[i], jobs[j] = jobs[j], jobs[i]
 	})
 
-	for _, j := range jobs {
-		if staleCtx.Err() != nil {
-			// Results already stale; try again later.
+	// We also try to get more jobs to the API by processing them in parallel.
+	jobsCh := make(chan *api.JobJobTypeCommand)
+	defer close(jobsCh)
+
+	for range min(m.cfg.JobCreationConcurrency, len(jobs)) {
+		go jobHandlerWorker(ctx, staleCtx, logger, handler, agentTags, jobsCh)
+	}
+
+	for _, job := range jobs {
+		select {
+		case <-ctx.Done():
 			return
-		}
-
-		jobTags := toMapAndLogErrors(logger, j.AgentQueryRules)
-
-		// The api returns jobs that match ANY agent tags (the agent query rules)
-		// However, we can only acquire jobs that match ALL agent tags
-		if !agenttags.JobTagsMatchAgentTags(jobTags, agentTags) {
-			logger.Debug("skipping job because it did not match all tags", zap.Any("job", j))
-			continue
-		}
-
-		job := model.Job{
-			CommandJob: &j.CommandJob,
-			StaleCh:    staleCtx.Done(),
-		}
-
-		// The next handler should be the Limiter (except in some tests).
-		// Limiter handles deduplicating jobs before passing to the scheduler.
-		logger.Debug("passing job to next handler",
-			zap.Stringer("handler", reflect.TypeOf(handler)),
-			zap.String("uuid", j.Uuid),
-		)
-		switch err := handler.Handle(ctx, job); {
-		case errors.Is(err, model.ErrDuplicateJob):
-			// Job wasn't scheduled because it's already scheduled.
-
-		case errors.Is(err, model.ErrStaleJob):
-			// Job wasn't scheduled because the data has become stale.
-			// Staleness is set within this function, so we can return early.
+		case <-staleCtx.Done():
 			return
+		case jobsCh <- job:
+		}
+	}
+}
 
-		case err != nil:
-			// Note: this check is for the original context, not staleCtx,
-			// in order to avoid the log when the context is cancelled
-			// (particularly during tests).
-			if ctx.Err() != nil {
+func jobHandlerWorker(ctx, staleCtx context.Context, logger *zap.Logger, handler model.JobHandler, agentTags map[string]string, jobsCh <-chan *api.JobJobTypeCommand) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-staleCtx.Done():
+			return
+		case j := <-jobsCh:
+			if j == nil {
 				return
 			}
-			logger.Error("failed to create job", zap.Error(err))
+			jobTags := toMapAndLogErrors(logger, j.AgentQueryRules)
+
+			// The api returns jobs that match ANY agent tags (the agent query rules)
+			// However, we can only acquire jobs that match ALL agent tags
+			if !agenttags.JobTagsMatchAgentTags(jobTags, agentTags) {
+				logger.Debug("skipping job because it did not match all tags", zap.Any("job", j))
+				continue
+			}
+
+			job := model.Job{
+				CommandJob: &j.CommandJob,
+				StaleCh:    staleCtx.Done(),
+			}
+
+			// The next handler should be the deduper (except in some tests).
+			// Deduper handles deduplicating jobs before passing to the scheduler.
+			logger.Debug("passing job to next handler",
+				zap.Stringer("handler", reflect.TypeOf(handler)),
+				zap.String("uuid", j.Uuid),
+			)
+			// The next handler operates under the main ctx, but can optionally
+			// use staleCtx.Done() (stored in job) to skip work. (Only Limiter
+			// does this.)
+			switch err := handler.Handle(ctx, job); {
+			case errors.Is(err, model.ErrDuplicateJob):
+				// Job wasn't scheduled because it's already scheduled.
+
+			case errors.Is(err, model.ErrStaleJob):
+				// Job wasn't scheduled because the data has become stale.
+				// Staleness is set within this function, so we can return early.
+				return
+
+			case err != nil:
+				// Note: this check is for the original context, not staleCtx,
+				// in order to avoid the log when the context is cancelled
+				// (particularly during tests).
+				if ctx.Err() != nil {
+					return
+				}
+				logger.Error("failed to create job", zap.Error(err))
+			}
 		}
 	}
 }
