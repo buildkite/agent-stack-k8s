@@ -55,6 +55,8 @@ type podWatcher struct {
 	// library outside of our control is a carve-out from the usual rule.)
 	// The context is needed to ensure job cancel checkers are cleaned up.
 	resourceEventHandlerCtx context.Context
+
+	agentTags map[string]string
 }
 
 // NewPodWatcher creates an informer that does various things with pods and
@@ -76,6 +78,12 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, cfg *config.Con
 	if jobCancelCheckerInterval <= 0 {
 		jobCancelCheckerInterval = config.DefaultJobCancelCheckerPollInterval
 	}
+
+	agentTags, errs := agenttags.TagMapFromTags(cfg.Tags)
+	if len(errs) > 0 {
+		logger.Warn("parsing agent tags", zap.Errors("errors", errs))
+	}
+
 	return &podWatcher{
 		logger:                      logger,
 		k8s:                         k8s,
@@ -85,6 +93,7 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, cfg *config.Con
 		jobCancelCheckerInterval:    jobCancelCheckerInterval,
 		ignoreJobs:                  make(map[uuid.UUID]struct{}),
 		cancelCheckerChs:            make(map[uuid.UUID]*onceChan),
+		agentTags:                   agentTags,
 	}
 }
 
@@ -168,6 +177,13 @@ func (w *podWatcher) jobUUIDAndLogger(pod *corev1.Pod) (uuid.UUID, *zap.Logger, 
 	}
 
 	log = log.With(zap.String("jobUUID", jobUUID.String()))
+
+	// Check that tags match - there may be pods around that were created by
+	// another controller using different tags.
+	if !agenttags.JobTagsMatchAgentTags(agenttags.ScanLabels(pod.Labels), w.agentTags) {
+		log.Debug("Pod labels do not match agent tags for this controller. Skipping.")
+		return uuid.UUID{}, log, errors.New("pod labels do not match agent tags for this controller")
+	}
 
 	w.ignoreJobsMu.RLock()
 	defer w.ignoreJobsMu.RUnlock()
