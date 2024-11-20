@@ -33,7 +33,7 @@ func failJob(
 	}, options...)
 
 	// queue is required for acquire! maybe more
-	ctr, err := agentcore.NewController(ctx, agentToken, kjobName(jobUUID), tags, opts...)
+	ctr, err := agentcore.NewController(ctx, agentToken, k8sJobName(jobUUID), tags, opts...)
 	if err != nil {
 		zapLogger.Error("registering or connecting ephemeral agent", zap.Error(err))
 		return fmt.Errorf("registering or connecting ephemeral agent: %w", err)

@@ -203,7 +203,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	kjob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        kjobName(inputs.uuid),
+			Name:        k8sJobName(inputs.uuid),
 			Labels:      make(map[string]string),
 			Annotations: make(map[string]string),
 		},
@@ -217,9 +217,21 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	}
 
 	kjob.Labels[config.UUIDLabel] = inputs.uuid
-	w.labelWithAgentTags(kjob.Labels, inputs.agentQueryRules)
-	kjob.Annotations[config.BuildURLAnnotation] = inputs.envMap["BUILDKITE_BUILD_URL"]
-	w.annotateWithJobURL(kjob.Annotations, inputs.uuid, inputs.envMap)
+	tagLabels, errs := agenttags.LabelsFromTags(inputs.agentQueryRules)
+	if len(errs) > 0 {
+		w.logger.Warn("converting all tags to labels", zap.Errors("errs", errs))
+	}
+	maps.Copy(kjob.Labels, tagLabels)
+
+	buildURL := inputs.envMap["BUILDKITE_BUILD_URL"]
+	kjob.Annotations[config.BuildURLAnnotation] = buildURL
+	jobURL, err := w.jobURL(inputs.uuid, buildURL)
+	if err != nil {
+		w.logger.Warn("could not parse BuildURL when annotating with JobURL", zap.String("buildURL", buildURL))
+	}
+	if jobURL != "" {
+		kjob.Annotations[config.JobURLAnnotation] = jobURL
+	}
 
 	// Prevent k8s cluster autoscaler from terminating the job before it finishes to scale down cluster
 	kjob.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
@@ -452,18 +464,15 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		}
 	}
 
-	agentTags := []agentTag{
-		{
-			Name:  "k8s:agent-stack-version",
-			Value: version.Version(),
-		},
+	agentTags := map[string]string{
+		"k8s:agent-stack-version": version.Version(),
 	}
 
-	if tags, err := agentTagsFromJob(inputs.agentQueryRules); err != nil {
-		w.logger.Warn("error parsing job tags", zap.String("job", inputs.uuid))
-	} else {
-		agentTags = append(agentTags, tags...)
+	tags, errs := agenttags.TagMapFromTags(inputs.agentQueryRules)
+	if len(errs) > 0 {
+		w.logger.Warn("errors parsing job tags", zap.String("job", inputs.uuid), zap.Errors("errors", errs))
 	}
+	maps.Copy(agentTags, tags)
 
 	// Agent server container
 	// This runs the "upper layer" of the agent that is responsible for talking
@@ -864,62 +873,24 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 	return failJob(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, message, opts...)
 }
 
-func (w *worker) labelWithAgentTags(dstLabels map[string]string, agentQueryRules []string) {
-	ls, errs := agenttags.ToLabels(agentQueryRules)
-	if len(errs) != 0 {
-		w.logger.Warn("converting all tags to labels", zap.Errors("errs", errs))
-	}
-
-	for k, v := range ls {
-		dstLabels[k] = v
-	}
-}
-
-func (w *worker) annotateWithJobURL(dstAnnotations map[string]string, jobUUID string, envMap map[string]string) {
-	buildURL := envMap["BUILDKITE_BUILD_URL"]
+func (w *worker) jobURL(jobUUID string, buildURL string) (string, error) {
 	u, err := url.Parse(buildURL)
 	if err != nil {
-		w.logger.Warn(
-			"could not parse BuildURL when annotating with JobURL",
-			zap.String("buildURL", buildURL),
-		)
-		return
+		return "", err
 	}
 	u.Fragment = jobUUID
-	dstAnnotations[config.JobURLAnnotation] = u.String()
+	return u.String(), nil
 }
 
-func kjobName(jobUUID string) string {
+func k8sJobName(jobUUID string) string {
 	return fmt.Sprintf("buildkite-%s", jobUUID)
 }
 
-type agentTag struct {
-	Name  string
-	Value string
-}
-
-func agentTagsFromJob(agentQueryRules []string) ([]agentTag, error) {
-	agentTags := make([]agentTag, 0, len(agentQueryRules))
-	for _, tag := range agentQueryRules {
-		k, v, found := strings.Cut(tag, "=")
-		if !found {
-			return nil, fmt.Errorf("could not parse tag: %q", tag)
-		}
-		agentTags = append(agentTags, agentTag{Name: k, Value: v})
+// Format each agentTag as key=value and join with ,
+func createAgentTagString(tags map[string]string) string {
+	ts := make([]string, 0, len(tags))
+	for k, v := range tags {
+		ts = append(ts, k+"="+v)
 	}
-
-	return agentTags, nil
-}
-
-func createAgentTagString(tags []agentTag) string {
-	var sb strings.Builder
-	for i, t := range tags {
-		sb.WriteString(t.Name)
-		sb.WriteString("=")
-		sb.WriteString(t.Value)
-		if i < len(tags)-1 {
-			sb.WriteString(",")
-		}
-	}
-	return sb.String()
+	return strings.Join(ts, ",")
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 
 	agentcore "github.com/buildkite/agent/v3/core"
@@ -283,15 +284,7 @@ func (w *podWatcher) failJob(ctx context.Context, log *zap.Logger, pod *corev1.P
 	}
 
 	// Tags are required order to connect the agent.
-	var tags []string
-	for key, value := range pod.Labels {
-		k, has := strings.CutPrefix(key, "tag.buildkite.com/")
-		if !has {
-			continue
-		}
-		tags = append(tags, fmt.Sprintf("%s=%s", k, value))
-	}
-
+	tags := agenttags.TagsFromLabels(pod.Labels)
 	opts := w.cfg.AgentConfig.ControllerOptions()
 
 	if err := failJob(ctx, w.logger, agentToken, jobUUID.String(), tags, message.String(), opts...); err != nil {
