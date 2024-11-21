@@ -3,32 +3,35 @@ package agenttags
 import (
 	"errors"
 	"fmt"
+	"iter"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
-// ToMap converts a slice of strings of the form `k=v` to a map where the
+// TagMapFromTags converts a slice of strings of the form `k=v` to a map where the
 // key is `k` and the value is `v`. If any element of the slice does not
 // have that form, it will not be inserted into the map and instead generate
 // an error which will be appended to the second return value.
-func ToMap(tags []string) (map[string]string, []error) {
-	m := map[string]string{}
-	errs := []error{}
+func TagMapFromTags(tags []string) (map[string]string, []error) {
+	m := make(map[string]string, len(tags))
+	var errs []error
 	for _, tag := range tags {
-		parts := strings.SplitN(tag, "=", 2)
-		if len(parts) != 2 {
+		k, v, has := strings.Cut(tag, "=")
+		if !has {
 			errs = append(errs, fmt.Errorf("invalid agent tag: %q", tag))
 			continue
 		}
-		m[parts[0]] = parts[1]
+		m[k] = v
 	}
 	return m, errs
 }
 
-func mapToLabels(m map[string]string) (map[string]string, []error) {
-	labels := map[string]string{}
-	errs := []error{}
+// labelsFromTagMap converts map[key->value] to map[tag.buildkite.com/key->value],
+// with k8s compatibility checks
+func labelsFromTagMap(m map[string]string) (map[string]string, []error) {
+	labels := make(map[string]string, len(m))
+	var errs []error
 	for k, v := range m {
 		namespacedKey := "tag.buildkite.com/" + k
 		if errMsgs := validation.IsQualifiedName(namespacedKey); len(errMsgs) > 0 {
@@ -50,7 +53,7 @@ func mapToLabels(m map[string]string) (map[string]string, []error) {
 	return labels, errs
 }
 
-// ToLabels converts a slice of strings of the form `k=v` to a map where the
+// LabelsFromTags converts a slice of strings of the form `k=v` to a map where the
 // key is `k` and the value is `v`. If any element of the slice does not
 // have that form or if `k` is not a valid kubernetes label name or if `v`
 // is not a valid kubernetes label value, it will not be inserted into the
@@ -58,25 +61,51 @@ func mapToLabels(m map[string]string) (map[string]string, []error) {
 // return value.
 //
 // See https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
-func ToLabels(tags []string) (map[string]string, []error) {
-	m, errs1 := ToMap(tags)
-	labels, errs2 := mapToLabels(m)
+func LabelsFromTags(tags []string) (map[string]string, []error) {
+	m, errs1 := TagMapFromTags(tags)
+	labels, errs2 := labelsFromTagMap(m)
 	return labels, append(errs1, errs2...)
 }
 
-// JobTagsMatchAgentTags returns true if and only if, for each tag key in
-// `jobTags`: either the tag key is also present in `agentTags`, and the tag
-// value in `jobTags` is "*" or the same as the tag value in `agentTags`
+// JobTagsMatchAgentTags reports whether each tag key in `jobTags` is also
+// present in `agentTags`, and the tag value in `jobTags` is either "*" or the
+// same as the tag value in `agentTags`.
 //
 // In the future, this may be expanded to: if the tag value `agentTags` is in some
 // set of strings defined by the tag value in `jobTags` (eg a glob or regex)
 // See https://buildkite.com/docs/agent/v3/cli-start#agent-targeting
-func JobTagsMatchAgentTags(jobTags, agentTags map[string]string) bool {
+func JobTagsMatchAgentTags(jobTags iter.Seq2[string, string], agentTags map[string]string) bool {
 	for k, v := range jobTags {
 		agentTagValue, exists := agentTags[k]
-		if !exists || (v != "*" && v != agentTagValue) {
+		if !exists {
+			return false
+		}
+		if v != "*" && v != agentTagValue {
 			return false
 		}
 	}
 	return true
+}
+
+// ScanLabels returns an iterator over all labels that are tags.
+func ScanLabels(labels map[string]string) iter.Seq2[string, string] {
+	return func(yield func(string, string) bool) {
+		for key, value := range labels {
+			k, has := strings.CutPrefix(key, "tag.buildkite.com/")
+			if !has {
+				continue
+			}
+			if !yield(k, value) {
+				return
+			}
+		}
+	}
+}
+
+// TagsFromLabels converts job or pod labels into a slice of agent/job tags.
+func TagsFromLabels(labels map[string]string) (tags []string) {
+	for key, value := range ScanLabels(labels) {
+		tags = append(tags, key+"="+value)
+	}
+	return tags
 }

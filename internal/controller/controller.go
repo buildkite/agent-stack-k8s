@@ -138,7 +138,7 @@ func NewInformerFactory(
 	namespace string,
 	tags []string,
 ) (informers.SharedInformerFactory, error) {
-	labelsFromTags, errs := agenttags.ToLabels(tags)
+	labelsFromTags, errs := agenttags.LabelsFromTags(tags)
 	if len(errs) != 0 {
 		return nil, errors.Join(errs...)
 	}

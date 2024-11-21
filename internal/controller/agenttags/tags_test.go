@@ -3,13 +3,14 @@ package agenttags_test
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestToMap(t *testing.T) {
+func TestMapFromTags(t *testing.T) {
 	t.Parallel()
 
 	for i, test := range []struct {
@@ -63,7 +64,7 @@ func TestToMap(t *testing.T) {
 		test := test
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			t.Parallel()
-			m, errs := agenttags.ToMap(test.agentTags)
+			m, errs := agenttags.TagMapFromTags(test.agentTags)
 			if test.expectedErrs != nil {
 				assert.Equal(t, test.expectedErrs, errs)
 			}
@@ -73,27 +74,31 @@ func TestToMap(t *testing.T) {
 
 }
 
-func TestToLabels(t *testing.T) {
+func TestLabelsFromTags(t *testing.T) {
 	t.Parallel()
 
 	const invalidLabelErrMsg = "a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')"
 
-	for i, test := range []struct {
+	for _, test := range []struct {
+		name           string
 		agentTags      []string
 		expectedLabels map[string]string
 		expectedErrs   []error
 	}{
 		{
+			name:           "empty tags",
 			agentTags:      []string{},
 			expectedLabels: map[string]string{},
 		},
 		{
+			name:      "valid queue",
 			agentTags: []string{"queue=kubernetes"},
 			expectedLabels: map[string]string{
 				"tag.buildkite.com/queue": "kubernetes",
 			},
 		},
 		{
+			name:      "valid queue and arch",
 			agentTags: []string{"queue=kubernetes", "arch=arm64"},
 			expectedLabels: map[string]string{
 				"tag.buildkite.com/queue": "kubernetes",
@@ -101,6 +106,7 @@ func TestToLabels(t *testing.T) {
 			},
 		},
 		{
+			name:      "valid queue and arch (swapped order)",
 			agentTags: []string{"arch=arm64", "queue=kubernetes"},
 			expectedLabels: map[string]string{
 				"tag.buildkite.com/queue": "kubernetes",
@@ -108,21 +114,22 @@ func TestToLabels(t *testing.T) {
 			},
 		},
 		{
+			name:           "k8s rejects value",
 			agentTags:      []string{"queue=kubernetes=2"},
 			expectedLabels: map[string]string{},
 			expectedErrs:   []error{errors.New(invalidLabelErrMsg)},
 		},
 		{
+			name:      "empty value",
 			agentTags: []string{"queue="},
 			expectedLabels: map[string]string{
 				"tag.buildkite.com/queue": "",
 			},
 		},
 	} {
-		test := test
-		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()
-			labels, errs := agenttags.ToLabels(test.agentTags)
+			labels, errs := agenttags.LabelsFromTags(test.agentTags)
 			if test.expectedErrs != nil {
 				assert.Equal(t, test.expectedErrs, errs)
 			}
@@ -199,7 +206,7 @@ func TestJobTagsMatchAgentTags(t *testing.T) {
 
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			t.Parallel()
-			actualResult := agenttags.JobTagsMatchAgentTags(test.jobTags, test.agentTags)
+			actualResult := agenttags.JobTagsMatchAgentTags(maps.All(test.jobTags), test.agentTags)
 			assert.Equal(
 				t,
 				test.expectedResult,

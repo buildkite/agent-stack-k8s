@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"reflect"
 	"sync"
@@ -117,19 +118,14 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 	return clusteredJobResp(*resp), err
 }
 
-func toMapAndLogErrors(logger *zap.Logger, tags []string) map[string]string {
-	agentTags, tagErrs := agenttags.ToMap(tags)
-	if len(tagErrs) != 0 {
-		logger.Warn("making a map of agent tags", zap.Errors("err", tagErrs))
-	}
-	return agentTags
-}
-
 func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan error {
 	logger := m.logger.With(zap.String("org", m.cfg.Org))
 	errs := make(chan error, 1)
 
-	agentTags := toMapAndLogErrors(logger, m.cfg.Tags)
+	agentTags, tagErrs := agenttags.TagMapFromTags(m.cfg.Tags)
+	if len(tagErrs) != 0 {
+		logger.Warn("making a map of agent tags", zap.Errors("err", tagErrs))
+	}
 
 	var queue string
 	var ok bool
@@ -242,11 +238,14 @@ func jobHandlerWorker(ctx, staleCtx context.Context, logger *zap.Logger, handler
 			if j == nil {
 				return
 			}
-			jobTags := toMapAndLogErrors(logger, j.AgentQueryRules)
+			jobTags, tagErrs := agenttags.TagMapFromTags(j.AgentQueryRules)
+			if len(tagErrs) != 0 {
+				logger.Warn("making a map of job tags", zap.Errors("err", tagErrs))
+			}
 
 			// The api returns jobs that match ANY agent tags (the agent query rules)
 			// However, we can only acquire jobs that match ALL agent tags
-			if !agenttags.JobTagsMatchAgentTags(jobTags, agentTags) {
+			if !agenttags.JobTagsMatchAgentTags(maps.All(jobTags), agentTags) {
 				logger.Debug("skipping job because it did not match all tags", zap.Any("job", j))
 				continue
 			}
