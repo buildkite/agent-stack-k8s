@@ -78,7 +78,6 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("agent-token-secret", c.AgentTokenSecret)
 	enc.AddBool("debug", c.Debug)
 	enc.AddString("image", c.Image)
-	enc.AddString("imagePullyPolicy",c.ImagePullPolicy)
 	enc.AddDuration("job-ttl", c.JobTTL)
 	enc.AddDuration("poll-interval", c.PollInterval)
 	enc.AddDuration("stale-job-data-timeout", c.StaleJobDataTimeout)
