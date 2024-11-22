@@ -33,7 +33,6 @@ type Config struct {
 	AgentTokenSecret       string        `json:"agent-token-secret"       validate:"required"`
 	BuildkiteToken         string        `json:"buildkite-token"          validate:"required"`
 	Image                  string        `json:"image"                    validate:"required"`
-	ImagePullPolicy        string        `json:"imagePullPolicy'          validate:"required"`
 	MaxInFlight            int           `json:"max-in-flight"            validate:"min=0"`
 	Namespace              string        `json:"namespace"                validate:"required"`
 	Org                    string        `json:"org"                      validate:"required"`

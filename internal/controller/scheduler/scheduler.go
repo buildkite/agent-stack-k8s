@@ -587,7 +587,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			// /workspace.
 			Name:            CopyAgentContainerName,
 			Image:           w.cfg.Image,
-			ImagePullPolicy: corev1.PullAlways,
+			ImagePullPolicy: corev1.PullIfNotPresent,
 			Command:         []string{"cp"},
 			Args: []string{
 				"/usr/local/bin/buildkite-agent",
@@ -601,7 +601,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		},
 	}
 
-	// Pre-pull these images. (Note that even when specifying PullAlways,
+	// Pre-pull these images. (Note that even when specifying PullIfNotPresent,
 	// layers can still be cached on the node.)
 	preflightImagePulls := map[string]struct{}{}
 	for _, c := range podSpec.Containers {
@@ -625,7 +625,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		initContainers = append(initContainers, corev1.Container{
 			Name:            name,
 			Image:           image,
-			ImagePullPolicy: corev1.PullAlways,
+			ImagePullPolicy: corev1.PullIfNotPresent,
 			// `tini-static --version` is sorta like `true`, but:
 			// (a) always exists (we *just* copied it into /workspace), and
 			// (b) is statically compiled, so should be compatible with whatever
