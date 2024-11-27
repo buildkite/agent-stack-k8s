@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
@@ -18,7 +19,7 @@ import (
 // number of jobs currently running is below a limit.
 type MaxInFlight struct {
 	// MaxInFlight sets the upper limit on number of jobs running concurrently
-	// in the cluster. 0 means no limit.
+	// in the cluster. Must be at least 1.
 	MaxInFlight int
 
 	// Next handler in the chain.
@@ -39,6 +40,7 @@ func New(logger *zap.Logger, scheduler model.JobHandler, maxInFlight int) *MaxIn
 		// whole controller is still just starting up.
 		panic(fmt.Sprintf("maxInFlight <= 0 (got %d)", maxInFlight))
 	}
+	maxInFlightGauge.Set(float64(maxInFlight))
 	l := &MaxInFlight{
 		handler:     scheduler,
 		MaxInFlight: maxInFlight,
@@ -49,6 +51,9 @@ func New(logger *zap.Logger, scheduler model.JobHandler, maxInFlight int) *MaxIn
 		// Fill the bucket with tokens.
 		l.tokenBucket <- struct{}{}
 	}
+	// Rather than calling gauge.Set, get the number of tokens during scrape.
+	// Provide a callback for tokensAvailableGauge.
+	tokensAvailableFunc = func() int { return len(l.tokenBucket) }
 	return l
 }
 
@@ -76,6 +81,7 @@ func (l *MaxInFlight) RegisterInformer(ctx context.Context, factory informers.Sh
 func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 	// Block until there's a token in the bucket, or cancel if the job
 	// information becomes too stale.
+	start := time.Now()
 	select {
 	case <-ctx.Done():
 		return context.Cause(ctx)
@@ -84,11 +90,13 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 		return model.ErrStaleJob
 
 	case <-l.tokenBucket:
-		l.logger.Debug("token acquired",
-			zap.String("uuid", job.Uuid),
-			zap.Int("available-tokens", len(l.tokenBucket)),
-		)
+		// Continue below.
 	}
+	tokenWaitDurationHistogram.Observe(time.Since(start).Seconds())
+	l.logger.Debug("token acquired",
+		zap.String("uuid", job.Uuid),
+		zap.Int("available-tokens", len(l.tokenBucket)),
+	)
 
 	// We got a token from the bucket above! Proceed to schedule the pod.
 	// The next handler should be Scheduler (except in some tests).
@@ -96,9 +104,11 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 		zap.Stringer("handler", reflect.TypeOf(l.handler)),
 		zap.String("uuid", job.Uuid),
 	)
+	jobHandlerCallsCounter.Inc()
 	if err := l.handler.Handle(ctx, job); err != nil {
+		jobHandlerErrorCounter.Inc()
 		// Oh well. Return the token.
-		l.tryReturnToken()
+		l.tryReturnToken("Handle")
 
 		l.logger.Debug("next handler failed",
 			zap.String("uuid", job.Uuid),
@@ -111,6 +121,7 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 
 // OnAdd is called by k8s to inform us a resource is added.
 func (l *MaxInFlight) OnAdd(obj any, inInitialList bool) {
+	onAddEventCounter.Inc()
 	job, _ := obj.(*batchv1.Job)
 	if job == nil {
 		return
@@ -125,13 +136,14 @@ func (l *MaxInFlight) OnAdd(obj any, inInitialList bool) {
 	// Otherwise, try to take one, but don't block (in case the stack was
 	// restarted with a different limit).
 	if !model.JobFinished(job) {
-		l.tryTakeToken()
+		l.tryTakeToken("OnAdd")
 		l.logger.Debug("existing not-finished job discovered", zap.Int("tokens-available", len(l.tokenBucket)))
 	}
 }
 
 // OnUpdate is called by k8s to inform us a resource is updated.
 func (l *MaxInFlight) OnUpdate(prev, curr any) {
+	onUpdateEventCounter.Inc()
 	prevState, _ := prev.(*batchv1.Job)
 	currState, _ := curr.(*batchv1.Job)
 	if prevState == nil || currState == nil {
@@ -140,13 +152,14 @@ func (l *MaxInFlight) OnUpdate(prev, curr any) {
 	// Only take or return a token if the job state has *changed*.
 	// The only valid change is from not-finished to finished.
 	if !model.JobFinished(prevState) && model.JobFinished(currState) {
-		l.tryReturnToken()
+		l.tryReturnToken("OnUpdate")
 		l.logger.Debug("job state changed from not-finished to finished", zap.Int("tokens-available", len(l.tokenBucket)))
 	}
 }
 
 // OnDelete is called by k8s to inform us a resource is deleted.
 func (l *MaxInFlight) OnDelete(obj any) {
+	onDeleteEventCounter.Inc()
 	prevState, _ := obj.(*batchv1.Job)
 	if prevState == nil {
 		return
@@ -156,24 +169,28 @@ func (l *MaxInFlight) OnDelete(obj any) {
 	// If that state was finished, we've already returned a token.
 	// If that state was not-finished, we need to return a token now.
 	if !model.JobFinished(prevState) {
-		l.tryReturnToken()
+		l.tryReturnToken("OnDelete")
 		l.logger.Debug("not-finished job was deleted", zap.Int("tokens-available", len(l.tokenBucket)))
 	}
 }
 
 // tryTakeToken takes a token from the bucket, if one is available. It does not
 // block.
-func (l *MaxInFlight) tryTakeToken() {
+func (l *MaxInFlight) tryTakeToken(source string) {
 	select {
 	case <-l.tokenBucket:
+		// Success.
 	default:
+		tokenUnderflowCounter.WithLabelValues(source).Inc()
 	}
 }
 
 // tryReturnToken returns a token to the bucket, if not full. It does not block.
-func (l *MaxInFlight) tryReturnToken() {
+func (l *MaxInFlight) tryReturnToken(source string) {
 	select {
 	case l.tokenBucket <- struct{}{}:
+		// Success.
 	default:
+		tokenOverflowCounter.WithLabelValues(source).Inc()
 	}
 }

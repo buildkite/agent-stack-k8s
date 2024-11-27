@@ -83,6 +83,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"",
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)",
 	)
+	cmd.Flags().Uint16(
+		"prometheus-port",
+		0,
+		"Bind port to expose Prometheus /metrics; 0 disables it",
+	)
 	cmd.Flags().String("graphql-endpoint", "", "Buildkite GraphQL endpoint URL")
 
 	cmd.Flags().Duration(

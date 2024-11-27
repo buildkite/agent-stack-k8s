@@ -37,6 +37,7 @@ type Config struct {
 	Namespace              string        `json:"namespace"                validate:"required"`
 	Org                    string        `json:"org"                      validate:"required"`
 	Tags                   stringSlice   `json:"tags"                     validate:"min=1"`
+	PrometheusPort         uint16        `json:"prometheus-port"          validate:"omitempty"`
 	ProfilerAddress        string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
 	GraphQLEndpoint        string        `json:"graphql-endpoint"         validate:"omitempty"`
 	// Agent endpoint is set in agent-config.
@@ -89,6 +90,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 		return err
 	}
 	enc.AddString("profiler-address", c.ProfilerAddress)
+	enc.AddUint16("prometheus-port", c.PrometheusPort)
 	enc.AddString("cluster-uuid", c.ClusterUUID)
 	enc.AddBool("prohibit-kubernetes-plugin", c.ProhibitKubernetesPlugin)
 	if err := enc.AddArray("additional-redacted-vars", c.AdditionalRedactedVars); err != nil {
