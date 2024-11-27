@@ -2,6 +2,7 @@ package deduper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sync"
@@ -93,7 +94,14 @@ func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
 	if err := d.handler.Handle(ctx, job); err != nil {
 		jobHandlerErrorCounter.Inc()
 
-		// Couldn't schedule the job. Oh well. Record as not-in-flight.
+		if errors.Is(err, model.ErrDuplicateJob) {
+			// It already exists, despite our efforts to deduplicate it?
+			// Leave it marked as running then - just return.
+			return err
+		}
+
+		// Couldn't schedule the job, it's not a duplicate. Oh well.
+		// Record as not-in-flight.
 		numInFlight, ok := d.casa(uuid, false)
 		if ok {
 			jobsUnmarkedRunningCounter.WithLabelValues("Handle").Inc()
