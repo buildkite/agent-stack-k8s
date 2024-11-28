@@ -294,7 +294,7 @@ func jobHandlerWorker(
 			// Deduper handles deduplicating jobs before passing to the scheduler.
 			logger.Debug("passing job to next handler",
 				zap.Stringer("handler", reflect.TypeOf(handler)),
-				zap.String("uuid", j.Uuid),
+				zap.String("job-uuid", j.Uuid),
 			)
 			jobHandlerCallsCounter.Inc()
 			// The next handler operates under the main ctx, but can optionally

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
 	"go.uber.org/zap"
@@ -94,7 +95,7 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 	}
 	tokenWaitDurationHistogram.Observe(time.Since(start).Seconds())
 	l.logger.Debug("token acquired",
-		zap.String("uuid", job.Uuid),
+		zap.String("job-uuid", job.Uuid),
 		zap.Int("available-tokens", len(l.tokenBucket)),
 	)
 
@@ -102,7 +103,7 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 	// The next handler should be Scheduler (except in some tests).
 	l.logger.Debug("passing job to next handler",
 		zap.Stringer("handler", reflect.TypeOf(l.handler)),
-		zap.String("uuid", job.Uuid),
+		zap.String("job-uuid", job.Uuid),
 	)
 	jobHandlerCallsCounter.Inc()
 	if err := l.handler.Handle(ctx, job); err != nil {
@@ -111,7 +112,7 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 		l.tryReturnToken("Handle")
 
 		l.logger.Debug("next handler failed",
-			zap.String("uuid", job.Uuid),
+			zap.String("job-uuid", job.Uuid),
 			zap.Int("available-tokens", len(l.tokenBucket)),
 		)
 		return err
@@ -130,6 +131,7 @@ func (l *MaxInFlight) OnAdd(obj any, inInitialList bool) {
 		// After sync is finished, the limiter handler takes tokens directly.
 		return
 	}
+
 	// Before sync is finished: we're learning about existing jobs, so we should
 	// (try to) take tokens for unfinished jobs started by a previous controller.
 	// If it's added as already finished, no need to take a token for it.
@@ -137,7 +139,10 @@ func (l *MaxInFlight) OnAdd(obj any, inInitialList bool) {
 	// restarted with a different limit).
 	if !model.JobFinished(job) {
 		l.tryTakeToken("OnAdd")
-		l.logger.Debug("existing not-finished job discovered", zap.Int("tokens-available", len(l.tokenBucket)))
+		l.logger.Debug("existing not-finished job discovered",
+			zap.String("job-uuid", job.Labels[config.UUIDLabel]),
+			zap.Int("tokens-available", len(l.tokenBucket)),
+		)
 	}
 }
 
@@ -153,7 +158,10 @@ func (l *MaxInFlight) OnUpdate(prev, curr any) {
 	// The only valid change is from not-finished to finished.
 	if !model.JobFinished(prevState) && model.JobFinished(currState) {
 		l.tryReturnToken("OnUpdate")
-		l.logger.Debug("job state changed from not-finished to finished", zap.Int("tokens-available", len(l.tokenBucket)))
+		l.logger.Debug("job state changed from not-finished to finished",
+			zap.String("job-uuid", currState.Labels[config.UUIDLabel]),
+			zap.Int("tokens-available", len(l.tokenBucket)),
+		)
 	}
 }
 
@@ -170,7 +178,10 @@ func (l *MaxInFlight) OnDelete(obj any) {
 	// If that state was not-finished, we need to return a token now.
 	if !model.JobFinished(prevState) {
 		l.tryReturnToken("OnDelete")
-		l.logger.Debug("not-finished job was deleted", zap.Int("tokens-available", len(l.tokenBucket)))
+		l.logger.Debug("not-finished job was deleted",
+			zap.String("job-uuid", prevState.Labels[config.UUIDLabel]),
+			zap.Int("tokens-available", len(l.tokenBucket)),
+		)
 	}
 }
 

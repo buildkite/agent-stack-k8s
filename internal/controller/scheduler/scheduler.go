@@ -83,7 +83,7 @@ type worker struct {
 }
 
 func (w *worker) Handle(ctx context.Context, job model.Job) error {
-	logger := w.logger.With(zap.String("uuid", job.Uuid))
+	logger := w.logger.With(zap.String("job-uuid", job.Uuid))
 	logger.Info("creating job")
 
 	inputs, err := w.ParseJob(job.CommandJob)

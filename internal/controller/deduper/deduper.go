@@ -76,7 +76,7 @@ func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
 	if numInFlight, ok := d.casa(uuid, true); !ok {
 		jobsAlreadyRunningCounter.WithLabelValues("handle").Inc()
 		d.logger.Debug("job is already in-flight",
-			zap.String("uuid", job.Uuid),
+			zap.String("job-uuid", job.Uuid),
 			zap.Int("num-in-flight", numInFlight),
 		)
 		return model.ErrDuplicateJob
@@ -87,7 +87,7 @@ func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
 	// limiter or the scheudler.
 	d.logger.Debug("passing job to next handler",
 		zap.Stringer("handler", reflect.TypeOf(d.handler)),
-		zap.String("uuid", job.Uuid),
+		zap.String("job-uuid", job.Uuid),
 	)
 	jobHandlerCallsCounter.Inc()
 
@@ -110,7 +110,7 @@ func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
 		}
 
 		d.logger.Debug("next handler failed",
-			zap.String("uuid", job.Uuid),
+			zap.String("job-uuid", job.Uuid),
 			zap.Int("num-in-flight", numInFlight),
 			zap.Error(err),
 		)
@@ -192,7 +192,7 @@ func (d *Deduper) markRunning(id uuid.UUID, source string) {
 	if !ok {
 		jobsAlreadyRunningCounter.WithLabelValues(source).Inc()
 		d.logger.Debug("job was already in inFlight!",
-			zap.String("uuid", id.String()),
+			zap.String("job-uuid", id.String()),
 			zap.String("source", source),
 			zap.Int("num-in-flight", numInFlight),
 		)
@@ -201,7 +201,7 @@ func (d *Deduper) markRunning(id uuid.UUID, source string) {
 
 	jobsMarkedRunningCounter.WithLabelValues(source).Inc()
 	d.logger.Debug("added previous job to inFlight",
-		zap.String("uuid", id.String()),
+		zap.String("job-uuid", id.String()),
 		zap.String("source", source),
 		zap.Int("num-in-flight", numInFlight),
 	)
@@ -213,7 +213,7 @@ func (d *Deduper) unmarkRunning(id uuid.UUID, source string) {
 	numInFlight, ok := d.casa(id, false)
 	if !ok {
 		d.logger.Debug("job was already missing from inFlight!",
-			zap.String("uuid", id.String()),
+			zap.String("job-uuid", id.String()),
 			zap.String("source", source),
 			zap.Int("num-in-flight", numInFlight),
 		)
@@ -222,7 +222,7 @@ func (d *Deduper) unmarkRunning(id uuid.UUID, source string) {
 	}
 
 	d.logger.Debug("job removed from inFlight",
-		zap.String("uuid", id.String()),
+		zap.String("job-uuid", id.String()),
 		zap.String("source", source),
 		zap.Int("num-in-flight", numInFlight),
 	)
