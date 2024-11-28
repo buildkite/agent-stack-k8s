@@ -116,11 +116,18 @@ func (w *worker) Handle(ctx context.Context, job model.Job) error {
 	if err := w.createJob(ctx, kjob); err != nil {
 		jobCreateErrorCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
 
-		if kerrors.IsInvalid(err) {
-			logger.Warn("Job creation failed, failing job", zap.Error(err))
+		switch {
+		case kerrors.IsAlreadyExists(err):
+			logger.Warn("Job creation failed because it already exists", zap.Error(err))
+			return fmt.Errorf("%w: %w", model.ErrDuplicateJob, err)
+
+		case kerrors.IsInvalid(err):
+			logger.Warn("Job invalid, failing job on Buildkite", zap.Error(err))
 			return w.failJob(ctx, inputs, fmt.Sprintf("Kubernetes rejected the podSpec built by agent-stack-k8s: %v", err))
+
+		default:
+			return err
 		}
-		return err
 	}
 	jobCreateSuccessCounter.Inc()
 	jobEndToEndDurationHistogram.Observe(time.Since(job.QueriedAt).Seconds())
