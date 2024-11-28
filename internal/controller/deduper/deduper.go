@@ -74,7 +74,7 @@ func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
 		return err
 	}
 	if numInFlight, ok := d.casa(uuid, true); !ok {
-		jobsAlreadyRunningCounter.WithLabelValues("handle").Inc()
+		jobsAlreadyRunningCounter.WithLabelValues("Handle").Inc()
 		d.logger.Debug("job is already in-flight",
 			zap.String("job-uuid", job.Uuid),
 			zap.Int("num-in-flight", numInFlight),
@@ -128,7 +128,8 @@ func (d *Deduper) OnAdd(obj any, inInitialList bool) {
 		return
 	}
 
-	// Once the initial list is complete, we are told about new jobs in Handle.
+	// Once the initial list is complete, we are told about new jobs before they
+	// are created in Handle.
 	if !inInitialList {
 		return
 	}
@@ -137,31 +138,32 @@ func (d *Deduper) OnAdd(obj any, inInitialList bool) {
 		d.logger.Error("invalid UUID in job label", zap.Error(err))
 		return
 	}
-	d.markRunning(id, "OnAdd")
+
+	// Change state from not in-flight to in-flight.
+	numInFlight, ok := d.casa(id, true)
+	if !ok {
+		jobsAlreadyRunningCounter.WithLabelValues("OnAdd").Inc()
+		d.logger.Debug("job was already in inFlight!",
+			zap.String("uuid", id.String()),
+			zap.Int("num-in-flight", numInFlight),
+		)
+		return
+	}
+
+	jobsMarkedRunningCounter.WithLabelValues("OnAdd").Inc()
+	d.logger.Debug("added previous job to inFlight",
+		zap.String("uuid", id.String()),
+		zap.Int("num-in-flight", numInFlight),
+	)
 }
 
 // OnUpdate is called by k8s to inform us a resource is updated.
-func (d *Deduper) OnUpdate(prev, curr any) {
+func (d *Deduper) OnUpdate(any, any) {
 	onUpdateEventCounter.Inc()
-
-	prevState, _ := prev.(*batchv1.Job)
-	currState, _ := curr.(*batchv1.Job)
-	if prevState == nil || currState == nil {
-		return
-	}
-
-	// If this update is not a transition from not-finished to finished, skip
-	// the rest of the work.
-	if model.JobFinished(prevState) || !model.JobFinished(currState) {
-		return
-	}
-
-	id, err := uuid.Parse(currState.Labels[config.UUIDLabel])
-	if err != nil {
-		d.logger.Error("invalid UUID in job label", zap.Error(err))
-		return
-	}
-	d.unmarkRunning(id, "OnUpdate")
+	// Otherwise ignore this event. Although this can tell us that a job has
+	// gone from running to finished, the Job continues to exist in the cluster
+	// until it is cleaned up through ttlSecondsAfterFinished. Trying to
+	// create the same job again will fail.
 }
 
 // OnDelete is called by k8s to inform us a resource is deleted.
@@ -172,61 +174,29 @@ func (d *Deduper) OnDelete(prev any) {
 	if prevState == nil {
 		return
 	}
-	// If the last job state before delete was observed was finished, then
-	// OnUpdate should have already marked it as not-running.
-	if model.JobFinished(prevState) {
-		return
-	}
+	// Whether or not the job had become terminal, it's now deleted.
 	id, err := uuid.Parse(prevState.Labels[config.UUIDLabel])
 	if err != nil {
 		d.logger.Error("invalid UUID in job label", zap.Error(err))
 		return
 	}
-	d.unmarkRunning(id, "OnDelete")
-}
 
-// markRunning records a job as in-flight.
-func (d *Deduper) markRunning(id uuid.UUID, source string) {
-	// Change state from not in-flight to in-flight.
-	numInFlight, ok := d.casa(id, true)
-	if !ok {
-		jobsAlreadyRunningCounter.WithLabelValues(source).Inc()
-		d.logger.Debug("job was already in inFlight!",
-			zap.String("job-uuid", id.String()),
-			zap.String("source", source),
-			zap.Int("num-in-flight", numInFlight),
-		)
-		return
-	}
-
-	jobsMarkedRunningCounter.WithLabelValues(source).Inc()
-	d.logger.Debug("added previous job to inFlight",
-		zap.String("job-uuid", id.String()),
-		zap.String("source", source),
-		zap.Int("num-in-flight", numInFlight),
-	)
-}
-
-// unmarkRunning un-records a job as in-flight.
-func (d *Deduper) unmarkRunning(id uuid.UUID, source string) {
 	// Change state from in-flight to not in-flight.
 	numInFlight, ok := d.casa(id, false)
 	if !ok {
 		d.logger.Debug("job was already missing from inFlight!",
 			zap.String("job-uuid", id.String()),
-			zap.String("source", source),
 			zap.Int("num-in-flight", numInFlight),
 		)
-		jobsAlreadyNotRunningCounter.WithLabelValues(source).Inc()
+		jobsAlreadyNotRunningCounter.WithLabelValues("OnDelete").Inc()
 		return
 	}
 
 	d.logger.Debug("job removed from inFlight",
 		zap.String("job-uuid", id.String()),
-		zap.String("source", source),
 		zap.Int("num-in-flight", numInFlight),
 	)
-	jobsUnmarkedRunningCounter.WithLabelValues(source).Inc()
+	jobsUnmarkedRunningCounter.WithLabelValues("OnDelete").Inc()
 }
 
 // casa is an atomic compare-and-swap-like primitive.
