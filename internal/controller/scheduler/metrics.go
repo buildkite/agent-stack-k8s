@@ -58,6 +58,7 @@ var (
 var (
 	// Overridden to return len(jobCancelCheckers) by podWatcher.
 	jobCancelCheckerGaugeFunc = func() int { return 0 }
+	ignoredJobsGaugeFunc      = func() int { return 0 }
 
 	_ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: promNamespace,
@@ -65,6 +66,12 @@ var (
 		Name:      "num_job_cancel_checkers",
 		Help:      "Current count of job cancellation checkers",
 	}, func() float64 { return float64(jobCancelCheckerGaugeFunc()) })
+	_ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: promNamespace,
+		Subsystem: "pod_watcher",
+		Name:      "num_ignored_jobs",
+		Help:      "Current count of jobs ignored for podWatcher checks",
+	}, func() float64 { return float64(ignoredJobsGaugeFunc()) })
 
 	podWatcherOnAddEventCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,
