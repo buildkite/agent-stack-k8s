@@ -1,0 +1,11 @@
+steps:
+  - label: ":x:"
+    agents:
+      queue: "{{.queue}}"
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: buildkite/agent:latest plus some extra junk
+                command:
+                  - "true"

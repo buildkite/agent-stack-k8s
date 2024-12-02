@@ -1,18 +1,15 @@
 steps:
-  - label: ":stopwatch:"
+  - label: ":x:"
     agents:
       queue: "{{.queue}}"
     plugins:
       - kubernetes:
           podSpec:
             initContainers:
-              - name: snorlax
+              - name: broken
                 image: buildkite/agent:latest
                 command:
-                  - "/bin/sh"
-                args:
-                  - "-c"
-                  - "sleep 20"
+                  - "well this isn't going to work"
             containers: # one command needed to make a valid podspec
               - name: load-bearing
                 image: buildkite/agent:latest
