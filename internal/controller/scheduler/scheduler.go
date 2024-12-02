@@ -883,7 +883,7 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 	}
 
 	opts := w.cfg.AgentConfig.ControllerOptions()
-	if err := failJob(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, message, opts...); err != nil {
+	if err := acquireAndFail(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, message, opts...); err != nil {
 		w.logger.Error("failed to acquire and fail the job on Buildkite", zap.Error(err))
 		schedulerBuildkiteJobFailErrorsCounter.Inc()
 		return err
