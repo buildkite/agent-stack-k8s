@@ -26,6 +26,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		JobTTL:                       300 * time.Second,
 		ImagePullBackOffGracePeriod:  60 * time.Second,
 		JobCancelCheckerPollInterval: 10 * time.Second,
+		EmptyJobGracePeriod:          50 * time.Second,
 		PollInterval:                 5 * time.Second,
 		StaleJobDataTimeout:          10 * time.Second,
 		JobCreationConcurrency:       5,

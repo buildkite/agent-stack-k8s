@@ -34,6 +34,12 @@ rules:
       - pods/eviction
     verbs:
       - create
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - list
 ---
 apiVersion: v1
 kind: ServiceAccount

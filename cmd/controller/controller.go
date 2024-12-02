@@ -110,6 +110,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultJobCancelCheckerPollInterval,
 		"Controls the interval between job state queries while a pod is still Pending",
 	)
+	cmd.Flags().Duration(
+		"empty-job-grace-period",
+		config.DefaultEmptyJobGracePeriod,
+		"Duration after starting a Kubernetes job that the controller will wait before considering failing the job due to a missing pod (e.g. when the podSpec specifies a missing service account)",
+	)
 	cmd.Flags().Bool(
 		"prohibit-kubernetes-plugin",
 		false,

@@ -42,7 +42,7 @@ type podWatcher struct {
 	// Jobs that we've failed, cancelled, or were found to be in a terminal
 	// state.
 	ignoredJobsMu sync.RWMutex
-	ignoredJob    map[uuid.UUID]struct{}
+	ignoredJobs   map[uuid.UUID]struct{}
 
 	// The job cancel checkers query the job state every so often.
 	jobCancelCheckerInterval time.Duration
@@ -95,14 +95,14 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, cfg *config.Con
 		cfg:                         cfg,
 		imagePullBackOffGracePeriod: imagePullBackOffGracePeriod,
 		jobCancelCheckerInterval:    jobCancelCheckerInterval,
-		ignoredJob:                  make(map[uuid.UUID]struct{}),
+		ignoredJobs:                 make(map[uuid.UUID]struct{}),
 		cancelCheckerChs:            make(map[uuid.UUID]*onceChan),
 		agentTags:                   agentTags,
 	}
-	ignoredJobsGaugeFunc = func() int {
+	podWatcherIgnoredJobsGaugeFunc = func() int {
 		pw.ignoredJobsMu.RLock()
 		defer pw.ignoredJobsMu.RUnlock()
-		return len(pw.ignoredJob)
+		return len(pw.ignoredJobs)
 	}
 	jobCancelCheckerGaugeFunc = func() int {
 		pw.cancelCheckerChsMu.Lock()
@@ -530,19 +530,19 @@ func (w *podWatcher) jobCancelChecker(ctx context.Context, stopCh <-chan struct{
 func (w *podWatcher) ignoreJob(jobUUID uuid.UUID) {
 	w.ignoredJobsMu.Lock()
 	defer w.ignoredJobsMu.Unlock()
-	w.ignoredJob[jobUUID] = struct{}{}
+	w.ignoredJobs[jobUUID] = struct{}{}
 }
 
 func (w *podWatcher) unignoreJob(jobUUID uuid.UUID) {
 	w.ignoredJobsMu.Lock()
 	defer w.ignoredJobsMu.Unlock()
-	delete(w.ignoredJob, jobUUID)
+	delete(w.ignoredJobs, jobUUID)
 }
 
 func (w *podWatcher) isIgnored(jobUUID uuid.UUID) bool {
 	w.ignoredJobsMu.RLock()
 	defer w.ignoredJobsMu.RUnlock()
-	_, ignore := w.ignoredJob[jobUUID]
+	_, ignore := w.ignoredJobs[jobUUID]
 	return ignore
 }
 

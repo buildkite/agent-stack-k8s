@@ -4,6 +4,7 @@ image: my.registry.dev/buildkite-agent:latest
 job-ttl: 5m
 image-pull-backoff-grace-period: 60s
 job-cancel-checker-poll-interval: 10s
+empty-job-grace-period: 50s
 poll-interval: 5s
 stale-job-data-timeout: 10s
 job-creation-concurrency: 5

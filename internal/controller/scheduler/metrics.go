@@ -53,12 +53,89 @@ var (
 	})
 )
 
+// Job watcher metrics
+var (
+	// Overridden by NewJobWatcher
+	jobsStallingGaugeFunc          = func() int { return 0 }
+	jobWatcherIgnoredJobsGaugeFunc = func() int { return 0 }
+
+	_ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "num_stalling_jobs",
+		Help:      "Current number of jobs that are running but have no pods",
+	}, func() float64 { return float64(jobsStallingGaugeFunc()) })
+	_ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "num_ignored_jobs",
+		Help:      "Current count of jobs ignored for jobWatcher checks",
+	}, func() float64 { return float64(jobWatcherIgnoredJobsGaugeFunc()) })
+
+	jobWatcherOnAddEventCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "onadd_events_total",
+		Help:      "Count of OnAdd informer events",
+	})
+	jobWatcherOnUpdateEventCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "onupdate_events_total",
+		Help:      "Count of OnUpdate informer events",
+	})
+	jobWatcherOnDeleteEventCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "ondelete_events_total",
+		Help:      "Count of OnDelete informer events",
+	})
+
+	jobWatcherFinishedWithoutPodCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "jobs_finished_without_pod_total",
+		Help:      "Count of jobs that entered a terminal state (Failed or Succeeded) without a pod",
+	})
+	jobWatcherStalledWithoutPodCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "jobs_stalled_without_pod_total",
+		Help:      "Count of jobs that ran for too long without a pod",
+	})
+
+	jobWatcherBuildkiteJobFailsCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "jobs_failed_on_buildkite_total",
+		Help:      "Count of jobs that jobWatcher successfully acquired and failed on Buildkite",
+	})
+	jobWatcherBuildkiteJobFailErrorsCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "job_fail_on_buildkite_errors_total",
+		Help:      "Count of errors when jobWatcher tried to acquire and fail a job on Buildkite",
+	})
+	jobWatcherJobCleanupsCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "cleanups_total",
+		Help:      "Count of stalled jobs successfully cleaned up",
+	})
+	jobWatcherJobCleanupErrorsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "cleanup_errors_total",
+		Help:      "Count of errors during attempts to clean up a stalled job",
+	}, []string{"reason"})
+)
+
 // Pod watcher metrics
 
 var (
 	// Overridden to return len(jobCancelCheckers) by podWatcher.
-	jobCancelCheckerGaugeFunc = func() int { return 0 }
-	ignoredJobsGaugeFunc      = func() int { return 0 }
+	jobCancelCheckerGaugeFunc      = func() int { return 0 }
+	podWatcherIgnoredJobsGaugeFunc = func() int { return 0 }
 
 	_ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: promNamespace,
@@ -71,7 +148,7 @@ var (
 		Subsystem: "pod_watcher",
 		Name:      "num_ignored_jobs",
 		Help:      "Current count of jobs ignored for podWatcher checks",
-	}, func() float64 { return float64(ignoredJobsGaugeFunc()) })
+	}, func() float64 { return float64(podWatcherIgnoredJobsGaugeFunc()) })
 
 	podWatcherOnAddEventCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,
@@ -151,12 +228,12 @@ var (
 		Namespace: promNamespace,
 		Subsystem: "completion_watcher",
 		Name:      "cleanups_total",
-		Help:      "Count of jobs successfully cleaned up",
+		Help:      "Count of jobs with finished agents successfully cleaned up",
 	})
 	completionWatcherJobCleanupErrorsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: promNamespace,
 		Subsystem: "completion_watcher",
 		Name:      "cleanup_errors_total",
-		Help:      "Count of errors during attempts to clean up a job",
+		Help:      "Count of errors during attempts to clean up a job with a finished agent",
 	}, []string{"reason"})
 )
