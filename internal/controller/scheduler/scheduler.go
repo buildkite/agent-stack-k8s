@@ -30,7 +30,6 @@ import (
 )
 
 const (
-	defaultTermGracePeriodSeconds     = 60
 	agentTokenKey                     = "BUILDKITE_AGENT_TOKEN"
 	AgentContainerName                = "agent"
 	CopyAgentContainerName            = "copy-agent"

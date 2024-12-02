@@ -6,6 +6,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 
 	"go.uber.org/zap"
+
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,9 +17,18 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+const defaultTermGracePeriodSeconds = 60
+
 type completionsWatcher struct {
 	logger *zap.Logger
 	k8s    kubernetes.Interface
+
+	// This is the context passed to RegisterInformer.
+	// It's being stored here (grrrr!) because the k8s ResourceEventHandler
+	// interface doesn't have context args. (Working around an interface in a
+	// library outside of our control is a carve-out from the usual rule.)
+	// The context is needed to ensure goroutines are cleaned up.
+	resourceEventHandlerCtx context.Context
 }
 
 func NewPodCompletionWatcher(logger *zap.Logger, k8s kubernetes.Interface) *completionsWatcher {
@@ -30,14 +40,12 @@ func NewPodCompletionWatcher(logger *zap.Logger, k8s kubernetes.Interface) *comp
 }
 
 // Creates a Pods informer and registers the handler on it
-func (w *completionsWatcher) RegisterInformer(
-	ctx context.Context,
-	factory informers.SharedInformerFactory,
-) error {
+func (w *completionsWatcher) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
 	informer := factory.Core().V1().Pods().Informer()
 	if _, err := informer.AddEventHandler(w); err != nil {
 		return err
 	}
+	w.resourceEventHandlerCtx = ctx // see note on field
 	go factory.Start(ctx.Done())
 	return nil
 }
@@ -49,7 +57,7 @@ func (w *completionsWatcher) OnDelete(obj any) {}
 func (w *completionsWatcher) OnAdd(obj any, isInInitialList bool) {
 	completionWatcherOnAddEventCounter.Inc()
 	pod := obj.(*v1.Pod)
-	w.cleanupSidecars(pod)
+	w.cleanupSidecars(w.resourceEventHandlerCtx, pod)
 }
 
 func (w *completionsWatcher) OnUpdate(old any, new any) {
@@ -62,7 +70,7 @@ func (w *completionsWatcher) OnUpdate(old any, new any) {
 	}
 
 	newPod := new.(*v1.Pod)
-	w.cleanupSidecars(newPod)
+	w.cleanupSidecars(w.resourceEventHandlerCtx, newPod)
 }
 
 // cleanupSidecars first checks if the container status of the agent container
@@ -70,7 +78,7 @@ func (w *completionsWatcher) OnUpdate(old any, new any) {
 // it with an ActiveDeadlineSeconds value (defaultTermGracePeriodSeconds).
 // (So this is not actually sidecar-specific, but is needed because sidecars
 // would otherwise cause the pod to continue running.)
-func (w *completionsWatcher) cleanupSidecars(pod *v1.Pod) {
+func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *v1.Pod) {
 	terminated := getTermination(pod)
 	if terminated == nil {
 		return
@@ -82,7 +90,6 @@ func (w *completionsWatcher) cleanupSidecars(pod *v1.Pod) {
 	)
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		ctx := context.TODO()
 		job, err := w.k8s.BatchV1().Jobs(pod.Namespace).Get(ctx, pod.Labels["job-name"], metav1.GetOptions{})
 		if err != nil {
 			return err
