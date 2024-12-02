@@ -91,6 +91,16 @@ func AddConfigFlags(cmd *cobra.Command) {
 	cmd.Flags().String("graphql-endpoint", "", "Buildkite GraphQL endpoint URL")
 
 	cmd.Flags().Duration(
+		"stale-job-data-timeout",
+		config.DefaultStaleJobDataTimeout,
+		"Duration after querying jobs in Buildkite that the data is considered valid",
+	)
+	cmd.Flags().Int(
+		"job-creation-concurrency",
+		config.DefaultJobCreationConcurrency,
+		"Number of concurrent goroutines to run for converting Buildkite jobs into Kubernetes jobs",
+	)
+	cmd.Flags().Duration(
 		"image-pull-backoff-grace-period",
 		config.DefaultImagePullBackOffGracePeriod,
 		"Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled)",

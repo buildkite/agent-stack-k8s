@@ -14,6 +14,7 @@ import (
 	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
@@ -46,12 +47,12 @@ func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, er
 
 	// Default StaleJobDataTimeout to 10s.
 	if cfg.StaleJobDataTimeout <= 0 {
-		cfg.StaleJobDataTimeout = 10 * time.Second
+		cfg.StaleJobDataTimeout = config.DefaultStaleJobDataTimeout
 	}
 
 	// Default CreationConcurrency to 5.
 	if cfg.JobCreationConcurrency <= 0 {
-		cfg.JobCreationConcurrency = 5
+		cfg.JobCreationConcurrency = config.DefaultJobCreationConcurrency
 	}
 
 	return &Monitor{

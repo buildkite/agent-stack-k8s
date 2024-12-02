@@ -15,8 +15,10 @@ const (
 	BuildURLAnnotation                  = "buildkite.com/build-url"
 	JobURLAnnotation                    = "buildkite.com/job-url"
 	DefaultNamespace                    = "default"
+	DefaultStaleJobDataTimeout          = 10 * time.Second
 	DefaultImagePullBackOffGracePeriod  = 30 * time.Second
 	DefaultJobCancelCheckerPollInterval = 5 * time.Second
+	DefaultJobCreationConcurrency       = 5
 )
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
