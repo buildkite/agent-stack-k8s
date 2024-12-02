@@ -131,8 +131,10 @@ func (w *podWatcher) OnDelete(maybePod any) {
 		return
 	}
 
-	jobUUID, _, err := w.jobUUIDAndLogger(pod)
+	log := loggerForObject(w.logger, pod)
+	jobUUID, err := jobUUIDForObject(pod)
 	if err != nil {
+		log.Error("Job UUID label missing or invalid for pod")
 		return
 	}
 
@@ -171,8 +173,10 @@ func (w *podWatcher) OnUpdate(oldMaybePod, newMaybePod any) {
 }
 
 func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
-	jobUUID, log, err := w.jobUUIDAndLogger(pod)
+	log := loggerForObject(w.logger, pod)
+	jobUUID, err := jobUUIDForObject(pod)
 	if err != nil {
+		log.Error("Job UUID label missing or invalid for pod")
 		return
 	}
 
@@ -192,37 +196,6 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 	// Check whether the agent container has started yet, and start or stop the
 	// job cancel checker accordingly.
 	w.startOrStopJobCancelChecker(ctx, log, pod, jobUUID)
-}
-
-func (w *podWatcher) jobUUIDAndLogger(pod *corev1.Pod) (uuid.UUID, *zap.Logger, error) {
-	log := w.logger.With(zap.String("namespace", pod.Namespace), zap.String("podName", pod.Name))
-
-	rawJobUUID, exists := pod.Labels[config.UUIDLabel]
-	if !exists {
-		log.Debug("Job UUID label not present. Skipping.")
-		return uuid.UUID{}, log, errors.New("no job UUID label")
-	}
-
-	jobUUID, err := uuid.Parse(rawJobUUID)
-	if err != nil {
-		log.Warn("Job UUID label was not a UUID!", zap.String("jobUUID", rawJobUUID))
-		return uuid.UUID{}, log, err
-	}
-
-	log = log.With(zap.String("jobUUID", jobUUID.String()))
-
-	// Check that tags match - there may be pods around that were created by
-	// another controller using different tags.
-	if !agenttags.JobTagsMatchAgentTags(agenttags.ScanLabels(pod.Labels), w.agentTags) {
-		log.Debug("Pod labels do not match agent tags for this controller. Skipping.")
-		return uuid.UUID{}, log, errors.New("pod labels do not match agent tags for this controller")
-	}
-
-	if w.isIgnored(jobUUID) {
-		log.Debug("Job already failed, canceled, or wasn't in a failable/cancellable state")
-		return jobUUID, log, errors.New("job ignored")
-	}
-	return jobUUID, log, nil
 }
 
 func (w *podWatcher) failOnImagePullFailure(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
