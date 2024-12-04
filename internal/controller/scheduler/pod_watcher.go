@@ -18,6 +18,7 @@ import (
 
 	"github.com/Khan/genqlient/graphql"
 	"github.com/google/uuid"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -62,10 +63,12 @@ type podWatcher struct {
 
 // NewPodWatcher creates an informer that does various things with pods and
 // Buildkite jobs:
-//   - If a container stays in ImagePullBackOff state for too long, the Buildkite
+//   - If an init container fails, the BK Agent REST API will be used to fail
+//     the job (since an agent hasn't run yet).
+//   - If a container stays in ImagePullBackOff state for too long, the BK
 //     Agent REST API will be used to fail the job and the pod will be evicted.
 //   - If a container stays in ImagePullBackOff, and the pod somehow got through
-//     all the init containers (including the image pull checks...) the Buildkite
+//     all the init containers (including the image pull checks...) the BK
 //     GraphQL API will be used to cancel the job instead.
 //   - If a pod is pending, every so often Buildkite will be checked to see if
 //     the corresponding job has been cancelled so that the pod can be evicted
@@ -129,6 +132,9 @@ func (w *podWatcher) OnDelete(maybePod any) {
 	}
 
 	w.stopJobCancelChecker(jobUUID)
+
+	// The pod is gone, so we can stop ignoring it (if it comes back).
+	w.unignoreJob(jobUUID)
 }
 
 func (w *podWatcher) OnAdd(maybePod any, isInInitialList bool) {
@@ -165,9 +171,13 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 		return
 	}
 
-	// Check for a container stuck in ImagePullBackOff, and fail or cancel
-	// the job accordingly.
-	w.cancelImagePullBackOff(ctx, log, pod, jobUUID)
+	// Check for an init container that failed for any reason.
+	// (Note: users can define their own init containers through podSpec.)
+	w.failOnInitContainerFailure(ctx, log, pod, jobUUID)
+
+	// Check for a container stuck in ImagePullBackOff or InvalidImageName,
+	// and fail or cancel the job accordingly.
+	w.failOnImagePullFailure(ctx, log, pod, jobUUID)
 
 	// Check whether the agent container has started yet, and start or stop the
 	// job cancel checker accordingly.
@@ -208,47 +218,65 @@ func (w *podWatcher) jobUUIDAndLogger(pod *corev1.Pod) (uuid.UUID, *zap.Logger, 
 	return jobUUID, log, nil
 }
 
-func (w *podWatcher) cancelImagePullBackOff(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
-	log.Debug("Checking pod for ImagePullBackOff")
+func (w *podWatcher) failOnImagePullFailure(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
+	log.Debug("Checking pod containers for ImagePullBackOff or InvalidImageName")
 
-	if pod.Status.StartTime == nil {
-		// Status could be unpopulated, or it hasn't started yet.
-		return
-	}
-	startedAt := pod.Status.StartTime.Time
-	if startedAt.IsZero() || time.Since(startedAt) < w.imagePullBackOffGracePeriod {
-		// Not started yet, or started recently
-		return
-	}
+	failImmediately := false
 
 	images := make(map[string]struct{})
 
 	// If any init container fails to pull, whether it's one we added
 	// specifically to check for pull failure, the pod won't run.
 	for _, containerStatus := range pod.Status.InitContainerStatuses {
-		if !shouldCancel(&containerStatus) {
+		waiting := containerStatus.State.Waiting
+		if waiting == nil {
 			continue
 		}
-		images[containerStatus.Image] = struct{}{}
+		switch waiting.Reason {
+		case "ImagePullBackOff":
+			images[containerStatus.Image] = struct{}{}
+		case "InvalidImageName":
+			images[containerStatus.Image] = struct{}{}
+			failImmediately = true
+		}
 	}
 
 	// These containers only run after the init containers have run.
 	// Theoretically this could still happen even if all the init containers
 	// successfully pulled.
 	for _, containerStatus := range pod.Status.ContainerStatuses {
-		if !shouldCancel(&containerStatus) {
+		waiting := containerStatus.State.Waiting
+		if waiting == nil {
 			continue
 		}
-		if !isSystemContainer(&containerStatus) {
-			log.Info("Ignoring container during ImagePullBackOff watch.", zap.String("name", containerStatus.Name))
-			continue
+		switch waiting.Reason {
+		case "ImagePullBackOff":
+			if !isSystemContainer(&containerStatus) {
+				log.Info("Ignoring container during ImagePullBackOff watch.", zap.String("name", containerStatus.Name))
+				continue
+			}
+			images[containerStatus.Image] = struct{}{}
+		case "InvalidImageName":
+			images[containerStatus.Image] = struct{}{}
+			failImmediately = true
 		}
-		images[containerStatus.Image] = struct{}{}
 	}
 
 	if len(images) == 0 {
 		// All's well with the world.
 		return
+	}
+
+	if !failImmediately { // apply the grace period
+		if pod.Status.StartTime == nil {
+			// Status could be unpopulated, or it hasn't started yet.
+			return
+		}
+		startedAt := pod.Status.StartTime.Time
+		if startedAt.IsZero() || time.Since(startedAt) < w.imagePullBackOffGracePeriod {
+			// Not started yet, or started recently
+			return
+		}
 	}
 
 	// Get the current job state from BK.
@@ -270,7 +298,16 @@ func (w *podWatcher) cancelImagePullBackOff(ctx context.Context, log *zap.Logger
 	case api.JobStatesScheduled:
 		// We can acquire it and fail it ourselves.
 		log.Info("One or more job containers are in ImagePullBackOff. Failing.")
-		w.failJob(ctx, log, pod, jobUUID, images)
+		message := w.formatImagePullFailureMessage(images)
+		if err := w.failJob(ctx, log, pod, jobUUID, message); errors.Is(err, agentcore.ErrJobAcquisitionRejected) {
+			// If the error was because BK rejected the acquisition(?), then its probably moved
+			// on to a state where we need to cancel instead.
+			log.Info("Attempting to cancel job instead")
+			w.cancelJob(ctx, log, pod, jobUUID)
+			return
+		}
+		// Also evict the pod, because it won't die on its own.
+		w.evictPod(ctx, log, pod, jobUUID)
 
 	case api.JobStatesAccepted, api.JobStatesAssigned, api.JobStatesRunning:
 		// An agent is already doing something with the job - now canceling
@@ -293,14 +330,61 @@ func (w *podWatcher) cancelImagePullBackOff(ctx context.Context, log *zap.Logger
 	}
 }
 
-func (w *podWatcher) failJob(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID, images map[string]struct{}) {
-	agentToken, err := fetchAgentToken(ctx, w.logger, w.k8s, w.cfg.Namespace, w.cfg.AgentTokenSecret)
-	if err != nil {
-		log.Error("Couldn't fetch agent token in order to fail the job", zap.Error(err))
+func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
+	log.Debug("Checking pod for failed init containers")
+
+	containerFails := make(map[string]*corev1.ContainerStateTerminated)
+
+	// If any init container fails, whether it's one we added specifically to
+	// check for pull failure or not, the pod won't run.
+	for _, containerStatus := range pod.Status.InitContainerStatuses {
+		term := containerStatus.State.Terminated
+		if term == nil || term.ExitCode == 0 { // not terminated, or succeeded
+			continue
+		}
+		containerFails[containerStatus.Name] = term
+	}
+
+	if len(containerFails) == 0 {
+		// All's well with the world.
 		return
 	}
 
-	// Format the failed images into a nice list.
+	// Attempt to acquire it and fail it ourselves.
+	// Don't bother checking the current BK state of the job in advance, since
+	// it should always be api.JobStatesScheduled. Init containers must all
+	// succeed before the agent container starts.
+	// If it's not in Scheduled state, acquire will fail, but also that would
+	// imply something weird is going on with the job (another agent?) and we
+	// probably shouldn't interfere.
+	log.Info("One or more init containers failed. Failing.")
+	message := w.formatInitContainerFails(containerFails)
+	// failJob logs on error - that's sufficient error handling.
+	_ = w.failJob(ctx, log, pod, jobUUID, message)
+	// No need to fall back to cancelling if acquire failed - see above.
+	// No need to evict, the pod should be considered failed already.
+}
+
+func (w *podWatcher) formatInitContainerFails(terms map[string]*corev1.ContainerStateTerminated) string {
+	keys := make([]string, 0, len(terms))
+	for k := range terms {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+
+	tw := table.NewWriter()
+	tw.SetStyle(table.StyleColoredDark)
+	tw.AppendHeader(table.Row{"CONTAINER", "EXIT CODE", "SIGNAL", "REASON", "MESSAGE"})
+	tw.AppendSeparator()
+	for _, key := range keys {
+		term := terms[key]
+		tw.AppendRow(table.Row{key, term.ExitCode, term.Signal, term.Reason, term.Message})
+	}
+	return "The following init containers failed:\n\n" + tw.Render()
+}
+
+func (w *podWatcher) formatImagePullFailureMessage(images map[string]struct{}) string {
+	// Format the failed images into a nice sorted list.
 	imagesList := make([]string, 0, len(images))
 	for image := range images {
 		imagesList = append(imagesList, image)
@@ -309,27 +393,32 @@ func (w *podWatcher) failJob(ctx context.Context, log *zap.Logger, pod *corev1.P
 	var message strings.Builder
 	message.WriteString("The following container images couldn't be pulled:\n")
 	for _, image := range imagesList {
-		fmt.Fprintf(&message, " * %s\n", image)
+		fmt.Fprintf(&message, " * %q\n", image)
+	}
+	return message.String()
+}
+
+func (w *podWatcher) failJob(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID, message string) error {
+	agentToken, err := fetchAgentToken(ctx, w.logger, w.k8s, w.cfg.Namespace, w.cfg.AgentTokenSecret)
+	if err != nil {
+		log.Error("Couldn't fetch agent token in order to fail the job", zap.Error(err))
+		return err
 	}
 
 	// Tags are required order to connect the agent.
 	tags := agenttags.TagsFromLabels(pod.Labels)
 	opts := w.cfg.AgentConfig.ControllerOptions()
 
-	if err := failJob(ctx, w.logger, agentToken, jobUUID.String(), tags, message.String(), opts...); err != nil {
+	if err := failJob(ctx, w.logger, agentToken, jobUUID.String(), tags, message, opts...); err != nil {
 		log.Error("Couldn't fail the job", zap.Error(err))
 		podWatcherBuildkiteJobFailErrorsCounter.Inc()
-		// If the error was because BK rejected the acquisition, then its moved
-		// on to a state where we need to cancel instead.
-		if errors.Is(err, agentcore.ErrJobAcquisitionRejected) {
-			log.Info("Attempting to cancel job instead")
-			w.cancelJob(ctx, log, pod, jobUUID)
-		}
-		return
+		return err
 	}
 	podWatcherBuildkiteJobFailsCounter.Inc()
+	return nil
+}
 
-	// Let's also evict the pod (request graceful termination).
+func (w *podWatcher) evictPod(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
 	eviction := &policyv1.Eviction{
 		ObjectMeta: pod.ObjectMeta,
 	}
@@ -361,11 +450,8 @@ func (w *podWatcher) cancelJob(ctx context.Context, log *zap.Logger, pod *corev1
 	}
 	podWatcherBuildkiteJobCancelsCounter.Inc()
 
-	// Evicting the pod might prevent the agent from logging its last-gasp
-	// "it could be ImagePullBackOff" message.
-	// On the other hand, not evicting the pod will probably leave it running
-	// indefinitely if there are any sidecars.
-	// TODO: experiment with adding eviction here.
+	// Note that evicting the pod might prevent the agent from logging its
+	// last-gasp "it could be ImagePullBackOff" message.
 
 	// We can avoid repeating the GraphQL queries to fetch and cancel the job
 	// (between cancelling and Kubernetes cleaning up the pod) if we got here.
@@ -470,6 +556,12 @@ func (w *podWatcher) ignoreJob(jobUUID uuid.UUID) {
 	w.ignoreJobs[jobUUID] = struct{}{}
 }
 
+func (w *podWatcher) unignoreJob(jobUUID uuid.UUID) {
+	w.ignoreJobsMu.Lock()
+	defer w.ignoreJobsMu.Unlock()
+	delete(w.ignoreJobs, jobUUID)
+}
+
 // onceChan stores a channel and a [sync.Once] to be used for closing the
 // channel at most once.
 type onceChan struct {
@@ -482,11 +574,6 @@ func (oc *onceChan) closeOnce() {
 		return
 	}
 	oc.once.Do(func() { close(oc.ch) })
-}
-
-func shouldCancel(containerStatus *corev1.ContainerStatus) bool {
-	return containerStatus.State.Waiting != nil &&
-		containerStatus.State.Waiting.Reason == "ImagePullBackOff"
 }
 
 // All container-\d containers will have the agent installed as their PID 1.
