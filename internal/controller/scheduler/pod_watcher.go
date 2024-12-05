@@ -41,8 +41,8 @@ type podWatcher struct {
 
 	// Jobs that we've failed, cancelled, or were found to be in a terminal
 	// state.
-	ignoreJobsMu sync.RWMutex
-	ignoreJobs   map[uuid.UUID]struct{}
+	ignoredJobsMu sync.RWMutex
+	ignoredJobs   map[uuid.UUID]struct{}
 
 	// The job cancel checkers query the job state every so often.
 	jobCancelCheckerInterval time.Duration
@@ -95,9 +95,14 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, cfg *config.Con
 		cfg:                         cfg,
 		imagePullBackOffGracePeriod: imagePullBackOffGracePeriod,
 		jobCancelCheckerInterval:    jobCancelCheckerInterval,
-		ignoreJobs:                  make(map[uuid.UUID]struct{}),
+		ignoredJobs:                 make(map[uuid.UUID]struct{}),
 		cancelCheckerChs:            make(map[uuid.UUID]*onceChan),
 		agentTags:                   agentTags,
+	}
+	podWatcherIgnoredJobsGaugeFunc = func() int {
+		pw.ignoredJobsMu.RLock()
+		defer pw.ignoredJobsMu.RUnlock()
+		return len(pw.ignoredJobs)
 	}
 	jobCancelCheckerGaugeFunc = func() int {
 		pw.cancelCheckerChsMu.Lock()
@@ -126,8 +131,10 @@ func (w *podWatcher) OnDelete(maybePod any) {
 		return
 	}
 
-	jobUUID, _, err := w.jobUUIDAndLogger(pod)
+	log := loggerForObject(w.logger, pod)
+	jobUUID, err := jobUUIDForObject(pod)
 	if err != nil {
+		log.Error("Job UUID label missing or invalid for pod")
 		return
 	}
 
@@ -166,14 +173,21 @@ func (w *podWatcher) OnUpdate(oldMaybePod, newMaybePod any) {
 }
 
 func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
-	jobUUID, log, err := w.jobUUIDAndLogger(pod)
+	log := loggerForObject(w.logger, pod)
+	jobUUID, err := jobUUIDForObject(pod)
 	if err != nil {
+		log.Error("Job UUID label missing or invalid for pod")
+		return
+	}
+
+	if w.isIgnored(jobUUID) {
+		log.Debug("Job is currently ignored for podWatcher checks")
 		return
 	}
 
 	// Check for an init container that failed for any reason.
 	// (Note: users can define their own init containers through podSpec.)
-	w.failOnInitContainerFailure(ctx, log, pod, jobUUID)
+	w.failOnInitContainerFailure(ctx, log, pod)
 
 	// Check for a container stuck in ImagePullBackOff or InvalidImageName,
 	// and fail or cancel the job accordingly.
@@ -182,40 +196,6 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 	// Check whether the agent container has started yet, and start or stop the
 	// job cancel checker accordingly.
 	w.startOrStopJobCancelChecker(ctx, log, pod, jobUUID)
-}
-
-func (w *podWatcher) jobUUIDAndLogger(pod *corev1.Pod) (uuid.UUID, *zap.Logger, error) {
-	log := w.logger.With(zap.String("namespace", pod.Namespace), zap.String("podName", pod.Name))
-
-	rawJobUUID, exists := pod.Labels[config.UUIDLabel]
-	if !exists {
-		log.Debug("Job UUID label not present. Skipping.")
-		return uuid.UUID{}, log, errors.New("no job UUID label")
-	}
-
-	jobUUID, err := uuid.Parse(rawJobUUID)
-	if err != nil {
-		log.Warn("Job UUID label was not a UUID!", zap.String("jobUUID", rawJobUUID))
-		return uuid.UUID{}, log, err
-	}
-
-	log = log.With(zap.String("jobUUID", jobUUID.String()))
-
-	// Check that tags match - there may be pods around that were created by
-	// another controller using different tags.
-	if !agenttags.JobTagsMatchAgentTags(agenttags.ScanLabels(pod.Labels), w.agentTags) {
-		log.Debug("Pod labels do not match agent tags for this controller. Skipping.")
-		return uuid.UUID{}, log, errors.New("pod labels do not match agent tags for this controller")
-	}
-
-	w.ignoreJobsMu.RLock()
-	defer w.ignoreJobsMu.RUnlock()
-
-	if _, ignore := w.ignoreJobs[jobUUID]; ignore {
-		log.Debug("Job already failed, canceled, or wasn't in a failable/cancellable state")
-		return jobUUID, log, errors.New("job ignored")
-	}
-	return jobUUID, log, nil
 }
 
 func (w *podWatcher) failOnImagePullFailure(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
@@ -299,13 +279,25 @@ func (w *podWatcher) failOnImagePullFailure(ctx context.Context, log *zap.Logger
 		// We can acquire it and fail it ourselves.
 		log.Info("One or more job containers are in ImagePullBackOff. Failing.")
 		message := w.formatImagePullFailureMessage(images)
-		if err := w.failJob(ctx, log, pod, jobUUID, message); errors.Is(err, agentcore.ErrJobAcquisitionRejected) {
-			// If the error was because BK rejected the acquisition(?), then its probably moved
-			// on to a state where we need to cancel instead.
+		switch err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, message); {
+		case errors.Is(err, agentcore.ErrJobAcquisitionRejected):
+			podWatcherBuildkiteJobFailErrorsCounter.Inc()
+			// If the error was because BK rejected the job acquisition, then
+			// it's moved on to a state where we need to cancel instead.
+			// (The init container probably successfully pulled, but another
+			// pull of the same image later on failed after the agent started.)
 			log.Info("Attempting to cancel job instead")
 			w.cancelJob(ctx, log, pod, jobUUID)
 			return
+
+		case err != nil:
+			podWatcherBuildkiteJobFailErrorsCounter.Inc()
+
+			// Maybe the job was cancelled in the meantime?
+			log.Error("Could not fail Buildkite job", zap.Error(err))
+			return
 		}
+		podWatcherBuildkiteJobFailsCounter.Inc()
 		// Also evict the pod, because it won't die on its own.
 		w.evictPod(ctx, log, pod, jobUUID)
 
@@ -330,7 +322,7 @@ func (w *podWatcher) failOnImagePullFailure(ctx context.Context, log *zap.Logger
 	}
 }
 
-func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
+func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Logger, pod *corev1.Pod) {
 	log.Debug("Checking pod for failed init containers")
 
 	containerFails := make(map[string]*corev1.ContainerStateTerminated)
@@ -359,8 +351,13 @@ func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Lo
 	// probably shouldn't interfere.
 	log.Info("One or more init containers failed. Failing.")
 	message := w.formatInitContainerFails(containerFails)
-	// failJob logs on error - that's sufficient error handling.
-	_ = w.failJob(ctx, log, pod, jobUUID, message)
+	if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, message); err != nil {
+		// Maybe the job was cancelled in the meantime?
+		log.Error("Could not fail Buildkite job", zap.Error(err))
+		podWatcherBuildkiteJobFailErrorsCounter.Inc()
+		return
+	}
+	podWatcherBuildkiteJobFailsCounter.Inc()
 	// No need to fall back to cancelling if acquire failed - see above.
 	// No need to evict, the pod should be considered failed already.
 }
@@ -396,26 +393,6 @@ func (w *podWatcher) formatImagePullFailureMessage(images map[string]struct{}) s
 		fmt.Fprintf(&message, " * %q\n", image)
 	}
 	return message.String()
-}
-
-func (w *podWatcher) failJob(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID, message string) error {
-	agentToken, err := fetchAgentToken(ctx, w.logger, w.k8s, w.cfg.Namespace, w.cfg.AgentTokenSecret)
-	if err != nil {
-		log.Error("Couldn't fetch agent token in order to fail the job", zap.Error(err))
-		return err
-	}
-
-	// Tags are required order to connect the agent.
-	tags := agenttags.TagsFromLabels(pod.Labels)
-	opts := w.cfg.AgentConfig.ControllerOptions()
-
-	if err := failJob(ctx, w.logger, agentToken, jobUUID.String(), tags, message, opts...); err != nil {
-		log.Error("Couldn't fail the job", zap.Error(err))
-		podWatcherBuildkiteJobFailErrorsCounter.Inc()
-		return err
-	}
-	podWatcherBuildkiteJobFailsCounter.Inc()
-	return nil
 }
 
 func (w *podWatcher) evictPod(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
@@ -551,15 +528,22 @@ func (w *podWatcher) jobCancelChecker(ctx context.Context, stopCh <-chan struct{
 }
 
 func (w *podWatcher) ignoreJob(jobUUID uuid.UUID) {
-	w.ignoreJobsMu.Lock()
-	defer w.ignoreJobsMu.Unlock()
-	w.ignoreJobs[jobUUID] = struct{}{}
+	w.ignoredJobsMu.Lock()
+	defer w.ignoredJobsMu.Unlock()
+	w.ignoredJobs[jobUUID] = struct{}{}
 }
 
 func (w *podWatcher) unignoreJob(jobUUID uuid.UUID) {
-	w.ignoreJobsMu.Lock()
-	defer w.ignoreJobsMu.Unlock()
-	delete(w.ignoreJobs, jobUUID)
+	w.ignoredJobsMu.Lock()
+	defer w.ignoredJobsMu.Unlock()
+	delete(w.ignoredJobs, jobUUID)
+}
+
+func (w *podWatcher) isIgnored(jobUUID uuid.UUID) bool {
+	w.ignoredJobsMu.RLock()
+	defer w.ignoredJobsMu.RUnlock()
+	_, ignore := w.ignoredJobs[jobUUID]
+	return ignore
 }
 
 // onceChan stores a channel and a [sync.Once] to be used for closing the

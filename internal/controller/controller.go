@@ -136,7 +136,20 @@ func Run(
 		logger.Fatal("failed to register completions informer", zap.Error(err))
 	}
 
+	// JobWatcher watches for jobs in bad conditions to clean up:
+	// * Jobs that fail without ever creating a pod
+	// * Jobs that stall forever without ever creating a pod
+	jobWatcher := scheduler.NewJobWatcher(
+		logger.Named("jobWatcher"),
+		k8sClient,
+		cfg,
+	)
+	if err := jobWatcher.RegisterInformer(ctx, informerFactory); err != nil {
+		logger.Fatal("failed to register jobWatcher informer", zap.Error(err))
+	}
+
 	// PodWatcher watches for other conditions to clean up pods:
+	// * Pods where an init container failed for any reason
 	// * Pods where a container is in ImagePullBackOff for too long
 	// * Pods that are still pending, but the Buildkite job has been cancelled
 	podWatcher := scheduler.NewPodWatcher(

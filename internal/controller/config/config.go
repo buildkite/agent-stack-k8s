@@ -15,8 +15,11 @@ const (
 	BuildURLAnnotation                  = "buildkite.com/build-url"
 	JobURLAnnotation                    = "buildkite.com/job-url"
 	DefaultNamespace                    = "default"
+	DefaultStaleJobDataTimeout          = 10 * time.Second
 	DefaultImagePullBackOffGracePeriod  = 30 * time.Second
 	DefaultJobCancelCheckerPollInterval = 5 * time.Second
+	DefaultEmptyJobGracePeriod          = 30 * time.Second
+	DefaultJobCreationConcurrency       = 5
 )
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
@@ -49,6 +52,7 @@ type Config struct {
 	PodSpecPatch                 *corev1.PodSpec `json:"pod-spec-patch"                   validate:"omitempty"`
 	ImagePullBackOffGracePeriod  time.Duration   `json:"image-pull-backoff-grace-period"  validate:"omitempty"`
 	JobCancelCheckerPollInterval time.Duration   `json:"job-cancel-checker-poll-interval" validate:"omitempty"`
+	EmptyJobGracePeriod          time.Duration   `json:"empty-job-grace-period"           validate:"omitempty"`
 
 	// WorkspaceVolume allows supplying a volume for /workspace. By default
 	// an EmptyDir volume is created for it.
