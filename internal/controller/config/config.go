@@ -151,6 +151,9 @@ func appendNegatedToEnvOpt(ctr *corev1.Container, name string, value *bool) {
 }
 
 func appendCommaSepToEnv(ctr *corev1.Container, name string, values []string) {
+	if len(values) == 0 {
+		return
+	}
 	ctr.Env = append(ctr.Env, corev1.EnvVar{
 		Name:  name,
 		Value: strings.Join(values, ","),
