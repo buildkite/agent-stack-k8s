@@ -405,6 +405,48 @@ func TestBuildSkipCheckout(t *testing.T) {
 	}
 }
 
+func TestBuildCheckoutEmptyConfigEnv(t *testing.T) {
+	t.Parallel()
+
+	pluginsYAML := `- github.com/buildkite-plugins/kubernetes-buildkite-plugin:
+    checkout: {}
+  `
+
+	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
+	require.NoError(t, err)
+
+	job := &api.CommandJob{
+		Uuid:            "abc",
+		Command:         "echo hello world",
+		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+		AgentQueryRules: []string{"queue=kubernetes"},
+	}
+
+	worker := scheduler.New(
+		zaptest.NewLogger(t),
+		nil,
+		scheduler.Config{
+			Namespace:            "buildkite",
+			Image:                "buildkite/agent:latest",
+			AgentTokenSecretName: "bkcq_1234567890",
+		},
+	)
+	inputs, err := worker.ParseJob(job)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	for _, container := range kjob.Spec.Template.Spec.Containers {
+		if container.Name == "checkout" {
+			for _, envVar := range container.Env {
+				if envVar.Name == "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG" {
+					t.Error("with `checkout: {}`, want no BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG env on checkout container")
+				}
+			}
+		}
+	}
+}
+
 func TestFailureJobs(t *testing.T) {
 	t.Parallel()
 	pluginsJSON, err := json.Marshal([]map[string]any{
