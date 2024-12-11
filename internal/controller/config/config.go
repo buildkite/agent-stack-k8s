@@ -81,6 +81,12 @@ type Config struct {
 	// from the job (the kubernetes "plugin" in pipeline.yml). If enabled,
 	// jobs with a "kubernetes" plugin will fail.
 	ProhibitKubernetesPlugin bool `json:"prohibit-kubernetes-plugin" validate:"omitempty"`
+
+	// AllowPodSpecPatchUnsafeCmdMod can be used to allow podSpecPatch to change
+	// container commands. Normally this is prevented, because if the
+	// replacement command does not execute buildkite-agent in the right way,
+	// then the pod will malfunction.
+	AllowPodSpecPatchUnsafeCmdMod bool `json:"allow-pod-spec-patch-unsafe-command-modification" validate:"omitempty"`
 }
 
 type stringSlice []string
@@ -111,6 +117,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddUint16("prometheus-port", c.PrometheusPort)
 	enc.AddString("cluster-uuid", c.ClusterUUID)
 	enc.AddBool("prohibit-kubernetes-plugin", c.ProhibitKubernetesPlugin)
+	enc.AddBool("allow-pod-spec-patch-unsafe-command-modification", c.AllowPodSpecPatchUnsafeCmdMod)
 	if err := enc.AddArray("additional-redacted-vars", c.AdditionalRedactedVars); err != nil {
 		return err
 	}

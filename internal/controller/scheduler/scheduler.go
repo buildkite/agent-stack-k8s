@@ -50,22 +50,23 @@ var (
 )
 
 type Config struct {
-	Namespace                   string
-	Image                       string
-	AgentTokenSecretName        string
-	JobTTL                      time.Duration
-	JobActiveDeadlineSeconds    int
-	AdditionalRedactedVars      []string
-	WorkspaceVolume             *corev1.Volume
-	AgentConfig                 *config.AgentConfig
-	DefaultCheckoutParams       *config.CheckoutParams
-	DefaultCommandParams        *config.CommandParams
-	DefaultSidecarParams        *config.SidecarParams
-	DefaultMetadata             config.Metadata
-	DefaultImagePullPolicy      corev1.PullPolicy
-	DefaultImageCheckPullPolicy corev1.PullPolicy
-	PodSpecPatch                *corev1.PodSpec
-	ProhibitK8sPlugin           bool
+	Namespace                     string
+	Image                         string
+	AgentTokenSecretName          string
+	JobTTL                        time.Duration
+	JobActiveDeadlineSeconds      int
+	AdditionalRedactedVars        []string
+	WorkspaceVolume               *corev1.Volume
+	AgentConfig                   *config.AgentConfig
+	DefaultCheckoutParams         *config.CheckoutParams
+	DefaultCommandParams          *config.CommandParams
+	DefaultSidecarParams          *config.SidecarParams
+	DefaultMetadata               config.Metadata
+	DefaultImagePullPolicy        corev1.PullPolicy
+	DefaultImageCheckPullPolicy   corev1.PullPolicy
+	PodSpecPatch                  *corev1.PodSpec
+	ProhibitK8sPlugin             bool
+	AllowPodSpecPatchUnsafeCmdMod bool
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
@@ -582,7 +583,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// Allow podSpec to be overridden by the controller config and the k8s plugin.
 	// Patch from the controller config is applied first.
 	if w.cfg.PodSpecPatch != nil {
-		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin)
+		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin, w.cfg.AllowPodSpecPatchUnsafeCmdMod)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
 		}
@@ -592,7 +593,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	// If present, patch from the k8s plugin is applied second.
 	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpecPatch != nil {
-		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin)
+		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin, w.cfg.AllowPodSpecPatchUnsafeCmdMod)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
 		}
@@ -835,6 +836,30 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// Prepend all the init containers defined above to the podspec.
 	podSpec.InitContainers = append(initContainers, podSpec.InitContainers...)
 
+	// Only attempt the job once.
+	podSpec.RestartPolicy = corev1.RestartPolicyNever
+
+	// Allow podSpec to be overridden by the agent configuration and the k8s plugin
+
+	// Patch from the agent is applied first
+	if w.cfg.PodSpecPatch != nil {
+		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin, w.cfg.AllowPodSpecPatchUnsafeCmdMod)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
+		}
+		podSpec = patched
+		w.logger.Debug("Applied podSpec patch from agent", zap.Any("patched", patched))
+	}
+
+	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpecPatch != nil {
+		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin, w.cfg.AllowPodSpecPatchUnsafeCmdMod)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
+		}
+		podSpec = patched
+		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
+	}
+
 	kjob.Spec.Template.Spec = *podSpec
 
 	return kjob, nil
@@ -842,9 +867,14 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 var ErrNoCommandModification = errors.New("modifying container commands or args via podSpecPatch is not supported")
 
-func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *config.CommandParams, k8sPlugin *KubernetesPlugin) (*corev1.PodSpec, error) {
+func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *config.CommandParams, k8sPlugin *KubernetesPlugin, allowUnsafeCmdMod bool) (*corev1.PodSpec, error) {
 
-	// Index command containers by name - these should be unique within each podSpec.
+	// Index containers by name - these should be unique within each podSpec.
+	originalInitContainers := make(map[string]*corev1.Container)
+	for i := range original.InitContainers {
+		c := &original.InitContainers[i]
+		originalInitContainers[c.Name] = c
+	}
 	originalContainers := make(map[string]*corev1.Container)
 	for i := range original.Containers {
 		c := &original.Containers[i]
@@ -854,6 +884,36 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *co
 	// We do special stuff™️ with container commands to make them run as
 	// buildkite agent things under the hood, so don't let users mess with them
 	// via podSpecPatch.
+	for i := range patch.InitContainers {
+		c := &patch.InitContainers[i]
+		if len(c.Command) == 0 && len(c.Args) == 0 {
+			// No modification (strategic merge won't set these to empty).
+			continue
+		}
+		oc := originalInitContainers[c.Name]
+		if oc != nil && slices.Equal(c.Command, oc.Command) && slices.Equal(c.Args, oc.Args) {
+			// No modification (original and patch are equal).
+			continue
+		}
+
+		// Some modification is occuring.
+		// What we prevent vs what we fix up depends on the type of container.
+		//
+		// Containers added by the scheduler: prevent command modification
+		// entirely.
+		// Init containers added by the user: allow modification freely.
+		switch {
+		case c.Name == CopyAgentContainerName:
+			if !allowUnsafeCmdMod {
+				return nil, fmt.Errorf("for the %s container, %w", c.Name, ErrNoCommandModification)
+			}
+		case strings.HasPrefix(c.Name, ImageCheckContainerNamePrefix):
+			if !allowUnsafeCmdMod {
+				return nil, fmt.Errorf("for the %s container, %w", c.Name, ErrNoCommandModification)
+			}
+		}
+	}
+
 	for i := range patch.Containers {
 		c := &patch.Containers[i]
 		if len(c.Command) == 0 && len(c.Args) == 0 {
@@ -872,10 +932,14 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *co
 		// Agent, checkout: prevent command modification entirely.
 		switch c.Name {
 		case AgentContainerName:
-			return nil, fmt.Errorf("for the agent container, %w", ErrNoCommandModification)
+			if !allowUnsafeCmdMod {
+				return nil, fmt.Errorf("for the %s container, %w", c.Name, ErrNoCommandModification)
+			}
 
 		case CheckoutContainerName:
-			return nil, fmt.Errorf("for the checkout container, %w; instead consider configuring a checkout hook or skipping the checkout container entirely", ErrNoCommandModification)
+			if !allowUnsafeCmdMod {
+				return nil, fmt.Errorf("for the %s container, %w; instead consider configuring a checkout hook or skipping the checkout container entirely", c.Name, ErrNoCommandModification)
+			}
 
 		default:
 			// Is it patching a command container or a sidecar?
