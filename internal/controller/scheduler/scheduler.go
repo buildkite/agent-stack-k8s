@@ -40,19 +40,20 @@ const (
 var errK8sPluginProhibited = errors.New("the kubernetes plugin is prohibited by this controller, but was configured on this job")
 
 type Config struct {
-	Namespace              string
-	Image                  string
-	AgentTokenSecretName   string
-	JobTTL                 time.Duration
-	AdditionalRedactedVars []string
-	WorkspaceVolume        *corev1.Volume
-	AgentConfig            *config.AgentConfig
-	DefaultCheckoutParams  *config.CheckoutParams
-	DefaultCommandParams   *config.CommandParams
-	DefaultSidecarParams   *config.SidecarParams
-	DefaultMetadata        config.Metadata
-	PodSpecPatch           *corev1.PodSpec
-	ProhibitK8sPlugin      bool
+	Namespace                  string
+	Image                      string
+	AgentTokenSecretName       string
+	JobTTL                     time.Duration
+	AdditionalRedactedVars     []string
+	WorkspaceVolume            *corev1.Volume
+	AgentConfig                *config.AgentConfig
+	DefaultCheckoutParams      *config.CheckoutParams
+	DefaultCommandParams       *config.CommandParams
+	DefaultSidecarParams       *config.SidecarParams
+	DefaultMetadata            config.Metadata
+	PodSpecPatch               *corev1.PodSpec
+	ProhibitK8sPlugin          bool
+	AllowPodSpecPatchRawCmdMod bool
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
@@ -662,7 +663,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	// Patch from the agent is applied first
 	if w.cfg.PodSpecPatch != nil {
-		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch)
+		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch, w.cfg.AllowPodSpecPatchRawCmdMod)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
 		}
@@ -671,7 +672,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	}
 
 	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpecPatch != nil {
-		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch)
+		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch, w.cfg.AllowPodSpecPatchRawCmdMod)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
 		}
@@ -686,12 +687,17 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 var ErrNoCommandModification = errors.New("modifying container commands or args via podSpecPatch is not supported. Specify the command in the job's command field instead")
 
-func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec) (*corev1.PodSpec, error) {
-	// We do special stuff™️ with container commands to make them run as buildkite agent things under the hood, so don't
-	// let users mess with them via podSpecPatch.
-	for _, c := range patch.Containers {
-		if len(c.Command) != 0 || len(c.Args) != 0 {
-			return nil, ErrNoCommandModification
+func PatchPodSpec(original, patch *corev1.PodSpec, allowCmdMod bool) (*corev1.PodSpec, error) {
+	if !allowCmdMod {
+		// We do special stuff™️ with container commands to make them run as
+		// buildkite agent things/ under the hood, so don't let users mess with
+		// them via podSpecPatch...
+		// Unless they specifically configure the stack to allow it and have
+		// read the big red warning in the readme.
+		for _, c := range patch.Containers {
+			if len(c.Command) != 0 || len(c.Args) != 0 {
+				return nil, ErrNoCommandModification
+			}
 		}
 	}
 
