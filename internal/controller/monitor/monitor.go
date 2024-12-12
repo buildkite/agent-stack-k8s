@@ -1,6 +1,7 @@
 package monitor
 
 import (
+	"cmp"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -8,14 +9,16 @@ import (
 	"maps"
 	"math/rand/v2"
 	"reflect"
+	"slices"
 	"sync"
 	"time"
 
-	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
+
+	"github.com/Khan/genqlient/graphql"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 )
@@ -223,6 +226,15 @@ func (m *Monitor) passJobsToNextHandler(
 	// Shuffling increases the odds of making progress.
 	rand.Shuffle(len(jobs), func(i, j int) {
 		jobs[i], jobs[j] = jobs[j], jobs[i]
+	})
+
+	// After shuffling, sort by priority. This negates some of the benefit of
+	// shuffling (suppose all the highest priority jobs have difficulty being
+	// scheduled).
+	slices.SortFunc(jobs, func(a, b *api.JobJobTypeCommand) int {
+		// Higher number = higher priority.
+		// See https://buildkite.com/docs/pipelines/configure/workflows/managing-priorities
+		return cmp.Compare(b.Priority.Number, a.Priority.Number)
 	})
 
 	// We also try to get more jobs to the API by processing them in parallel.
