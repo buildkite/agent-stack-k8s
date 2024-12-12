@@ -1,6 +1,6 @@
 x-anchors:
-  push: &push
-    label: ":helm::docker: push controller image and helm chart"
+  push-helm: &push-helm
+    label: ":helm::docker: build and push helm chart"
     plugins:
       - kubernetes:
           checkout:
@@ -10,7 +10,7 @@ x-anchors:
             containers:
               - name: deploy
                 image: alpine:latest
-                command: [.buildkite/steps/build-and-push.sh]
+                command: [.buildkite/steps/build-and-push-helm.sh]
                 envFrom:
                   - secretRef:
                       name: deploy-secrets
@@ -162,7 +162,7 @@ steps:
           files: junit-*.xml
           format: junit
 
-  - label: ":docker: build controller"
+  - label: ":docker: build and push controller image"
     key: controller
     plugins:
       - kubernetes:
@@ -170,7 +170,7 @@ steps:
             containers:
               - name: ko
                 image: golang:1.23
-                command: [.buildkite/steps/controller.sh]
+                command: [.buildkite/steps/build-and-push-controller.sh]
                 envFrom:
                   - secretRef:
                       name: deploy-secrets
@@ -181,7 +181,7 @@ steps:
   # On feature branches, don't wait for tests. We may want to deploy
   # to a test cluster to debug the feature branch.
   - if: build.branch != pipeline.default_branch && build.tag !~ /^.+\$/
-    <<: *push
+    <<: *push-helm
     key: push-feature-branch
     depends_on:
       - tidy
@@ -193,7 +193,7 @@ steps:
   # On the main branch or tags, wait for tests. We don't want to
   # push a new image or chart unless the tests pass.
   - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
-    <<: *push
+    <<: *push-helm
     key: push-main-or-tag
     depends_on:
       - tidy
