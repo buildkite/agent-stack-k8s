@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/Khan/genqlient/graphql"
 )
@@ -395,8 +394,8 @@ type CommandJob struct {
 	Uuid string `json:"uuid"`
 	// Environment variables for this job
 	Env []string `json:"env"`
-	// The time when the job became scheduled for running
-	ScheduledAt time.Time `json:"scheduledAt"`
+	// The priority of this job
+	Priority CommandJobPriority `json:"priority"`
 	// The ruleset used to find an agent to run this job
 	AgentQueryRules []string `json:"agentQueryRules"`
 	// The command the job will run
@@ -409,14 +408,25 @@ func (v *CommandJob) GetUuid() string { return v.Uuid }
 // GetEnv returns CommandJob.Env, and is useful for accessing the field via an interface.
 func (v *CommandJob) GetEnv() []string { return v.Env }
 
-// GetScheduledAt returns CommandJob.ScheduledAt, and is useful for accessing the field via an interface.
-func (v *CommandJob) GetScheduledAt() time.Time { return v.ScheduledAt }
+// GetPriority returns CommandJob.Priority, and is useful for accessing the field via an interface.
+func (v *CommandJob) GetPriority() CommandJobPriority { return v.Priority }
 
 // GetAgentQueryRules returns CommandJob.AgentQueryRules, and is useful for accessing the field via an interface.
 func (v *CommandJob) GetAgentQueryRules() []string { return v.AgentQueryRules }
 
 // GetCommand returns CommandJob.Command, and is useful for accessing the field via an interface.
 func (v *CommandJob) GetCommand() string { return v.Command }
+
+// CommandJobPriority includes the requested fields of the GraphQL type JobPriority.
+// The GraphQL type's documentation follows.
+//
+// The priority with which a job will run
+type CommandJobPriority struct {
+	Number int `json:"number"`
+}
+
+// GetNumber returns CommandJobPriority.Number, and is useful for accessing the field via an interface.
+func (v *CommandJobPriority) GetNumber() int { return v.Number }
 
 // GetBuildBuild includes the requested fields of the GraphQL type Build.
 // The GraphQL type's documentation follows.
@@ -1234,8 +1244,8 @@ func (v *JobJobTypeCommand) GetUuid() string { return v.CommandJob.Uuid }
 // GetEnv returns JobJobTypeCommand.Env, and is useful for accessing the field via an interface.
 func (v *JobJobTypeCommand) GetEnv() []string { return v.CommandJob.Env }
 
-// GetScheduledAt returns JobJobTypeCommand.ScheduledAt, and is useful for accessing the field via an interface.
-func (v *JobJobTypeCommand) GetScheduledAt() time.Time { return v.CommandJob.ScheduledAt }
+// GetPriority returns JobJobTypeCommand.Priority, and is useful for accessing the field via an interface.
+func (v *JobJobTypeCommand) GetPriority() CommandJobPriority { return v.CommandJob.Priority }
 
 // GetAgentQueryRules returns JobJobTypeCommand.AgentQueryRules, and is useful for accessing the field via an interface.
 func (v *JobJobTypeCommand) GetAgentQueryRules() []string { return v.CommandJob.AgentQueryRules }
@@ -1273,7 +1283,7 @@ type __premarshalJobJobTypeCommand struct {
 
 	Env []string `json:"env"`
 
-	ScheduledAt time.Time `json:"scheduledAt"`
+	Priority CommandJobPriority `json:"priority"`
 
 	AgentQueryRules []string `json:"agentQueryRules"`
 
@@ -1293,7 +1303,7 @@ func (v *JobJobTypeCommand) __premarshalJSON() (*__premarshalJobJobTypeCommand, 
 
 	retval.Uuid = v.CommandJob.Uuid
 	retval.Env = v.CommandJob.Env
-	retval.ScheduledAt = v.CommandJob.ScheduledAt
+	retval.Priority = v.CommandJob.Priority
 	retval.AgentQueryRules = v.CommandJob.AgentQueryRules
 	retval.Command = v.CommandJob.Command
 	return &retval, nil
@@ -1659,7 +1669,9 @@ fragment Job on Job {
 fragment CommandJob on JobTypeCommand {
 	uuid
 	env
-	scheduledAt
+	priority {
+		number
+	}
 	agentQueryRules
 	command
 }
@@ -1755,7 +1767,9 @@ fragment Job on Job {
 fragment CommandJob on JobTypeCommand {
 	uuid
 	env
-	scheduledAt
+	priority {
+		number
+	}
 	agentQueryRules
 	command
 }
@@ -1822,7 +1836,9 @@ fragment Job on Job {
 fragment CommandJob on JobTypeCommand {
 	uuid
 	env
-	scheduledAt
+	priority {
+		number
+	}
 	agentQueryRules
 	command
 }
@@ -1956,7 +1972,9 @@ fragment Job on Job {
 fragment CommandJob on JobTypeCommand {
 	uuid
 	env
-	scheduledAt
+	priority {
+		number
+	}
 	agentQueryRules
 	command
 }
@@ -2014,7 +2032,9 @@ fragment Job on Job {
 fragment CommandJob on JobTypeCommand {
 	uuid
 	env
-	scheduledAt
+	priority {
+		number
+	}
 	agentQueryRules
 	command
 }
