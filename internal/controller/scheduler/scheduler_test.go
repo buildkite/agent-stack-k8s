@@ -97,7 +97,7 @@ func TestPatchPodSpec(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			result, err := scheduler.PatchPodSpec(c.podspec, c.patch)
+			result, err := scheduler.PatchPodSpec(c.podspec, c.patch, false)
 			if c.err != nil {
 				require.Error(t, err)
 				require.ErrorIs(t, c.err, err)

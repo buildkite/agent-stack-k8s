@@ -3,27 +3,38 @@
 [![Build status](https://badge.buildkite.com/d58c90abfe8b48f8d8750dac8e911fc0b6afe026631b4dc97c.svg?branch=main)](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack)
 
 ## Table of Contents
-- [Overview](#Overview)
-- [How does it work](#How-does-it-work)
-- [Architecture](#Architecture)
-- [Installation](#Installation)
-  - [Requirements](#Requirements)
-  - [Deploy with Helm](#Deploy-with-Helm)
-  - [Options](#Options)
-- [Sample Buildkite Pipeline](#Sample-Buildkite-Pipelines)
-  - [Cloning repos via SSH](#Cloning-repos-via-SSH)
-  - [Cloning repos via HTTPS](#Cloning-repos-via-HTTPS)
-  - [Pod Spec Patch](#Pod-Spec-Patch)
-  - [Sidecars](#Sidecars)
-  - [Extra volume mounts](#Extra-volume-mounts)
-  - [Skipping checkout](#Skipping-checkout)
-  - [Overriding flags for git clone/fetch](#Overriding-flags-for-git-clonefetch)
-  - [Validating your pipeline](#Validating-your-pipeline)
-- [Securing the stack](#securing-the-stack)
-  - [Prohibiting the kubernetes plugin (v0.13.0 and later)](#prohibiting-the-kubernetes-plugin-v0130-and-later)
-- [How to setup agent hooks](#How-to-setup-agent-hooks)
-- [Debugging](#Debugging)
-- [Open Questions](#Open-Questions)
+-   [Overview](#overview)
+-   [How does it work](#how-does-it-work)
+-   [Architecture](#architecture)
+-   [Installation](#installation)
+    -   [Requirements](#requirements)
+    -   [Deploy with Helm](#deploy-with-helm)
+    -   [Options](#options)
+-   [Sample Buildkite Pipelines](#sample-buildkite-pipelines)
+    -   [PodSpec command and args interpretation](#podspec-command-and-args-interpretation)
+    -   [Cloning repos via SSH](#cloning-repos-via-ssh)
+    -   [Cloning repos via HTTPS](#cloning-repos-via-https)
+    -   [Default job metadata](#default-job-metadata)
+    -   [Pod Spec Patch](#pod-spec-patch)
+    -   [Sidecars](#sidecars)
+    -   [The workspace volume](#the-workspace-volume)
+    -   [Extra volume mounts](#extra-volume-mounts)
+    -   [Skipping checkout (v0.13.0 and later)](#skipping-checkout-v0130-and-later)
+    -   [Overriding flags for git clone and git fetch (v0.13.0 and later)](#overriding-flags-for-git-clone-and-git-fetch-v0130-and-later)
+    -   [Overriding other git settings (v0.16.0 and later)](#overriding-other-git-settings-v0160-and-later)
+    -   [Default envFrom](#default-envfrom)
+-   [Setting agent configuration (v0.16.0 and later)](#setting-agent-configuration-v0160-and-later)
+-   [How to set up pipeline signing (v0.16.0 and later)](#how-to-set-up-pipeline-signing-v0160-and-later)
+-   [How to set up agent hooks and plugins (v0.16.0 and later)](#how-to-set-up-agent-hooks-and-plugins-v0160-and-later)
+-   [How to set up agent hooks (v0.15.0 and earlier)](#how-to-set-up-agent-hooks-v0150-and-earlier)
+    -   [Validating your pipeline](#validating-your-pipeline)
+-   [Securing the stack](#securing-the-stack)
+    -   [Prohibiting the kubernetes plugin (v0.13.0 and later)](#prohibiting-the-kubernetes-plugin-v0130-and-later)
+-   [Debugging](#debugging)
+    -   [Prerequisites](#prerequisites)
+    -   [Inputs to the script](#inputs-to-the-script)
+    -   [Data/logs gathered:](#datalogs-gathered)
+-   [Open questions](#open-questions)
 
 ## Overview
 
@@ -552,6 +563,47 @@ steps:
 - name: Hello from a container with default resources
   command: echo Hello World!
 ```
+
+#### Overriding commands
+
+By default, PodSpecPatch is prevented from modifying a container's `command` or
+`args`. Attempting to do so results in an error.
+
+If this is something you want to do, first consider other potential solutions:
+
+* To override checkout behaviour, consider writing a `checkout` hook, or
+  disabling the checkout container entirely with `checkout: skip: true`.
+* To run additional containers without `buildkite-agent` in them, consider using
+  a sidecar.
+
+We are continually investigating ways to make the stack more flexible while
+ensuring core functionality.
+
+> [!CAUTION]
+> Avoid using PodSpecPatch to override `command` or `args`. Such modifications,
+> if not done with extreme care and detailed knowledge about how agent-stack-k8s
+> constructs podspecs, are very likely to break how the agent within the pod
+> works.
+>
+> If the replacement command for a checkout or command container does not invoke
+> `buildkite-agent bootstrap`:
+>
+>  * the container will not connect to the `agent` container, and the agent will
+>    not finish the job normally because there was not an expected number of
+>    other containers connecting to it
+>  * logs from the container will not be visible in Buildkite
+>  * hooks will not be executed automatically
+>  * plugins will not be checked out or executed automatically
+>
+> and various other functions provided by `buildkite-agent` may not work.
+>
+> If the command for the `agent` container is overridden, and the replacement
+> command does not invoke `buildkite-agent start`, then the job will not be
+> acquired on Buildkite at all.
+
+If you still wish to disable this precaution, and override the raw `command` or
+`args` of your containers using PodSpecPatch, you may do so with the
+`allow-pod-spec-patch-raw-command-modification` config option.
 
 ### Sidecars
 
