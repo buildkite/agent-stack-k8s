@@ -548,71 +548,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		)
 	}
 
-	// Init containers. These run in order before the regular containers.
-	// We run some init containers before any specified in the given podSpec.
-	//
-	// We use an init container to copy buildkite-agent into /workspace.
-	// We also use init containers to check that images can be pulled before
-	// any other containers run.
-	//
-	// Why not let Kubernetes worry about pulling images as needed? Well...
-	// If Kubernetes can't pull an image, the container stays in Waiting with
-	// ImagePullBackOff. But Kubernetes also tries to start containers ASAP.
-	// This behaviour is fine for when you are using Kubernetes to run services,
-	// such as a web server or database, because you are DevOps and are dealing
-	// with Kubernetes more directly.
-	// Since the agent, command, checkout etc are in separate containers, we can
-	// be in the awkward situation of having started a BK job with an agent
-	// running happily in the agent server container, but any of the other pod
-	// containers can still be waiting on an image that can't be pulled.
-	//
-	// Over here in the agent-stack-k8s controller, we can detect
-	// ImagePullBackOff using the k8s API (see imagePullBackOffWatcher.go) but
-	// our options for pulling the plug on a job that's already started are
-	// limited, because we can't steal responsibility for the job from the
-	// already-running agent.
-	//
-	// We can:
-	//  * kill the agent container (agent lost, which looks weird)
-	//  * use GraphQL to cancel the job, rely on the agent to count the
-	//    containers that connected to it through the socket, and spit out an
-	//    error in the log that is easy to miss. (This is what we used to do.)
-	// Both those options suck.
-	//
-	// So instead, we pull each required image in its own init container and
-	// set the entrypoint to the equivalent of "/bin/true".
-	// If the image pull fails, we can use agentcore to fail the job directly.
-	// This early detection approach is also useful in a CI/CD context since the
-	// user is more likely to be playing with pipeline configurations.
-	//
-	// The main downside to pre-pulling images with init containers is that
-	// init containers do not run in parallel, so Kubernetes might well decide
-	// not to pull them in parallel. Also there's no agent running to report
-	// that we're currently waiting for the image pull. (In the BK UI, the job
-	// will sit in "waiting for agent" for a bit.)
-	//
-	// TODO: investigate agent modifications to accept handover of a started
-	// job (i.e. make the controller acquire the job, log some k8s progress,
-	// then hand over the job token to the agent in the pod.)
-	initContainers := []corev1.Container{
-		{
-			// This container copies buildkite-agent and tini-static into
-			// /workspace.
-			Name:            CopyAgentContainerName,
-			Image:           w.cfg.Image,
-			ImagePullPolicy: corev1.PullAlways,
-			Command:         []string{"cp"},
-			Args: []string{
-				"/usr/local/bin/buildkite-agent",
-				"/sbin/tini-static",
-				"/workspace",
-			},
-			VolumeMounts: []corev1.VolumeMount{{
-				Name:      workspaceVolume.Name,
-				MountPath: "/workspace",
-			}},
-		},
-	}
+	initContainers := []corev1.Container{w.createInitContainer(podSpec, workspaceVolume)}
 
 	// Pre-pull these images. (Note that even when specifying PullAlways,
 	// layers can still be cached on the node.)
@@ -716,6 +652,126 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec) (*corev1.PodS
 	}
 
 	return &patchedSpec, nil
+}
+
+func (w *worker) createInitContainer(podSpec *corev1.PodSpec, workspaceVolume *corev1.Volume) corev1.Container {
+	podUser, podGroup := int64(0), int64(0)
+	if podSpec.SecurityContext != nil {
+		if podSpec.SecurityContext.RunAsUser != nil {
+			podUser = *(podSpec.SecurityContext.RunAsUser)
+		}
+		if podSpec.SecurityContext.RunAsGroup != nil {
+			podGroup = *(podSpec.SecurityContext.RunAsGroup)
+		}
+	}
+
+	var securityContext *corev1.SecurityContext
+	var containerArgs strings.Builder
+	// Ensure that the checkout occurs as the user/group specified in the pod's security context.
+	// we will create a buildkite-agent user/group in the checkout container as needed and switch
+	// to it. The created user/group will have the uid/gid specified in the pod's security context.
+	switch {
+	case podUser != 0 && podGroup != 0:
+		// The init container needs to be run as root to create the user and give it ownership to the workspace directory
+		securityContext = &corev1.SecurityContext{
+			RunAsUser:    ptr.To[int64](0),
+			RunAsGroup:   ptr.To[int64](0),
+			RunAsNonRoot: ptr.To(false),
+		}
+
+		fmt.Fprintf(&containerArgs, `set -eufo pipefail
+addgroup -g %d buildkite-agent
+adduser -D -u %d -G buildkite-agent -h /workspace buildkite-agent
+chown -R %d:%d /workspace`,
+			podGroup,
+			podUser,
+			podUser,
+			podGroup,
+		)
+
+	case podUser != 0 && podGroup == 0:
+		//The init container needs to be run as root to create the user and give it ownership to the workspace directory
+		securityContext = &corev1.SecurityContext{
+			RunAsUser:    ptr.To[int64](0),
+			RunAsGroup:   ptr.To[int64](0),
+			RunAsNonRoot: ptr.To[bool](false),
+		}
+
+		fmt.Fprintf(&containerArgs, `set -exufo pipefail
+adduser -D -u %d -G root -h /workspace buildkite-agent
+chown -R %d /workspace`,
+			podUser,
+			podUser,
+		)
+
+	// If the group is not root, but the user is root, I don't think we NEED to do anything. It's fine
+	// for the user and group to be root for the checked out repo, even though the Pod's security
+	// context has a non-root group.
+	default:
+		securityContext = nil
+	}
+	// Init containers. These run in order before the regular containers.
+	// We run some init containers before any specified in the given podSpec.
+	//
+	// We use an init container to copy buildkite-agent into /workspace.
+	// We also use init containers to check that images can be pulled before
+	// any other containers run.
+	//
+	// Why not let Kubernetes worry about pulling images as needed? Well...
+	// If Kubernetes can't pull an image, the container stays in Waiting with
+	// ImagePullBackOff. But Kubernetes also tries to start containers ASAP.
+	// This behaviour is fine for when you are using Kubernetes to run services,
+	// such as a web server or database, because you are DevOps and are dealing
+	// with Kubernetes more directly.
+	// Since the agent, command, checkout etc are in separate containers, we can
+	// be in the awkward situation of having started a BK job with an agent
+	// running happily in the agent server container, but any of the other pod
+	// containers can still be waiting on an image that can't be pulled.
+	//
+	// Over here in the agent-stack-k8s controller, we can detect
+	// ImagePullBackOff using the k8s API (see imagePullBackOffWatcher.go) but
+	// our options for pulling the plug on a job that's already started are
+	// limited, because we can't steal responsibility for the job from the
+	// already-running agent.
+	//
+	// We can:
+	//  * kill the agent container (agent lost, which looks weird)
+	//  * use GraphQL to cancel the job, rely on the agent to count the
+	//    containers that connected to it through the socket, and spit out an
+	//    error in the log that is easy to miss. (This is what we used to do.)
+	// Both those options suck.
+
+	//
+	// So instead, we pull each required image in its own init container and
+	// set the entrypoint to the equivalent of "/bin/true".
+	// If the image pull fails, we can use agentcore to fail the job directly.
+	// This early detection approach is also useful in a CI/CD context since the
+	// user is more likely to be playing with pipeline configurations.
+	//
+	// The main downside to pre-pulling images with init containers is that
+	// init containers do not run in parallel, so Kubernetes might well decide
+	// not to pull them in parallel. Also there's no agent running to report
+	// that we're currently waiting for the image pull. (In the BK UI, the job
+	// will sit in "waiting for agent" for a bit.)
+	//
+	// TODO: investigate agent modifications to accept handover of a started
+	// job (i.e. make the controller acquire the job, log some k8s progress,
+	// then hand over the job token to the agent in the pod.)
+	containerArgs.WriteString("\ncp /usr/local/bin/buildkite-agent /sbin/tini-static /workspace\n")
+	return corev1.Container{
+		// This container copies buildkite-agent and tini-static into
+		// /workspace.
+		Name:            CopyAgentContainerName,
+		Image:           w.cfg.Image,
+		ImagePullPolicy: corev1.PullAlways,
+		Command:         []string{"ash", "-c"},
+		Args:            []string{containerArgs.String()},
+		SecurityContext: securityContext,
+		VolumeMounts: []corev1.VolumeMount{{
+			Name:      workspaceVolume.Name,
+			MountPath: "/workspace",
+		}},
+	}
 }
 
 func (w *worker) createCheckoutContainer(
