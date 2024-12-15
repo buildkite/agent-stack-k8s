@@ -92,6 +92,7 @@ pod-spec-patch:
     selectors.example.com/my-selector: example-value
   containers:
     - name: container-0
+      image: example.org/my-container@latest
       env:
         - name: GITHUB_TOKEN
           valueFrom:
