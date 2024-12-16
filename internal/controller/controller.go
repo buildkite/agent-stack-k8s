@@ -87,19 +87,20 @@ func Run(
 	// Scheduler does the complicated work of converting a Buildkite job into
 	// a pod to run that job. It talks to the k8s API to create pods.
 	sched := scheduler.New(logger.Named("scheduler"), k8sClient, scheduler.Config{
-		Namespace:              cfg.Namespace,
-		Image:                  cfg.Image,
-		AgentTokenSecretName:   cfg.AgentTokenSecret,
-		JobTTL:                 cfg.JobTTL,
-		AdditionalRedactedVars: cfg.AdditionalRedactedVars,
-		WorkspaceVolume:        cfg.WorkspaceVolume,
-		AgentConfig:            cfg.AgentConfig,
-		DefaultCheckoutParams:  cfg.DefaultCheckoutParams,
-		DefaultCommandParams:   cfg.DefaultCommandParams,
-		DefaultSidecarParams:   cfg.DefaultSidecarParams,
-		DefaultMetadata:        cfg.DefaultMetadata,
-		PodSpecPatch:           cfg.PodSpecPatch,
-		ProhibitK8sPlugin:      cfg.ProhibitKubernetesPlugin,
+		Namespace:                  cfg.Namespace,
+		Image:                      cfg.Image,
+		AgentTokenSecretName:       cfg.AgentTokenSecret,
+		JobTTL:                     cfg.JobTTL,
+		AdditionalRedactedVars:     cfg.AdditionalRedactedVars,
+		WorkspaceVolume:            cfg.WorkspaceVolume,
+		AgentConfig:                cfg.AgentConfig,
+		DefaultCheckoutParams:      cfg.DefaultCheckoutParams,
+		DefaultCommandParams:       cfg.DefaultCommandParams,
+		DefaultSidecarParams:       cfg.DefaultSidecarParams,
+		DefaultMetadata:            cfg.DefaultMetadata,
+		PodSpecPatch:               cfg.PodSpecPatch,
+		ProhibitK8sPlugin:          cfg.ProhibitKubernetesPlugin,
+		AllowPodSpecPatchRawCmdMod: cfg.AllowPodSpecPatchRawCmdMod,
 	})
 
 	informerFactory, err := NewInformerFactory(k8sClient, cfg.Namespace, cfg.Tags)
