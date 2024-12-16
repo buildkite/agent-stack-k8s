@@ -16,7 +16,7 @@ GHCH_VERSION="0.11.0"
 GHCH_URL="https://github.com/buildkite/ghch/releases/download/v${GHCH_VERSION}/ghch-$(go env GOARCH)"
 
 echo --- :hammer: Installing packages
-apk add --no-progress aws-cli crane git
+apk add --no-progress aws-cli crane git jq
 wget -q "${GORELEASER_URL}/v${GORELEASER_VERSION}/${GORELEASER_FILE}"
 apk add --no-progress --allow-untrusted "${GORELEASER_FILE}"
 rm "${GORELEASER_FILE}"
