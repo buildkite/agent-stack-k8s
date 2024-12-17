@@ -80,7 +80,7 @@ sequenceDiagram
 - A Cluster UUID (if using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters))
 
 
-### Deploying an AWS EKS Cluster
+### Creating the K8's cluster
 
 (For simplicity, this guide uses AWS EKS, but you can use any cloud provider or on-premises Kubernetes cluster.)
 
@@ -99,7 +99,7 @@ You can now run the following command to go ahead and create the required infras
     --max-pods-per-node 5 -N 4
 ```
 
-### Deploying with Helm
+### Deploying K8's stack using Helm
 
 The simplest way to get up and running is by deploying the Helm chart, which simplifies the process of installing and managing Buildkite agents on your Kubernetes cluster.
 
