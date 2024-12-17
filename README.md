@@ -74,15 +74,36 @@ sequenceDiagram
 
 ### Requirements
 
-- A Kubernetes cluster
+- A Kubernetes cluster (GKE, AKS, etc.)
 - An API token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
 - An [agent token](https://buildkite.com/docs/agent/v3/tokens)
+- A Cluster UUID (if using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters))
 
-### Deploy with Helm
 
-The simplest way to get up and running is by deploying our [Helm](https://helm.sh) chart:
+### Deploying an AWS EKS Cluster
 
-```bash
+(For simplicity, this guide uses AWS EKS, but you can use any cloud provider or on-premises Kubernetes cluster.)
+
+To begin, we need to create the required infrastructure (VPC, subnets, security groups, etc.) and then create the EKS cluster. Follow these steps to install and set up eksctl for managing AWS infrastructure:
+
+Download and install eksctl by following the [official installation guide](https://eksctl.io/installation/). Once comopleted ensure the binary is available in your system's PATH.
+
+You can now run the following command to go ahead and create the required infrastructure.
+
+
+```eksctl create cluster --name jykbuildkite-k8s \
+    --region ap-southeast-2 \
+    --nodegroup-name buildkite-nodes \
+    --nodes-min 3 \
+    --nodes-max 6 \
+    --max-pods-per-node 5 -N 4
+```
+
+### Deploying with Helm
+
+The simplest way to get up and running is by deploying the Helm chart, which simplifies the process of installing and managing Buildkite agents on your Kubernetes cluster.
+
+```
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --create-namespace \
     --namespace buildkite \
@@ -91,7 +112,17 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --set graphqlToken=<your Buildkite GraphQL-enabled API token>
 ```
 
+If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This can be done using a flag on the helm command like so:
+
+```
+--set config.cluster-uuid=<your cluster's UUID>
+```
+
+Alternatively, you can specify the UUID in a values file:
+
 If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
+
+
 ```yaml
 # values.yaml
 config:
