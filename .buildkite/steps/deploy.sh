@@ -8,7 +8,7 @@ apk add --update-cache --no-progress helm git
 source .buildkite/steps/repo_info.sh
 
 echo --- :helm: Helm upgrade
-helm upgrade agent-stack-k8s "${helm_repo}/agent-stack-k8s" \
+helm upgrade agent-stack-k8s "${helm_repo_pecr}/agent-stack-k8s" \
   --version "${version}" \
   --namespace buildkite \
   --install \

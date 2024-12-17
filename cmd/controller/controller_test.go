@@ -109,7 +109,8 @@ func TestReadAndParseConfig(t *testing.T) {
 			},
 			Containers: []corev1.Container{
 				{
-					Name: "container-0",
+					Name:  "container-0",
+					Image: "example.org/my-container@latest",
 					Env: []corev1.EnvVar{
 						{
 							Name: "GITHUB_TOKEN",
