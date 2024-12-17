@@ -1,0 +1,12 @@
+steps:
+  - label: ":x:"
+    agents:
+      queue: "{{.queue}}"
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: buildkite/agent-extreme:never # will not exist
+                imagePullPolicy: Never # should lead to ErrImageNeverPull
+                command:
+                  - echo 'this ought to fail'
