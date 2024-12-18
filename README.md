@@ -91,8 +91,9 @@ Download and install eksctl by following the [official installation guide](https
 You can now run the following command to go ahead and create the required infrastructure.
 
 
-```eksctl create cluster --name jykbuildkite-k8s \
-    --region ap-southeast-2 \
+```
+eksctl create cluster --name agent-stack-ks \
+    --region <your AWS region> \
     --nodegroup-name buildkite-nodes \
     --nodes-min 3 \
     --nodes-max 6 \
