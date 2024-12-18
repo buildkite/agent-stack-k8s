@@ -100,7 +100,7 @@ eksctl create cluster --name agent-stack-ks \
     --max-pods-per-node 5 -N 4
 ```
 
-#### Expected output
+Here is an example of the expected output:
 <details>
 
 
@@ -190,6 +190,23 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --set agentToken=<your Buildkite agent token> \
     --set graphqlToken=<your Buildkite GraphQL-enabled API token>
 ```
+
+<details>
+Here is the expected output:
+
+```
+Release "agent-stack-k8s" does not exist. Installing it now.
+Pulled: ghcr.io/buildkite/helm/agent-stack-k8s:0.20.2
+Digest: sha256:3d3153bfaa2ecbe42db36b6ee241b7f5c0e2f5b04517afb542e5a3d65a6ca597
+NAME: agent-stack-k8s
+LAST DEPLOYED: Thu Dec 19 09:54:47 2024
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+```
+
+</details>
 
 If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This can be done using a flag on the helm command like so:
 
