@@ -555,7 +555,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		)
 	}
 
-	initContainers := []corev1.Container{w.createInitContainer(podSpec, workspaceVolume)}
+	initContainers := []corev1.Container{w.createWorkspaceSetupContainer(podSpec, workspaceVolume)}
 
 	// Only attempt the job once.
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
@@ -781,7 +781,7 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec) (*corev1.PodS
 	return &patchedSpec, nil
 }
 
-func (w *worker) createInitContainer(podSpec *corev1.PodSpec, workspaceVolume *corev1.Volume) corev1.Container {
+func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspaceVolume *corev1.Volume) corev1.Container {
 	podUser, podGroup := int64(0), int64(0)
 	if podSpec.SecurityContext != nil {
 		if podSpec.SecurityContext.RunAsUser != nil {
