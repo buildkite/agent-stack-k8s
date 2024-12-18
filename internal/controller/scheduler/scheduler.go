@@ -806,11 +806,7 @@ func (w *worker) createInitContainer(podSpec *corev1.PodSpec, workspaceVolume *c
 			RunAsNonRoot: ptr.To(false),
 		}
 
-		fmt.Fprintf(&containerArgs, `set -eufo pipefail
-chown -R %d:%d /workspace`,
-			podUser,
-			podGroup,
-		)
+		fmt.Fprintf(&containerArgs, "chown -R %d:%d /workspace\n", podUser, podGroup)
 
 	case podUser != 0 && podGroup == 0:
 		//The init container needs to be run as root to create the user and give it ownership to the workspace directory
@@ -820,10 +816,7 @@ chown -R %d:%d /workspace`,
 			RunAsNonRoot: ptr.To[bool](false),
 		}
 
-		fmt.Fprintf(&containerArgs, `set -exufo pipefail
-chown -R %d /workspace`,
-			podUser,
-		)
+		fmt.Fprintf(&containerArgs, "chown -R %d /workspace\n", podUser)
 
 	// If the group is not root, but the user is root, I don't think we NEED to do anything. It's fine
 	// for the user and group to be root for the checked out repo, even though the Pod's security
@@ -844,8 +837,8 @@ chown -R %d /workspace`,
 		Name:            CopyAgentContainerName,
 		Image:           w.cfg.Image,
 		ImagePullPolicy: w.cfg.DefaultImagePullPolicy,
-		Command:         []string{"ash", "-c"},
-		Args:            []string{containerArgs.String()},
+		Command:         []string{"ash"},
+		Args:            []string{"-cefx", containerArgs.String()},
 		SecurityContext: securityContext,
 		VolumeMounts: []corev1.VolumeMount{{
 			Name:      workspaceVolume.Name,
