@@ -1,0 +1,17 @@
+steps:
+  - label: ":x:"
+    agents:
+      queue: "{{.queue}}"
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: alpine:latest
+                name: nope
+                command:
+                  - echo "la di da di da"
+          podSpecPatch:
+            containers:
+              - name: agent
+                command:
+                  - echo "am I out of touch? no, it's buildkite-agent that is wrong!"

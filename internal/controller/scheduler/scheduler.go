@@ -43,6 +43,11 @@ const (
 
 var errK8sPluginProhibited = errors.New("the kubernetes plugin is prohibited by this controller, but was configured on this job")
 
+var (
+	commandContainerCommand = []string{"/workspace/tini-static"}
+	commandContainerArgs    = []string{"--", "/workspace/buildkite-agent", "bootstrap"}
+)
+
 type Config struct {
 	Namespace                   string
 	Image                       string
@@ -399,8 +404,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		// Substitute the container's entrypoint for tini-static + buildkite-agent
 		// Note that tini-static (not plain tini) is needed because we don't
 		// know what libraries are available in the image.
-		c.Command = []string{"/workspace/tini-static"}
-		c.Args = []string{"--", "/workspace/buildkite-agent", "bootstrap"}
+		c.Command = commandContainerCommand
+		c.Args = commandContainerArgs
 
 		if c.ImagePullPolicy == "" {
 			c.ImagePullPolicy = w.cfg.DefaultImagePullPolicy
@@ -446,8 +451,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		c := corev1.Container{
 			Name:            "container-0",
 			Image:           w.cfg.Image,
-			Command:         []string{"/workspace/tini-static"},
-			Args:            []string{"--", "/workspace/buildkite-agent", "bootstrap"},
+			Command:         commandContainerCommand,
+			Args:            commandContainerArgs,
 			WorkingDir:      "/workspace",
 			VolumeMounts:    volumeMounts,
 			ImagePullPolicy: w.cfg.DefaultImagePullPolicy,
@@ -563,7 +568,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// Allow podSpec to be overridden by the controller config and the k8s plugin.
 	// Patch from the controller config is applied first.
 	if w.cfg.PodSpecPatch != nil {
-		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch)
+		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
 		}
@@ -573,7 +578,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	// If present, patch from the k8s plugin is applied second.
 	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpecPatch != nil {
-		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch)
+		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
 		}
@@ -747,14 +752,65 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	return kjob, nil
 }
 
-var ErrNoCommandModification = errors.New("modifying container commands or args via podSpecPatch is not supported. Specify the command in the job's command field instead")
+var ErrNoCommandModification = errors.New("modifying container commands or args via podSpecPatch is not supported")
 
-func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec) (*corev1.PodSpec, error) {
-	// We do special stuff™️ with container commands to make them run as buildkite agent things under the hood, so don't
-	// let users mess with them via podSpecPatch.
-	for _, c := range patch.Containers {
-		if len(c.Command) != 0 || len(c.Args) != 0 {
-			return nil, ErrNoCommandModification
+func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *config.CommandParams, k8sPlugin *KubernetesPlugin) (*corev1.PodSpec, error) {
+
+	// Index command containers by name - these should be unique within each podSpec.
+	originalContainers := make(map[string]*corev1.Container)
+	for i := range original.Containers {
+		c := &original.Containers[i]
+		originalContainers[c.Name] = c
+	}
+
+	// We do special stuff™️ with container commands to make them run as
+	// buildkite agent things under the hood, so don't let users mess with them
+	// via podSpecPatch.
+	for i := range patch.Containers {
+		c := &patch.Containers[i]
+		if len(c.Command) == 0 && len(c.Args) == 0 {
+			// No modification (strategic merge won't set these to empty).
+			continue
+		}
+		oc := originalContainers[c.Name]
+		if oc != nil && slices.Equal(c.Command, oc.Command) && slices.Equal(c.Args, oc.Args) {
+			// No modification (original and patch are equal).
+			continue
+		}
+
+		// Some modification is occuring.
+		// What we prevent vs what we fix up depends on the type of container.
+
+		// Agent, checkout: prevent command modification entirely.
+		switch c.Name {
+		case AgentContainerName:
+			return nil, fmt.Errorf("for the agent container, %w", ErrNoCommandModification)
+
+		case CheckoutContainerName:
+			return nil, fmt.Errorf("for the checkout container, %w; instead consider configuring a checkout hook or skipping the checkout container entirely", ErrNoCommandModification)
+
+		default:
+			// Is it patching a command container or a sidecar?
+			if oc == nil || !slices.Equal(oc.Command, commandContainerCommand) || !slices.Equal(oc.Args, commandContainerArgs) {
+				// It's either a new container, which for now we'll treat as
+				// a sidecar, or a patch on an existing sidecar.
+				// Since these are unmonitored by buildkite-agent within the pod
+				// the command modification is fine.
+				continue
+			}
+
+			// It's a command container. Remove the modification and apply the
+			// same transformation from container command to BUILDKITE_COMMAND.
+			command := cmdParams.Command(c.Command, c.Args)
+			if k8sPlugin != nil && k8sPlugin.CommandParams != nil && k8sPlugin.CommandParams.Interposer != "" {
+				command = k8sPlugin.CommandParams.Command(c.Command, c.Args)
+			}
+			c.Command = nil
+			c.Args = nil
+			c.Env = append(c.Env, corev1.EnvVar{
+				Name:  "BUILDKITE_COMMAND",
+				Value: command,
+			})
 		}
 	}
 
