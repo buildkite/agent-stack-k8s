@@ -441,7 +441,28 @@ func TestImagePullBackOffFailed(t *testing.T) {
 	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
 	logs := tc.FetchLogs(build)
 	assert.Contains(t, logs, "other job has run")
-	assert.Contains(t, logs, "The following container images couldn't be pulled:\n * \"buildkite/non-existant-image:latest\"")
+	assert.Contains(t, logs, "The following images could not be pulled or were unavailable:\n")
+	assert.Contains(t, logs, `"buildkite/non-existant-image:latest"`)
+	assert.Contains(t, logs, "ImagePullBackOff")
+}
+
+func TestPullPolicyNeverMissingImage(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "never-pull.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
+	logs := tc.FetchLogs(build)
+	assert.Contains(t, logs, "The following images could not be pulled or were unavailable:\n")
+	assert.Contains(t, logs, `"buildkite/agent-extreme:never"`)
+	assert.Contains(t, logs, "ErrImageNeverPull")
 }
 
 func TestBrokenInitContainer(t *testing.T) {
@@ -475,7 +496,7 @@ func TestInvalidImageRefFormat(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
 	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
-	tc.AssertLogsContain(build, "The following container images couldn't be pulled:\n * \"buildkite/agent:latest plus some extra junk\"")
+	tc.AssertLogsContain(build, `invalid reference format "buildkite/agent:latest plus some extra junk" for container "container-0"`)
 }
 
 func TestArtifactsUploadFailedJobs(t *testing.T) {

@@ -158,6 +158,7 @@ func TestJobPluginConversion(t *testing.T) {
 		nil,
 		scheduler.Config{
 			AgentTokenSecretName: "token-secret",
+			Image:                "buildkite/agent:latest",
 		},
 	)
 	inputs, err := worker.ParseJob(job)
@@ -242,6 +243,7 @@ func TestTagEnv(t *testing.T) {
 		nil,
 		scheduler.Config{
 			AgentTokenSecretName: "token-secret",
+			Image:                "buildkite/agent:latest",
 		},
 	)
 	inputs, err := worker.ParseJob(job)
@@ -275,7 +277,9 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 		Command:         "echo hello world",
 		AgentQueryRules: []string{},
 	}
-	worker := scheduler.New(zaptest.NewLogger(t), nil, scheduler.Config{})
+	worker := scheduler.New(zaptest.NewLogger(t), nil, scheduler.Config{
+		Image: "buildkite/agent:latest",
+	})
 	inputs, err := worker.ParseJob(job)
 	require.NoError(t, err)
 	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
