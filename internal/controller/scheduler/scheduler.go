@@ -1,12 +1,14 @@
 package scheduler
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +21,8 @@ import (
 
 	"github.com/buildkite/agent/v3/clicommand"
 
+	"github.com/distribution/reference"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"go.uber.org/zap"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -30,29 +34,31 @@ import (
 )
 
 const (
-	agentTokenKey                     = "BUILDKITE_AGENT_TOKEN"
-	AgentContainerName                = "agent"
-	CopyAgentContainerName            = "copy-agent"
-	ImagePullCheckContainerNamePrefix = "imagepullcheck-"
-	CheckoutContainerName             = "checkout"
+	agentTokenKey                 = "BUILDKITE_AGENT_TOKEN"
+	AgentContainerName            = "agent"
+	CopyAgentContainerName        = "copy-agent"
+	ImageCheckContainerNamePrefix = "imagecheck-"
+	CheckoutContainerName         = "checkout"
 )
 
 var errK8sPluginProhibited = errors.New("the kubernetes plugin is prohibited by this controller, but was configured on this job")
 
 type Config struct {
-	Namespace              string
-	Image                  string
-	AgentTokenSecretName   string
-	JobTTL                 time.Duration
-	AdditionalRedactedVars []string
-	WorkspaceVolume        *corev1.Volume
-	AgentConfig            *config.AgentConfig
-	DefaultCheckoutParams  *config.CheckoutParams
-	DefaultCommandParams   *config.CommandParams
-	DefaultSidecarParams   *config.SidecarParams
-	DefaultMetadata        config.Metadata
-	PodSpecPatch           *corev1.PodSpec
-	ProhibitK8sPlugin      bool
+	Namespace                   string
+	Image                       string
+	AgentTokenSecretName        string
+	JobTTL                      time.Duration
+	AdditionalRedactedVars      []string
+	WorkspaceVolume             *corev1.Volume
+	AgentConfig                 *config.AgentConfig
+	DefaultCheckoutParams       *config.CheckoutParams
+	DefaultCommandParams        *config.CommandParams
+	DefaultSidecarParams        *config.SidecarParams
+	DefaultMetadata             config.Metadata
+	DefaultImagePullPolicy      corev1.PullPolicy
+	DefaultImageCheckPullPolicy corev1.PullPolicy
+	PodSpecPatch                *corev1.PodSpec
+	ProhibitK8sPlugin           bool
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
@@ -396,9 +402,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		c.Command = []string{"/workspace/tini-static"}
 		c.Args = []string{"--", "/workspace/buildkite-agent", "bootstrap"}
 
-		// The image *should* be present since we just pulled it with an init
-		// container, but weirder things have happened.
-		c.ImagePullPolicy = corev1.PullIfNotPresent
+		if c.ImagePullPolicy == "" {
+			c.ImagePullPolicy = w.cfg.DefaultImagePullPolicy
+		}
+
 		c.Env = append(c.Env, containerEnv...)
 		c.Env = append(c.Env,
 			corev1.EnvVar{
@@ -443,7 +450,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			Args:            []string{"--", "/workspace/buildkite-agent", "bootstrap"},
 			WorkingDir:      "/workspace",
 			VolumeMounts:    volumeMounts,
-			ImagePullPolicy: corev1.PullIfNotPresent,
+			ImagePullPolicy: w.cfg.DefaultImagePullPolicy,
 			Env: append(containerEnv,
 				corev1.EnvVar{
 					Name:  "BUILDKITE_COMMAND",
@@ -550,31 +557,174 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	initContainers := []corev1.Container{w.createInitContainer(podSpec, workspaceVolume)}
 
-	// Pre-pull these images. (Note that even when specifying PullAlways,
-	// layers can still be cached on the node.)
-	preflightImagePulls := map[string]struct{}{}
-	for _, c := range podSpec.Containers {
-		preflightImagePulls[c.Image] = struct{}{}
-	}
-	for _, c := range podSpec.EphemeralContainers {
-		preflightImagePulls[c.Image] = struct{}{}
-	}
-	// w.cfg.Image is the first init container, so we don't need to add another
-	// container specifically to check it can pull. Same goes for user-supplied
-	// init containers.
-	delete(preflightImagePulls, w.cfg.Image)
-	for _, c := range podSpec.InitContainers {
-		delete(preflightImagePulls, c.Image)
+	// Only attempt the job once.
+	podSpec.RestartPolicy = corev1.RestartPolicyNever
+
+	// Allow podSpec to be overridden by the controller config and the k8s plugin.
+	// Patch from the controller config is applied first.
+	if w.cfg.PodSpecPatch != nil {
+		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
+		}
+		podSpec = patched
+		w.logger.Debug("Applied podSpec patch from agent", zap.Any("patched", patched))
 	}
 
+	// If present, patch from the k8s plugin is applied second.
+	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpecPatch != nil {
+		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
+		}
+		podSpec = patched
+		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
+	}
+
+	// Use init containers to check that images can be used or pulled before
+	// any other containers run. These are added _after_ podSpecPatch is applied
+	// since podSpecPatch may freely modify each container's image ref.
+	// This process also checks that image refs are well-formed so we can fail
+	// the job early.
+	// Init containers run before the agent, so we can acquire and fail the job
+	// if an init container stays in ImagePullBackOff for too long.
+	//
+	// Rank pull policy by preference. If two containers specify different pull
+	// policies, the most preferred policy is used for the image check.
+	// Always is most preferred, Never is least preferred.
+	var pullPolicyPreference = map[corev1.PullPolicy]int{
+		corev1.PullNever:        1,
+		corev1.PullIfNotPresent: 2,
+		corev1.PullAlways:       3,
+	}
+
+	// First decide which images to pre-check and what pull policy to use.
+	type policyAndRef struct {
+		policy corev1.PullPolicy
+		ref    reference.Reference
+	}
+	type imageParseErr struct {
+		container string
+		image     string
+		err       error
+	}
+	var invalidRefs []imageParseErr
+
+	preflightImageChecks := make(map[string]policyAndRef)
+	for _, c := range podSpec.Containers {
+		ref, err := reference.Parse(c.Image)
+		if err != nil {
+			invalidRefs = append(invalidRefs, imageParseErr{container: c.Name, image: c.Image, err: err})
+			continue
+		}
+
+		pnr, has := preflightImageChecks[c.Image]
+		if !has || pnr.policy == "" {
+			preflightImageChecks[c.Image] = policyAndRef{
+				policy: c.ImagePullPolicy,
+				ref:    ref,
+			}
+			continue
+		}
+
+		// Pick the more preferred pull policy of either what is present in
+		// preflightImagePulls or what the user set for c.ImagePullPolicy.
+		// Most to least preferred: Always, default, IfNotPresent, Never.
+		// (If two containers specify different policies, then to check that
+		// both will run, using the policy more likely to pull means the other
+		// is more likely to have an image if it succeeds, and more likely to
+		// fail quickly if the pull fails.
+		r := pullPolicyPreference[c.ImagePullPolicy]
+		s := pullPolicyPreference[pnr.policy]
+		if r > s {
+			preflightImageChecks[c.Image] = policyAndRef{
+				policy: c.ImagePullPolicy,
+				ref:    ref,
+			}
+		}
+	}
+
+	// We don't need to add more init containers to check images when existing
+	// init containers will do this for us implicitly.
+	cullCheckForExisting := func(c corev1.Container) {
+		if _, err := reference.Parse(c.Image); err != nil {
+			invalidRefs = append(invalidRefs, imageParseErr{container: c.Name, image: c.Image, err: err})
+			return
+		}
+
+		pnr, has := preflightImageChecks[c.Image]
+		if !has {
+			return // not an image we'd add a check for
+		}
+
+		r := pullPolicyPreference[c.ImagePullPolicy]
+		s := pullPolicyPreference[pnr.policy]
+		// If the existing init container has the same or higher preference than
+		// the image check container we would add, then no need to add it.
+		if r >= s {
+			delete(preflightImageChecks, c.Image)
+		}
+	}
+
+	cullCheckForExisting(initContainers[0])    // the workspace setup container
+	for _, c := range podSpec.InitContainers { // user-defined init containers
+		cullCheckForExisting(c)
+	}
+
+	// If any of the image refs were bad, return a single error with all of them
+	// in a sorted table.
+	if len(invalidRefs) > 0 {
+		if len(invalidRefs) == 1 {
+			ie := invalidRefs[0]
+			return nil, fmt.Errorf("%w %q for container %q", ie.err, ie.image, ie.container)
+		}
+
+		slices.SortFunc(invalidRefs, func(a, b imageParseErr) int {
+			return cmp.Compare(a.container, b.container)
+		})
+		tw := table.NewWriter()
+		tw.SetStyle(table.StyleColoredDark)
+		tw.AppendHeader(table.Row{"CONTAINER", "IMAGE REF", "PARSE ERROR"})
+		tw.AppendSeparator()
+		for _, ie := range invalidRefs {
+			tw.AppendRow(table.Row{
+				strconv.Quote(ie.container), // could also be invalid at this stage
+				strconv.Quote(ie.image),     // it couldn't be parsed, so quote it
+				ie.err,
+			})
+		}
+		return nil, errors.New("invalid image references\n\n" + tw.Render())
+	}
+
+	// Create the pre-flight image check containers.
 	i := 0
-	for image := range preflightImagePulls {
-		name := ImagePullCheckContainerNamePrefix + strconv.Itoa(i)
-		w.logger.Info("creating preflight image pull init container", zap.String("name", name), zap.String("image", image))
+	for image, pnr := range preflightImageChecks {
+		name := ImageCheckContainerNamePrefix + strconv.Itoa(i)
+		policy := pnr.policy
+		if policy == "" {
+			policy = w.cfg.DefaultImageCheckPullPolicy
+		}
+		if policy == "" {
+			// If pull policy is unspecified by either the podSpec{,Patch} or
+			// controller configuration, use Always, unless there is a
+			// digest that has pinned the ref, in which case use IfNotPresent.
+			// (No need to pull a pinned image ref if it's present.)
+			policy = corev1.PullAlways
+			if _, hasDigest := pnr.ref.(reference.Digested); hasDigest {
+				policy = corev1.PullIfNotPresent
+			}
+		}
+
+		w.logger.Debug(
+			"adding preflight image check init container",
+			zap.String("name", name),
+			zap.String("image", image),
+			zap.String("policy", string(policy)),
+		)
 		initContainers = append(initContainers, corev1.Container{
 			Name:            name,
 			Image:           image,
-			ImagePullPolicy: corev1.PullAlways,
+			ImagePullPolicy: policy,
 			// `tini-static --version` is sorta like `true`, but:
 			// (a) always exists (we *just* copied it into /workspace), and
 			// (b) is statically compiled, so should be compatible with whatever
@@ -589,31 +739,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		i++
 	}
 
+	// Prepend all the init containers defined above to the podspec.
 	podSpec.InitContainers = append(initContainers, podSpec.InitContainers...)
-
-	// Only attempt the job once.
-	podSpec.RestartPolicy = corev1.RestartPolicyNever
-
-	// Allow podSpec to be overridden by the agent configuration and the k8s plugin
-
-	// Patch from the agent is applied first
-	if w.cfg.PodSpecPatch != nil {
-		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch)
-		if err != nil {
-			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
-		}
-		podSpec = patched
-		w.logger.Debug("Applied podSpec patch from agent", zap.Any("patched", patched))
-	}
-
-	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpecPatch != nil {
-		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch)
-		if err != nil {
-			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
-		}
-		podSpec = patched
-		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
-	}
 
 	kjob.Spec.Template.Spec = *podSpec
 
@@ -716,7 +843,7 @@ chown -R %d /workspace`,
 		// /workspace.
 		Name:            CopyAgentContainerName,
 		Image:           w.cfg.Image,
-		ImagePullPolicy: corev1.PullAlways,
+		ImagePullPolicy: w.cfg.DefaultImagePullPolicy,
 		Command:         []string{"ash", "-c"},
 		Args:            []string{containerArgs.String()},
 		SecurityContext: securityContext,
@@ -738,7 +865,7 @@ func (w *worker) createCheckoutContainer(
 		Image:           w.cfg.Image,
 		WorkingDir:      "/workspace",
 		VolumeMounts:    volumeMounts,
-		ImagePullPolicy: corev1.PullIfNotPresent,
+		ImagePullPolicy: w.cfg.DefaultImagePullPolicy,
 		Env: []corev1.EnvVar{
 			{
 				Name:  "BUILDKITE_KUBERNETES_EXEC",

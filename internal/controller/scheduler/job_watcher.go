@@ -38,7 +38,7 @@ type jobWatcher struct {
 
 	// Tracks stalling jobs (jobs that have yet to create pods).
 	stallingJobsMu sync.Mutex
-	stallingJobs   map[*batchv1.Job]struct{}
+	stallingJobs   map[uuid.UUID]*batchv1.Job
 
 	// Tracks jobs that are being cleaned up (to avoid repeats).
 	ignoredJobsMu sync.RWMutex
@@ -58,7 +58,7 @@ func NewJobWatcher(logger *zap.Logger, k8sClient kubernetes.Interface, cfg *conf
 		logger:       logger,
 		k8s:          k8sClient,
 		cfg:          cfg,
-		stallingJobs: make(map[*batchv1.Job]struct{}),
+		stallingJobs: make(map[uuid.UUID]*batchv1.Job),
 		ignoredJobs:  make(map[uuid.UUID]struct{}),
 	}
 	jobsStallingGaugeFunc = func() int {
@@ -118,12 +118,13 @@ func (w *jobWatcher) OnDelete(prev any) {
 	if kjob == nil {
 		return
 	}
-	w.removeFromStalling(kjob)
 
 	jobUUID, err := jobUUIDForObject(kjob)
 	if err != nil {
 		return
 	}
+
+	w.removeFromStalling(jobUUID)
 
 	// The job is gone, so we can stop ignoring it (if it comes back).
 	w.unignoreJob(jobUUID)
@@ -145,10 +146,10 @@ func (w *jobWatcher) runChecks(ctx context.Context, kjob *batchv1.Job) {
 	}
 
 	if model.JobFinished(kjob) {
-		w.removeFromStalling(kjob)
+		w.removeFromStalling(jobUUID)
 		w.checkFinishedWithoutPod(ctx, log, kjob)
 	} else {
-		w.checkStalledWithoutPod(log, kjob)
+		w.checkStalledWithoutPod(log, jobUUID, kjob)
 	}
 }
 
@@ -171,7 +172,7 @@ func (w *jobWatcher) checkFinishedWithoutPod(ctx context.Context, log *zap.Logge
 	w.failJob(ctx, log, kjob, message)
 }
 
-func (w *jobWatcher) checkStalledWithoutPod(log *zap.Logger, kjob *batchv1.Job) {
+func (w *jobWatcher) checkStalledWithoutPod(log *zap.Logger, jobUUID uuid.UUID, kjob *batchv1.Job) {
 	log.Debug("Checking job for stalling without a pod")
 
 	// If the job is not finished and there is no pod, it should start one
@@ -184,7 +185,7 @@ func (w *jobWatcher) checkStalledWithoutPod(log *zap.Logger, kjob *batchv1.Job) 
 	}
 	if pods > 0 {
 		// All's well with the world.
-		w.removeFromStalling(kjob)
+		w.removeFromStalling(jobUUID)
 		return
 	}
 
@@ -193,7 +194,7 @@ func (w *jobWatcher) checkStalledWithoutPod(log *zap.Logger, kjob *batchv1.Job) 
 		return
 	}
 
-	w.addToStalling(kjob)
+	w.addToStalling(jobUUID, kjob)
 }
 
 func (w *jobWatcher) fetchEvents(ctx context.Context, log *zap.Logger, kjob *batchv1.Job) string {
@@ -248,16 +249,16 @@ func (w *jobWatcher) formatEvents(evlist *corev1.EventList) string {
 	return tw.Render()
 }
 
-func (w *jobWatcher) addToStalling(kjob *batchv1.Job) {
+func (w *jobWatcher) addToStalling(jobUUID uuid.UUID, kjob *batchv1.Job) {
 	w.stallingJobsMu.Lock()
 	defer w.stallingJobsMu.Unlock()
-	w.stallingJobs[kjob] = struct{}{}
+	w.stallingJobs[jobUUID] = kjob
 }
 
-func (w *jobWatcher) removeFromStalling(kjob *batchv1.Job) {
+func (w *jobWatcher) removeFromStalling(jobUUID uuid.UUID) {
 	w.stallingJobsMu.Lock()
 	defer w.stallingJobsMu.Unlock()
-	delete(w.stallingJobs, kjob)
+	delete(w.stallingJobs, jobUUID)
 }
 
 func (w *jobWatcher) stalledJobChecker(ctx context.Context) {
@@ -274,21 +275,17 @@ func (w *jobWatcher) stalledJobChecker(ctx context.Context) {
 		// Gather stalled jobs
 		var stalled []*batchv1.Job
 		w.stallingJobsMu.Lock()
-		for kjob := range w.stallingJobs {
+		for jobUUID, kjob := range w.stallingJobs {
 			if time.Since(kjob.Status.StartTime.Time) < w.cfg.EmptyJobGracePeriod {
 				continue
 			}
 
 			// ignore it from now until it is deleted
-			jobUUID, err := jobUUIDForObject(kjob)
-			if err != nil {
-				continue
-			}
 			w.ignoreJob(jobUUID)
 
 			// Move it from w.stalling into stalled
 			stalled = append(stalled, kjob)
-			delete(w.stallingJobs, kjob)
+			delete(w.stallingJobs, jobUUID)
 		}
 		w.stallingJobsMu.Unlock()
 

@@ -115,6 +115,16 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultEmptyJobGracePeriod,
 		"Duration after starting a Kubernetes job that the controller will wait before considering failing the job due to a missing pod (e.g. when the podSpec specifies a missing service account)",
 	)
+	cmd.Flags().String(
+		"default-image-pull-policy",
+		"IfNotPresent",
+		"Configures a default image pull policy for containers that do not specify a pull policy and non-init containers created by the stack itself",
+	)
+	cmd.Flags().String(
+		"default-image-check-pull-policy",
+		"",
+		"Sets a default PullPolicy for image-check init containers, used if an image pull policy is not set for the corresponding container in a podSpec or podSpecPatch",
+	)
 	cmd.Flags().Bool(
 		"prohibit-kubernetes-plugin",
 		false,

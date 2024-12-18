@@ -133,9 +133,10 @@ var (
 // Pod watcher metrics
 
 var (
-	// Overridden to return len(jobCancelCheckers) by podWatcher.
-	jobCancelCheckerGaugeFunc      = func() int { return 0 }
-	podWatcherIgnoredJobsGaugeFunc = func() int { return 0 }
+	// Overridden by podWatcher.
+	jobCancelCheckerGaugeFunc        = func() int { return 0 }
+	podWatcherIgnoredJobsGaugeFunc   = func() int { return 0 }
+	watchingForImageFailureGaugeFunc = func() int { return 0 }
 
 	_ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: promNamespace,
@@ -149,6 +150,12 @@ var (
 		Name:      "num_ignored_jobs",
 		Help:      "Current count of jobs ignored for podWatcher checks",
 	}, func() float64 { return float64(podWatcherIgnoredJobsGaugeFunc()) })
+	_ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: promNamespace,
+		Subsystem: "pod_watcher",
+		Name:      "num_watching_for_image_failure",
+		Help:      "Current count of pods being watched for potential image-related failures",
+	}, func() float64 { return float64(watchingForImageFailureGaugeFunc()) })
 
 	podWatcherOnAddEventCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,
