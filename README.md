@@ -100,7 +100,7 @@ eksctl create cluster --name agent-stack-ks \
     --max-pods-per-node 5 -N 4
 ```
 
-Here is an example of the expected output:
+Example of the expected output:
 <details>
 
 
@@ -191,8 +191,8 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --set graphqlToken=<your Buildkite GraphQL-enabled API token>
 ```
 
+Example of the expected output:
 <details>
-Here is the expected output:
 
 ```
 Release "agent-stack-k8s" does not exist. Installing it now.
