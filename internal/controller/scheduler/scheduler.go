@@ -555,25 +555,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		)
 	}
 
-	initContainers := []corev1.Container{
-		{
-			// This container copies buildkite-agent and tini-static into
-			// /workspace.
-			Name:            CopyAgentContainerName,
-			Image:           w.cfg.Image,
-			ImagePullPolicy: corev1.PullAlways,
-			Command:         []string{"cp"},
-			Args: []string{
-				"/usr/local/bin/buildkite-agent",
-				"/sbin/tini-static",
-				"/workspace",
-			},
-			VolumeMounts: []corev1.VolumeMount{{
-				Name:      workspaceVolume.Name,
-				MountPath: "/workspace",
-			}},
-		},
-	}
+	initContainers := []corev1.Container{w.createWorkspaceSetupContainer(podSpec, workspaceVolume)}
 
 	// Only attempt the job once.
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
@@ -797,6 +779,72 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec) (*corev1.PodS
 	}
 
 	return &patchedSpec, nil
+}
+
+func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspaceVolume *corev1.Volume) corev1.Container {
+	podUser, podGroup := int64(0), int64(0)
+	if podSpec.SecurityContext != nil {
+		if podSpec.SecurityContext.RunAsUser != nil {
+			podUser = *(podSpec.SecurityContext.RunAsUser)
+		}
+		if podSpec.SecurityContext.RunAsGroup != nil {
+			podGroup = *(podSpec.SecurityContext.RunAsGroup)
+		}
+	}
+
+	var securityContext *corev1.SecurityContext
+	var containerArgs strings.Builder
+	// Ensure that the checkout occurs as the user/group specified in the pod's security context.
+	// we will create a buildkite-agent user/group in the checkout container as needed and switch
+	// to it. The created user/group will have the uid/gid specified in the pod's security context.
+	switch {
+	case podUser != 0 && podGroup != 0:
+		// The init container needs to be run as root to create the user and give it ownership to the workspace directory
+		securityContext = &corev1.SecurityContext{
+			RunAsUser:    ptr.To[int64](0),
+			RunAsGroup:   ptr.To[int64](0),
+			RunAsNonRoot: ptr.To(false),
+		}
+
+		fmt.Fprintf(&containerArgs, "chown -R %d:%d /workspace\n", podUser, podGroup)
+
+	case podUser != 0 && podGroup == 0:
+		//The init container needs to be run as root to create the user and give it ownership to the workspace directory
+		securityContext = &corev1.SecurityContext{
+			RunAsUser:    ptr.To[int64](0),
+			RunAsGroup:   ptr.To[int64](0),
+			RunAsNonRoot: ptr.To[bool](false),
+		}
+
+		fmt.Fprintf(&containerArgs, "chown -R %d /workspace\n", podUser)
+
+	// If the group is not root, but the user is root, I don't think we NEED to do anything. It's fine
+	// for the user and group to be root for the checked out repo, even though the Pod's security
+	// context has a non-root group.
+	default:
+		securityContext = nil
+	}
+	// Init containers. These run in order before the regular containers.
+	// We run some init containers before any specified in the given podSpec.
+	//
+	// We use an init container to copy buildkite-agent into /workspace.
+	// We also use init containers to check that images can be pulled before
+	// any other containers run.
+	containerArgs.WriteString("\ncp /usr/local/bin/buildkite-agent /sbin/tini-static /workspace\n")
+	return corev1.Container{
+		// This container copies buildkite-agent and tini-static into
+		// /workspace.
+		Name:            CopyAgentContainerName,
+		Image:           w.cfg.Image,
+		ImagePullPolicy: w.cfg.DefaultImagePullPolicy,
+		Command:         []string{"ash"},
+		Args:            []string{"-cefx", containerArgs.String()},
+		SecurityContext: securityContext,
+		VolumeMounts: []corev1.VolumeMount{{
+			Name:      workspaceVolume.Name,
+			MountPath: "/workspace",
+		}},
+	}
 }
 
 func (w *worker) createCheckoutContainer(
