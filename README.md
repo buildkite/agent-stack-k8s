@@ -100,9 +100,11 @@ eksctl create cluster --name agent-stack-ks \
     --max-pods-per-node 5 -N 4
 ```
 
-Expected output
+#### Expected output
 <details>
-```shell
+
+
+```
 eksctl create cluster --name buildkite-k8-cluster --region ap-southeast-2 --nodegroup-name buildkite-nodes --nodes-min 3 --nodes-max 6 --max-pods-per-node 5 -N 4
 2024-12-18 10:37:24 [ℹ]  eksctl version 0.198.0-dev+8c015c84d.2024-12-10T17:20:22Z
 2024-12-18 10:37:24 [ℹ]  using region ap-southeast-2
@@ -173,6 +175,7 @@ eksctl create cluster --name buildkite-k8-cluster --region ap-southeast-2 --node
 2024-12-18 10:51:34 [ℹ]  kubectl command should work with "/Users/jykingston/.kube/config", try 'kubectl get nodes'
 2024-12-18 10:51:34 [✔]  EKS cluster "buildkite-k8-cluster" in "ap-southeast-2" region is ready
 ```
+
 </details>
 
 ### Deploying K8's stack using Helm
