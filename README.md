@@ -74,15 +74,115 @@ sequenceDiagram
 
 ### Requirements
 
-- A Kubernetes cluster
+- A Kubernetes cluster (GKE, AKS, etc.)
 - An API token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
 - An [agent token](https://buildkite.com/docs/agent/v3/tokens)
+- A Cluster UUID (if using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters))
 
-### Deploy with Helm
 
-The simplest way to get up and running is by deploying our [Helm](https://helm.sh) chart:
+### Creating the K8's cluster
 
-```bash
+(For simplicity, this guide uses AWS EKS, but you can use any cloud provider or on-premises Kubernetes cluster.)
+
+To begin, we need to create the required infrastructure (VPC, subnets, security groups, etc.) and then create the EKS cluster. Follow these steps to install and set up eksctl for managing AWS infrastructure:
+
+Download and install eksctl by following the [official installation guide](https://eksctl.io/installation/). Once comopleted ensure the binary is available in your system's PATH.
+
+You can now run the following command to go ahead and create the required infrastructure.
+
+
+```
+eksctl create cluster --name agent-stack-ks \
+    --region <your AWS region> \
+    --nodegroup-name buildkite-nodes \
+    --nodes-min 3 \
+    --nodes-max 6 \
+    --max-pods-per-node 5 -N 4
+```
+
+Example of the expected output:
+<details>
+
+
+```
+eksctl create cluster --name buildkite-k8-cluster --region ap-southeast-2 --nodegroup-name buildkite-nodes --nodes-min 3 --nodes-max 6 --max-pods-per-node 5 -N 4
+2024-12-18 10:37:24 [ℹ]  eksctl version 0.198.0-dev+8c015c84d.2024-12-10T17:20:22Z
+2024-12-18 10:37:24 [ℹ]  using region ap-southeast-2
+2024-12-18 10:37:24 [ℹ]  setting availability zones to [ap-southeast-2b ap-southeast-2a ap-southeast-2c]
+2024-12-18 10:37:24 [ℹ]  subnets for ap-southeast-2b - public:192.168.0.0/19 private:192.168.96.0/19
+2024-12-18 10:37:24 [ℹ]  subnets for ap-southeast-2a - public:192.168.32.0/19 private:192.168.128.0/19
+2024-12-18 10:37:24 [ℹ]  subnets for ap-southeast-2c - public:192.168.64.0/19 private:192.168.160.0/19
+2024-12-18 10:37:24 [ℹ]  nodegroup "buildkite-nodes" will use "" [AmazonLinux2/1.30]
+2024-12-18 10:37:24 [ℹ]  using Kubernetes version 1.30
+2024-12-18 10:37:24 [ℹ]  creating EKS cluster "buildkite-k8-cluster" in "ap-southeast-2" region with managed nodes
+2024-12-18 10:37:24 [ℹ]  will create 2 separate CloudFormation stacks for cluster itself and the initial managed nodegroup
+2024-12-18 10:37:24 [ℹ]  if you encounter any issues, check CloudFormation console or try 'eksctl utils describe-stacks --region=ap-southeast-2 --cluster=buildkite-k8-cluster'
+2024-12-18 10:37:24 [ℹ]  Kubernetes API endpoint access will use default of {publicAccess=true, privateAccess=false} for cluster "buildkite-k8-cluster" in "ap-southeast-2"
+2024-12-18 10:37:24 [ℹ]  CloudWatch logging will not be enabled for cluster "buildkite-k8-cluster" in "ap-southeast-2"
+2024-12-18 10:37:24 [ℹ]  you can enable it with 'eksctl utils update-cluster-logging --enable-types={SPECIFY-YOUR-LOG-TYPES-HERE (e.g. all)} --region=ap-southeast-2 --cluster=buildkite-k8-cluster'
+2024-12-18 10:37:24 [ℹ]  default addons vpc-cni, kube-proxy, coredns were not specified, will install them as EKS addons
+2024-12-18 10:37:24 [ℹ]  
+2 sequential tasks: { create cluster control plane "buildkite-k8-cluster", 
+    2 sequential sub-tasks: { 
+        2 sequential sub-tasks: { 
+            1 task: { create addons },
+            wait for control plane to become ready,
+        },
+        create managed nodegroup "buildkite-nodes",
+    } 
+}
+2024-12-18 10:37:24 [ℹ]  building cluster stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:37:25 [ℹ]  deploying stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:37:55 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:38:25 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:39:25 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:40:25 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:41:25 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:42:25 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:43:26 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:44:26 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:45:26 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:46:26 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-cluster"
+2024-12-18 10:46:27 [!]  recommended policies were found for "vpc-cni" addon, but since OIDC is disabled on the cluster, eksctl cannot configure the requested permissions; the recommended way to provide IAM permissions for "vpc-cni" addon is via pod identity associations; after addon creation is completed, add all recommended policies to the config file, under `addon.PodIdentityAssociations`, and run `eksctl update addon`
+2024-12-18 10:46:27 [ℹ]  creating addon
+2024-12-18 10:46:28 [ℹ]  successfully created addon
+2024-12-18 10:46:28 [ℹ]  creating addon
+2024-12-18 10:46:29 [ℹ]  successfully created addon
+2024-12-18 10:46:29 [ℹ]  creating addon
+2024-12-18 10:46:29 [ℹ]  successfully created addon
+2024-12-18 10:48:30 [ℹ]  building managed nodegroup stack "eksctl-buildkite-k8-cluster-nodegroup-buildkite-nodes"
+2024-12-18 10:48:31 [ℹ]  deploying stack "eksctl-buildkite-k8-cluster-nodegroup-buildkite-nodes"
+2024-12-18 10:48:31 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-nodegroup-buildkite-nodes"
+2024-12-18 10:49:01 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-nodegroup-buildkite-nodes"
+2024-12-18 10:49:37 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-nodegroup-buildkite-nodes"
+2024-12-18 10:51:33 [ℹ]  waiting for CloudFormation stack "eksctl-buildkite-k8-cluster-nodegroup-buildkite-nodes"
+2024-12-18 10:51:33 [ℹ]  waiting for the control plane to become ready
+2024-12-18 10:51:33 [✔]  saved kubeconfig as "/Users/jykingston/.kube/config"
+2024-12-18 10:51:33 [ℹ]  no tasks
+2024-12-18 10:51:33 [✔]  all EKS cluster resources for "buildkite-k8-cluster" have been created
+2024-12-18 10:51:34 [ℹ]  nodegroup "buildkite-nodes" has 4 node(s)
+2024-12-18 10:51:34 [ℹ]  node "ip-192-168-23-49.ap-southeast-2.compute.internal" is ready
+2024-12-18 10:51:34 [ℹ]  node "ip-192-168-59-61.ap-southeast-2.compute.internal" is ready
+2024-12-18 10:51:34 [ℹ]  node "ip-192-168-78-38.ap-southeast-2.compute.internal" is ready
+2024-12-18 10:51:34 [ℹ]  node "ip-192-168-94-142.ap-southeast-2.compute.internal" is ready
+2024-12-18 10:51:34 [ℹ]  waiting for at least 3 node(s) to become ready in "buildkite-nodes"
+2024-12-18 10:51:34 [ℹ]  nodegroup "buildkite-nodes" has 4 node(s)
+2024-12-18 10:51:34 [ℹ]  node "ip-192-168-23-49.ap-southeast-2.compute.internal" is ready
+2024-12-18 10:51:34 [ℹ]  node "ip-192-168-59-61.ap-southeast-2.compute.internal" is ready
+2024-12-18 10:51:34 [ℹ]  node "ip-192-168-78-38.ap-southeast-2.compute.internal" is ready
+2024-12-18 10:51:34 [ℹ]  node "ip-192-168-94-142.ap-southeast-2.compute.internal" is ready
+2024-12-18 10:51:34 [✔]  created 1 managed nodegroup(s) in cluster "buildkite-k8-cluster"
+2024-12-18 10:51:34 [ℹ]  kubectl command should work with "/Users/jykingston/.kube/config", try 'kubectl get nodes'
+2024-12-18 10:51:34 [✔]  EKS cluster "buildkite-k8-cluster" in "ap-southeast-2" region is ready
+```
+
+</details>
+
+### Deploying K8's stack using Helm
+
+The simplest way to get up and running is by deploying the Helm chart, which simplifies the process of installing and managing Buildkite agents on your Kubernetes cluster.
+
+```
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --create-namespace \
     --namespace buildkite \
@@ -91,7 +191,34 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --set graphqlToken=<your Buildkite GraphQL-enabled API token>
 ```
 
+Example of the expected output:
+<details>
+
+```
+Release "agent-stack-k8s" does not exist. Installing it now.
+Pulled: ghcr.io/buildkite/helm/agent-stack-k8s:0.20.2
+Digest: sha256:3d3153bfaa2ecbe42db36b6ee241b7f5c0e2f5b04517afb542e5a3d65a6ca597
+NAME: agent-stack-k8s
+LAST DEPLOYED: Thu Dec 19 09:54:47 2024
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+```
+
+</details>
+
+If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This can be done using a flag on the helm command like so:
+
+```
+--set config.cluster-uuid=<your cluster's UUID>
+```
+
+Alternatively, you can specify the UUID in a values file:
+
 If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
+
+
 ```yaml
 # values.yaml
 config:
