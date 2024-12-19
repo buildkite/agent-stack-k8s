@@ -2,7 +2,6 @@ package integration_test
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -54,7 +53,7 @@ func TestPodSpecPatchInStep(t *testing.T) {
 	tc.AssertLogsContain(build, "value of MOUNTAIN is cotopaxi")
 }
 
-func TestPodSpecPatchInStepFailsWhenPatchingContainerCommands(t *testing.T) {
+func TestPodSpecPatchAllowsPatchingCommandContainerCommands(t *testing.T) {
 	tc := testcase{
 		T:       t,
 		Fixture: "podspecpatch-command-step.yaml",
@@ -68,8 +67,26 @@ func TestPodSpecPatchInStepFailsWhenPatchingContainerCommands(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "i love quito")
+}
+
+func TestPodSpecPatchRejectsPatchingAgentContainerCommand(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "podspecpatch-agent.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+
 	tc.AssertFail(ctx, build)
-	tc.AssertLogsContain(build, fmt.Sprintf("%v", scheduler.ErrNoCommandModification))
+	tc.AssertLogsContain(build, scheduler.ErrNoCommandModification.Error())
 }
 
 func TestPodSpecPatchInController(t *testing.T) {
