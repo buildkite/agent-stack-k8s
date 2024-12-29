@@ -47,29 +47,31 @@ When a job is available, the controller will create a pod to acquire and run the
 The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
 
 ## Architecture
-
 ```mermaid
 sequenceDiagram
-    participant bc as buildkite controller
-    participant gql as Buildkite GraphQL API
-    participant bapi as Buildkite API
-    participant kubernetes
-    bc->>gql: Get scheduled builds & jobs
-    gql-->>bc: {build: jobs: [{uuid: "abc"}]}
-    kubernetes->>pod: start
-    bc->>kubernetes: watch for pod completions
-    bc->>kubernetes: create pod with agent sidecar
-    kubernetes->>pod: create
-    pod->>bapi: agent accepts & starts job
-    pod->>pod: run sidecars
-    pod->>pod: agent bootstrap
-    pod->>pod: run user pods to completion
-    pod->>bapi: upload artifacts, exit code
-    pod->>pod: agent exit
-    kubernetes->>bc: pod completion event
-    bc->>kubernetes: cleanup finished pods
-```
+    participant BC as Buildkite Controller
+    participant GQL as Buildkite GraphQL API
+    participant API as Buildkite API
+    participant K8S as Kubernetes
+    participant Pod
 
+    BC->>GQL: 1. Fetch scheduled builds & jobs
+    GQL-->>BC: 2. Respond with builds & jobs<br>{build: jobs: [{uuid: "abc"}]}
+    
+    BC->>K8S: 3. Create pod with agent sidecar
+    K8S->>Pod: 4. Initialize pod
+    
+    BC->>K8S: 5. Watch for pod completions
+    Pod->>API: 6. Agent accepts & starts job
+    Pod->>Pod: 7. Execute sidecars
+    Pod->>Pod: 8. Agent bootstraps environment
+    Pod->>Pod: 9. Run user-defined tasks
+    Pod->>API: 10. Upload artifacts and exit code
+    Pod->>Pod: 11. Agent exits
+    
+    K8S->>BC: 12. Notify pod completion
+    BC->>K8S: 13. Cleanup completed pods
+```
 ## Installation
 
 ### Requirements
@@ -82,16 +84,15 @@ sequenceDiagram
 
 ### Creating the K8s cluster
 
-(For simplicity, this guide uses AWS EKS, but you can use any cloud provider or on-premises Kubernetes cluster.)
+**(For simplicity, this guide uses AWS EKS, but you can use any cloud provider or on-premises Kubernetes cluster.)**
 
-To begin, we need to create the required infrastructure (VPC, subnets, security groups, etc.) and then create the EKS cluster. Follow these steps to install and set up eksctl for managing AWS infrastructure:
+To begin, we need to create the infrastuture that we are going to deploy our Agent into. 
 
-Download and install eksctl by following the [official installation guide](https://eksctl.io/installation/). Once comopleted ensure the binary is available in your system's PATH.
+You will need to download and install `eksctl` first by following the [official installation guide](https://eksctl.io/installation/)
 
-You can now run the following command to go ahead and create the required infrastructure.
+Once installed, you can run the following `eksctl` command to create the infrusturcutre in AWS (VPC, Subnets, Security Groups, etc).
 
-
-```
+```console
 eksctl create cluster --name agent-stack-ks \
     --region <your AWS region> \
     --nodegroup-name buildkite-nodes \
@@ -100,8 +101,8 @@ eksctl create cluster --name agent-stack-ks \
     --max-pods-per-node 5 -N 4
 ```
 
-Example of the expected output:
 <details>
+<summary>Example of the expected output:</summary>
 
 
 ```
@@ -182,17 +183,17 @@ eksctl create cluster --name buildkite-k8-cluster --region ap-southeast-2 --node
 
 The simplest way to get up and running is by deploying the Helm chart, which simplifies the process of installing and managing Buildkite agents on your Kubernetes cluster.
 
-```
+```console
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --create-namespace \
     --namespace buildkite \
     --set config.org=<your Buildkite org slug> \
     --set agentToken=<your Buildkite agent token> \
-    --set graphqlToken=<your Buildkite GraphQL-enabled API token>
+    --set graphqlToken=<your Buildkite GraphQL-enabled API token> \
+    --set config.cluster-uuid=<your cluster's UUID>
 ```
-
-Example of the expected output:
 <details>
+<summary>Example of the expected output</summary>
 
 ```
 Release "agent-stack-k8s" does not exist. Installing it now.
@@ -208,26 +209,23 @@ TEST SUITE: None
 
 </details>
 
-If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This can be done using a flag on the helm command like so:
+To obtain the cluster's UUID, you will need to navigate to the [Agents page](https://buildkite.com/organizations/-/clusters), select the required cluster and then select the "Settings". Here you will find the UUID listed in the "GraphQL API Integration" section as the first value.
 
-```
---set config.cluster-uuid=<your cluster's UUID>
-```
-
-Alternatively, you can specify the UUID in a values file:
-
-If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
-
+The Cluster UUID can also be you can specifed in a values file:
 
 ```yaml
 # values.yaml
 config:
   cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 ```
-The cluster's UUID may be obtained by navigating to the [clusters page](https://buildkite.com/organizations/-/clusters), clicking on the relevant cluster and then clicking on "Settings". It will be in a section titled "GraphQL API Integration".
 
 > [!NOTE]
 > Don't confuse the Cluster UUID with the UUID for the Queue. See [the docs](https://buildkite.com/docs/clusters/overview) for an explanation.
+
+
+> [!NOTE]
+> If you are using an unclustered setup, you can omit the `config.cluster-uuid` parameter.
+
 
 We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
 which means you'll need Helm version 3.8.0 or newer.
@@ -275,7 +273,7 @@ Configuration can also be provided by a config file (`--config` or `CONFIG`), or
 
 You can also have an external provider create a secret for you in the namespace before deploying the chart with helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
 
-```bash
+```console
 --set agentStackSecret=<secret-name>
 ```
 
@@ -294,7 +292,7 @@ dependencies:
 
 or use it as a template:
 
-```
+```console
 helm template oci://ghcr.io/buildkite/helm/agent-stack-k8s -f my-values.yaml
 ```
 
@@ -419,7 +417,7 @@ If you need to use git ssh credentials in your job containers, we recommend one 
 You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
 
 Supposing a SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
-```bash
+```console
 kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_DSA_KEY="$HOME/.ssh/id_ecdsa"
 ```
 
@@ -460,7 +458,7 @@ Once again, this example is illustrative only.
 First, create a Kubernetes secret containing the key `.git-credentials`, formatted in the manner
 expected by [the `store` Git credendial helper](https://git-scm.com/docs/git-credential-store):
 
-```bash
+```console
 kubectl create secret generic my-git-credentials --from-file='.git-credentials'="$HOME/.git-credentials"
 ```
 
@@ -565,7 +563,7 @@ config:
           name: git-checkout # <---- this is the same secret name you would have put in `gitEnvFrom` in the kubernetes plugin
 ```
 You may use the `-f` or `--values` arguments to `helm upgrade` to specify a `values.yaml` file.
-```shell
+```console
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --create-namespace \
     --namespace buildkite \
@@ -890,7 +888,7 @@ Any volume source can be specified for keys, but a common choice is to use a
 and ideally are never shown in plain text.
 
 1.  Create one or two secrets containing signing and verification keys:
-    ```shell
+    ```console
     kubectl create secret generic my-signing-key --from-file='key'="$HOME/private.jwk"
     kubectl create secret generic my-verification-key --from-file='key'="$HOME/public.jwk"
     ```
@@ -937,7 +935,7 @@ choice is to use a `configMap`, since hooks generally aren't very big and
 config maps are made available across the cluster.
 
 1.  Create the config map containing hooks:
-    ```shell
+    ```console
     kubectl create configmap buildkite-agent-hooks --from-file=/tmp/hooks -n buildkite
     ```
 
@@ -979,7 +977,7 @@ In case of agent-stack-k8s, we need these hooks to be accessible to the kubernet
 
 Here is the command to create `configmap` which will have agent hooks in it:
 
-```shell
+```console
 kubectl create configmap buildkite-agent-hooks --from-file=/tmp/hooks -n buildkite
 ```
 We have all the hooks under directory `/tmp/hooks` and we are creating `configmap` with name `buildkite-agent-hooks` in `buildkite`
