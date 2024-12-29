@@ -80,7 +80,7 @@ sequenceDiagram
 - A Cluster UUID (if using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters))
 
 
-### Creating the K8's cluster
+### Creating the K8s cluster
 
 (For simplicity, this guide uses AWS EKS, but you can use any cloud provider or on-premises Kubernetes cluster.)
 
