@@ -11,6 +11,8 @@ job-creation-concurrency: 5
 max-in-flight: 100
 namespace: my-buildkite-ns
 org: my-buildkite-org
+default-image-pull-policy: Never
+default-image-check-pull-policy: IfNotPresent
 
 # Setting a custom GraphQL endpoint is usually only useful if you have a
 #  different instance of Buildkite itself available to run.
@@ -92,6 +94,7 @@ pod-spec-patch:
     selectors.example.com/my-selector: example-value
   containers:
     - name: container-0
+      image: example.org/my-container@latest
       env:
         - name: GITHUB_TOKEN
           valueFrom:

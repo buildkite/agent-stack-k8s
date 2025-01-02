@@ -491,6 +491,18 @@
             }
           }
         },
+        "default-image-pull-policy": {
+          "type": "string",
+          "description": "Configures a default image pull policy for containers that do not specify a pull policy, or containers created by the stack itself",
+          "default": "IfNotPresent",
+          "examples": ["Always", "IfNotPresent", "Never", ""]
+        },
+        "default-image-check-pull-policy": {
+          "type": "string",
+          "description": "Configures a default image pull policy for image-check init containers, used if an image pull policy is not set for the corresponding container in a podSpec or podSpecPatch",
+          "default": "",
+          "examples": ["Always", "IfNotPresent", "Never", ""]
+        },
         "pod-spec-patch": {
           "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
         }

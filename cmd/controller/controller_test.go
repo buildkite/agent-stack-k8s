@@ -37,6 +37,8 @@ func TestReadAndParseConfig(t *testing.T) {
 		ClusterUUID:                  "beefcafe-abbe-baba-abba-deedcedecade",
 		ProhibitKubernetesPlugin:     true,
 		GraphQLEndpoint:              "http://graphql.buildkite.localhost/v1",
+		DefaultImagePullPolicy:       "Never",
+		DefaultImageCheckPullPolicy:  "IfNotPresent",
 
 		WorkspaceVolume: &corev1.Volume{
 			Name: "workspace-2-the-reckoning",
@@ -109,7 +111,8 @@ func TestReadAndParseConfig(t *testing.T) {
 			},
 			Containers: []corev1.Container{
 				{
-					Name: "container-0",
+					Name:  "container-0",
+					Image: "example.org/my-container@latest",
 					Env: []corev1.EnvVar{
 						{
 							Name: "GITHUB_TOKEN",

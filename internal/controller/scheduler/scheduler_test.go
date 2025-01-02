@@ -1,12 +1,12 @@
-package scheduler_test
+package scheduler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,14 +19,13 @@ func TestPatchPodSpec(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name      string
-		podspec   *corev1.PodSpec
-		patch     *corev1.PodSpec
-		assertion func(t *testing.T, result *corev1.PodSpec)
-		err       error
+		name    string
+		podspec *corev1.PodSpec
+		patch   *corev1.PodSpec
+		want    *corev1.PodSpec
 	}{
 		{
-			name: "patching a container",
+			name: "patching in a new unmanaged container",
 			podspec: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
@@ -45,19 +44,57 @@ func TestPatchPodSpec(t *testing.T) {
 					},
 				},
 			},
-			assertion: func(t *testing.T, result *corev1.PodSpec) {
-				assert.Equal(t, "debian:latest", result.Containers[0].Image)
+			want: &corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name:  "my-cool-container",
+					Image: "debian:latest",
+				}, {
+					Image: "alpine:latest",
+					Command: []string{
+						"echo hello world",
+					},
+				}},
 			},
 		},
 		{
-			name: "patching container commands should fail",
+			name: "patching a sidecar container",
 			podspec: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
-						Image: "alpine:latest",
-						Command: []string{
-							"echo hello world",
-						},
+						Name:    "sidecar-0",
+						Image:   "alpine:latest",
+						Command: []string{"echo hello world"},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:    "sidecar-0",
+						Command: []string{"echo goodbye world"},
+					},
+				},
+			},
+			want: &corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name:    "sidecar-0",
+					Image:   "alpine:latest",
+					Command: []string{"echo goodbye world"},
+				}},
+			},
+		},
+		{
+			name: "patching command container commands and args should work",
+			podspec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:    "my-cool-container",
+						Image:   "alpine:latest",
+						Command: commandContainerCommand,
+						Args:    commandContainerArgs,
+						Env: []corev1.EnvVar{{
+							Name: "BUILDKITE_COMMAND", Value: "echo hello world",
+						}},
 					},
 				},
 			},
@@ -65,44 +102,135 @@ func TestPatchPodSpec(t *testing.T) {
 				Containers: []corev1.Container{
 					{
 						Name:    "my-cool-container",
-						Command: []string{"this", "shouldn't", "work"},
+						Command: []string{"this should"},
+						Args:    []string{"work", "as", "expected"},
 					},
 				},
 			},
-			err: scheduler.ErrNoCommandModification,
+			want: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:    "my-cool-container",
+						Image:   "alpine:latest",
+						Command: commandContainerCommand,
+						Args:    commandContainerArgs,
+						Env: []corev1.EnvVar{{
+							Name: "BUILDKITE_COMMAND", Value: "this should work as expected",
+						}},
+					},
+				},
+			},
 		},
+	}
+
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := PatchPodSpec(test.podspec, test.patch, nil, nil)
+			if err != nil {
+				t.Fatalf("PodSpecPatch error = %v", err)
+			}
+			if diff := cmp.Diff(got, test.want); diff != "" {
+				t.Errorf("PodSpecPatch result diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestPatchPodSpec_ErrNoCommandModification(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		podspec *corev1.PodSpec
+		patch   *corev1.PodSpec
+	}{
 		{
-			name: "patching container args should fail",
+			name: "patching agent command should fail",
 			podspec: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
-						Image: "alpine:latest",
-						Command: []string{
-							"echo hello world",
-						},
+						Name:    AgentContainerName,
+						Image:   "alpine:latest",
+						Command: []string{"echo hello world"},
 					},
 				},
 			},
 			patch: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
-						Name: "my-cool-container",
-						Args: []string{"this", "also", "shouldn't", "work"},
+						Name:    AgentContainerName,
+						Command: []string{"this shouldn't work"},
 					},
 				},
 			},
-			err: scheduler.ErrNoCommandModification,
+		},
+		{
+			name: "patching agent args should fail",
+			podspec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:    AgentContainerName,
+						Image:   "alpine:latest",
+						Command: []string{"echo hello world"},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name: AgentContainerName,
+						Args: []string{"this", "shouldn't", "work"},
+					},
+				},
+			},
+		},
+		{
+			name: "patching checkout command should fail",
+			podspec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:    CheckoutContainerName,
+						Image:   "alpine:latest",
+						Command: []string{"echo hello world"},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:    CheckoutContainerName,
+						Command: []string{"this shouldn't work"},
+					},
+				},
+			},
+		},
+		{
+			name: "patching checkout args should fail",
+			podspec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:    CheckoutContainerName,
+						Image:   "alpine:latest",
+						Command: []string{"echo hello world"},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name: CheckoutContainerName,
+						Args: []string{"this", "shouldn't", "work"},
+					},
+				},
+			},
 		},
 	}
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			result, err := scheduler.PatchPodSpec(c.podspec, c.patch)
-			if c.err != nil {
-				require.Error(t, err)
-				require.ErrorIs(t, c.err, err)
-			} else {
-				c.assertion(t, result)
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := PatchPodSpec(test.podspec, test.patch, nil, nil)
+			if !errors.Is(err, ErrNoCommandModification) {
+				t.Errorf("PodSpecPatch error = %v, want ErrNoCommandModification (%v)", err, ErrNoCommandModification)
 			}
 		})
 	}
@@ -110,7 +238,7 @@ func TestPatchPodSpec(t *testing.T) {
 
 func TestJobPluginConversion(t *testing.T) {
 	t.Parallel()
-	pluginConfig := scheduler.KubernetesPlugin{
+	pluginConfig := KubernetesPlugin{
 		PodSpec: &corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
@@ -153,11 +281,12 @@ func TestJobPluginConversion(t *testing.T) {
 		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	worker := scheduler.New(
+	worker := New(
 		zaptest.NewLogger(t),
 		nil,
-		scheduler.Config{
+		Config{
 			AgentTokenSecretName: "token-secret",
+			Image:                "buildkite/agent:latest",
 		},
 	)
 	inputs, err := worker.ParseJob(job)
@@ -215,7 +344,7 @@ func TestTagEnv(t *testing.T) {
 	t.Parallel()
 	logger := zaptest.NewLogger(t)
 
-	pluginConfig := scheduler.KubernetesPlugin{
+	pluginConfig := KubernetesPlugin{
 		PodSpec: &corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
@@ -237,11 +366,12 @@ func TestTagEnv(t *testing.T) {
 		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	worker := scheduler.New(
+	worker := New(
 		logger,
 		nil,
-		scheduler.Config{
+		Config{
 			AgentTokenSecretName: "token-secret",
+			Image:                "buildkite/agent:latest",
 		},
 	)
 	inputs, err := worker.ParseJob(job)
@@ -275,7 +405,9 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 		Command:         "echo hello world",
 		AgentQueryRules: []string{},
 	}
-	worker := scheduler.New(zaptest.NewLogger(t), nil, scheduler.Config{})
+	worker := New(zaptest.NewLogger(t), nil, Config{
+		Image: "buildkite/agent:latest",
+	})
 	inputs, err := worker.ParseJob(job)
 	require.NoError(t, err)
 	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
@@ -309,10 +441,10 @@ func TestBuild(t *testing.T) {
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 
-	worker := scheduler.New(
+	worker := New(
 		zaptest.NewLogger(t),
 		nil,
-		scheduler.Config{
+		Config{
 			Namespace:            "buildkite",
 			Image:                "buildkite/agent:latest",
 			AgentTokenSecretName: "bkcq_1234567890",
@@ -377,10 +509,10 @@ func TestBuildSkipCheckout(t *testing.T) {
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 
-	worker := scheduler.New(
+	worker := New(
 		zaptest.NewLogger(t),
 		nil,
-		scheduler.Config{
+		Config{
 			Namespace:            "buildkite",
 			Image:                "buildkite/agent:latest",
 			AgentTokenSecretName: "bkcq_1234567890",
@@ -422,10 +554,10 @@ func TestBuildCheckoutEmptyConfigEnv(t *testing.T) {
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 
-	worker := scheduler.New(
+	worker := New(
 		zaptest.NewLogger(t),
 		nil,
-		scheduler.Config{
+		Config{
 			Namespace:            "buildkite",
 			Image:                "buildkite/agent:latest",
 			AgentTokenSecretName: "bkcq_1234567890",
@@ -461,7 +593,7 @@ func TestFailureJobs(t *testing.T) {
 		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	wrapper := scheduler.New(zaptest.NewLogger(t), nil, scheduler.Config{})
+	wrapper := New(zaptest.NewLogger(t), nil, Config{})
 	_, err = wrapper.ParseJob(job)
 	require.Error(t, err)
 }
@@ -470,7 +602,7 @@ func TestProhibitKubernetesPlugin(t *testing.T) {
 	t.Parallel()
 	pluginsJSON, err := json.Marshal([]map[string]any{
 		{
-			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": scheduler.KubernetesPlugin{},
+			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": KubernetesPlugin{},
 		},
 	})
 	require.NoError(t, err)
@@ -480,7 +612,7 @@ func TestProhibitKubernetesPlugin(t *testing.T) {
 		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	worker := scheduler.New(zaptest.NewLogger(t), nil, scheduler.Config{
+	worker := New(zaptest.NewLogger(t), nil, Config{
 		ProhibitK8sPlugin: true,
 	})
 	_, err = worker.ParseJob(job)

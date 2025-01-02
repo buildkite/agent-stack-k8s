@@ -64,6 +64,9 @@ type Config struct {
 	DefaultSidecarParams  *SidecarParams  `json:"default-sidecar-params"  validate:"omitempty"`
 	DefaultMetadata       Metadata        `json:"default-metadata"        validate:"omitempty"`
 
+	DefaultImagePullPolicy      corev1.PullPolicy `json:"default-image-pull-policy"       validate:"omitempty"`
+	DefaultImageCheckPullPolicy corev1.PullPolicy `json:"default-image-check-pull-policy" validate:"omitempty"`
+
 	// ProhibitKubernetesPlugin can be used to prevent alterations to the pod
 	// from the job (the kubernetes "plugin" in pipeline.yml). If enabled,
 	// jobs with a "kubernetes" plugin will fail.
@@ -120,6 +123,8 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	if err := enc.AddReflected("default-metadata", c.DefaultMetadata); err != nil {
 		return err
 	}
+	enc.AddString("default-image-pull-policy", string(c.DefaultImagePullPolicy))
+	enc.AddString("default-image-check-pull-policy", string(c.DefaultImageCheckPullPolicy))
 	return nil
 }
 
