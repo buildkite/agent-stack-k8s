@@ -1,16 +1,24 @@
 package monitor
 
 import (
+	"cmp"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"sort"
+	"maps"
+	"math/rand/v2"
+	"reflect"
+	"slices"
+	"sync"
 	"time"
 
-	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
+
+	"github.com/Khan/genqlient/graphql"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 )
@@ -22,24 +30,32 @@ type Monitor struct {
 }
 
 type Config struct {
-	Namespace    string
-	Token        string
-	ClusterUUID  string
-	MaxInFlight  int
-	PollInterval time.Duration
-	Org          string
-	Tags         []string
-}
-
-type JobHandler interface {
-	Create(context.Context, *api.CommandJob) error
+	GraphQLEndpoint        string
+	Namespace              string
+	Token                  string
+	ClusterUUID            string
+	MaxInFlight            int
+	JobCreationConcurrency int
+	PollInterval           time.Duration
+	StaleJobDataTimeout    time.Duration
+	Org                    string
+	Tags                   []string
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
-	graphqlClient := api.NewClient(cfg.Token)
+	graphqlClient := api.NewClient(cfg.Token, cfg.GraphQLEndpoint)
 
-	if cfg.PollInterval < time.Second {
-		cfg.PollInterval = time.Second
+	// Poll no more frequently than every 1s (please don't DoS us).
+	cfg.PollInterval = min(cfg.PollInterval, time.Second)
+
+	// Default StaleJobDataTimeout to 10s.
+	if cfg.StaleJobDataTimeout <= 0 {
+		cfg.StaleJobDataTimeout = config.DefaultStaleJobDataTimeout
+	}
+
+	// Default CreationConcurrency to 5.
+	if cfg.JobCreationConcurrency <= 0 {
+		cfg.JobCreationConcurrency = config.DefaultJobCreationConcurrency
 	}
 
 	return &Monitor{
@@ -89,7 +105,16 @@ func (r clusteredJobResp) CommandJobs() []*api.JobJobTypeCommand {
 
 // getScheduledCommandJobs calls either the clustered or unclustered GraphQL API
 // methods, depending on if a cluster uuid was provided in the config
-func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jobResp, error) {
+func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jobResp jobResp, err error) {
+	jobQueryCounter.Inc()
+	start := time.Now()
+	defer func() {
+		jobQueryDurationHistogram.Observe(time.Since(start).Seconds())
+		if err != nil {
+			jobQueryErrorCounter.Inc()
+		}
+	}()
+
 	if m.cfg.ClusterUUID == "" {
 		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)})
 		return unclusteredJobResp(*resp), err
@@ -106,19 +131,14 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 	return clusteredJobResp(*resp), err
 }
 
-func toMapAndLogErrors(logger *zap.Logger, tags []string) map[string]string {
-	agentTags, tagErrs := agenttags.ToMap(tags)
-	if len(tagErrs) != 0 {
-		logger.Warn("making a map of agent tags", zap.Errors("err", tagErrs))
-	}
-	return agentTags
-}
-
-func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
+func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan error {
 	logger := m.logger.With(zap.String("org", m.cfg.Org))
 	errs := make(chan error, 1)
 
-	agentTags := toMapAndLogErrors(logger, m.cfg.Tags)
+	agentTags, tagErrs := agenttags.TagMapFromTags(m.cfg.Tags)
+	if len(tagErrs) != 0 {
+		logger.Warn("making a map of agent tags", zap.Errors("err", tagErrs))
+	}
 
 	var queue string
 	var ok bool
@@ -129,6 +149,11 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 
 	go func() {
 		logger.Info("started")
+		defer logger.Info("stopped")
+
+		monitorUpGauge.Set(1)
+		defer monitorUpGauge.Set(0)
+
 		ticker := time.NewTicker(m.cfg.PollInterval)
 		defer ticker.Stop()
 
@@ -142,6 +167,8 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 			case <-ticker.C:
 			case <-first:
 			}
+
+			queriedAt := time.Now() // used for end-to-end durations
 
 			resp, err := m.getScheduledCommandJobs(ctx, queue)
 			if err != nil {
@@ -159,34 +186,157 @@ func (m *Monitor) Start(ctx context.Context, handler JobHandler) <-chan error {
 			}
 
 			jobs := resp.CommandJobs()
-
-			// TODO: sort by ScheduledAt in the API
-			sort.Slice(jobs, func(i, j int) bool {
-				return jobs[i].ScheduledAt.Before(jobs[j].ScheduledAt)
-			})
-
-			for _, job := range jobs {
-				jobTags := toMapAndLogErrors(logger, job.AgentQueryRules)
-
-				// The api returns jobs that match ANY agent tags (the agent query rules)
-				// However, we can only acquire jobs that match ALL agent tags
-				if !agenttags.JobTagsMatchAgentTags(jobTags, agentTags) {
-					logger.Debug("skipping job because it did not match all tags", zap.Any("job", job))
-					continue
-				}
-
-				logger.Debug("creating job", zap.String("uuid", job.Uuid))
-				if err := handler.Create(ctx, &job.CommandJob); err != nil {
-					if ctx.Err() != nil {
-						return
-					}
-					logger.Error("failed to create job", zap.Error(err))
-				}
+			if len(jobs) == 0 {
+				continue
 			}
+
+			jobsReturnedCounter.Add(float64(len(jobs)))
+
+			// The next handler should be the Limiter (except in some tests).
+			// Limiter handles deduplicating jobs before passing to the scheduler.
+			m.passJobsToNextHandler(ctx, logger, handler, agentTags, jobs, queriedAt)
 		}
 	}()
 
 	return errs
+}
+
+func (m *Monitor) passJobsToNextHandler(
+	ctx context.Context,
+	logger *zap.Logger,
+	handler model.JobHandler,
+	agentTags map[string]string,
+	jobs []*api.JobJobTypeCommand,
+	queriedAt time.Time,
+) {
+	// A sneaky way to create a channel that is closed after a duration.
+	// Why not pass directly to handler.Handle? Because that might
+	// interrupt scheduling a pod, when all we want is to bound the
+	// time spent waiting for the limiter.
+	staleCtx, staleCancel := context.WithTimeout(ctx, m.cfg.StaleJobDataTimeout)
+	defer staleCancel()
+
+	// Why shuffle the jobs? Suppose we sort the jobs to prefer, say, oldest.
+	// The first job we'll always try to schedule will then be the oldest, which
+	// sounds reasonable. But if that job is not able to be accepted by the
+	// cluster for some reason (e.g. there are multiple stack controllers on the
+	// same BK queue, and the job is already created by another controller),
+	// and the k8s API is slow, then we'll live-lock between grabbing jobs,
+	// trying to run the same oldest one, failing, then timing out (staleness).
+	// Shuffling increases the odds of making progress.
+	rand.Shuffle(len(jobs), func(i, j int) {
+		jobs[i], jobs[j] = jobs[j], jobs[i]
+	})
+
+	// After shuffling, sort by priority. This negates some of the benefit of
+	// shuffling (suppose all the highest priority jobs have difficulty being
+	// scheduled).
+	slices.SortFunc(jobs, func(a, b *api.JobJobTypeCommand) int {
+		// Higher number = higher priority.
+		// See https://buildkite.com/docs/pipelines/configure/workflows/managing-priorities
+		return cmp.Compare(b.Priority.Number, a.Priority.Number)
+	})
+
+	// We also try to get more jobs to the API by processing them in parallel.
+	jobsCh := make(chan *api.JobJobTypeCommand)
+	defer close(jobsCh)
+
+	var wg sync.WaitGroup
+	for range min(m.cfg.JobCreationConcurrency, len(jobs)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			jobHandlerWorker(ctx, staleCtx, logger, handler, agentTags, queriedAt, jobsCh)
+		}()
+	}
+	defer wg.Wait()
+
+	for i, job := range jobs {
+		select {
+		case <-ctx.Done():
+			return
+		case <-staleCtx.Done():
+			// Every remaining job is stale.
+			staleJobsCounter.Add(float64(len(jobs) - i))
+			return
+		case jobsCh <- job:
+		}
+	}
+}
+
+func jobHandlerWorker(
+	ctx, staleCtx context.Context,
+	logger *zap.Logger,
+	handler model.JobHandler,
+	agentTags map[string]string,
+	queriedAt time.Time,
+	jobsCh <-chan *api.JobJobTypeCommand,
+) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-staleCtx.Done():
+			return
+		case j := <-jobsCh:
+			if j == nil {
+				return
+			}
+			jobsReachedWorkerCounter.Inc()
+
+			jobTags, tagErrs := agenttags.TagMapFromTags(j.AgentQueryRules)
+			if len(tagErrs) != 0 {
+				logger.Warn("making a map of job tags", zap.Errors("err", tagErrs))
+			}
+
+			// The api returns jobs that match ANY agent tags (the agent query rules)
+			// However, we can only acquire jobs that match ALL agent tags
+			if !agenttags.JobTagsMatchAgentTags(maps.All(jobTags), agentTags) {
+				logger.Debug("skipping job because it did not match all tags", zap.Any("job", j))
+				jobsFilteredOutCounter.Inc()
+				continue
+			}
+
+			job := model.Job{
+				CommandJob: &j.CommandJob,
+				StaleCh:    staleCtx.Done(),
+				QueriedAt:  queriedAt,
+			}
+
+			// The next handler should be the deduper (except in some tests).
+			// Deduper handles deduplicating jobs before passing to the scheduler.
+			logger.Debug("passing job to next handler",
+				zap.Stringer("handler", reflect.TypeOf(handler)),
+				zap.String("job-uuid", j.Uuid),
+			)
+			jobHandlerCallsCounter.Inc()
+			// The next handler operates under the main ctx, but can optionally
+			// use staleCtx.Done() (stored in job) to skip work. (Only Limiter
+			// does this.)
+			switch err := handler.Handle(ctx, job); {
+			case errors.Is(err, model.ErrDuplicateJob):
+				// Job wasn't scheduled because it's already scheduled.
+				jobHandlerErrorCounter.WithLabelValues("duplicate").Inc()
+
+			case errors.Is(err, model.ErrStaleJob):
+				// Job wasn't scheduled because the data has become stale.
+				// Staleness is set within this function, so we can return early.
+				jobHandlerErrorCounter.WithLabelValues("stale").Inc()
+				staleJobsCounter.Inc() // also incremented elsewhere
+				return
+
+			case err != nil:
+				// Note: this check is for the original context, not staleCtx,
+				// in order to avoid the log when the context is cancelled
+				// (particularly during tests).
+				if ctx.Err() != nil {
+					return
+				}
+				logger.Error("failed to create job", zap.Error(err))
+				jobHandlerErrorCounter.WithLabelValues("other").Inc()
+			}
+		}
+	}
 }
 
 func encodeClusterGraphQLID(clusterUUID string) string {

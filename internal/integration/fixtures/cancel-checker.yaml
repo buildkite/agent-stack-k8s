@@ -1,0 +1,20 @@
+steps:
+  - label: ":stopwatch:"
+    agents:
+      queue: "{{.queue}}"
+    plugins:
+      - kubernetes:
+          podSpec:
+            initContainers:
+              - name: snorlax
+                image: buildkite/agent:latest
+                command:
+                  - "/bin/sh"
+                args:
+                  - "-c"
+                  - "sleep 20"
+            containers: # one command needed to make a valid podspec
+              - name: load-bearing
+                image: buildkite/agent:latest
+                command:
+                  - "echo romeo romeo oscar romeo"

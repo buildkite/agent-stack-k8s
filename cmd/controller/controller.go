@@ -83,10 +83,47 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"",
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)",
 	)
+	cmd.Flags().Uint16(
+		"prometheus-port",
+		0,
+		"Bind port to expose Prometheus /metrics; 0 disables it",
+	)
+	cmd.Flags().String("graphql-endpoint", "", "Buildkite GraphQL endpoint URL")
+
+	cmd.Flags().Duration(
+		"stale-job-data-timeout",
+		config.DefaultStaleJobDataTimeout,
+		"Duration after querying jobs in Buildkite that the data is considered valid",
+	)
+	cmd.Flags().Int(
+		"job-creation-concurrency",
+		config.DefaultJobCreationConcurrency,
+		"Number of concurrent goroutines to run for converting Buildkite jobs into Kubernetes jobs",
+	)
 	cmd.Flags().Duration(
 		"image-pull-backoff-grace-period",
 		config.DefaultImagePullBackOffGracePeriod,
 		"Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled)",
+	)
+	cmd.Flags().Duration(
+		"job-cancel-checker-poll-interval",
+		config.DefaultJobCancelCheckerPollInterval,
+		"Controls the interval between job state queries while a pod is still Pending",
+	)
+	cmd.Flags().Duration(
+		"empty-job-grace-period",
+		config.DefaultEmptyJobGracePeriod,
+		"Duration after starting a Kubernetes job that the controller will wait before considering failing the job due to a missing pod (e.g. when the podSpec specifies a missing service account)",
+	)
+	cmd.Flags().String(
+		"default-image-pull-policy",
+		"IfNotPresent",
+		"Configures a default image pull policy for containers that do not specify a pull policy and non-init containers created by the stack itself",
+	)
+	cmd.Flags().String(
+		"default-image-check-pull-policy",
+		"",
+		"Sets a default PullPolicy for image-check init containers, used if an image pull policy is not set for the corresponding container in a podSpec or podSpecPatch",
 	)
 	cmd.Flags().Bool(
 		"prohibit-kubernetes-plugin",
@@ -108,9 +145,16 @@ func ReadConfigFromFileArgsAndEnv(cmd *cobra.Command, args []string) (*viper.Vip
 		configFile = os.Getenv("CONFIG")
 	}
 
-	v := viper.New()
+	// By default Viper unmarshals a key like "a.b.c" as nested maps:
+	//   map[string]any{"a": map[string]any{"b": map[string]any{"c": ... }}}
+	// which is frustrating, because `.` is commonly used in Kubernetes labels,
+	// annotations, and node selector keys (they tend to use domain names to
+	// "namespace" keys). So change Viper's delimiter to`::`.
+	v := viper.NewWithOptions(
+		viper.KeyDelimiter("::"),
+		viper.EnvKeyReplacer(strings.NewReplacer("-", "_")),
+	)
 	v.SetConfigFile(configFile)
-	v.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 
 	// Bind the flags to the viper instance, but only those that can appear in the config file.
 	errs := []error{}

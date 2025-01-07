@@ -3,10 +3,20 @@ debug: true
 image: my.registry.dev/buildkite-agent:latest
 job-ttl: 5m
 image-pull-backoff-grace-period: 60s
+job-cancel-checker-poll-interval: 10s
+empty-job-grace-period: 50s
 poll-interval: 5s
+stale-job-data-timeout: 10s
+job-creation-concurrency: 5
 max-in-flight: 100
 namespace: my-buildkite-ns
 org: my-buildkite-org
+default-image-pull-policy: Never
+default-image-check-pull-policy: IfNotPresent
+
+# Setting a custom GraphQL endpoint is usually only useful if you have a
+#  different instance of Buildkite itself available to run.
+graphql-endpoint: http://graphql.buildkite.localhost/v1
 
 # only set cluster-uuid if the pipelines are in a cluster
 # the UUID may be found in the cluster settings
@@ -20,6 +30,25 @@ tags:
 # (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail,
 # preventing the pipeline YAML from having any influence over the podSpec
 prohibit-kubernetes-plugin: true
+
+# The workspace volume can be overriden from its default (an emptyDir named
+# 'workspace').
+workspace-volume:
+  name: workspace-2-the-reckoning
+  ephemeral:
+    volumeClaimTemplate:
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: my-special-storage-class
+        resources:
+          requests:
+            storage: 1Gi
+
+# Applies to all agents
+agent-config:
+  # Setting a custom Agent REST API endpoint is usually only useful if you have
+  #  a different instance of Buildkite itself available to run.
+  endpoint: http://agent.buildkite.localhost/v3
 
 # Applies to the checkout container in all spawned pods
 default-checkout-params:
@@ -45,13 +74,27 @@ default-sidecar-params:
       configMapRef:
         name: logging-config
 
+# Applied to all spawned jobs.
+default-metadata:
+  annotations:
+    # Note the constraints on annotation names:
+    # https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/#syntax-and-character-set
+    imageregistry: "https://hub.docker.com/"
+  labels:
+    # Note the constraints on label names:
+    # https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
+    argocd.argoproj.io/tracking-id: example-id-here
+
 # This will be applied to the job's podSpec as a strategic merge patch
 # See https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch
 pod-spec-patch:
   serviceAccountName: buildkite-agent-sa
   automountServiceAccountToken: true
+  nodeSelector:
+    selectors.example.com/my-selector: example-value
   containers:
     - name: container-0
+      image: example.org/my-container@latest
       env:
         - name: GITHUB_TOKEN
           valueFrom:

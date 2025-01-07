@@ -1,0 +1,17 @@
+steps:
+  - label: ":x:"
+    agents:
+      queue: "{{.queue}}"
+    plugins:
+      - kubernetes:
+          podSpec:
+            initContainers:
+              - name: broken
+                image: buildkite/agent:latest
+                command:
+                  - "well this isn't going to work"
+            containers: # one command needed to make a valid podspec
+              - name: load-bearing
+                image: buildkite/agent:latest
+                command:
+                  - "echo romeo romeo oscar romeo"

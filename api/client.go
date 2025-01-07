@@ -13,7 +13,10 @@ import (
 	"github.com/Khan/genqlient/graphql"
 )
 
-func NewClient(token string) graphql.Client {
+func NewClient(token, endpoint string) graphql.Client {
+	if endpoint == "" {
+		endpoint = "https://graphql.buildkite.com/v1"
+	}
 	httpClient := http.Client{
 		Timeout: 60 * time.Second,
 		Transport: NewLogger(&authedTransport{
@@ -21,7 +24,7 @@ func NewClient(token string) graphql.Client {
 			wrapped: http.DefaultTransport,
 		}),
 	}
-	return graphql.NewClient("https://graphql.buildkite.com/v1", &httpClient)
+	return graphql.NewClient(endpoint, &httpClient)
 }
 
 type authedTransport struct {
@@ -30,8 +33,24 @@ type authedTransport struct {
 }
 
 func (t *authedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", "Bearer "+t.key)
-	return t.wrapped.RoundTrip(req)
+	// RoundTripper should not mutate the request except to close the body, and
+	// should always close the request body whether or not there was an error.
+	// See https://pkg.go.dev/net/http#RoundTripper.
+	// This implementation based on https://github.com/golang/oauth2/blob/master/transport.go
+	reqBodyClosed := false
+	if req.Body != nil {
+		defer func() {
+			if !reqBodyClosed {
+				req.Body.Close()
+			}
+		}()
+	}
+
+	reqCopy := req.Clone(req.Context())
+	reqCopy.Header.Set("Authorization", "Bearer "+t.key)
+
+	reqBodyClosed = true
+	return t.wrapped.RoundTrip(reqCopy)
 }
 
 type logTransport struct {
@@ -51,20 +70,19 @@ func (t *logTransport) RoundTrip(in *http.Request) (out *http.Response, err erro
 	log.Printf("--> %s %s", in.Method, in.URL)
 
 	// Save these headers so we can redact Authorization.
-	savedHeaders := in.Header.Clone()
+	inCopy := in
 	if in.Header != nil && in.Header.Get("authorization") != "" {
-		in.Header.Set("authorization", "<redacted>")
+		inCopy = in.Clone(in.Context())
+		inCopy.Header.Set("authorization", "<redacted>")
 	}
 
-	b, err := httputil.DumpRequestOut(in, true)
-	if err == nil {
-		log.Println(string(b))
-	} else {
+	b, err := httputil.DumpRequestOut(inCopy, true)
+	if err != nil {
 		log.Printf("Failed to dump request %s %s: %v", in.Method, in.URL, err)
 	}
-
-	// Restore the non-redacted headers.
-	in.Header = savedHeaders
+	if b := string(b); b != "" {
+		log.Println(b)
+	}
 
 	start := time.Now()
 	out, err = t.inner.RoundTrip(in)
@@ -72,21 +90,22 @@ func (t *logTransport) RoundTrip(in *http.Request) (out *http.Response, err erro
 	if err != nil {
 		log.Printf("<-- %v %s %s (%s)", err, in.Method, in.URL, duration)
 	}
-	if out != nil {
-		msg := fmt.Sprintf("<-- %d", out.StatusCode)
-		if out.Request != nil {
-			msg = fmt.Sprintf("%s %s", msg, out.Request.URL)
-		}
-		msg = fmt.Sprintf("%s (%s)", msg, duration)
 
-		log.Print(msg)
+	if out == nil {
+		return
+	}
+	msg := fmt.Sprintf("<-- %d", out.StatusCode)
+	if out.Request != nil {
+		msg = fmt.Sprintf("%s %s", msg, out.Request.URL)
+	}
+	log.Printf("%s (%s)", msg, duration)
 
-		b, err := httputil.DumpResponse(out, true)
-		if err == nil {
-			log.Println(string(b))
-		} else {
-			log.Printf("Failed to dump response %s %s: %v", in.Method, in.URL, err)
-		}
+	b, err = httputil.DumpResponse(out, true)
+	if err != nil {
+		log.Printf("Failed to dump response %s %s: %v", in.Method, in.URL, err)
+	}
+	if b := string(b); b != "" {
+		log.Println(b)
 	}
 	return
 }

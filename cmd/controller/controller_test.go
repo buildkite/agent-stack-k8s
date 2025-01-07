@@ -6,6 +6,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/google/go-cmp/cmp"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -18,19 +19,48 @@ func ptr[T any](v T) *T {
 
 func TestReadAndParseConfig(t *testing.T) {
 	expected := config.Config{
-		Debug:                       true,
-		AgentTokenSecret:            "my-kubernetes-secret",
-		BuildkiteToken:              "my-graphql-enabled-token",
-		Image:                       "my.registry.dev/buildkite-agent:latest",
-		JobTTL:                      300 * time.Second,
-		ImagePullBackOffGradePeriod: 60 * time.Second,
-		PollInterval:                5 * time.Second,
-		MaxInFlight:                 100,
-		Namespace:                   "my-buildkite-ns",
-		Org:                         "my-buildkite-org",
-		Tags:                        []string{"queue=my-queue", "priority=high"},
-		ClusterUUID:                 "beefcafe-abbe-baba-abba-deedcedecade",
-		ProhibitKubernetesPlugin:    true,
+		Debug:                        true,
+		AgentTokenSecret:             "my-kubernetes-secret",
+		BuildkiteToken:               "my-graphql-enabled-token",
+		Image:                        "my.registry.dev/buildkite-agent:latest",
+		JobTTL:                       300 * time.Second,
+		ImagePullBackOffGracePeriod:  60 * time.Second,
+		JobCancelCheckerPollInterval: 10 * time.Second,
+		EmptyJobGracePeriod:          50 * time.Second,
+		PollInterval:                 5 * time.Second,
+		StaleJobDataTimeout:          10 * time.Second,
+		JobCreationConcurrency:       5,
+		MaxInFlight:                  100,
+		Namespace:                    "my-buildkite-ns",
+		Org:                          "my-buildkite-org",
+		Tags:                         []string{"queue=my-queue", "priority=high"},
+		ClusterUUID:                  "beefcafe-abbe-baba-abba-deedcedecade",
+		ProhibitKubernetesPlugin:     true,
+		GraphQLEndpoint:              "http://graphql.buildkite.localhost/v1",
+		DefaultImagePullPolicy:       "Never",
+		DefaultImageCheckPullPolicy:  "IfNotPresent",
+
+		WorkspaceVolume: &corev1.Volume{
+			Name: "workspace-2-the-reckoning",
+			VolumeSource: corev1.VolumeSource{
+				Ephemeral: &corev1.EphemeralVolumeSource{
+					VolumeClaimTemplate: &corev1.PersistentVolumeClaimTemplate{
+						Spec: corev1.PersistentVolumeClaimSpec{
+							AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+							StorageClassName: ptr("my-special-storage-class"),
+							Resources: corev1.VolumeResourceRequirements{
+								Requests: corev1.ResourceList{
+									"storage": resource.MustParse("1Gi"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		AgentConfig: &config.AgentConfig{
+			Endpoint: ptr("http://agent.buildkite.localhost/v3"),
+		},
 		DefaultCommandParams: &config.CommandParams{
 			Interposer: config.InterposerVector,
 			EnvFrom: []corev1.EnvFromSource{{
@@ -65,12 +95,24 @@ func TestReadAndParseConfig(t *testing.T) {
 				},
 			}},
 		},
+		DefaultMetadata: config.Metadata{
+			Annotations: map[string]string{
+				"imageregistry": "https://hub.docker.com/",
+			},
+			Labels: map[string]string{
+				"argocd.argoproj.io/tracking-id": "example-id-here",
+			},
+		},
 		PodSpecPatch: &corev1.PodSpec{
 			ServiceAccountName:           "buildkite-agent-sa",
 			AutomountServiceAccountToken: ptr(true),
+			NodeSelector: map[string]string{
+				"selectors.example.com/my-selector": "example-value",
+			},
 			Containers: []corev1.Container{
 				{
-					Name: "container-0",
+					Name:  "container-0",
+					Image: "example.org/my-container@latest",
 					Env: []corev1.EnvVar{
 						{
 							Name: "GITHUB_TOKEN",
@@ -115,5 +157,8 @@ func TestReadAndParseConfig(t *testing.T) {
 
 	actual, err := controller.ParseAndValidateConfig(v)
 	require.NoError(t, err)
-	require.Equal(t, expected, *actual)
+
+	if diff := cmp.Diff(*actual, expected); diff != "" {
+		t.Errorf("parsed config diff (-got +want):\n%s", diff)
+	}
 }

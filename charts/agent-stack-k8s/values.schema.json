@@ -165,10 +165,16 @@
       "title": "The config Schema",
       "required": ["org"],
       "properties": {
+        "graphql-endpoint": {
+          "type": "string",
+          "default": "",
+          "title": "The GraphQL endpoint URL",
+          "examples": [""]
+        },
         "image": {
           "type": "string",
           "default": "",
-          "title": "The image Schema",
+          "title": "The container image used to obtain buildkite-agent, and for running commands without any k8s-specific configuration. The default for each release of agent-stack-k8s is set to a version tag of gchr.io/buildkite/agent matching agent-stack-k8s's go.mod file",
           "examples": [""]
         },
         "debug": {
@@ -186,26 +192,38 @@
         "max-in-flight": {
           "type": "integer",
           "default": 0,
-          "title": "The max-in-flight Schema",
+          "title": "Sets an upper limit on the number of Kubernetes jobs that the controller will run",
           "examples": [100]
         },
         "poll-interval": {
           "type": "string",
-          "default": "",
-          "title": "The poll-interval Schema",
+          "default": "1s",
+          "title": "Interval between polling Buildkite for jobs. Values below 1 second will be ignored and 1 second will be used instead",
           "examples": ["1s", "1m"]
+        },
+        "stale-job-data-timeout": {
+          "type": "string",
+          "default": "10s",
+          "title": "After polling Buildkite for jobs, the job data is considered valid up to this timeout",
+          "examples": ["1s", "1m"]
+        },
+        "job-creation-concurrency": {
+          "type": "integer",
+          "default": 5,
+          "title": "Sets a limit on the number of Kubernetes jobs that will be attempted to be created simultaneously in parallel",
+          "examples": [1, 2, 5, 10]
         },
         "org": {
           "type": "string",
           "default": "",
           "minLength": 1,
-          "title": "The org Schema",
+          "title": "Buildkite organization slug",
           "examples": [""]
         },
         "tags": {
           "type": "array",
           "default": [],
-          "title": "The tags Schema",
+          "title": "Buildkite agent tags used for acquiring jobs - 'queue' is required",
           "items": {
             "type": "string"
           },
@@ -226,11 +244,123 @@
           },
           "examples": [["SECRET_RECIPE"]]
         },
+        "image-pull-backoff-grace-period": {
+          "type": "string",
+          "default": "30s",
+          "title": "Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled). Must be a Go duration string",
+          "examples": ["60s"]
+        },
+        "job-cancel-checker-poll-interval": {
+          "type": "string",
+          "default": "5s",
+          "title": "Controls the interval between job state queries while a pod is still Pending. Must be a Go duration string",
+          "examples": ["10s"]
+        },
         "prohibit-kubernetes-plugin": {
           "type": "boolean",
           "default": false,
           "title": "Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
           "examples": [true]
+        },
+        "workspaceVolume": {
+          "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+        },
+        "agent-config": {
+          "type": "object",
+          "default": null,
+          "title": "Agent configuration",
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "default": "",
+              "title": "The Agent REST API endpoint URL",
+              "examples": [""]
+            },
+            "no-http2": {
+              "type": "boolean",
+              "default": false,
+              "title": "Disables HTTP/2 within the agent"
+            },
+            "experiment": {
+              "type": "array",
+              "default": [],
+              "items": {
+                "type": "string"
+              }
+            },
+            "shell": {
+              "type": "string",
+              "default": "/bin/sh -ec",
+              "title": "Shell used by the agent to execute commands"
+            },
+            "no-color": {
+              "type": "boolean"
+            },
+            "strict-single-hooks": {
+              "type": "boolean"
+            },
+            "no-multipart-artifact-upload": {
+              "type": "boolean"
+            },
+            "trace-context-encoding": {
+              "type": "string"
+            },
+            "disable-warnings-for": {
+              "type": "array",
+              "default": [],
+              "items": {
+                "type": "string"
+              }
+            },
+            "no-pty": {
+              "type": "boolean"
+            },
+            "no-command-eval": {
+              "type": "boolean"
+            },
+            "no-local-hooks": {
+              "type": "boolean"
+            },
+            "no-plugins": {
+              "type": "boolean"
+            },
+            "plugin-validation": {
+              "type": "boolean"
+            },
+            "hooks-path": {
+              "type": "string"
+            },
+            "plugins-path": {
+              "type": "string"
+            },
+            "hooksVolume": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+            },
+            "pluginsVolume": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+            },
+            "debug-signing": {
+              "type": "boolean"
+            },
+            "signing-jwks-file": {
+              "type": "string"
+            },
+            "signing-jwks-key-id": {
+              "type": "string"
+            },
+            "signingJWKSVolume": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+            },
+            "verification-jwks-file": {
+              "type": "string"
+            },
+            "verification-failure-behavior": {
+              "type": "string"
+            },
+            "verificationJWKSVolume": {
+              "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+            }
+          }
         },
         "default-checkout-params": {
           "type": "object",
@@ -242,6 +372,11 @@
               "default": null,
               "title": "If true, skips building and running checkout containers"
             },
+            "cleanFlags": {
+              "type": "string",
+              "default": null,
+              "title": "If set, appends the BUILDKITE_GIT_CLEAN_FLAGS variable"
+            },
             "cloneFlags": {
               "type": "string",
               "default": null,
@@ -251,6 +386,40 @@
               "type": "string",
               "default": null,
               "title": "If set, appends the BUILDKITE_GIT_FETCH_FLAGS variable"
+            },
+            "noSubmodules": {
+              "type": "boolean",
+              "default": null,
+              "title": "If set, disables submodule support"
+            },
+            "submoduleCloneConfig": {
+              "type": "array",
+              "default": [],
+              "title": "Key=value config options passed to git submodule clone"
+            },
+            "gitMirrors": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "default": null
+                },
+                "volume": {
+                  "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+                },
+                "cloneFlags": {
+                  "type": "string",
+                  "default": null
+                },
+                "lockTimeout": {
+                  "type": "integer",
+                  "default": null
+                },
+                "skipUpdate": {
+                  "type": "boolean",
+                  "default": null
+                }
+              }
             },
             "gitCredentialsSecret": {
               "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.SecretVolumeSource"
@@ -300,6 +469,39 @@
               }
             }
           }
+        },
+        "default-metadata": {
+          "type": "object",
+          "default": null,
+          "title": "Default metadata (labels, annotations) for jobs",
+          "properties": {
+            "labels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "title": "Default labels to apply to jobs. Note the constraints on label names: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set"
+            },
+            "annotations": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "title": "Default annotations to apply to jobs. Note the constraints on annotation names: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/#syntax-and-character-set"
+            }
+          }
+        },
+        "default-image-pull-policy": {
+          "type": "string",
+          "description": "Configures a default image pull policy for containers that do not specify a pull policy, or containers created by the stack itself",
+          "default": "IfNotPresent",
+          "examples": ["Always", "IfNotPresent", "Never", ""]
+        },
+        "default-image-check-pull-policy": {
+          "type": "string",
+          "description": "Configures a default image pull policy for image-check init containers, used if an image pull policy is not set for the corresponding container in a podSpec or podSpecPatch",
+          "default": "",
+          "examples": ["Always", "IfNotPresent", "Never", ""]
         },
         "pod-spec-patch": {
           "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"

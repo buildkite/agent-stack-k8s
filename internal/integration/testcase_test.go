@@ -274,8 +274,12 @@ func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 
 func (t testcase) AssertFail(ctx context.Context, build api.Build) {
 	t.Helper()
-
 	assert.Equal(t, api.BuildStatesFailed, t.waitForBuild(ctx, build))
+}
+
+func (t testcase) AssertCancelled(ctx context.Context, build api.Build) {
+	t.Helper()
+	assert.Equal(t, api.BuildStatesCanceled, t.waitForBuild(ctx, build))
 }
 
 func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildStates {

@@ -33,6 +33,12 @@ rules:
       - pods/eviction
     verbs:
       - create
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
