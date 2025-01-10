@@ -288,12 +288,15 @@ If you need to use git ssh credentials in your job containers, we recommend one 
 1. Use a container image that's based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
 2. Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entrypoint for your job container image
 
+> [!NOTE]
+> Support for DSA keys has been removed from OpenSSH as of early 2025. This removal now affects agent version `v3.88.0` and newer. Please migrate to `RSA`, `ECDSA` or `EDDSA` keys.
+
 #### Example secret creation for ssh cloning
 You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
 
 Supposing a SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
 ```bash
-kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_DSA_KEY="$HOME/.ssh/id_ecdsa"
+kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_RSA_KEY="$HOME/.ssh/id_rsa"
 ```
 
 Then the following pipeline will be able to clone a git repository that requires ssh credentials.
@@ -331,7 +334,7 @@ mount for the `git-credentials` volume, and configure Git to use the file within
 Once again, this example is illustrative only.
 
 First, create a Kubernetes secret containing the key `.git-credentials`, formatted in the manner
-expected by [the `store` Git credendial helper](https://git-scm.com/docs/git-credential-store):
+expected by [the `store` Git credential helper](https://git-scm.com/docs/git-credential-store):
 
 ```bash
 kubectl create secret generic my-git-credentials --from-file='.git-credentials'="$HOME/.git-credentials"
