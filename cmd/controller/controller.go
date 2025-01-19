@@ -130,6 +130,16 @@ func AddConfigFlags(cmd *cobra.Command) {
 		false,
 		"Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
 	)
+	cmd.Flags().Int(
+		"qps", 
+		100, 
+		"Set the QPS for the Kubernetes client"
+	)
+	cmd.Flags().Int(
+		"burst", 
+		200, 
+		"Set the Burst for the Kubernetes client"
+	)
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.
@@ -279,6 +289,21 @@ func New() *cobra.Command {
 			logger.Info("configuration loaded", zap.Object("config", cfg))
 
 			clientConfig := restconfig.GetConfigOrDie()
+
+			qps, err := cmd.Flags().GetInt("qps")
+			if err != nil {
+				return fmt.Errorf("failed to get qps flag: %w", err)
+			}
+
+			burst, err := cmd.Flags().GetInt("burst")
+			if err != nil {
+				return fmt.Errorf("failed to get burst flag: %w", err)
+			}
+
+			clientConfig.QPS = float32(qps)
+			
+			clientConfig.Burst = burst
+
 			k8sClient, err := kubernetes.NewForConfig(clientConfig)
 			if err != nil {
 				logger.Error("failed to create clientset", zap.Error(err))
