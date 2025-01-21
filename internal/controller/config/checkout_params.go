@@ -27,7 +27,7 @@ func (co *CheckoutParams) ApplyTo(podSpec *corev1.PodSpec, ctr *corev1.Container
 	appendToEnvOpt(ctr, "BUILDKITE_GIT_CLEAN_FLAGS", co.CleanFlags)
 	appendToEnvOpt(ctr, "BUILDKITE_GIT_CLONE_FLAGS", co.CloneFlags)
 	appendToEnvOpt(ctr, "BUILDKITE_GIT_FETCH_FLAGS", co.FetchFlags)
-	appendBoolToEnvOpt(ctr, "BUILDKITE_GIT_SUBMODULES", co.NoSubmodules)
+	appendNegatedToEnvOpt(ctr, "BUILDKITE_GIT_SUBMODULES", co.NoSubmodules)
 	appendCommaSepToEnv(ctr, "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", co.SubmoduleCloneConfig)
 	co.GitMirrors.ApplyTo(podSpec, ctr)
 	ctr.EnvFrom = append(ctr.EnvFrom, co.EnvFrom...)
