@@ -503,11 +503,12 @@ config:
   pod-spec-patch:
     initContainers:
     - name: copy-agent
-    requests:
-      cpu: 100m
-      memory: 50Mi
-    limits:
-      memory: 100Mi
+      resources:
+        requests:
+          cpu: 100m
+          memory: 50Mi
+        limits:
+          memory: 100Mi
     containers:
     - name: agent          # this container acquires the job
       resources:

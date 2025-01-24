@@ -560,7 +560,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		)
 	}
 
-	initContainers := []corev1.Container{w.createWorkspaceSetupContainer(podSpec, workspaceVolume)}
+	podSpec.InitContainers = []corev1.Container{w.createWorkspaceSetupContainer(podSpec, workspaceVolume)}
 
 	// Only attempt the job once.
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
@@ -671,7 +671,6 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		}
 	}
 
-	cullCheckForExisting(initContainers[0])    // the workspace setup container
 	for _, c := range podSpec.InitContainers { // user-defined init containers
 		cullCheckForExisting(c)
 	}
@@ -726,7 +725,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			zap.String("image", image),
 			zap.String("policy", string(policy)),
 		)
-		initContainers = append(initContainers, corev1.Container{
+		podSpec.InitContainers = append(podSpec.InitContainers, corev1.Container{
 			Name:            name,
 			Image:           image,
 			ImagePullPolicy: policy,
@@ -743,9 +742,6 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		})
 		i++
 	}
-
-	// Prepend all the init containers defined above to the podspec.
-	podSpec.InitContainers = append(initContainers, podSpec.InitContainers...)
 
 	kjob.Spec.Template.Spec = *podSpec
 
