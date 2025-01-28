@@ -560,7 +560,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		)
 	}
 
-	podSpec.InitContainers = []corev1.Container{w.createWorkspaceSetupContainer(podSpec, workspaceVolume)}
+	podSpec.InitContainers = append(podSpec.InitContainers, w.createWorkspaceSetupContainer(podSpec, workspaceVolume))
 
 	// Only attempt the job once.
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
