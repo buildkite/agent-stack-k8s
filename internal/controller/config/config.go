@@ -20,6 +20,8 @@ const (
 	DefaultJobCancelCheckerPollInterval = 5 * time.Second
 	DefaultEmptyJobGracePeriod          = 30 * time.Second
 	DefaultJobCreationConcurrency       = 5
+	DefaultK8sClientRateLimiterQPS      = 20
+	DefaultK8sClientRateLimiterBurst    = 30
 )
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
@@ -43,6 +45,9 @@ type Config struct {
 	PrometheusPort         uint16        `json:"prometheus-port"          validate:"omitempty"`
 	ProfilerAddress        string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
 	GraphQLEndpoint        string        `json:"graphql-endpoint"         validate:"omitempty"`
+
+	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps" validate:"omitempty"`
+	K8sClientRateLimiterBurst int `json:"k8s-client-rate-limiter-burst" validate:"omitempty"`
 	// Agent endpoint is set in agent-config.
 
 	// ClusterUUID field is mandatory for most new orgs.
