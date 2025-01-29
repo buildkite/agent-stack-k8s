@@ -105,8 +105,8 @@ eksctl create cluster --name agent-stack-ks \
 <summary>Example of the expected output:</summary>
 
 
-```
-eksctl create cluster --name buildkite-k8-cluster --region ap-southeast-2 --nodegroup-name buildkite-nodes --nodes-min 3 --nodes-max 6 --max-pods-per-node 5 -N 4
+```console
+$ eksctl create cluster --name buildkite-k8-cluster --region ap-southeast-2 --nodegroup-name buildkite-nodes --nodes-min 3 --nodes-max 6 --max-pods-per-node 5 -N 4
 2024-12-18 10:37:24 [ℹ]  eksctl version 0.198.0-dev+8c015c84d.2024-12-10T17:20:22Z
 2024-12-18 10:37:24 [ℹ]  using region ap-southeast-2
 2024-12-18 10:37:24 [ℹ]  setting availability zones to [ap-southeast-2b ap-southeast-2a ap-southeast-2c]
