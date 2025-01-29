@@ -179,7 +179,7 @@ eksctl create cluster --name buildkite-k8-cluster --region ap-southeast-2 --node
 
 </details>
 
-### Deploying K8's stack using Helm
+### Deploying K8s stack using Helm
 
 The simplest way to get up and running is by deploying the Helm chart, which simplifies the process of installing and managing Buildkite agents on your Kubernetes cluster.
 
