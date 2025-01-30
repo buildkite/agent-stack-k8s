@@ -9,6 +9,8 @@ poll-interval: 5s
 stale-job-data-timeout: 10s
 job-creation-concurrency: 5
 max-in-flight: 100
+k8s-client-rate-limiter-qps: 20
+k8s-client-rate-limiter-burst: 30
 namespace: my-buildkite-ns
 org: my-buildkite-org
 default-image-pull-policy: Never

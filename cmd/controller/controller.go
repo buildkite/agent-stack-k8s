@@ -100,6 +100,16 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultJobCreationConcurrency,
 		"Number of concurrent goroutines to run for converting Buildkite jobs into Kubernetes jobs",
 	)
+	cmd.Flags().Int(
+		"k8s-client-rate-limiter-qps",
+		config.DefaultK8sClientRateLimiterQPS,
+		"The QPS value of the K8s client rate limiter.",
+	)
+	cmd.Flags().Int(
+		"k8s-client-rate-limiter-burst",
+		config.DefaultK8sClientRateLimiterBurst,
+		"The burst value of the K8s client rate limiter.",
+	)
 	cmd.Flags().Duration(
 		"image-pull-backoff-grace-period",
 		config.DefaultImagePullBackOffGracePeriod,
@@ -279,6 +289,8 @@ func New() *cobra.Command {
 			logger.Info("configuration loaded", zap.Object("config", cfg))
 
 			clientConfig := restconfig.GetConfigOrDie()
+			clientConfig.QPS = float32(cfg.K8sClientRateLimiterQPS)
+			clientConfig.Burst = cfg.K8sClientRateLimiterBurst
 			k8sClient, err := kubernetes.NewForConfig(clientConfig)
 			if err != nil {
 				logger.Error("failed to create clientset", zap.Error(err))
