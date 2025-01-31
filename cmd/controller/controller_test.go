@@ -31,6 +31,8 @@ func TestReadAndParseConfig(t *testing.T) {
 		StaleJobDataTimeout:          10 * time.Second,
 		JobCreationConcurrency:       5,
 		MaxInFlight:                  100,
+		K8sClientRateLimiterQPS:      20,
+		K8sClientRateLimiterBurst:    30,
 		Namespace:                    "my-buildkite-ns",
 		Org:                          "my-buildkite-org",
 		Tags:                         []string{"queue=my-queue", "priority=high"},

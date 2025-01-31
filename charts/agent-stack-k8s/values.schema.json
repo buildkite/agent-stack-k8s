@@ -250,6 +250,18 @@
           "title": "Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled). Must be a Go duration string",
           "examples": ["60s"]
         },
+        "k8s-client-rate-limiter-qps": {
+          "type": "integer",
+          "default": 10,
+          "title": "QPS indicates the number of queries per second from this client to the Kubernetes API, once the number of queries defined for Burst has been exhausted. Used together with k8s-client-rate-limiter-burst.",
+          "examples": [20, 30, 50]
+        },
+        "k8s-client-rate-limiter-burst": {
+          "type": "integer",
+          "default": 20,
+          "title": "Maximum number of queries allowed before throttling requests (via QPS) to the Kubernetes API. Used together with k8s-client-rate-limiter-qps.",
+          "examples": [30, 50, 100]
+        },
         "job-cancel-checker-poll-interval": {
           "type": "string",
           "default": "5s",

@@ -131,6 +131,8 @@ Flags:
       --image string                               The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent:3.78.0")
       --image-pull-backoff-grace-period duration   Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled) (default 30s)
       --job-ttl duration                           time to retain kubernetes jobs after completion (default 10m0s)
+      --k8s-client-rate-limiter-qps int            number of queries per second allowed to Kubernetes API, once Burst has been exhausted (default 10)
+      --k8s-client-rate-limiter-burst int          number of queries allowed before throttling requests to Kubernetes API, before using QPS (default 20)
       --max-in-flight int                          max jobs in flight, 0 means no max (default 25)
       --namespace string                           kubernetes namespace to create resources in (default "default")
       --org string                                 Buildkite organization name to watch
