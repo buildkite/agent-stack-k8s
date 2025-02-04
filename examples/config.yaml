@@ -105,5 +105,5 @@ pod-spec-patch:
               key: github-token
       resources:
         requests:
-          cpu: 1000m # one core
+          cpu: 1
           mem: 4Gi
