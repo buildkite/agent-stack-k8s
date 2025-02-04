@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -194,19 +196,40 @@ func ReadConfigFromFileArgsAndEnv(cmd *cobra.Command, args []string) (*viper.Vip
 }
 
 var resourceQuantityType = reflect.TypeOf(resource.Quantity{})
+var intOrStringType = reflect.TypeOf(intstr.IntOrString{})
 
-// This mapstructure.DecodeHookFunc is needed to decode quantities (as used in
-// podSpecs) properly. Without this, viper (which uses mapstructure) doesn't
-// know how to put a string (e.g. "100m") into a "map" (resource.Quantity) and
+// This mapstructure.DecodeHookFunc is needed to decode kubernetes objects (as
+// used in podSpecs) properly. Without this, viper (which uses mapstructure) doesn't
+// e.g. know how to put a string (e.g. "100m") into a "map" (resource.Quantity) and
 // will error out.
-func stringToResourceQuantity(f, t reflect.Type, data any) (any, error) {
-	if f.Kind() != reflect.String {
+func decodeKubeSpecials(f, t reflect.Type, data any) (any, error) {
+	switch t {
+	case resourceQuantityType:
+		switch f.Kind() {
+		case reflect.String:
+			return resource.ParseQuantity(data.(string))
+		case reflect.Float64:
+			return resource.ParseQuantity(strconv.FormatFloat(data.(float64), 'f', -1, 64))
+		case reflect.Float32:
+			return resource.ParseQuantity(strconv.FormatFloat(float64(data.(float32)), 'f', -1, 32))
+		case reflect.Int:
+			return resource.ParseQuantity(strconv.Itoa(data.(int)))
+		default:
+			return nil, fmt.Errorf("invalid resource quantity: %v", data)
+		}
+	case intOrStringType:
+		switch f.Kind() {
+		case reflect.String:
+			return intstr.FromString(data.(string)), nil
+		case reflect.Int:
+			return intstr.FromInt(data.(int)), nil
+		default:
+			return nil, fmt.Errorf("invalid int/string: %v", data)
+		}
+	default:
 		return data, nil
 	}
-	if t != resourceQuantityType {
-		return data, nil
-	}
-	return resource.ParseQuantity(data.(string))
+
 }
 
 // This viper.DecoderConfigOption is needed to make mapstructure (used by viper)
@@ -221,10 +244,10 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 	// The user likely expects every part of their config to be meaningful, so if some of it is
 	// ignored in parsing, they almost certainly want to know about it.
 	cfg := &config.Config{}
-	// This decode hook = the default Viper decode hooks + stringToResourceQuantity
+	// This decode hook = the default Viper decode hooks + decodeKubeSpecials
 	// (Setting this option overrides the default.)
 	decodeHook := viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
-		stringToResourceQuantity,
+		decodeKubeSpecials,
 		config.StringToInterposer,
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
