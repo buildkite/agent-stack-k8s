@@ -759,6 +759,26 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *co
 		originalContainers[c.Name] = c
 	}
 
+	// We do special stuff™️ with init-container commands to make them run as
+	// buildkite agent things under the hood, so don't let users mess with them
+	// via podSpecPatch.
+	for i := range patch.InitContainers {
+		c := &patch.InitContainers[i]
+		if len(c.Command) == 0 && len(c.Args) == 0 {
+			// No modification (strategic merge won't set these to empty).
+			continue
+		}
+		oc := originalContainers[c.Name]
+		if oc != nil && slices.Equal(c.Command, oc.Command) && slices.Equal(c.Args, oc.Args) {
+			// No modification (original and patch are equal).
+			continue
+		}
+
+		if CopyAgentContainerName == c.Name {
+			return nil, fmt.Errorf("for the agent container, %w", ErrNoCommandModification)
+		}
+	}
+
 	// We do special stuff™️ with container commands to make them run as
 	// buildkite agent things under the hood, so don't let users mess with them
 	// via podSpecPatch.
@@ -774,7 +794,7 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *co
 			continue
 		}
 
-		// Some modification is occuring.
+		// Some modification is occurring.
 		// What we prevent vs what we fix up depends on the type of container.
 
 		// Agent, checkout: prevent command modification entirely.

@@ -224,6 +224,46 @@ func TestPatchPodSpec_ErrNoCommandModification(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "patching init-container command should fail",
+			podspec: &corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name:    CopyAgentContainerName,
+						Image:   "alpine:latest",
+						Command: []string{"echo hello world"},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name:    CopyAgentContainerName,
+						Command: []string{"this shouldn't work"},
+					},
+				},
+			},
+		},
+		{
+			name: "patching init-container args should fail",
+			podspec: &corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name:    CopyAgentContainerName,
+						Image:   "alpine:latest",
+						Command: []string{"echo hello world"},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name: CopyAgentContainerName,
+						Args: []string{"this", "shouldn't", "work"},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range cases {
@@ -451,9 +491,8 @@ func TestBuild(t *testing.T) {
 			PodSpecPatch: &corev1.PodSpec{
 				InitContainers: []corev1.Container{
 					{
-						Name:    "copy-agent",
-						Image:   "alpine:latest",
-						Command: []string{"ls", "-l"},
+						Name:  "copy-agent",
+						Image: "alpine:latest",
 					},
 				},
 				Containers: []corev1.Container{
@@ -485,7 +524,7 @@ func TestBuild(t *testing.T) {
 	if diff := cmp.Diff(copyAgent.Image, "alpine:latest"); diff != "" {
 		t.Errorf("unexpected init container image (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff(copyAgent.Command, []string{"ls", "-l"}); diff != "" {
+	if diff := cmp.Diff(copyAgent.Command, []string{"ash"}); diff != "" {
 		t.Errorf("unexpected init container command (-want +got):\n%s", diff)
 	}
 
