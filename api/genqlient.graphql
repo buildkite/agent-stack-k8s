@@ -55,14 +55,18 @@ query GetBuild($uuid: ID!) {
     }
 }
 
-query GetScheduledJobs($slug: ID!, $agentQueryRules: [String!]) {
+query GetScheduledJobs(
+    $slug: ID!, 
+    $agentQueryRules: [String!], 
+    $first: Int
+) {
     organization(slug: $slug) {
         # @genqlient(pointer: true)
         id
         jobs(
             state: [SCHEDULED]
             type: [COMMAND]
-            first: 100
+            first: $first
             order: RECENTLY_ASSIGNED
             agentQueryRules: $agentQueryRules
             clustered: false
@@ -82,6 +86,7 @@ query GetScheduledJobsClustered(
     $slug: ID!
     $agentQueryRules: [String!]
     $cluster: ID!
+    $first: Int
 ) {
     organization(slug: $slug) {
         # @genqlient(pointer: true)
@@ -89,7 +94,7 @@ query GetScheduledJobsClustered(
         jobs(
             state: [SCHEDULED]
             type: [COMMAND]
-            first: 100
+            first: $first
             order: RECENTLY_ASSIGNED
             agentQueryRules: $agentQueryRules
             cluster: $cluster
