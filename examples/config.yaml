@@ -15,6 +15,7 @@ namespace: my-buildkite-ns
 org: my-buildkite-org
 default-image-pull-policy: Never
 default-image-check-pull-policy: IfNotPresent
+graphql-results-limit: 200
 
 # Setting a custom GraphQL endpoint is usually only useful if you have a
 #  different instance of Buildkite itself available to run.
