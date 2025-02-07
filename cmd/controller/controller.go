@@ -142,6 +142,10 @@ func AddConfigFlags(cmd *cobra.Command) {
 		false,
 		"Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
 	)
+	cmd.Flags().Int(
+		"graphql-results-limit",
+		config.DefaultGraphQLResultsLimit,
+		"Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled")
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.

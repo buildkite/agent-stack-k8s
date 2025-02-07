@@ -79,6 +79,7 @@ func Run(
 		JobCreationConcurrency: cfg.JobCreationConcurrency,
 		Tags:                   cfg.Tags,
 		Token:                  cfg.BuildkiteToken,
+		GraphQLResultsLimit:    cfg.GraphQLResultsLimit,
 	})
 	if err != nil {
 		logger.Fatal("failed to create monitor", zap.Error(err))
