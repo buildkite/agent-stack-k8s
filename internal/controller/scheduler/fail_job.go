@@ -26,6 +26,7 @@ func acquireAndFailForObject(
 	k8sClient kubernetes.Interface,
 	cfg *config.Config,
 	obj metav1.Object,
+	code int,
 	message string,
 ) error {
 	agentToken, err := fetchAgentToken(ctx, logger, k8sClient, obj.GetNamespace(), cfg.AgentTokenSecret)
@@ -44,7 +45,7 @@ func acquireAndFailForObject(
 	tags := agenttags.TagsFromLabels(labels)
 	opts := cfg.AgentConfig.ControllerOptions()
 
-	if err := acquireAndFail(ctx, logger, agentToken, cfg.JobPrefix, jobUUID, tags, message, opts...); err != nil {
+	if err := acquireAndFail(ctx, logger, agentToken, cfg.JobPrefix, jobUUID, tags, code, message, opts...); err != nil {
 		logger.Error("failed to acquire and fail the job on Buildkite", zap.Error(err))
 		return err
 	}
@@ -60,6 +61,7 @@ func acquireAndFail(
 	jobPrefix string,
 	jobUUID string,
 	tags []string,
+	code int,
 	message string,
 	options ...agentcore.ControllerOption,
 ) error {
@@ -93,7 +95,7 @@ func acquireAndFail(
 		return fmt.Errorf("writing log: %w", err)
 	}
 
-	if err := jctr.Finish(ctx, agentcore.ProcessExit{Status: 1}); err != nil {
+	if err := jctr.Finish(ctx, agentcore.ProcessExit{Status: code}); err != nil {
 		zapLogger.Error("finishing job", zap.Error(err))
 		return fmt.Errorf("finishing job: %w", err)
 	}
