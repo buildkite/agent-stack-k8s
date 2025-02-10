@@ -591,11 +591,9 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			switch pod.Name {
 			case CheckoutContainerName:
 				podSpec.Containers = append(podSpec.Containers[:i], podSpec.Containers[i+1:]...)
-				break
 
 			default:
 				continue
-
 			}
 		}
 	}
