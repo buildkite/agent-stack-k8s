@@ -586,6 +586,20 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
 	}
 
+	if skipCheckout {
+		for i, pod := range podSpec.Containers {
+			switch pod.Name {
+			case CheckoutContainerName:
+				podSpec.Containers = append(podSpec.Containers[:i], podSpec.Containers[i+1:]...)
+				break
+
+			default:
+				continue
+
+			}
+		}
+	}
+
 	// Use init containers to check that images can be used or pulled before
 	// any other containers run. These are added _after_ podSpecPatch is applied
 	// since podSpecPatch may freely modify each container's image ref.
