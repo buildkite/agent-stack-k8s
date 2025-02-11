@@ -39,6 +39,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		ClusterUUID:                  "beefcafe-abbe-baba-abba-deedcedecade",
 		ProhibitKubernetesPlugin:     true,
 		GraphQLEndpoint:              "http://graphql.buildkite.localhost/v1",
+		GraphQLResultsLimit:          200,
 		DefaultImagePullPolicy:       "Never",
 		DefaultImageCheckPullPolicy:  "IfNotPresent",
 
