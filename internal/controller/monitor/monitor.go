@@ -40,6 +40,7 @@ type Config struct {
 	StaleJobDataTimeout    time.Duration
 	Org                    string
 	Tags                   []string
+	GraphQLResultsLimit    int
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
@@ -116,7 +117,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 	}()
 
 	if m.cfg.ClusterUUID == "" {
-		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)})
+		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit)
 		return unclusteredJobResp(*resp), err
 	}
 
@@ -126,7 +127,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 	}
 
 	resp, err := api.GetScheduledJobsClustered(
-		ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID),
+		ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID), m.cfg.GraphQLResultsLimit,
 	)
 	return clusteredJobResp(*resp), err
 }

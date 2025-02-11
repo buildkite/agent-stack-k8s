@@ -122,22 +122,33 @@ Available Commands:
   version     Prints the version
 
 Flags:
-      --agent-token-secret string                  name of the Buildkite agent token secret (default "buildkite-agent-token")
-      --buildkite-token string                     Buildkite API token with GraphQL scopes
-      --cluster-uuid string                        UUID of the Buildkite Cluster. The agent token must be for the Buildkite Cluster.
-  -f, --config string                              config file path
-      --debug                                      debug logs
-  -h, --help                                       help for agent-stack-k8s
-      --image string                               The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent:3.78.0")
-      --image-pull-backoff-grace-period duration   Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled) (default 30s)
-      --job-ttl duration                           time to retain kubernetes jobs after completion (default 10m0s)
-      --max-in-flight int                          max jobs in flight, 0 means no max (default 25)
-      --namespace string                           kubernetes namespace to create resources in (default "default")
-      --org string                                 Buildkite organization name to watch
-      --poll-interval duration                     time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start (default 1s)
-      --profiler-address string                    Bind address to expose the pprof profiler (e.g. localhost:6060)
-      --prohibit-kubernetes-plugin                 Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec
-      --tags strings                               A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux") (default [queue=kubernetes])
+      --agent-token-secret string                   name of the Buildkite agent token secret (default "buildkite-agent-token")
+      --buildkite-token string                      Buildkite API token with GraphQL scopes
+      --cluster-uuid string                         UUID of the Buildkite Cluster. The agent token must be for the Buildkite Cluster.
+  -f, --config string                               config file path
+      --debug                                       debug logs
+      --default-image-check-pull-policy string      Sets a default PullPolicy for image-check init containers, used if an image pull policy is not set for the corresponding container in a podSpec or podSpecPatch
+      --default-image-pull-policy string            Configures a default image pull policy for containers that do not specify a pull policy and non-init containers created by the stack itself (default "IfNotPresent")
+      --empty-job-grace-period duration             Duration after starting a Kubernetes job that the controller will wait before considering failing the job due to a missing pod (e.g. when the podSpec specifies a missing service account) (default 30s)
+      --graphql-endpoint string                     Buildkite GraphQL endpoint URL
+      --graphql-results-limit int                   Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled (default 100)
+  -h, --help                                        help for agent-stack-k8s
+      --image string                                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent:3.91.0")
+      --image-pull-backoff-grace-period duration    Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled) (default 30s)
+      --job-cancel-checker-poll-interval duration   Controls the interval between job state queries while a pod is still Pending (default 5s)
+      --job-creation-concurrency int                Number of concurrent goroutines to run for converting Buildkite jobs into Kubernetes jobs (default 5)
+      --job-ttl duration                            time to retain kubernetes jobs after completion (default 10m0s)
+      --k8s-client-rate-limiter-burst int           The burst value of the K8s client rate limiter. (default 20)
+      --k8s-client-rate-limiter-qps int             The QPS value of the K8s client rate limiter. (default 10)
+      --max-in-flight int                           max jobs in flight, 0 means no max (default 25)
+      --namespace string                            kubernetes namespace to create resources in (default "default")
+      --org string                                  Buildkite organization name to watch
+      --poll-interval duration                      time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start (default 1s)
+      --profiler-address string                     Bind address to expose the pprof profiler (e.g. localhost:6060)
+      --prohibit-kubernetes-plugin                  Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec
+      --prometheus-port uint16                      Bind port to expose Prometheus /metrics; 0 disables it
+      --stale-job-data-timeout duration             Duration after querying jobs in Buildkite that the data is considered valid (default 10s)
+      --tags strings                                A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux") (default [queue=kubernetes])
 
 Use "agent-stack-k8s [command] --help" for more information about a command.
 ```
