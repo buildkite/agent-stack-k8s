@@ -586,11 +586,14 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
 	}
 
+	// Removes all containers named "checkout" when checkout disabled via controller config or plugin
+	// This will also remove containers named "checkout" added via PodSpecPatch
 	if skipCheckout {
 		for i, pod := range podSpec.Containers {
 			switch pod.Name {
 			case CheckoutContainerName:
-				podSpec.Containers = append(podSpec.Containers[:i], podSpec.Containers[i+1:]...)
+				podSpec.Containers = slices.Delete(podSpec.Containers, i, i+1)
+				w.logger.Info("skipCheckout is set to 'true', removing 'checkout' container from podSpec.Containers", zap.String("job-uuid", inputs.uuid))
 
 			default:
 				continue
