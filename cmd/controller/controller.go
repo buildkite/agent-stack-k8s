@@ -318,6 +318,11 @@ func New() *cobra.Command {
 			clientConfig := restconfig.GetConfigOrDie()
 			clientConfig.QPS = float32(cfg.K8sClientRateLimiterQPS)
 			clientConfig.Burst = cfg.K8sClientRateLimiterBurst
+
+			// Default to Protobuf encoding for API responses, support fallback to JSON
+			clientConfig.AcceptContentTypes = "application/vnd.kubernetes.protobuf,application/json"
+			clientConfig.ContentType = "application/vnd.kubernetes.protobuf"
+
 			k8sClient, err := kubernetes.NewForConfig(clientConfig)
 			if err != nil {
 				logger.Error("failed to create clientset", zap.Error(err))
