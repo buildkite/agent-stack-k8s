@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -133,8 +134,15 @@ func (w *worker) Handle(ctx context.Context, job model.Job) error {
 			return fmt.Errorf("%w: %w", model.ErrDuplicateJob, err)
 
 		case kerrors.IsInvalid(err):
+			var out string = ""
+			outBytes, errYaml := yaml.Marshal(kjob)
+			if errYaml != nil {
+				out = fmt.Sprintf("%v", errYaml)
+			} else {
+				out = string(outBytes)
+			}
 			logger.Warn("Job invalid, failing job on Buildkite", zap.Error(err))
-			return w.failJob(ctx, inputs, fmt.Sprintf("Kubernetes rejected the podSpec built by agent-stack-k8s: %v", err))
+			return w.failJob(ctx, inputs, fmt.Sprintf("Kubernetes rejected the podSpec built by agent-stack-k8s: %v\n\n%s", err, out))
 
 		default:
 			return err
