@@ -33,6 +33,20 @@
       "title": "The image for the agent-stack-k8s controller",
       "examples": ["ghcr.io/buildkite/agent-stack-k8s/controller:latest"]
     },
+    "nameOverride": {
+      "type": "string",
+      "default": "",
+      "minLength": 0,
+      "title": "The chart's overridden name",
+      "examples": ["agent-stack-k8s-blue"]
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "default": "",
+      "minLength": 0,
+      "title": "The chart's overridden full name",
+      "examples": ["agent-stack-k8s-green"]
+    },
     "nodeSelector": {
       "type": "object",
       "default": {},

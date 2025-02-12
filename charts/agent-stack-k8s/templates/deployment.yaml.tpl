@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ include "agent-stack-k8s.fullname" . }}
   namespace: {{ .Release.Namespace }}
 spec:
   selector:
@@ -15,7 +15,7 @@ spec:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml.tpl") . | sha256sum }}
         checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml.tpl") . | sha256sum }}
     spec:
-      serviceAccountName: {{ .Release.Name }}-controller
+      serviceAccountName: {{ include "agent-stack-k8s.fullname" . }}-controller
       nodeSelector:
         {{- toYaml $.Values.nodeSelector | nindent 8 }}
       tolerations:
@@ -29,7 +29,7 @@ spec:
           value: /etc/config.yaml
         envFrom:
           - secretRef:
-              name: {{ if .Values.agentStackSecret }}{{ .Values.agentStackSecret }}{{ else }}{{ .Release.Name }}-secrets{{ end }}
+              name: {{ if .Values.agentStackSecret }}{{ .Values.agentStackSecret }}{{ else }}{{ include "agent-stack-k8s.fullname" . }}-secrets{{ end }}
         volumeMounts:
           - name: config
             mountPath: /etc/config.yaml
@@ -53,4 +53,4 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: {{ .Release.Name }}-config
+            name: {{ include "agent-stack-k8s.fullname" . }}-config
