@@ -636,6 +636,104 @@ type GetBuildsResponse struct {
 // GetPipeline returns GetBuildsResponse.Pipeline, and is useful for accessing the field via an interface.
 func (v *GetBuildsResponse) GetPipeline() GetBuildsPipeline { return v.Pipeline }
 
+// GetClusterQueuesOrganization includes the requested fields of the GraphQL type Organization.
+// The GraphQL type's documentation follows.
+//
+// An organization
+type GetClusterQueuesOrganization struct {
+	// Return cluster in the Organization by UUID
+	Cluster GetClusterQueuesOrganizationCluster `json:"cluster"`
+}
+
+// GetCluster returns GetClusterQueuesOrganization.Cluster, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganization) GetCluster() GetClusterQueuesOrganizationCluster {
+	return v.Cluster
+}
+
+// GetClusterQueuesOrganizationCluster includes the requested fields of the GraphQL type Cluster.
+type GetClusterQueuesOrganizationCluster struct {
+	Queues GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection `json:"queues"`
+}
+
+// GetQueues returns GetClusterQueuesOrganizationCluster.Queues, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationCluster) GetQueues() GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection {
+	return v.Queues
+}
+
+// GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection includes the requested fields of the GraphQL type ClusterQueueConnection.
+type GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection struct {
+	Edges    []GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge `json:"edges"`
+	PageInfo GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo                `json:"pageInfo"`
+}
+
+// GetEdges returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection.Edges, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection) GetEdges() []GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge {
+	return v.Edges
+}
+
+// GetPageInfo returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection.PageInfo, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection) GetPageInfo() GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo {
+	return v.PageInfo
+}
+
+// GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge includes the requested fields of the GraphQL type ClusterQueueEdge.
+type GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge struct {
+	Node GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue `json:"node"`
+}
+
+// GetNode returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge.Node, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge) GetNode() GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue {
+	return v.Node
+}
+
+// GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue includes the requested fields of the GraphQL type ClusterQueue.
+type GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue struct {
+	Key            string `json:"key"`
+	DispatchPaused bool   `json:"dispatchPaused"`
+}
+
+// GetKey returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue.Key, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue) GetKey() string {
+	return v.Key
+}
+
+// GetDispatchPaused returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue.DispatchPaused, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue) GetDispatchPaused() bool {
+	return v.DispatchPaused
+}
+
+// GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo includes the requested fields of the GraphQL type PageInfo.
+// The GraphQL type's documentation follows.
+//
+// Information about pagination in a connection.
+type GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo struct {
+	// When paginating forwards, are there more items?
+	HasNextPage bool `json:"hasNextPage"`
+	// When paginating forwards, the cursor to continue.
+	EndCursor string `json:"endCursor"`
+}
+
+// GetHasNextPage returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo.HasNextPage, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo) GetHasNextPage() bool {
+	return v.HasNextPage
+}
+
+// GetEndCursor returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo.EndCursor, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo) GetEndCursor() string {
+	return v.EndCursor
+}
+
+// GetClusterQueuesResponse is returned by GetClusterQueues on success.
+type GetClusterQueuesResponse struct {
+	// Find an organization
+	Organization GetClusterQueuesOrganization `json:"organization"`
+}
+
+// GetOrganization returns GetClusterQueuesResponse.Organization, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesResponse) GetOrganization() GetClusterQueuesOrganization {
+	return v.Organization
+}
+
 // GetCommandJobJob includes the requested fields of the GraphQL interface Job.
 //
 // GetCommandJobJob is implemented by the following types:
@@ -1525,6 +1623,22 @@ func (v *__GetBuildsInput) GetState() []BuildStates { return v.State }
 // GetFirst returns __GetBuildsInput.First, and is useful for accessing the field via an interface.
 func (v *__GetBuildsInput) GetFirst() int { return v.First }
 
+// __GetClusterQueuesInput is used internally by genqlient
+type __GetClusterQueuesInput struct {
+	Slug    string `json:"slug"`
+	Cluster string `json:"cluster"`
+	First   int    `json:"first"`
+}
+
+// GetSlug returns __GetClusterQueuesInput.Slug, and is useful for accessing the field via an interface.
+func (v *__GetClusterQueuesInput) GetSlug() string { return v.Slug }
+
+// GetCluster returns __GetClusterQueuesInput.Cluster, and is useful for accessing the field via an interface.
+func (v *__GetClusterQueuesInput) GetCluster() string { return v.Cluster }
+
+// GetFirst returns __GetClusterQueuesInput.First, and is useful for accessing the field via an interface.
+func (v *__GetClusterQueuesInput) GetFirst() int { return v.First }
+
 // __GetCommandJobInput is used internally by genqlient
 type __GetCommandJobInput struct {
 	Uuid string `json:"uuid"`
@@ -1847,6 +1961,58 @@ func GetBuilds(
 	var err_ error
 
 	var data_ GetBuildsResponse
+	resp_ := &graphql.Response{Data: &data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return &data_, err_
+}
+
+// The query or mutation executed by GetClusterQueues.
+const GetClusterQueues_Operation = `
+query GetClusterQueues ($slug: ID!, $cluster: ID!, $first: Int!) {
+	organization(slug: $slug) {
+		cluster(id: $cluster) {
+			queues(first: $first) {
+				edges {
+					node {
+						key
+						dispatchPaused
+					}
+				}
+				pageInfo {
+					hasNextPage
+					endCursor
+				}
+			}
+		}
+	}
+}
+`
+
+func GetClusterQueues(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	slug string,
+	cluster string,
+	first int,
+) (*GetClusterQueuesResponse, error) {
+	req_ := &graphql.Request{
+		OpName: "GetClusterQueues",
+		Query:  GetClusterQueues_Operation,
+		Variables: &__GetClusterQueuesInput{
+			Slug:    slug,
+			Cluster: cluster,
+			First:   first,
+		},
+	}
+	var err_ error
+
+	var data_ GetClusterQueuesResponse
 	resp_ := &graphql.Response{Data: &data_}
 
 	err_ = client_.MakeRequest(

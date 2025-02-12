@@ -94,11 +94,26 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)})
 		return unclusteredJobResp(*resp), err
 	}
+	queues, err := api.GetClusterQueues(ctx, m.gql, m.cfg.Org, m.cfg.ClusterUUID, 100)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch cluster queues: %w", err)
+	}
 
+	isQueuePaused := false
+	for _, edge := range queues.Organization.Cluster.Queues.Edges {
+		if edge.Node.Key == queue {
+			isQueuePaused = edge.Node.DispatchPaused
+			break
+		}
+	}
+	if isQueuePaused {
+		return nil, fmt.Errorf("the queue '%s' is paused", queue)
+	}
 	resp, err := api.GetScheduledJobsClustered(
 		ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, encodeClusterGraphQLID(m.cfg.ClusterUUID),
 	)
 	return clusteredJobResp(*resp), err
+
 }
 
 func toMapAndLogErrors(logger *zap.Logger, tags []string) map[string]string {
