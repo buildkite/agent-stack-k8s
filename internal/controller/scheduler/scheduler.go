@@ -54,6 +54,7 @@ type Config struct {
 	Image                       string
 	AgentTokenSecretName        string
 	JobTTL                      time.Duration
+	JobActiveDeadlineSeconds    int
 	AdditionalRedactedVars      []string
 	WorkspaceVolume             *corev1.Volume
 	AgentConfig                 *config.AgentConfig
@@ -76,15 +77,16 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 }
 
 type KubernetesPlugin struct {
-	PodSpec           *corev1.PodSpec        `json:"podSpec,omitempty"`
-	PodSpecPatch      *corev1.PodSpec        `json:"podSpecPatch,omitempty"`
-	GitEnvFrom        []corev1.EnvFromSource `json:"gitEnvFrom,omitempty"`
-	Sidecars          []corev1.Container     `json:"sidecars,omitempty"`
-	Metadata          config.Metadata        `json:"metadata,omitempty"`
-	ExtraVolumeMounts []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
-	CheckoutParams    *config.CheckoutParams `json:"checkout,omitempty"`
-	CommandParams     *config.CommandParams  `json:"commandParams,omitempty"`
-	SidecarParams     *config.SidecarParams  `json:"sidecarParams,omitempty"`
+	PodSpec                  *corev1.PodSpec        `json:"podSpec,omitempty"`
+	PodSpecPatch             *corev1.PodSpec        `json:"podSpecPatch,omitempty"`
+	GitEnvFrom               []corev1.EnvFromSource `json:"gitEnvFrom,omitempty"`
+	Sidecars                 []corev1.Container     `json:"sidecars,omitempty"`
+	Metadata                 config.Metadata        `json:"metadata,omitempty"`
+	ExtraVolumeMounts        []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
+	CheckoutParams           *config.CheckoutParams `json:"checkout,omitempty"`
+	CommandParams            *config.CommandParams  `json:"commandParams,omitempty"`
+	SidecarParams            *config.SidecarParams  `json:"sidecarParams,omitempty"`
+	JobActiveDeadlineSeconds int                    `json:"jobActiveDeadlineSeconds,omitempty"`
 }
 
 type worker struct {
@@ -354,6 +356,14 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	ttl := int32(w.cfg.JobTTL.Seconds())
 	kjob.Spec.TTLSecondsAfterFinished = &ttl
+
+	activeDeadlineSeconds := int64(w.cfg.JobActiveDeadlineSeconds)
+	kjob.Spec.ActiveDeadlineSeconds = &activeDeadlineSeconds
+
+	if inputs.k8sPlugin != nil && int64(inputs.k8sPlugin.JobActiveDeadlineSeconds) > 0 {
+		activeDeadlineSeconds = int64(inputs.k8sPlugin.JobActiveDeadlineSeconds)
+		kjob.Spec.ActiveDeadlineSeconds = &activeDeadlineSeconds
+	}
 
 	// Env vars used for command containers
 	containerEnv := append([]corev1.EnvVar{}, env...)
