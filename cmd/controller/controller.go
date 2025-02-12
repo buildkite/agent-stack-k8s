@@ -151,6 +151,10 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"graphql-results-limit",
 		config.DefaultGraphQLResultsLimit,
 		"Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled")
+	cmd.Flags().Bool(
+		"enable-queue-pause",
+		false,
+		"Allow controller to pause processing the jobs when queue is paused on Buildkite")
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.

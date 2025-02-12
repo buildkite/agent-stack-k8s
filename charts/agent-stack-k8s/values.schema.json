@@ -294,6 +294,12 @@
           "title": "Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
           "examples": [true]
         },
+        "enable-queue-pause": {
+          "type": "boolean",
+          "default": false,
+          "title": "Allow controller to pause processing the jobs when queue is paused on Buildkite",
+          "examples": [false]
+        },
         "workspaceVolume": {
           "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
         },
