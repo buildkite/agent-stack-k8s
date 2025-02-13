@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
@@ -593,7 +594,9 @@ func TestFailureJobs(t *testing.T) {
 		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	wrapper := New(zaptest.NewLogger(t), nil, Config{})
+	wrapper := New(zaptest.NewLogger(t), nil, Config{
+		Image: "buildkite/agent:latest",
+	})
 	_, err = wrapper.ParseJob(job)
 	require.Error(t, err)
 }
@@ -613,10 +616,495 @@ func TestProhibitKubernetesPlugin(t *testing.T) {
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	worker := New(zaptest.NewLogger(t), nil, Config{
+		Image:             "buildkite/agent:latest",
 		ProhibitK8sPlugin: true,
 	})
 	_, err = worker.ParseJob(job)
 	require.Error(t, err)
+}
+
+func TestImagePullPolicies(t *testing.T) {
+	t.Parallel()
+
+	const (
+		defaultImage       = "buildkite/agent:3.92.1"
+		imageWithoutDigest = "golang:1.23.5"
+		imageWithDigest    = "golang:1.23.5@sha256:8c10f21bec412f08f73aa7b97ca5ac5f28a39d8a88030ad8a339fd0a781d72b4"
+	)
+
+	tests := []struct {
+		name                      string
+		cfgDefaultCheckPullPolicy corev1.PullPolicy
+		cfgDefaultPullPolicy      corev1.PullPolicy
+		podSpecContainers         []corev1.Container
+		wantImageChecks           map[string]corev1.PullPolicy
+		wantContainers            map[string]corev1.PullPolicy
+	}{
+		// --------- The defaults ----------
+		{
+			name:            "empty defaults, empty podspec",
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled always by copy-agent
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name: "empty defaults, image without digest",
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithoutDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+				imageWithoutDigest: corev1.PullAlways,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name: "empty defaults, image with digest",
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+				imageWithDigest: corev1.PullIfNotPresent,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+
+		// --------- Pulling images always ----------
+		{
+			name: "empty defaults, container pull Always",
+			podSpecContainers: []corev1.Container{{
+				Name:            "container-0",
+				Image:           imageWithoutDigest,
+				ImagePullPolicy: corev1.PullAlways,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+				imageWithoutDigest: corev1.PullAlways,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"copy-agent":  corev1.PullAlways,
+				"agent":       corev1.PullIfNotPresent, // because it was just pulled
+				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
+				"container-0": corev1.PullIfNotPresent, // because it was just pulled
+			},
+		},
+		{
+			name:                 "default pull Always, empty podspec",
+			cfgDefaultPullPolicy: corev1.PullAlways,
+			wantImageChecks:      map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent, // because it was just pulled
+				"agent":       corev1.PullIfNotPresent, // because it was just pulled
+				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name:                      "default check pull Always, empty podspec",
+			cfgDefaultCheckPullPolicy: corev1.PullAlways,
+			wantImageChecks:           map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent, // because it was just pulled
+				"agent":       corev1.PullIfNotPresent, // because it was just pulled
+				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name:                 "default pull Always, image without digest",
+			cfgDefaultPullPolicy: corev1.PullAlways,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithoutDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+				imageWithoutDigest: corev1.PullAlways,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent, // because it was just pulled
+				"agent":       corev1.PullIfNotPresent, // because it was just pulled
+				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name:                      "default check pull Always, image without digest",
+			cfgDefaultCheckPullPolicy: corev1.PullAlways,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithoutDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+				imageWithoutDigest: corev1.PullAlways,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent, // because it was just pulled
+				"agent":       corev1.PullIfNotPresent, // because it was just pulled
+				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name:                 "default pull Always, image with digest",
+			cfgDefaultPullPolicy: corev1.PullAlways,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+				imageWithDigest: corev1.PullAlways,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent, // because it was just pulled
+				"agent":       corev1.PullIfNotPresent, // because it was just pulled
+				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name:                      "default check pull Always, image with digest",
+			cfgDefaultCheckPullPolicy: corev1.PullAlways,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+				imageWithDigest: corev1.PullAlways,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent, // because it was just pulled
+				"agent":       corev1.PullIfNotPresent, // because it was just pulled
+				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+
+		// --------- Pulling IfNotPresent ----------
+		{
+			name: "empty defaults, container pull IfNotPresent",
+			podSpecContainers: []corev1.Container{{
+				Name:            "container-0",
+				Image:           imageWithoutDigest,
+				ImagePullPolicy: corev1.PullIfNotPresent,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+				imageWithoutDigest: corev1.PullIfNotPresent,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name:                 "default pull IfNotPresent, empty podspec",
+			cfgDefaultPullPolicy: corev1.PullIfNotPresent,
+			wantImageChecks:      map[string]corev1.PullPolicy{
+				// default image pulled IfNotPresent by copy-agent
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
+				"copy-agent":  corev1.PullIfNotPresent,
+			},
+		},
+		{
+			name:                      "default check pull IfNotPresent, empty podspec",
+			cfgDefaultCheckPullPolicy: corev1.PullIfNotPresent,
+			wantImageChecks:           map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullAlways, // TODO: does this make sense?
+				"agent":       corev1.PullAlways,
+				"checkout":    corev1.PullAlways,
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name:                 "default pull IfNotPresent, image without digest",
+			cfgDefaultPullPolicy: corev1.PullIfNotPresent,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithoutDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled IfNotPresent by copy-agent
+				imageWithoutDigest: corev1.PullIfNotPresent,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
+				"copy-agent":  corev1.PullIfNotPresent,
+			},
+		},
+		{
+			name:                      "default check pull IfNotPresent, image without digest",
+			cfgDefaultCheckPullPolicy: corev1.PullIfNotPresent,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithoutDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled IfNotPresent by copy-agent
+				imageWithoutDigest: corev1.PullIfNotPresent,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullAlways, // TODO: does this make sense?
+				"agent":       corev1.PullAlways,
+				"checkout":    corev1.PullAlways,
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name:                 "default pull IfNotPresent, image with digest",
+			cfgDefaultPullPolicy: corev1.PullIfNotPresent,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled IfNotPresent by copy-agent
+				imageWithDigest: corev1.PullIfNotPresent,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
+				"copy-agent":  corev1.PullIfNotPresent,
+			},
+		},
+		{
+			name:                      "default check pull IfNotPresent, image with digest",
+			cfgDefaultCheckPullPolicy: corev1.PullIfNotPresent,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled IfNotPresent by copy-agent
+				imageWithDigest: corev1.PullIfNotPresent,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent,
+				"agent":       corev1.PullAlways,
+				"checkout":    corev1.PullAlways,
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+
+		// --------- Pulling never ----------
+		{
+			name: "empty defaults, container pull Never",
+			podSpecContainers: []corev1.Container{{
+				Name:            "container-0",
+				Image:           imageWithoutDigest,
+				ImagePullPolicy: corev1.PullNever,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+				imageWithoutDigest: corev1.PullNever,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullNever,
+				"agent":       corev1.PullIfNotPresent, // because it was just pulled
+				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
+				"copy-agent":  corev1.PullAlways,       // empty defaults
+			},
+		},
+		{
+			name:                 "default pull Never, empty podspec",
+			cfgDefaultPullPolicy: corev1.PullNever,
+			wantImageChecks:      map[string]corev1.PullPolicy{
+				// default image pulled Never by copy-agent
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullNever,
+				"agent":       corev1.PullNever,
+				"checkout":    corev1.PullNever,
+				"copy-agent":  corev1.PullNever,
+			},
+		},
+		{
+			name:                      "default check pull Never, empty podspec",
+			cfgDefaultCheckPullPolicy: corev1.PullNever,
+			wantImageChecks:           map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullAlways, // TODO: does this make sense?
+				"agent":       corev1.PullAlways,
+				"checkout":    corev1.PullAlways,
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name:                 "default pull Never, image without digest",
+			cfgDefaultPullPolicy: corev1.PullNever,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithoutDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Never by copy-agent
+				imageWithoutDigest: corev1.PullNever,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullNever,
+				"agent":       corev1.PullNever,
+				"checkout":    corev1.PullNever,
+				"copy-agent":  corev1.PullNever,
+			},
+		},
+		{
+			name:                      "default check pull Never, image without digest",
+			cfgDefaultCheckPullPolicy: corev1.PullNever,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithoutDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+				imageWithoutDigest: corev1.PullNever,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullAlways, // TODO: does this make sense?
+				"agent":       corev1.PullAlways,
+				"checkout":    corev1.PullAlways,
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+		{
+			name:                 "default pull Never, image with digest",
+			cfgDefaultPullPolicy: corev1.PullNever,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Never by copy-agent
+				imageWithDigest: corev1.PullNever,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullNever,
+				"agent":       corev1.PullNever,
+				"checkout":    corev1.PullNever,
+				"copy-agent":  corev1.PullNever,
+			},
+		},
+		{
+			name:                      "default check pull Never, image with digest",
+			cfgDefaultCheckPullPolicy: corev1.PullNever,
+			podSpecContainers: []corev1.Container{{
+				Name:  "container-0",
+				Image: imageWithDigest,
+			}},
+			wantImageChecks: map[string]corev1.PullPolicy{
+				// default image pulled Always by copy-agent
+				imageWithDigest: corev1.PullNever,
+			},
+			wantContainers: map[string]corev1.PullPolicy{
+				"container-0": corev1.PullIfNotPresent,
+				"agent":       corev1.PullAlways,
+				"checkout":    corev1.PullAlways,
+				"copy-agent":  corev1.PullAlways,
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			worker := New(
+				zaptest.NewLogger(t),
+				nil,
+				Config{
+					Namespace:                   "buildkite",
+					Image:                       defaultImage,
+					AgentTokenSecretName:        "bkcq_1234567890",
+					DefaultImagePullPolicy:      test.cfgDefaultPullPolicy,
+					DefaultImageCheckPullPolicy: test.cfgDefaultCheckPullPolicy,
+				},
+			)
+			kjob, err := worker.Build(
+				&corev1.PodSpec{Containers: test.podSpecContainers},
+				false,
+				buildInputs{
+					uuid:            "1234",
+					command:         "echo shell",
+					agentQueryRules: []string{"queue=bernetes"},
+				},
+			)
+			if err != nil {
+				t.Fatalf("worker.Build() error = %v", err)
+			}
+
+			gotImageChecks := make(map[string]corev1.PullPolicy)
+			for _, c := range kjob.Spec.Template.Spec.InitContainers {
+				if !strings.HasPrefix(c.Name, ImageCheckContainerNamePrefix) {
+					continue
+				}
+				if _, dupe := gotImageChecks[c.Image]; dupe {
+					t.Errorf("duplicate image check container for image %q", c.Image)
+				}
+				gotImageChecks[c.Image] = c.ImagePullPolicy
+			}
+			if diff := cmp.Diff(gotImageChecks, test.wantImageChecks); diff != "" {
+				t.Errorf("image check containers diff (-got +want):\n%s", diff)
+			}
+
+			gotContainers := make(map[string]corev1.PullPolicy)
+			containers := append(kjob.Spec.Template.Spec.InitContainers, kjob.Spec.Template.Spec.Containers...)
+			for _, c := range containers {
+				if strings.HasPrefix(c.Name, ImageCheckContainerNamePrefix) {
+					continue
+				}
+				if _, dupe := gotContainers[c.Name]; dupe {
+					t.Errorf("duplicate container name %q", c.Image)
+					continue
+				}
+				gotContainers[c.Name] = c.ImagePullPolicy
+			}
+
+			if diff := cmp.Diff(gotContainers, test.wantContainers); diff != "" {
+				t.Errorf("other containers diff (-got +want):\n%s", diff)
+			}
+
+		})
+	}
+
 }
 
 func findContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {

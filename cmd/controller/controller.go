@@ -134,7 +134,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 	)
 	cmd.Flags().String(
 		"default-image-pull-policy",
-		"IfNotPresent",
+		"",
 		"Configures a default image pull policy for containers that do not specify a pull policy and non-init containers created by the stack itself",
 	)
 	cmd.Flags().String(
