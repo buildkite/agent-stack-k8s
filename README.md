@@ -19,6 +19,7 @@
   - [Skipping checkout](#Skipping-checkout)
   - [Overriding flags for git clone/fetch](#Overriding-flags-for-git-clonefetch)
   - [Validating your pipeline](#Validating-your-pipeline)
+  - [Long-running jobs](#long-running-jobs)
 - [Securing the stack](#securing-the-stack)
   - [Prohibiting the kubernetes plugin (v0.13.0 and later)](#prohibiting-the-kubernetes-plugin-v0130-and-later)
 - [How to setup agent hooks](#How-to-setup-agent-hooks)
@@ -138,6 +139,7 @@ Flags:
       --job-cancel-checker-poll-interval duration   Controls the interval between job state queries while a pod is still Pending (default 5s)
       --job-creation-concurrency int                Number of concurrent goroutines to run for converting Buildkite jobs into Kubernetes jobs (default 5)
       --job-ttl duration                            time to retain kubernetes jobs after completion (default 10m0s)
+      --job-active-deadline-seconds int             maximum number of seconds a kubernetes job is allowed to run before terminating all pods and failing (default 21600)
       --k8s-client-rate-limiter-burst int           The burst value of the K8s client rate limiter. (default 20)
       --k8s-client-rate-limiter-qps int             The QPS value of the K8s client rate limiter. (default 10)
       --max-in-flight int                           max jobs in flight, 0 means no max (default 25)
@@ -1030,6 +1032,28 @@ This currently can't prevent every sort of error, you might still have a referen
 
 Our JSON schema can also be used with editors that support JSON Schema by configuring your editor to validate against the schema found [here](./cmd/linter/schema.json).
 
+### Long-running jobs
+
+With the addition of `.spec.job.activeDeadlineSeconds` in version [`v0.24.0`](https://github.com/buildkite/agent-stack-k8s/releases/tag/v0.24.0), Kubernetes jobs will run for a (default) maximum duration of `21600` seconds (6 hours). After this duration has been exceeded, all of the running Pods are terminated and the Job status will be `type: Failed`. This will be reflected in the Buildkite UI as `Exited with status -1 (agent lost)`.
+
+If long-running jobs are common in your Organization, this value should be increased in your controller configuration:
+```yaml
+# values.yaml
+...
+config:
+  job-active-deadline-seconds: 86400 # 24h
+...
+```
+It is also possible to override this configuration via the `kubernetes` plugin directly in your pipeline steps and will only apply to that `command` step:
+```yaml
+steps:
+- label: Long-running job
+  command: echo "Hello world" && sleep 43200
+  plugins:
+  - kubernetes:
+      jobActiveDeadlineSeconds: 43500
+```
+
 ## Securing the stack
 
 ### Prohibiting the kubernetes plugin (v0.13.0 and later)
@@ -1054,6 +1078,9 @@ With `prohibit-kubernetes-plugin` enabled, any job containing the kubernetes
 plugin will fail.
 
 ## Debugging
+
+Enable debug logging via the command line (`--debug`) or within the `values.yaml` file (`debug: true`)
+
 Use the `log-collector` script in the `utils` folder to collect logs for agent-stack-k8s.
 
 ### Prerequisites

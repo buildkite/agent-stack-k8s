@@ -70,6 +70,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		10*time.Minute,
 		"time to retain kubernetes jobs after completion",
 	)
+	cmd.Flags().Int(
+		"job-active-deadline-seconds",
+		21600,
+		"maximum number of seconds a kubernetes job is allowed to run before terminating all pods and failing job",
+	)
 	cmd.Flags().Duration(
 		"poll-interval",
 		time.Second,
