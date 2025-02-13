@@ -108,7 +108,7 @@ func (w *worker) Handle(ctx context.Context, job model.Job) error {
 	inputs, err := w.ParseJob(job.CommandJob)
 	if err != nil {
 		logger.Warn("Job parsing failed, failing job", zap.Error(err))
-		return w.failJob(ctx, inputs, fmt.Sprintf("agent-stack-k8s failed to parse the job: %v", err))
+		return w.failJob(ctx, inputs, 1, fmt.Sprintf("agent-stack-k8s failed to parse the job: %v", err))
 	}
 
 	// Default command container using default image.
@@ -128,7 +128,7 @@ func (w *worker) Handle(ctx context.Context, job model.Job) error {
 	kjob, err := w.Build(podSpec, false, inputs)
 	if err != nil {
 		logger.Warn("Job definition error detected, failing job", zap.Error(err))
-		return w.failJob(ctx, inputs, fmt.Sprintf("agent-stack-k8s failed to build a podSpec for the job: %v", err))
+		return w.failJob(ctx, inputs, 1, fmt.Sprintf("agent-stack-k8s failed to build a podSpec for the job: %v", err))
 	}
 
 	jobCreateCallsCounter.Inc()
@@ -142,7 +142,7 @@ func (w *worker) Handle(ctx context.Context, job model.Job) error {
 
 		case kerrors.IsInvalid(err):
 			logger.Warn("Job invalid, failing job on Buildkite", zap.Error(err))
-			return w.failJob(ctx, inputs, fmt.Sprintf("Kubernetes rejected the podSpec built by agent-stack-k8s: %v", err))
+			return w.failJob(ctx, inputs, 1, fmt.Sprintf("Kubernetes rejected the podSpec built by agent-stack-k8s: %v", err))
 
 		default:
 			return err
@@ -1144,7 +1144,7 @@ buildkite-agent-entrypoint bootstrap`,
 }
 
 // failJob fails the job in Buildkite.
-func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string) error {
+func (w *worker) failJob(ctx context.Context, inputs buildInputs, code int, message string) error {
 	// Need to fetch the agent token ourselves.
 	agentToken, err := fetchAgentToken(ctx, w.logger, w.client, w.cfg.Namespace, w.cfg.AgentTokenSecretName)
 	if err != nil {
@@ -1153,7 +1153,7 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 	}
 
 	opts := w.cfg.AgentConfig.ControllerOptions()
-	if err := acquireAndFail(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, message, opts...); err != nil {
+	if err := acquireAndFail(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, code, message, opts...); err != nil {
 		w.logger.Error("failed to acquire and fail the job on Buildkite", zap.Error(err))
 		schedulerBuildkiteJobFailErrorsCounter.Inc()
 		return err

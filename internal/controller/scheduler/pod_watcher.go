@@ -300,6 +300,7 @@ func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Lo
 	log.Debug("Checking pod for failed init containers")
 
 	containerFails := make(map[string]*corev1.ContainerStateTerminated)
+	firstNonZeroExit := int32(0)
 
 	// If any init container fails, whether it's one we added specifically to
 	// check for pull failure or not, the pod won't run.
@@ -309,6 +310,9 @@ func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Lo
 			continue
 		}
 		containerFails[containerStatus.Name] = term
+		if firstNonZeroExit == 0 {
+			firstNonZeroExit = term.ExitCode
+		}
 	}
 
 	if len(containerFails) == 0 {
@@ -325,7 +329,7 @@ func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Lo
 	// probably shouldn't interfere.
 	log.Info("One or more init containers failed. Failing.")
 	message := w.formatInitContainerFails(containerFails)
-	if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, message); err != nil {
+	if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, int(firstNonZeroExit), message); err != nil {
 		// Maybe the job was cancelled in the meantime?
 		log.Error("Could not fail Buildkite job", zap.Error(err))
 		podWatcherBuildkiteJobFailErrorsCounter.Inc()
@@ -488,7 +492,7 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		// We can acquire it and fail it ourselves.
 		log.Info("One or more job containers are waiting too long for images. Failing.")
 		message := w.formatImagePullFailureMessage(statuses)
-		switch err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, message); {
+		switch err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, 125, message); {
 		case errors.Is(err, agentcore.ErrJobAcquisitionRejected):
 			podWatcherBuildkiteJobFailErrorsCounter.Inc()
 			// If the error was because BK rejected the job acquisition, then
