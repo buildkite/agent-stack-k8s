@@ -520,7 +520,7 @@
         "default-image-pull-policy": {
           "type": "string",
           "description": "Configures a default image pull policy for containers that do not specify a pull policy, or containers created by the stack itself",
-          "default": "IfNotPresent",
+          "default": "",
           "examples": ["Always", "IfNotPresent", "Never", ""]
         },
         "default-image-check-pull-policy": {

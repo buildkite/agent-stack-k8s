@@ -68,10 +68,15 @@ type Config struct {
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
+	ref, err := reference.Parse(cfg.Image)
+	if err != nil {
+		logger.Fatal("Invalid default image reference!", zap.Error(err))
+	}
 	return &worker{
-		cfg:    cfg,
-		client: client,
-		logger: logger.Named("worker"),
+		cfg:             cfg,
+		defaultImageRef: ref,
+		client:          client,
+		logger:          logger.Named("worker"),
 	}
 }
 
@@ -88,9 +93,10 @@ type KubernetesPlugin struct {
 }
 
 type worker struct {
-	cfg    Config
-	client kubernetes.Interface
-	logger *zap.Logger
+	cfg             Config
+	defaultImageRef reference.Reference
+	client          kubernetes.Interface
+	logger          *zap.Logger
 }
 
 func (w *worker) Handle(ctx context.Context, job model.Job) error {
@@ -408,10 +414,6 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		c.Command = commandContainerCommand
 		c.Args = commandContainerArgs
 
-		if c.ImagePullPolicy == "" {
-			c.ImagePullPolicy = w.cfg.DefaultImagePullPolicy
-		}
-
 		c.Env = append(c.Env, containerEnv...)
 		c.Env = append(c.Env,
 			corev1.EnvVar{
@@ -450,13 +452,12 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	if len(podSpec.Containers) == 0 {
 		// Create a default command container named "container-0".
 		c := corev1.Container{
-			Name:            "container-0",
-			Image:           w.cfg.Image,
-			Command:         commandContainerCommand,
-			Args:            commandContainerArgs,
-			WorkingDir:      "/workspace",
-			VolumeMounts:    volumeMounts,
-			ImagePullPolicy: w.cfg.DefaultImagePullPolicy,
+			Name:         "container-0",
+			Image:        w.cfg.Image,
+			Command:      commandContainerCommand,
+			Args:         commandContainerArgs,
+			WorkingDir:   "/workspace",
+			VolumeMounts: volumeMounts,
 			Env: append(containerEnv,
 				corev1.EnvVar{
 					Name:  "BUILDKITE_COMMAND",
@@ -505,12 +506,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// to Buildkite: acquiring the job, starting the job, uploading log chunks,
 	// finishing the job.
 	agentContainer := corev1.Container{
-		Name:            AgentContainerName,
-		Args:            []string{"start"},
-		Image:           w.cfg.Image,
-		WorkingDir:      "/workspace",
-		VolumeMounts:    volumeMounts,
-		ImagePullPolicy: corev1.PullIfNotPresent,
+		Name:         AgentContainerName,
+		Args:         []string{"start"},
+		Image:        w.cfg.Image,
+		WorkingDir:   "/workspace",
+		VolumeMounts: volumeMounts,
 		Env: []corev1.EnvVar{
 			{
 				Name:  "BUILDKITE_KUBERNETES_EXEC",
@@ -604,19 +604,21 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	// Use init containers to check that images can be used or pulled before
 	// any other containers run. These are added _after_ podSpecPatch is applied
-	// since podSpecPatch may freely modify each container's image ref.
+	// since podSpecPatch may freely modify each container's image ref or add
+	// more containers.
 	// This process also checks that image refs are well-formed so we can fail
 	// the job early.
 	// Init containers run before the agent, so we can acquire and fail the job
 	// if an init container stays in ImagePullBackOff for too long.
 	//
 	// Rank pull policy by preference. If two containers specify different pull
-	// policies, the most preferred policy is used for the image check.
-	// Always is most preferred, Never is least preferred.
+	// policies for the same image, the most preferred policy is used for the
+	// image check.
+	// Always is most preferred, Never is less preferred.
 	var pullPolicyPreference = map[corev1.PullPolicy]int{
-		corev1.PullNever:        1,
+		corev1.PullNever:        1, // least preferred
 		corev1.PullIfNotPresent: 2,
-		corev1.PullAlways:       3,
+		corev1.PullAlways:       3, // most preferred
 	}
 
 	// First decide which images to pre-check and what pull policy to use.
@@ -632,17 +634,68 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	var invalidRefs []imageParseErr
 
 	preflightImageChecks := make(map[string]policyAndRef)
-	for _, c := range podSpec.Containers {
+	for i := range podSpec.Containers {
+		c := &podSpec.Containers[i]
+
+		// Parse the image ref for error reporting and policy purposes.
 		ref, err := reference.Parse(c.Image)
 		if err != nil {
 			invalidRefs = append(invalidRefs, imageParseErr{container: c.Name, image: c.Image, err: err})
 			continue
 		}
 
+		// "nominal policy" = "the image pull policy we would use if there
+		// was only one container".
+		// Actually we have two containers: an image check init container
+		// and an app container. The nominal policy is what mainly applies
+		// to image check containers.
+		//
+		// The nominal policy is computed as follows:
+		//  - If the container already has a pull policy, use that.
+		//  - Otherwise, use the DefaultImageCheckPullPolicy, if configured.
+		//  - Otherwise, use the DefaultImagePullPolicy, if configured.
+		//  - Otherwise, use Always or IfNotPresent depending on whether or not
+		//    the image ref is pinned by a digest.
+		nominalPolicy := coalesce(
+			c.ImagePullPolicy,
+			w.cfg.DefaultImageCheckPullPolicy,
+			w.cfg.DefaultImagePullPolicy,
+			defaultPullPolicyForImage(ref),
+		)
+
+		// The actual policy for this app container, accounting for defaults
+		// and pre-pulling by the image check container.
+		//
+		// 	- If the container already has a pull policy, use that.
+		//  - Otherwise, use the DefaultImagePullPolicy, if configured.
+		//  - Otherwise, use Always or IfNotPresent depending on whether or not
+		//    the image ref is pinned by a digest.
+		//
+		// DefaultImageCheckPullPolicy doesn't apply here, because this isn't
+		// an image check container - it's an app container!
+		//
+		// If the nominal policy is Always, then we'll create an imagecheck
+		// init container with the Always policy. But then there's no need to
+		// pull it again later, so we downgrade the app container's policy from
+		// Always to IfNotPresent.
+		c.ImagePullPolicy = coalesce(
+			c.ImagePullPolicy,
+			w.cfg.DefaultImagePullPolicy,
+			defaultPullPolicyForImage(ref),
+		)
+		if nominalPolicy == corev1.PullAlways && c.ImagePullPolicy == corev1.PullAlways {
+			c.ImagePullPolicy = corev1.PullIfNotPresent
+		}
+
 		pnr, has := preflightImageChecks[c.Image]
-		if !has || pnr.policy == "" {
+		if !has {
+			w.logger.Debug("setting initial pull policy for preflight image check",
+				zap.String("container", c.Name),
+				zap.String("image", c.Image),
+				zap.String("new-policy", string(nominalPolicy)),
+			)
 			preflightImageChecks[c.Image] = policyAndRef{
-				policy: c.ImagePullPolicy,
+				policy: nominalPolicy,
 				ref:    ref,
 			}
 			continue
@@ -655,11 +708,17 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		// both will run, using the policy more likely to pull means the other
 		// is more likely to have an image if it succeeds, and more likely to
 		// fail quickly if the pull fails.
-		r := pullPolicyPreference[c.ImagePullPolicy]
+		r := pullPolicyPreference[nominalPolicy]
 		s := pullPolicyPreference[pnr.policy]
 		if r > s {
+			w.logger.Debug("updating pull policy for preflight image check",
+				zap.String("container", c.Name),
+				zap.String("image", c.Image),
+				zap.String("old-policy", string(pnr.policy)),
+				zap.String("new-policy", string(nominalPolicy)),
+			)
 			preflightImageChecks[c.Image] = policyAndRef{
-				policy: c.ImagePullPolicy,
+				policy: nominalPolicy,
 				ref:    ref,
 			}
 		}
@@ -683,6 +742,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		// If the existing init container has the same or higher preference than
 		// the image check container we would add, then no need to add it.
 		if r >= s {
+			w.logger.Debug("removing preflight image check because of lower policy preference",
+				zap.String("container", c.Name),
+				zap.String("image", c.Image),
+				zap.String("old-policy", string(pnr.policy)),
+			)
 			delete(preflightImageChecks, c.Image)
 		}
 	}
@@ -721,20 +785,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	i := 0
 	for image, pnr := range preflightImageChecks {
 		name := ImageCheckContainerNamePrefix + strconv.Itoa(i)
-		policy := pnr.policy
-		if policy == "" {
-			policy = w.cfg.DefaultImageCheckPullPolicy
-		}
-		if policy == "" {
-			// If pull policy is unspecified by either the podSpec{,Patch} or
-			// controller configuration, use Always, unless there is a
-			// digest that has pinned the ref, in which case use IfNotPresent.
-			// (No need to pull a pinned image ref if it's present.)
-			policy = corev1.PullAlways
-			if _, hasDigest := pnr.ref.(reference.Digested); hasDigest {
-				policy = corev1.PullIfNotPresent
-			}
-		}
+
+		policy := coalesce(pnr.policy, w.cfg.DefaultImageCheckPullPolicy, defaultPullPolicyForImage(pnr.ref))
 
 		w.logger.Debug(
 			"adding preflight image check init container",
@@ -910,12 +962,13 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 	// We also use init containers to check that images can be pulled before
 	// any other containers run.
 	containerArgs.WriteString("\ncp /usr/local/bin/buildkite-agent /sbin/tini-static /workspace\n")
+
 	return corev1.Container{
 		// This container copies buildkite-agent and tini-static into
 		// /workspace.
 		Name:            CopyAgentContainerName,
 		Image:           w.cfg.Image,
-		ImagePullPolicy: w.cfg.DefaultImagePullPolicy,
+		ImagePullPolicy: coalesce(w.cfg.DefaultImagePullPolicy, defaultPullPolicyForImage(w.defaultImageRef)),
 		Command:         []string{"ash"},
 		Args:            []string{"-cefx", containerArgs.String()},
 		SecurityContext: securityContext,
@@ -933,11 +986,10 @@ func (w *worker) createCheckoutContainer(
 	k8sPlugin *KubernetesPlugin,
 ) corev1.Container {
 	checkoutContainer := corev1.Container{
-		Name:            CheckoutContainerName,
-		Image:           w.cfg.Image,
-		WorkingDir:      "/workspace",
-		VolumeMounts:    volumeMounts,
-		ImagePullPolicy: w.cfg.DefaultImagePullPolicy,
+		Name:         CheckoutContainerName,
+		Image:        w.cfg.Image,
+		WorkingDir:   "/workspace",
+		VolumeMounts: volumeMounts,
 		Env: []corev1.EnvVar{
 			{
 				Name:  "BUILDKITE_KUBERNETES_EXEC",
@@ -1120,4 +1172,27 @@ func createAgentTagString(tags map[string]string) string {
 		ts = append(ts, k+"="+v)
 	}
 	return strings.Join(ts, ",")
+}
+
+// defaultPullPolicyForImage parses the image reference. If the reference pins
+// a digest (a.k.a. hash, SHA) then it returns PullIfNotPresent, otherwise it
+// returns PullAlways. This is used for imagecheck-* init containers when
+// another default hasn't been set.
+func defaultPullPolicyForImage(ref reference.Reference) corev1.PullPolicy {
+	if _, hasDigest := ref.(reference.Digested); hasDigest {
+		return corev1.PullIfNotPresent
+	}
+	return corev1.PullAlways
+}
+
+// coalesce returns the first non-zero arg, or the zero value for T if all args
+// are zero.
+func coalesce[T comparable](x ...T) T {
+	var zero T
+	for _, s := range x {
+		if s != zero {
+			return s
+		}
+	}
+	return zero
 }
