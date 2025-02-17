@@ -23,6 +23,7 @@ const (
 	DefaultK8sClientRateLimiterQPS      = 10
 	DefaultK8sClientRateLimiterBurst    = 20
 	DefaultGraphQLResultsLimit          = 100
+	DefaultPaginationDepthLimit         = 1
 )
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
@@ -47,6 +48,7 @@ type Config struct {
 	ProfilerAddress        string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
 	GraphQLEndpoint        string        `json:"graphql-endpoint"         validate:"omitempty"`
 	GraphQLResultsLimit    int           `json:"graphql-results-limit"    validate:"min=1,max=500"`
+	PaginationDepthLimit   int           `json:"pagination-depth-limit"   validate:"min=1,max=20"`
 	// Agent endpoint is set in agent-config.
 
 	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps" validate:"omitempty"`

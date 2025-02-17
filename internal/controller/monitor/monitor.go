@@ -41,6 +41,7 @@ type Config struct {
 	Org                    string
 	Tags                   []string
 	GraphQLResultsLimit    int
+	PaginationDepthLimit   int
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
@@ -134,15 +135,14 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 	for {
 		resp, err = api.GetScheduledJobsClustered(
 			ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID), m.cfg.GraphQLResultsLimit, endCursor,
-	)
+		)
 		if err != nil {
 			return nil, err
 		}
 
 		clusteredJobs = append(clusteredJobs, resp.Organization.Jobs.Edges...)
 		pagninationDepth++
-		// TODO: Pass the depth limit as a Helm config parameter
-		if !resp.Organization.Jobs.PageInfo.HasNextPage || pagninationDepth >= 10 {
+		if !resp.Organization.Jobs.PageInfo.HasNextPage || pagninationDepth >= m.cfg.PaginationDepthLimit {
 			break
 		}
 		endCursor = resp.Organization.Jobs.PageInfo.EndCursor

@@ -146,6 +146,10 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"graphql-results-limit",
 		config.DefaultGraphQLResultsLimit,
 		"Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled")
+	cmd.Flags().Int(
+		"pagination-depth-limit",
+		config.DefaultPaginationDepthLimit,
+		"Sets the maximum depth of pagination when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite GraphQL API and number of Jobs to be scheduled on the Kubernetes Cluster.")
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.
