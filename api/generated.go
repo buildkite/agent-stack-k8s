@@ -912,8 +912,9 @@ func (v *GetScheduledJobsClusteredOrganization) GetJobs() GetScheduledJobsCluste
 
 // GetScheduledJobsClusteredOrganizationJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
 type GetScheduledJobsClusteredOrganizationJobsJobConnection struct {
-	Count int                                                                  `json:"count"`
-	Edges []GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge `json:"edges"`
+	Count    int                                                                  `json:"count"`
+	Edges    []GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge `json:"edges"`
+	PageInfo GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo       `json:"pageInfo"`
 }
 
 // GetCount returns GetScheduledJobsClusteredOrganizationJobsJobConnection.Count, and is useful for accessing the field via an interface.
@@ -922,6 +923,11 @@ func (v *GetScheduledJobsClusteredOrganizationJobsJobConnection) GetCount() int 
 // GetEdges returns GetScheduledJobsClusteredOrganizationJobsJobConnection.Edges, and is useful for accessing the field via an interface.
 func (v *GetScheduledJobsClusteredOrganizationJobsJobConnection) GetEdges() []GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge {
 	return v.Edges
+}
+
+// GetPageInfo returns GetScheduledJobsClusteredOrganizationJobsJobConnection.PageInfo, and is useful for accessing the field via an interface.
+func (v *GetScheduledJobsClusteredOrganizationJobsJobConnection) GetPageInfo() GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo {
+	return v.PageInfo
 }
 
 // GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
@@ -997,6 +1003,27 @@ func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge) __p
 	return &retval, nil
 }
 
+// GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo includes the requested fields of the GraphQL type PageInfo.
+// The GraphQL type's documentation follows.
+//
+// Information about pagination in a connection.
+type GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo struct {
+	// When paginating forwards, are there more items?
+	HasNextPage bool `json:"hasNextPage"`
+	// When paginating forwards, the cursor to continue.
+	EndCursor string `json:"endCursor"`
+}
+
+// GetHasNextPage returns GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo.HasNextPage, and is useful for accessing the field via an interface.
+func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo) GetHasNextPage() bool {
+	return v.HasNextPage
+}
+
+// GetEndCursor returns GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo.EndCursor, and is useful for accessing the field via an interface.
+func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo) GetEndCursor() string {
+	return v.EndCursor
+}
+
 // GetScheduledJobsClusteredResponse is returned by GetScheduledJobsClustered on success.
 type GetScheduledJobsClusteredResponse struct {
 	// Find an organization
@@ -1027,8 +1054,9 @@ func (v *GetScheduledJobsOrganization) GetJobs() GetScheduledJobsOrganizationJob
 
 // GetScheduledJobsOrganizationJobsJobConnection includes the requested fields of the GraphQL type JobConnection.
 type GetScheduledJobsOrganizationJobsJobConnection struct {
-	Count int                                                         `json:"count"`
-	Edges []GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge `json:"edges"`
+	Count    int                                                         `json:"count"`
+	Edges    []GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge `json:"edges"`
+	PageInfo GetScheduledJobsOrganizationJobsJobConnectionPageInfo       `json:"pageInfo"`
 }
 
 // GetCount returns GetScheduledJobsOrganizationJobsJobConnection.Count, and is useful for accessing the field via an interface.
@@ -1037,6 +1065,11 @@ func (v *GetScheduledJobsOrganizationJobsJobConnection) GetCount() int { return 
 // GetEdges returns GetScheduledJobsOrganizationJobsJobConnection.Edges, and is useful for accessing the field via an interface.
 func (v *GetScheduledJobsOrganizationJobsJobConnection) GetEdges() []GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge {
 	return v.Edges
+}
+
+// GetPageInfo returns GetScheduledJobsOrganizationJobsJobConnection.PageInfo, and is useful for accessing the field via an interface.
+func (v *GetScheduledJobsOrganizationJobsJobConnection) GetPageInfo() GetScheduledJobsOrganizationJobsJobConnectionPageInfo {
+	return v.PageInfo
 }
 
 // GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge includes the requested fields of the GraphQL type JobEdge.
@@ -1108,6 +1141,27 @@ func (v *GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge) __premarshal
 		}
 	}
 	return &retval, nil
+}
+
+// GetScheduledJobsOrganizationJobsJobConnectionPageInfo includes the requested fields of the GraphQL type PageInfo.
+// The GraphQL type's documentation follows.
+//
+// Information about pagination in a connection.
+type GetScheduledJobsOrganizationJobsJobConnectionPageInfo struct {
+	// When paginating forwards, are there more items?
+	HasNextPage bool `json:"hasNextPage"`
+	// When paginating forwards, the cursor to continue.
+	EndCursor string `json:"endCursor"`
+}
+
+// GetHasNextPage returns GetScheduledJobsOrganizationJobsJobConnectionPageInfo.HasNextPage, and is useful for accessing the field via an interface.
+func (v *GetScheduledJobsOrganizationJobsJobConnectionPageInfo) GetHasNextPage() bool {
+	return v.HasNextPage
+}
+
+// GetEndCursor returns GetScheduledJobsOrganizationJobsJobConnectionPageInfo.EndCursor, and is useful for accessing the field via an interface.
+func (v *GetScheduledJobsOrganizationJobsJobConnectionPageInfo) GetEndCursor() string {
+	return v.EndCursor
 }
 
 // GetScheduledJobsResponse is returned by GetScheduledJobs on success.
@@ -1557,6 +1611,7 @@ type __GetScheduledJobsClusteredInput struct {
 	AgentQueryRules []string `json:"agentQueryRules"`
 	Cluster         string   `json:"cluster"`
 	First           int      `json:"first"`
+	After           string   `json:"after"`
 }
 
 // GetSlug returns __GetScheduledJobsClusteredInput.Slug, and is useful for accessing the field via an interface.
@@ -1571,11 +1626,15 @@ func (v *__GetScheduledJobsClusteredInput) GetCluster() string { return v.Cluste
 // GetFirst returns __GetScheduledJobsClusteredInput.First, and is useful for accessing the field via an interface.
 func (v *__GetScheduledJobsClusteredInput) GetFirst() int { return v.First }
 
+// GetAfter returns __GetScheduledJobsClusteredInput.After, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsClusteredInput) GetAfter() string { return v.After }
+
 // __GetScheduledJobsInput is used internally by genqlient
 type __GetScheduledJobsInput struct {
 	Slug            string   `json:"slug"`
 	AgentQueryRules []string `json:"agentQueryRules"`
 	First           int      `json:"first"`
+	After           string   `json:"after"`
 }
 
 // GetSlug returns __GetScheduledJobsInput.Slug, and is useful for accessing the field via an interface.
@@ -1586,6 +1645,9 @@ func (v *__GetScheduledJobsInput) GetAgentQueryRules() []string { return v.Agent
 
 // GetFirst returns __GetScheduledJobsInput.First, and is useful for accessing the field via an interface.
 func (v *__GetScheduledJobsInput) GetFirst() int { return v.First }
+
+// GetAfter returns __GetScheduledJobsInput.After, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsInput) GetAfter() string { return v.After }
 
 // __PipelineDeleteInput is used internally by genqlient
 type __PipelineDeleteInput struct {
@@ -1958,16 +2020,20 @@ func GetOrganization(
 
 // The query or mutation executed by GetScheduledJobs.
 const GetScheduledJobs_Operation = `
-query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!], $first: Int) {
+query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!], $first: Int, $after: String!) {
 	organization(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: RECENTLY_ASSIGNED, agentQueryRules: $agentQueryRules, clustered: false) {
+		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: RECENTLY_ASSIGNED, agentQueryRules: $agentQueryRules, clustered: false, after: $after) {
 			count
 			edges {
 				node {
 					__typename
 					... Job
 				}
+			}
+			pageInfo {
+				hasNextPage
+				endCursor
 			}
 		}
 	}
@@ -1994,6 +2060,7 @@ func GetScheduledJobs(
 	slug string,
 	agentQueryRules []string,
 	first int,
+	after string,
 ) (*GetScheduledJobsResponse, error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobs",
@@ -2002,6 +2069,7 @@ func GetScheduledJobs(
 			Slug:            slug,
 			AgentQueryRules: agentQueryRules,
 			First:           first,
+			After:           after,
 		},
 	}
 	var err_ error
@@ -2020,16 +2088,20 @@ func GetScheduledJobs(
 
 // The query or mutation executed by GetScheduledJobsClustered.
 const GetScheduledJobsClustered_Operation = `
-query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!, $first: Int) {
+query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!, $first: Int, $after: String!) {
 	organization(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: RECENTLY_ASSIGNED, agentQueryRules: $agentQueryRules, cluster: $cluster) {
+		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: RECENTLY_ASSIGNED, agentQueryRules: $agentQueryRules, cluster: $cluster, after: $after) {
 			count
 			edges {
 				node {
 					__typename
 					... Job
 				}
+			}
+			pageInfo {
+				hasNextPage
+				endCursor
 			}
 		}
 	}
@@ -2057,6 +2129,7 @@ func GetScheduledJobsClustered(
 	agentQueryRules []string,
 	cluster string,
 	first int,
+	after string,
 ) (*GetScheduledJobsClusteredResponse, error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobsClustered",
@@ -2066,6 +2139,7 @@ func GetScheduledJobsClustered(
 			AgentQueryRules: agentQueryRules,
 			Cluster:         cluster,
 			First:           first,
+			After:           after,
 		},
 	}
 	var err_ error
