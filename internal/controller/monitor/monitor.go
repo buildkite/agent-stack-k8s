@@ -126,10 +126,41 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		agentQueryRule = append(agentQueryRule, fmt.Sprintf("queue=%s", queue))
 	}
 
-	resp, err := api.GetScheduledJobsClustered(
-		ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID), m.cfg.GraphQLResultsLimit,
+	var clusteredJobs []api.GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge
+	var pagninationDepth int
+	var endCursor string
+	var resp *api.GetScheduledJobsClusteredResponse
+
+	for {
+		resp, err = api.GetScheduledJobsClustered(
+			ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID), m.cfg.GraphQLResultsLimit, endCursor,
 	)
-	return clusteredJobResp(*resp), err
+		if err != nil {
+			return nil, err
+		}
+
+		clusteredJobs = append(clusteredJobs, resp.Organization.Jobs.Edges...)
+		pagninationDepth++
+		// TODO: Pass the depth limit as a Helm config parameter
+		if !resp.Organization.Jobs.PageInfo.HasNextPage || pagninationDepth >= 10 {
+			break
+		}
+		endCursor = resp.Organization.Jobs.PageInfo.EndCursor
+	}
+
+	// Create a combined response
+	clusteredResp := &api.GetScheduledJobsClusteredResponse{
+		Organization: api.GetScheduledJobsClusteredOrganization{
+			Id: resp.Organization.Id,
+			Jobs: api.GetScheduledJobsClusteredOrganizationJobsJobConnection{
+				Count:    len(clusteredJobs),
+				PageInfo: resp.Organization.Jobs.PageInfo,
+				Edges:    clusteredJobs,
+			},
+		},
+	}
+
+	return clusteredJobResp(*clusteredResp), nil
 }
 
 func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan error {
