@@ -1,0 +1,8 @@
+steps:
+  - label: ":x:"
+    agents:
+      queue: "{{.queue}}"
+    command: sleep 90
+    plugins:
+      - kubernetes:
+          jobActiveDeadlineSeconds: 60

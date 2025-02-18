@@ -7,6 +7,11 @@ tag="$(git describe)"
 version="${tag#v}"
 agent_image="$(buildkite-agent meta-data get agent-image)"
 
+# Clearly indicate PR number in version if it's a PR build.
+if [[ "${BUILDKITE_PULL_REQUEST:false}" != "false" ]]; then
+  version="${version}-PR-${BUILDKITE_PULL_REQUEST}"
+fi
+
 # Is this a release version (version-tagged)?
 if [[ "${version}" == "${BUILDKITE_TAG#v}" ]] ; then
     # Publish releases to both PECR and GHCR

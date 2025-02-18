@@ -43,15 +43,15 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: {{ .Release.Name }}
+  name: {{ include "agent-stack-k8s.fullname" . }}
   namespace: {{ .Release.Namespace }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: {{ .Release.Name }}-controller
+  name: {{ include "agent-stack-k8s.fullname" . }}-controller
 subjects:
   - kind: ServiceAccount
-    name: {{ .Release.Name }}-controller
+    name: {{ include "agent-stack-k8s.fullname" . }}-controller
     namespace: {{ .Release.Namespace }}
 ---
 apiVersion: v1

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
@@ -68,6 +70,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		10*time.Minute,
 		"time to retain kubernetes jobs after completion",
 	)
+	cmd.Flags().Int(
+		"job-active-deadline-seconds",
+		21600,
+		"maximum number of seconds a kubernetes job is allowed to run before terminating all pods and failing job",
+	)
 	cmd.Flags().Duration(
 		"poll-interval",
 		time.Second,
@@ -100,6 +107,16 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultJobCreationConcurrency,
 		"Number of concurrent goroutines to run for converting Buildkite jobs into Kubernetes jobs",
 	)
+	cmd.Flags().Int(
+		"k8s-client-rate-limiter-qps",
+		config.DefaultK8sClientRateLimiterQPS,
+		"The QPS value of the K8s client rate limiter.",
+	)
+	cmd.Flags().Int(
+		"k8s-client-rate-limiter-burst",
+		config.DefaultK8sClientRateLimiterBurst,
+		"The burst value of the K8s client rate limiter.",
+	)
 	cmd.Flags().Duration(
 		"image-pull-backoff-grace-period",
 		config.DefaultImagePullBackOffGracePeriod,
@@ -117,7 +134,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 	)
 	cmd.Flags().String(
 		"default-image-pull-policy",
-		"IfNotPresent",
+		"",
 		"Configures a default image pull policy for containers that do not specify a pull policy and non-init containers created by the stack itself",
 	)
 	cmd.Flags().String(
@@ -130,6 +147,10 @@ func AddConfigFlags(cmd *cobra.Command) {
 		false,
 		"Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
 	)
+	cmd.Flags().Int(
+		"graphql-results-limit",
+		config.DefaultGraphQLResultsLimit,
+		"Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled")
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.
@@ -184,19 +205,40 @@ func ReadConfigFromFileArgsAndEnv(cmd *cobra.Command, args []string) (*viper.Vip
 }
 
 var resourceQuantityType = reflect.TypeOf(resource.Quantity{})
+var intOrStringType = reflect.TypeOf(intstr.IntOrString{})
 
-// This mapstructure.DecodeHookFunc is needed to decode quantities (as used in
-// podSpecs) properly. Without this, viper (which uses mapstructure) doesn't
-// know how to put a string (e.g. "100m") into a "map" (resource.Quantity) and
+// This mapstructure.DecodeHookFunc is needed to decode kubernetes objects (as
+// used in podSpecs) properly. Without this, viper (which uses mapstructure) doesn't
+// e.g. know how to put a string (e.g. "100m") into a "map" (resource.Quantity) and
 // will error out.
-func stringToResourceQuantity(f, t reflect.Type, data any) (any, error) {
-	if f.Kind() != reflect.String {
+func decodeKubeSpecials(f, t reflect.Type, data any) (any, error) {
+	switch t {
+	case resourceQuantityType:
+		switch f.Kind() {
+		case reflect.String:
+			return resource.ParseQuantity(data.(string))
+		case reflect.Float64:
+			return resource.ParseQuantity(strconv.FormatFloat(data.(float64), 'f', -1, 64))
+		case reflect.Float32:
+			return resource.ParseQuantity(strconv.FormatFloat(float64(data.(float32)), 'f', -1, 32))
+		case reflect.Int:
+			return resource.ParseQuantity(strconv.Itoa(data.(int)))
+		default:
+			return nil, fmt.Errorf("invalid resource quantity: %v", data)
+		}
+	case intOrStringType:
+		switch f.Kind() {
+		case reflect.String:
+			return intstr.FromString(data.(string)), nil
+		case reflect.Int:
+			return intstr.FromInt(data.(int)), nil
+		default:
+			return nil, fmt.Errorf("invalid int/string: %v", data)
+		}
+	default:
 		return data, nil
 	}
-	if t != resourceQuantityType {
-		return data, nil
-	}
-	return resource.ParseQuantity(data.(string))
+
 }
 
 // This viper.DecoderConfigOption is needed to make mapstructure (used by viper)
@@ -211,10 +253,10 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 	// The user likely expects every part of their config to be meaningful, so if some of it is
 	// ignored in parsing, they almost certainly want to know about it.
 	cfg := &config.Config{}
-	// This decode hook = the default Viper decode hooks + stringToResourceQuantity
+	// This decode hook = the default Viper decode hooks + decodeKubeSpecials
 	// (Setting this option overrides the default.)
 	decodeHook := viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
-		stringToResourceQuantity,
+		decodeKubeSpecials,
 		config.StringToInterposer,
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
@@ -279,6 +321,13 @@ func New() *cobra.Command {
 			logger.Info("configuration loaded", zap.Object("config", cfg))
 
 			clientConfig := restconfig.GetConfigOrDie()
+			clientConfig.QPS = float32(cfg.K8sClientRateLimiterQPS)
+			clientConfig.Burst = cfg.K8sClientRateLimiterBurst
+
+			// Default to Protobuf encoding for API responses, support fallback to JSON
+			clientConfig.AcceptContentTypes = "application/vnd.kubernetes.protobuf,application/json"
+			clientConfig.ContentType = "application/vnd.kubernetes.protobuf"
+
 			k8sClient, err := kubernetes.NewForConfig(clientConfig)
 			if err != nil {
 				logger.Error("failed to create clientset", zap.Error(err))

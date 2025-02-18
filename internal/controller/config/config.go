@@ -20,6 +20,9 @@ const (
 	DefaultJobCancelCheckerPollInterval = 5 * time.Second
 	DefaultEmptyJobGracePeriod          = 30 * time.Second
 	DefaultJobCreationConcurrency       = 5
+	DefaultK8sClientRateLimiterQPS      = 10
+	DefaultK8sClientRateLimiterBurst    = 20
+	DefaultGraphQLResultsLimit          = 100
 )
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
@@ -28,22 +31,27 @@ var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
 // mapstructure (the module) supports switching the struct tag to "json", viper does not. So we have
 // to have the `mapstructure` tag for viper and the `json` tag is used by the mapstructure!
 type Config struct {
-	Debug                  bool          `json:"debug"`
-	JobTTL                 time.Duration `json:"job-ttl"`
-	PollInterval           time.Duration `json:"poll-interval"`
-	StaleJobDataTimeout    time.Duration `json:"stale-job-data-timeout"   validate:"omitempty"`
-	JobCreationConcurrency int           `json:"job-creation-concurrency" validate:"omitempty"`
-	AgentTokenSecret       string        `json:"agent-token-secret"       validate:"required"`
-	BuildkiteToken         string        `json:"buildkite-token"          validate:"required"`
-	Image                  string        `json:"image"                    validate:"required"`
-	MaxInFlight            int           `json:"max-in-flight"            validate:"min=0"`
-	Namespace              string        `json:"namespace"                validate:"required"`
-	Org                    string        `json:"org"                      validate:"required"`
-	Tags                   stringSlice   `json:"tags"                     validate:"min=1"`
-	PrometheusPort         uint16        `json:"prometheus-port"          validate:"omitempty"`
-	ProfilerAddress        string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
-	GraphQLEndpoint        string        `json:"graphql-endpoint"         validate:"omitempty"`
+	Debug                    bool          `json:"debug"`
+	JobTTL                   time.Duration `json:"job-ttl"`
+	JobActiveDeadlineSeconds int           `json:"job-active-deadline-seconds" validate:"required"`
+	PollInterval             time.Duration `json:"poll-interval"`
+	StaleJobDataTimeout      time.Duration `json:"stale-job-data-timeout"   validate:"omitempty"`
+	JobCreationConcurrency   int           `json:"job-creation-concurrency" validate:"omitempty"`
+	AgentTokenSecret         string        `json:"agent-token-secret"       validate:"required"`
+	BuildkiteToken           string        `json:"buildkite-token"          validate:"required"`
+	Image                    string        `json:"image"                    validate:"required"`
+	MaxInFlight              int           `json:"max-in-flight"            validate:"min=0"`
+	Namespace                string        `json:"namespace"                validate:"required"`
+	Org                      string        `json:"org"                      validate:"required"`
+	Tags                     stringSlice   `json:"tags"                     validate:"min=1"`
+	PrometheusPort           uint16        `json:"prometheus-port"          validate:"omitempty"`
+	ProfilerAddress          string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
+	GraphQLEndpoint          string        `json:"graphql-endpoint"         validate:"omitempty"`
+	GraphQLResultsLimit      int           `json:"graphql-results-limit"    validate:"min=1,max=500"`
 	// Agent endpoint is set in agent-config.
+
+	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps" validate:"omitempty"`
+	K8sClientRateLimiterBurst int `json:"k8s-client-rate-limiter-burst" validate:"omitempty"`
 
 	// ClusterUUID field is mandatory for most new orgs.
 	// Some old orgs allows unclustered setup.
@@ -87,6 +95,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddBool("debug", c.Debug)
 	enc.AddString("image", c.Image)
 	enc.AddDuration("job-ttl", c.JobTTL)
+	enc.AddInt("job-active-deadline-seconds", c.JobActiveDeadlineSeconds)
 	enc.AddDuration("poll-interval", c.PollInterval)
 	enc.AddDuration("stale-job-data-timeout", c.StaleJobDataTimeout)
 	enc.AddInt("job-creation-concurrency", c.JobCreationConcurrency)

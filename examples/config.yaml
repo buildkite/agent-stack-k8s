@@ -2,6 +2,7 @@ agent-token-secret: my-kubernetes-secret
 debug: true
 image: my.registry.dev/buildkite-agent:latest
 job-ttl: 5m
+job-active-deadline-seconds: 21600
 image-pull-backoff-grace-period: 60s
 job-cancel-checker-poll-interval: 10s
 empty-job-grace-period: 50s
@@ -9,10 +10,13 @@ poll-interval: 5s
 stale-job-data-timeout: 10s
 job-creation-concurrency: 5
 max-in-flight: 100
+k8s-client-rate-limiter-qps: 20
+k8s-client-rate-limiter-burst: 30
 namespace: my-buildkite-ns
 org: my-buildkite-org
 default-image-pull-policy: Never
 default-image-check-pull-policy: IfNotPresent
+graphql-results-limit: 200
 
 # Setting a custom GraphQL endpoint is usually only useful if you have a
 #  different instance of Buildkite itself available to run.
@@ -103,5 +107,5 @@ pod-spec-patch:
               key: github-token
       resources:
         requests:
-          cpu: 1000m # one core
+          cpu: 1
           mem: 4Gi

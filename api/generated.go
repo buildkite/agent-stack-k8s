@@ -1556,6 +1556,7 @@ type __GetScheduledJobsClusteredInput struct {
 	Slug            string   `json:"slug"`
 	AgentQueryRules []string `json:"agentQueryRules"`
 	Cluster         string   `json:"cluster"`
+	First           int      `json:"first"`
 }
 
 // GetSlug returns __GetScheduledJobsClusteredInput.Slug, and is useful for accessing the field via an interface.
@@ -1567,10 +1568,14 @@ func (v *__GetScheduledJobsClusteredInput) GetAgentQueryRules() []string { retur
 // GetCluster returns __GetScheduledJobsClusteredInput.Cluster, and is useful for accessing the field via an interface.
 func (v *__GetScheduledJobsClusteredInput) GetCluster() string { return v.Cluster }
 
+// GetFirst returns __GetScheduledJobsClusteredInput.First, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsClusteredInput) GetFirst() int { return v.First }
+
 // __GetScheduledJobsInput is used internally by genqlient
 type __GetScheduledJobsInput struct {
 	Slug            string   `json:"slug"`
 	AgentQueryRules []string `json:"agentQueryRules"`
+	First           int      `json:"first"`
 }
 
 // GetSlug returns __GetScheduledJobsInput.Slug, and is useful for accessing the field via an interface.
@@ -1578,6 +1583,9 @@ func (v *__GetScheduledJobsInput) GetSlug() string { return v.Slug }
 
 // GetAgentQueryRules returns __GetScheduledJobsInput.AgentQueryRules, and is useful for accessing the field via an interface.
 func (v *__GetScheduledJobsInput) GetAgentQueryRules() []string { return v.AgentQueryRules }
+
+// GetFirst returns __GetScheduledJobsInput.First, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsInput) GetFirst() int { return v.First }
 
 // __PipelineDeleteInput is used internally by genqlient
 type __PipelineDeleteInput struct {
@@ -1950,10 +1958,10 @@ func GetOrganization(
 
 // The query or mutation executed by GetScheduledJobs.
 const GetScheduledJobs_Operation = `
-query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!]) {
+query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!], $first: Int) {
 	organization(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED], type: [COMMAND], first: 100, order: RECENTLY_ASSIGNED, agentQueryRules: $agentQueryRules, clustered: false) {
+		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: RECENTLY_ASSIGNED, agentQueryRules: $agentQueryRules, clustered: false) {
 			count
 			edges {
 				node {
@@ -1985,6 +1993,7 @@ func GetScheduledJobs(
 	client_ graphql.Client,
 	slug string,
 	agentQueryRules []string,
+	first int,
 ) (*GetScheduledJobsResponse, error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobs",
@@ -1992,6 +2001,7 @@ func GetScheduledJobs(
 		Variables: &__GetScheduledJobsInput{
 			Slug:            slug,
 			AgentQueryRules: agentQueryRules,
+			First:           first,
 		},
 	}
 	var err_ error
@@ -2010,10 +2020,10 @@ func GetScheduledJobs(
 
 // The query or mutation executed by GetScheduledJobsClustered.
 const GetScheduledJobsClustered_Operation = `
-query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!) {
+query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!, $first: Int) {
 	organization(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED], type: [COMMAND], first: 100, order: RECENTLY_ASSIGNED, agentQueryRules: $agentQueryRules, cluster: $cluster) {
+		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: RECENTLY_ASSIGNED, agentQueryRules: $agentQueryRules, cluster: $cluster) {
 			count
 			edges {
 				node {
@@ -2046,6 +2056,7 @@ func GetScheduledJobsClustered(
 	slug string,
 	agentQueryRules []string,
 	cluster string,
+	first int,
 ) (*GetScheduledJobsClusteredResponse, error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobsClustered",
@@ -2054,6 +2065,7 @@ func GetScheduledJobsClustered(
 			Slug:            slug,
 			AgentQueryRules: agentQueryRules,
 			Cluster:         cluster,
+			First:           first,
 		},
 	}
 	var err_ error
