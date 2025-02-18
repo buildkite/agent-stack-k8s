@@ -92,7 +92,7 @@ You will need to download and install `eksctl` first by following the [official 
 
 Once installed, you can run the following `eksctl` command to create the infrusturcutre in AWS (VPC, Subnets, Security Groups, etc).
 
-```console
+```bash
 eksctl create cluster --name agent-stack-ks \
     --region <your AWS region> \
     --nodegroup-name buildkite-nodes \
@@ -183,7 +183,7 @@ $ eksctl create cluster --name buildkite-k8-cluster --region ap-southeast-2 --no
 
 The simplest way to get up and running is by deploying the Helm chart, which simplifies the process of installing and managing Buildkite agents on your Kubernetes cluster.
 
-```console
+```bash
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --create-namespace \
     --namespace buildkite \
@@ -195,7 +195,14 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
 <details>
 <summary>Example of the expected output</summary>
 
-```
+```console
+$ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
+    --create-namespace \
+    --namespace buildkite \
+    --set config.org=buildkite-kubernetes-stack \
+    --set agentToken=token-xxxx \
+    --set graphqlToken=token-xxxx \
+    --set config.cluster-uuid=xxxx-xxxx-xxxx-xxxx
 Release "agent-stack-k8s" does not exist. Installing it now.
 Pulled: ghcr.io/buildkite/helm/agent-stack-k8s:0.20.2
 Digest: sha256:3d3153bfaa2ecbe42db36b6ee241b7f5c0e2f5b04517afb542e5a3d65a6ca597
@@ -273,7 +280,7 @@ Configuration can also be provided by a config file (`--config` or `CONFIG`), or
 
 You can also have an external provider create a secret for you in the namespace before deploying the chart with helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
 
-```console
+```bash
 --set agentStackSecret=<secret-name>
 ```
 
@@ -292,7 +299,7 @@ dependencies:
 
 or use it as a template:
 
-```console
+```bash
 helm template oci://ghcr.io/buildkite/helm/agent-stack-k8s -f my-values.yaml
 ```
 
@@ -417,7 +424,7 @@ If you need to use git ssh credentials in your job containers, we recommend one 
 You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
 
 Supposing a SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
-```console
+```bash
 kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_DSA_KEY="$HOME/.ssh/id_ecdsa"
 ```
 
@@ -458,7 +465,7 @@ Once again, this example is illustrative only.
 First, create a Kubernetes secret containing the key `.git-credentials`, formatted in the manner
 expected by [the `store` Git credendial helper](https://git-scm.com/docs/git-credential-store):
 
-```console
+```bash
 kubectl create secret generic my-git-credentials --from-file='.git-credentials'="$HOME/.git-credentials"
 ```
 
@@ -563,7 +570,7 @@ config:
           name: git-checkout # <---- this is the same secret name you would have put in `gitEnvFrom` in the kubernetes plugin
 ```
 You may use the `-f` or `--values` arguments to `helm upgrade` to specify a `values.yaml` file.
-```console
+```bash
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --create-namespace \
     --namespace buildkite \
@@ -888,7 +895,7 @@ Any volume source can be specified for keys, but a common choice is to use a
 and ideally are never shown in plain text.
 
 1.  Create one or two secrets containing signing and verification keys:
-    ```console
+    ```bash
     kubectl create secret generic my-signing-key --from-file='key'="$HOME/private.jwk"
     kubectl create secret generic my-verification-key --from-file='key'="$HOME/public.jwk"
     ```
@@ -935,7 +942,7 @@ choice is to use a `configMap`, since hooks generally aren't very big and
 config maps are made available across the cluster.
 
 1.  Create the config map containing hooks:
-    ```console
+    ```bash
     kubectl create configmap buildkite-agent-hooks --from-file=/tmp/hooks -n buildkite
     ```
 
@@ -977,7 +984,7 @@ In case of agent-stack-k8s, we need these hooks to be accessible to the kubernet
 
 Here is the command to create `configmap` which will have agent hooks in it:
 
-```console
+```bash
 kubectl create configmap buildkite-agent-hooks --from-file=/tmp/hooks -n buildkite
 ```
 We have all the hooks under directory `/tmp/hooks` and we are creating `configmap` with name `buildkite-agent-hooks` in `buildkite`
