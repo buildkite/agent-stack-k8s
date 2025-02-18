@@ -92,6 +92,7 @@ func Run(
 		Image:                       cfg.Image,
 		AgentTokenSecretName:        cfg.AgentTokenSecret,
 		JobTTL:                      cfg.JobTTL,
+		JobActiveDeadlineSeconds:    cfg.JobActiveDeadlineSeconds,
 		AdditionalRedactedVars:      cfg.AdditionalRedactedVars,
 		WorkspaceVolume:             cfg.WorkspaceVolume,
 		AgentConfig:                 cfg.AgentConfig,

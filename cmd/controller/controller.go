@@ -70,6 +70,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		10*time.Minute,
 		"time to retain kubernetes jobs after completion",
 	)
+	cmd.Flags().Int(
+		"job-active-deadline-seconds",
+		21600,
+		"maximum number of seconds a kubernetes job is allowed to run before terminating all pods and failing job",
+	)
 	cmd.Flags().Duration(
 		"poll-interval",
 		time.Second,
@@ -129,7 +134,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 	)
 	cmd.Flags().String(
 		"default-image-pull-policy",
-		"IfNotPresent",
+		"",
 		"Configures a default image pull policy for containers that do not specify a pull policy and non-init containers created by the stack itself",
 	)
 	cmd.Flags().String(

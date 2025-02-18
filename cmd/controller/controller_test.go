@@ -24,6 +24,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		BuildkiteToken:               "my-graphql-enabled-token",
 		Image:                        "my.registry.dev/buildkite-agent:latest",
 		JobTTL:                       300 * time.Second,
+		JobActiveDeadlineSeconds:     21600,
 		ImagePullBackOffGracePeriod:  60 * time.Second,
 		JobCancelCheckerPollInterval: 10 * time.Second,
 		EmptyJobGracePeriod:          50 * time.Second,
