@@ -164,6 +164,19 @@ func (w *jobWatcher) checkFinishedWithoutPod(ctx context.Context, log *zap.Logge
 
 	jobWatcherFinishedWithoutPodCounter.Inc()
 
+	// Check if job has failed with reason DeadlineExceeded
+	for _, cond := range kjob.Status.Conditions {
+		switch cond.Reason {
+		case batchv1.JobReasonDeadlineExceeded:
+			// Job event has reason of DeadlineExceeded
+			if kjob.Spec.ActiveDeadlineSeconds != nil {
+				// Pods have been terminated due to activeDeadlineSeconds being configured
+				// No need to run failJob()
+				return
+			}
+		}
+	}
+
 	// Because no pod has been created, the agent hasn't started.
 	// We can acquire the Buildkite job and fail it ourselves.
 	log.Info("The Kubernetes job ended without starting a pod. Failing the corresponding Buildkite job")
