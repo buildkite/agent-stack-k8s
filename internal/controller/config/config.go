@@ -14,6 +14,7 @@ const (
 	UUIDLabel                           = "buildkite.com/job-uuid"
 	BuildURLAnnotation                  = "buildkite.com/build-url"
 	JobURLAnnotation                    = "buildkite.com/job-url"
+	PriorityAnnotation                  = "buildkite.com/job-priority"
 	DefaultNamespace                    = "default"
 	DefaultStaleJobDataTimeout          = 10 * time.Second
 	DefaultImagePullBackOffGracePeriod  = 30 * time.Second
