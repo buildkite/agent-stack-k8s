@@ -225,6 +225,46 @@ func TestPatchPodSpec_ErrNoCommandModification(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "patching init-container command should fail",
+			podspec: &corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name:    CopyAgentContainerName,
+						Image:   "alpine:latest",
+						Command: []string{"echo hello world"},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name:    CopyAgentContainerName,
+						Command: []string{"this shouldn't work"},
+					},
+				},
+			},
+		},
+		{
+			name: "patching init-container args should fail",
+			podspec: &corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name:    CopyAgentContainerName,
+						Image:   "alpine:latest",
+						Command: []string{"echo hello world"},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name: CopyAgentContainerName,
+						Args: []string{"this", "shouldn't", "work"},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range cases {
@@ -450,6 +490,12 @@ func TestBuild(t *testing.T) {
 			Image:                "buildkite/agent:latest",
 			AgentTokenSecretName: "bkcq_1234567890",
 			PodSpecPatch: &corev1.PodSpec{
+				InitContainers: []corev1.Container{
+					{
+						Name:  "copy-agent",
+						Image: "alpine:latest",
+					},
+				},
 				Containers: []corev1.Container{
 					{
 						Name: "checkout",
@@ -473,6 +519,15 @@ func TestBuild(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, kjob.Spec.Template.Spec.Containers, 3)
+	require.Len(t, kjob.Spec.Template.Spec.InitContainers, 2)
+
+	copyAgent := findContainer(t, kjob.Spec.Template.Spec.InitContainers, "copy-agent")
+	if diff := cmp.Diff(copyAgent.Image, "alpine:latest"); diff != "" {
+		t.Errorf("unexpected init container image (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(copyAgent.Command, []string{"ash"}); diff != "" {
+		t.Errorf("unexpected init container command (-want +got):\n%s", diff)
+	}
 
 	container0 := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
 	if diff := cmp.Diff(container0.Image, "alpine:latest"); diff != "" {

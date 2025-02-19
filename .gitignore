@@ -2,6 +2,7 @@ Brewfile.lock.json
 
 .DS_Store
 .vscode
+.idea
 
 dist/
 
