@@ -167,6 +167,7 @@ type buildInputs struct {
 	uuid            string
 	command         string
 	agentQueryRules []string
+	priority        int
 
 	// Involves some parsing of the job env / plugins map
 	envMap       map[string]string
@@ -179,6 +180,7 @@ func (w *worker) ParseJob(job *api.CommandJob) (buildInputs, error) {
 		uuid:            job.Uuid,
 		command:         job.Command,
 		agentQueryRules: job.AgentQueryRules,
+		priority:        job.Priority.Number,
 		envMap:          make(map[string]string),
 	}
 
@@ -265,6 +267,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	if jobURL != "" {
 		kjob.Annotations[config.JobURLAnnotation] = jobURL
 	}
+	kjob.Annotations[config.PriorityAnnotation] = strconv.Itoa(inputs.priority)
 
 	// Prevent k8s cluster autoscaler from terminating the job before it finishes to scale down cluster
 	kjob.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
