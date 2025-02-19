@@ -80,6 +80,7 @@ func Run(
 		Tags:                   cfg.Tags,
 		Token:                  cfg.BuildkiteToken,
 		GraphQLResultsLimit:    cfg.GraphQLResultsLimit,
+		EnableQueuePause:       cfg.EnableQueuePause,
 	})
 	if err != nil {
 		logger.Fatal("failed to create monitor", zap.Error(err))

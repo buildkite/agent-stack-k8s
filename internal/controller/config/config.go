@@ -48,6 +48,7 @@ type Config struct {
 	ProfilerAddress          string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
 	GraphQLEndpoint          string        `json:"graphql-endpoint"         validate:"omitempty"`
 	GraphQLResultsLimit      int           `json:"graphql-results-limit"    validate:"min=1,max=500"`
+	EnableQueuePause         bool          `json:"enable-queue-pause"       validate:"omitempty"`
 	// Agent endpoint is set in agent-config.
 
 	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps" validate:"omitempty"`
@@ -134,6 +135,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	}
 	enc.AddString("default-image-pull-policy", string(c.DefaultImagePullPolicy))
 	enc.AddString("default-image-check-pull-policy", string(c.DefaultImageCheckPullPolicy))
+	enc.AddBool("enable-queue-pause", c.EnableQueuePause)
 	return nil
 }
 

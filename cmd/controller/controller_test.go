@@ -43,6 +43,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		GraphQLResultsLimit:          200,
 		DefaultImagePullPolicy:       "Never",
 		DefaultImageCheckPullPolicy:  "IfNotPresent",
+                EnableQueuePause:             true,
 
 		WorkspaceVolume: &corev1.Volume{
 			Name: "workspace-2-the-reckoning",

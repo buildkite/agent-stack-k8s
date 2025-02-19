@@ -156,3 +156,22 @@ query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
         }
     }
 }
+
+query GetClusterQueues($slug: ID!, $cluster: ID!, $first: Int!){
+  organization(slug: $slug) {
+    cluster(id: $cluster){
+      queues(first: $first){
+        edges{
+          node{
+            key
+            dispatchPaused
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+}
