@@ -40,6 +40,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		ProhibitKubernetesPlugin:     true,
 		GraphQLEndpoint:              "http://graphql.buildkite.localhost/v1",
 		GraphQLResultsLimit:          200,
+		PaginationDepthLimit:         5,
 		DefaultImagePullPolicy:       "Never",
 		DefaultImageCheckPullPolicy:  "IfNotPresent",
 
