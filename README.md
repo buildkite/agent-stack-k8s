@@ -162,11 +162,15 @@ Flags:
       --prometheus-port uint16                      Bind port to expose Prometheus /metrics; 0 disables it
       --stale-job-data-timeout duration             Duration after querying jobs in Buildkite that the data is considered valid (default 10s)
       --tags strings                                A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux") (default [queue=kubernetes])
+      --enable-queue-pause bool                     Allow the controller to pause processing the jobs when the queue is paused on Buildkite. (default false)
+
 
 Use "agent-stack-k8s [command] --help" for more information about a command.
 ```
 
 Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](examples) folder there is a sample [YAML config](examples/config.yaml) and a sample [dotenv config](examples/config.env).
+
+With release v0.24.0 of `agent-stack-k8s`, we can enable '-enable-queue-pause` in the config, allowing the controller to pause processing the jobs when `queue` is paused on Buildkite.
 
 #### Externalize Secrets
 
