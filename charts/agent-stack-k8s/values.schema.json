@@ -300,6 +300,12 @@
           "title": "Allow controller to pause processing the jobs when queue is paused on Buildkite",
           "examples": [false]
         },
+        "allow-pod-spec-patch-unsafe-command-modification": {
+          "type": "boolean",
+          "default": false,
+          "title": "Permits PodSpecPatch to modify the command or args fields of containers. See the warning in the README before enabling this option",
+          "examples": [false]
+        },
         "workspaceVolume": {
           "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
         },
