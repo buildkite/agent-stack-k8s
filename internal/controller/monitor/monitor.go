@@ -117,9 +117,43 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		}
 	}()
 
+	var pagninationDepth int
+	var endCursor string
+
 	if m.cfg.ClusterUUID == "" {
-		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit)
-		return unclusteredJobResp(*resp), err
+		var unclusteredJobs []api.GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge
+		var resp *api.GetScheduledJobsResponse
+
+		for {
+			resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit, endCursor)
+			if err != nil {
+				return nil, err
+			}
+
+			unclusteredJobs = append(unclusteredJobs, resp.Organization.Jobs.Edges...)
+			pagninationDepth++
+			if !resp.Organization.Jobs.PageInfo.HasNextPage || pagninationDepth >= m.cfg.PaginationDepthLimit {
+				break
+			}
+			endCursor = resp.Organization.Jobs.PageInfo.EndCursor
+		}
+
+		// Create a combined response
+		unclusteredResp := &api.GetScheduledJobsResponse{
+			Organization: api.GetScheduledJobsOrganization{
+				// TODO: Review use of resp.GetOrganization() and GetScheduledJobsResponse
+				// as resp.Organization is highlighted as "nil dereference in field selection"
+				// but not the same when using GetScheduledJobsClusteredResponse
+				Id: resp.GetOrganization().Id,
+				Jobs: api.GetScheduledJobsOrganizationJobsJobConnection{
+					Count:    len(unclusteredJobs),
+					PageInfo: resp.GetOrganization().Jobs.PageInfo,
+					Edges:    unclusteredJobs,
+				},
+			},
+		}
+
+		return unclusteredJobResp(*unclusteredResp), nil
 	}
 
 	var agentQueryRule []string
@@ -128,8 +162,6 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 	}
 
 	var clusteredJobs []api.GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge
-	var pagninationDepth int
-	var endCursor string
 	var resp *api.GetScheduledJobsClusteredResponse
 
 	for {
