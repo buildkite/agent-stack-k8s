@@ -150,7 +150,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 	cmd.Flags().Int(
 		"graphql-results-limit",
 		config.DefaultGraphQLResultsLimit,
-		"Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled"
+		"Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled",
 	)
 	cmd.Flags().Bool(
 		"enable-queue-pause",

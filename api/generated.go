@@ -2256,7 +2256,6 @@ func GetScheduledJobs(
 	slug string,
 	agentQueryRules []string,
 	first int,
-
 	after string,
 ) (data_ *GetScheduledJobsResponse, err_ error) {
 	req_ := &graphql.Request{
