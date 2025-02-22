@@ -360,6 +360,20 @@ const (
 	BuildStatesSkipped BuildStates = "SKIPPED"
 )
 
+var AllBuildStates = []BuildStates{
+	BuildStatesBlocked,
+	BuildStatesCanceled,
+	BuildStatesCanceling,
+	BuildStatesCreating,
+	BuildStatesFailed,
+	BuildStatesFailing,
+	BuildStatesNotRun,
+	BuildStatesPassed,
+	BuildStatesRunning,
+	BuildStatesScheduled,
+	BuildStatesSkipped,
+}
+
 // CancelCommandJobJobTypeCommandCancelJobTypeCommandCancelPayload includes the requested fields of the GraphQL type JobTypeCommandCancelPayload.
 // The GraphQL type's documentation follows.
 //
@@ -645,6 +659,104 @@ type GetBuildsResponse struct {
 
 // GetPipeline returns GetBuildsResponse.Pipeline, and is useful for accessing the field via an interface.
 func (v *GetBuildsResponse) GetPipeline() GetBuildsPipeline { return v.Pipeline }
+
+// GetClusterQueuesOrganization includes the requested fields of the GraphQL type Organization.
+// The GraphQL type's documentation follows.
+//
+// An organization
+type GetClusterQueuesOrganization struct {
+	// Return cluster in the Organization by UUID
+	Cluster GetClusterQueuesOrganizationCluster `json:"cluster"`
+}
+
+// GetCluster returns GetClusterQueuesOrganization.Cluster, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganization) GetCluster() GetClusterQueuesOrganizationCluster {
+	return v.Cluster
+}
+
+// GetClusterQueuesOrganizationCluster includes the requested fields of the GraphQL type Cluster.
+type GetClusterQueuesOrganizationCluster struct {
+	Queues GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection `json:"queues"`
+}
+
+// GetQueues returns GetClusterQueuesOrganizationCluster.Queues, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationCluster) GetQueues() GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection {
+	return v.Queues
+}
+
+// GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection includes the requested fields of the GraphQL type ClusterQueueConnection.
+type GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection struct {
+	Edges    []GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge `json:"edges"`
+	PageInfo GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo                `json:"pageInfo"`
+}
+
+// GetEdges returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection.Edges, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection) GetEdges() []GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge {
+	return v.Edges
+}
+
+// GetPageInfo returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection.PageInfo, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnection) GetPageInfo() GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo {
+	return v.PageInfo
+}
+
+// GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge includes the requested fields of the GraphQL type ClusterQueueEdge.
+type GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge struct {
+	Node GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue `json:"node"`
+}
+
+// GetNode returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge.Node, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdge) GetNode() GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue {
+	return v.Node
+}
+
+// GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue includes the requested fields of the GraphQL type ClusterQueue.
+type GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue struct {
+	Key            string `json:"key"`
+	DispatchPaused bool   `json:"dispatchPaused"`
+}
+
+// GetKey returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue.Key, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue) GetKey() string {
+	return v.Key
+}
+
+// GetDispatchPaused returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue.DispatchPaused, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionEdgesClusterQueueEdgeNodeClusterQueue) GetDispatchPaused() bool {
+	return v.DispatchPaused
+}
+
+// GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo includes the requested fields of the GraphQL type PageInfo.
+// The GraphQL type's documentation follows.
+//
+// Information about pagination in a connection.
+type GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo struct {
+	// When paginating forwards, are there more items?
+	HasNextPage bool `json:"hasNextPage"`
+	// When paginating forwards, the cursor to continue.
+	EndCursor string `json:"endCursor"`
+}
+
+// GetHasNextPage returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo.HasNextPage, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo) GetHasNextPage() bool {
+	return v.HasNextPage
+}
+
+// GetEndCursor returns GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo.EndCursor, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesOrganizationClusterQueuesClusterQueueConnectionPageInfo) GetEndCursor() string {
+	return v.EndCursor
+}
+
+// GetClusterQueuesResponse is returned by GetClusterQueues on success.
+type GetClusterQueuesResponse struct {
+	// Find an organization
+	Organization GetClusterQueuesOrganization `json:"organization"`
+}
+
+// GetOrganization returns GetClusterQueuesResponse.Organization, and is useful for accessing the field via an interface.
+func (v *GetClusterQueuesResponse) GetOrganization() GetClusterQueuesOrganization {
+	return v.Organization
+}
 
 // GetCommandJobJob includes the requested fields of the GraphQL interface Job.
 //
@@ -1425,6 +1537,30 @@ const (
 	JobStatesWaitingFailed JobStates = "WAITING_FAILED"
 )
 
+var AllJobStates = []JobStates{
+	JobStatesAccepted,
+	JobStatesAssigned,
+	JobStatesBlocked,
+	JobStatesBlockedFailed,
+	JobStatesBroken,
+	JobStatesCanceled,
+	JobStatesCanceling,
+	JobStatesExpired,
+	JobStatesFinished,
+	JobStatesLimited,
+	JobStatesLimiting,
+	JobStatesPending,
+	JobStatesRunning,
+	JobStatesScheduled,
+	JobStatesSkipped,
+	JobStatesTimedOut,
+	JobStatesTimingOut,
+	JobStatesUnblocked,
+	JobStatesUnblockedFailed,
+	JobStatesWaiting,
+	JobStatesWaitingFailed,
+}
+
 // Autogenerated input type of JobTypeCommandCancel
 type JobTypeCommandCancelInput struct {
 	// A unique identifier for the client performing the mutation.
@@ -1589,6 +1725,22 @@ func (v *__GetBuildsInput) GetState() []BuildStates { return v.State }
 // GetFirst returns __GetBuildsInput.First, and is useful for accessing the field via an interface.
 func (v *__GetBuildsInput) GetFirst() int { return v.First }
 
+// __GetClusterQueuesInput is used internally by genqlient
+type __GetClusterQueuesInput struct {
+	Slug    string `json:"slug"`
+	Cluster string `json:"cluster"`
+	First   int    `json:"first"`
+}
+
+// GetSlug returns __GetClusterQueuesInput.Slug, and is useful for accessing the field via an interface.
+func (v *__GetClusterQueuesInput) GetSlug() string { return v.Slug }
+
+// GetCluster returns __GetClusterQueuesInput.Cluster, and is useful for accessing the field via an interface.
+func (v *__GetClusterQueuesInput) GetCluster() string { return v.Cluster }
+
+// GetFirst returns __GetClusterQueuesInput.First, and is useful for accessing the field via an interface.
+func (v *__GetClusterQueuesInput) GetFirst() int { return v.First }
+
 // __GetCommandJobInput is used internally by genqlient
 type __GetCommandJobInput struct {
 	Uuid string `json:"uuid"`
@@ -1673,7 +1825,7 @@ func (v *__SearchPipelinesInput) GetSearch() string { return v.Search }
 // GetFirst returns __SearchPipelinesInput.First, and is useful for accessing the field via an interface.
 func (v *__SearchPipelinesInput) GetFirst() int { return v.First }
 
-// The query or mutation executed by BuildCancel.
+// The mutation executed by BuildCancel.
 const BuildCancel_Operation = `
 mutation BuildCancel ($input: BuildCancelInput!) {
 	buildCancel(input: $input) {
@@ -1686,7 +1838,7 @@ func BuildCancel(
 	ctx_ context.Context,
 	client_ graphql.Client,
 	input BuildCancelInput,
-) (*BuildCancelResponse, error) {
+) (data_ *BuildCancelResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "BuildCancel",
 		Query:  BuildCancel_Operation,
@@ -1694,10 +1846,9 @@ func BuildCancel(
 			Input: input,
 		},
 	}
-	var err_ error
 
-	var data_ BuildCancelResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &BuildCancelResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -1705,10 +1856,10 @@ func BuildCancel(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }
 
-// The query or mutation executed by BuildCreate.
+// The mutation executed by BuildCreate.
 const BuildCreate_Operation = `
 mutation BuildCreate ($input: BuildCreateInput!) {
 	buildCreate(input: $input) {
@@ -1751,7 +1902,7 @@ func BuildCreate(
 	ctx_ context.Context,
 	client_ graphql.Client,
 	input BuildCreateInput,
-) (*BuildCreateResponse, error) {
+) (data_ *BuildCreateResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "BuildCreate",
 		Query:  BuildCreate_Operation,
@@ -1759,10 +1910,9 @@ func BuildCreate(
 			Input: input,
 		},
 	}
-	var err_ error
 
-	var data_ BuildCreateResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &BuildCreateResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -1770,10 +1920,10 @@ func BuildCreate(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }
 
-// The query or mutation executed by CancelCommandJob.
+// The mutation executed by CancelCommandJob.
 const CancelCommandJob_Operation = `
 mutation CancelCommandJob ($input: JobTypeCommandCancelInput!) {
 	jobTypeCommandCancel(input: $input) {
@@ -1786,7 +1936,7 @@ func CancelCommandJob(
 	ctx_ context.Context,
 	client_ graphql.Client,
 	input JobTypeCommandCancelInput,
-) (*CancelCommandJobResponse, error) {
+) (data_ *CancelCommandJobResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "CancelCommandJob",
 		Query:  CancelCommandJob_Operation,
@@ -1794,10 +1944,9 @@ func CancelCommandJob(
 			Input: input,
 		},
 	}
-	var err_ error
 
-	var data_ CancelCommandJobResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &CancelCommandJobResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -1805,10 +1954,10 @@ func CancelCommandJob(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }
 
-// The query or mutation executed by GetBuild.
+// The query executed by GetBuild.
 const GetBuild_Operation = `
 query GetBuild ($uuid: ID!) {
 	build(uuid: $uuid) {
@@ -1849,7 +1998,7 @@ func GetBuild(
 	ctx_ context.Context,
 	client_ graphql.Client,
 	uuid string,
-) (*GetBuildResponse, error) {
+) (data_ *GetBuildResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetBuild",
 		Query:  GetBuild_Operation,
@@ -1857,10 +2006,9 @@ func GetBuild(
 			Uuid: uuid,
 		},
 	}
-	var err_ error
 
-	var data_ GetBuildResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &GetBuildResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -1868,10 +2016,10 @@ func GetBuild(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }
 
-// The query or mutation executed by GetBuilds.
+// The query executed by GetBuilds.
 const GetBuilds_Operation = `
 query GetBuilds ($slug: ID!, $state: [BuildStates!], $first: Int) {
 	pipeline(slug: $slug) {
@@ -1920,7 +2068,7 @@ func GetBuilds(
 	slug string,
 	state []BuildStates,
 	first int,
-) (*GetBuildsResponse, error) {
+) (data_ *GetBuildsResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetBuilds",
 		Query:  GetBuilds_Operation,
@@ -1930,10 +2078,9 @@ func GetBuilds(
 			First: first,
 		},
 	}
-	var err_ error
 
-	var data_ GetBuildsResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &GetBuildsResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -1941,10 +2088,61 @@ func GetBuilds(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }
 
-// The query or mutation executed by GetCommandJob.
+// The query executed by GetClusterQueues.
+const GetClusterQueues_Operation = `
+query GetClusterQueues ($slug: ID!, $cluster: ID!, $first: Int!) {
+	organization(slug: $slug) {
+		cluster(id: $cluster) {
+			queues(first: $first) {
+				edges {
+					node {
+						key
+						dispatchPaused
+					}
+				}
+				pageInfo {
+					hasNextPage
+					endCursor
+				}
+			}
+		}
+	}
+}
+`
+
+func GetClusterQueues(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	slug string,
+	cluster string,
+	first int,
+) (data_ *GetClusterQueuesResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "GetClusterQueues",
+		Query:  GetClusterQueues_Operation,
+		Variables: &__GetClusterQueuesInput{
+			Slug:    slug,
+			Cluster: cluster,
+			First:   first,
+		},
+	}
+
+	data_ = &GetClusterQueuesResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by GetCommandJob.
 const GetCommandJob_Operation = `
 query GetCommandJob ($uuid: ID!) {
 	job(uuid: $uuid) {
@@ -1961,7 +2159,7 @@ func GetCommandJob(
 	ctx_ context.Context,
 	client_ graphql.Client,
 	uuid string,
-) (*GetCommandJobResponse, error) {
+) (data_ *GetCommandJobResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetCommandJob",
 		Query:  GetCommandJob_Operation,
@@ -1969,10 +2167,9 @@ func GetCommandJob(
 			Uuid: uuid,
 		},
 	}
-	var err_ error
 
-	var data_ GetCommandJobResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &GetCommandJobResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -1980,10 +2177,10 @@ func GetCommandJob(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }
 
-// The query or mutation executed by GetOrganization.
+// The query executed by GetOrganization.
 const GetOrganization_Operation = `
 query GetOrganization ($slug: ID!) {
 	organization(slug: $slug) {
@@ -1996,7 +2193,7 @@ func GetOrganization(
 	ctx_ context.Context,
 	client_ graphql.Client,
 	slug string,
-) (*GetOrganizationResponse, error) {
+) (data_ *GetOrganizationResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetOrganization",
 		Query:  GetOrganization_Operation,
@@ -2004,10 +2201,9 @@ func GetOrganization(
 			Slug: slug,
 		},
 	}
-	var err_ error
 
-	var data_ GetOrganizationResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &GetOrganizationResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -2015,10 +2211,10 @@ func GetOrganization(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }
 
-// The query or mutation executed by GetScheduledJobs.
+// The query executed by GetScheduledJobs.
 const GetScheduledJobs_Operation = `
 query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!], $first: Int, $after: String!) {
 	organization(slug: $slug) {
@@ -2060,8 +2256,9 @@ func GetScheduledJobs(
 	slug string,
 	agentQueryRules []string,
 	first int,
+
 	after string,
-) (*GetScheduledJobsResponse, error) {
+) (data_ *GetScheduledJobsResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobs",
 		Query:  GetScheduledJobs_Operation,
@@ -2072,10 +2269,9 @@ func GetScheduledJobs(
 			After:           after,
 		},
 	}
-	var err_ error
 
-	var data_ GetScheduledJobsResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &GetScheduledJobsResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -2083,10 +2279,10 @@ func GetScheduledJobs(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }
 
-// The query or mutation executed by GetScheduledJobsClustered.
+// The query executed by GetScheduledJobsClustered.
 const GetScheduledJobsClustered_Operation = `
 query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!, $first: Int, $after: String!) {
 	organization(slug: $slug) {
@@ -2130,7 +2326,7 @@ func GetScheduledJobsClustered(
 	cluster string,
 	first int,
 	after string,
-) (*GetScheduledJobsClusteredResponse, error) {
+) (data_ *GetScheduledJobsClusteredResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobsClustered",
 		Query:  GetScheduledJobsClustered_Operation,
@@ -2142,10 +2338,9 @@ func GetScheduledJobsClustered(
 			After:           after,
 		},
 	}
-	var err_ error
 
-	var data_ GetScheduledJobsClusteredResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &GetScheduledJobsClusteredResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -2153,10 +2348,10 @@ func GetScheduledJobsClustered(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }
 
-// The query or mutation executed by PipelineDelete.
+// The mutation executed by PipelineDelete.
 const PipelineDelete_Operation = `
 mutation PipelineDelete ($input: PipelineDeleteInput!) {
 	pipelineDelete(input: $input) {
@@ -2170,7 +2365,7 @@ func PipelineDelete(
 	ctx_ context.Context,
 	client_ graphql.Client,
 	input PipelineDeleteInput,
-) (*PipelineDeleteResponse, error) {
+) (data_ *PipelineDeleteResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "PipelineDelete",
 		Query:  PipelineDelete_Operation,
@@ -2178,10 +2373,9 @@ func PipelineDelete(
 			Input: input,
 		},
 	}
-	var err_ error
 
-	var data_ PipelineDeleteResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &PipelineDeleteResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -2189,10 +2383,10 @@ func PipelineDelete(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }
 
-// The query or mutation executed by SearchPipelines.
+// The query executed by SearchPipelines.
 const SearchPipelines_Operation = `
 query SearchPipelines ($slug: ID!, $search: String!, $first: Int!) {
 	organization(slug: $slug) {
@@ -2214,7 +2408,7 @@ func SearchPipelines(
 	slug string,
 	search string,
 	first int,
-) (*SearchPipelinesResponse, error) {
+) (data_ *SearchPipelinesResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "SearchPipelines",
 		Query:  SearchPipelines_Operation,
@@ -2224,10 +2418,9 @@ func SearchPipelines(
 			First:  first,
 		},
 	}
-	var err_ error
 
-	var data_ SearchPipelinesResponse
-	resp_ := &graphql.Response{Data: &data_}
+	data_ = &SearchPipelinesResponse{}
+	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
 		ctx_,
@@ -2235,5 +2428,5 @@ func SearchPipelines(
 		resp_,
 	)
 
-	return &data_, err_
+	return data_, err_
 }

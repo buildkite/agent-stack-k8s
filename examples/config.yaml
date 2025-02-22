@@ -2,6 +2,7 @@ agent-token-secret: my-kubernetes-secret
 debug: true
 image: my.registry.dev/buildkite-agent:latest
 job-ttl: 5m
+job-active-deadline-seconds: 21600
 image-pull-backoff-grace-period: 60s
 job-cancel-checker-poll-interval: 10s
 empty-job-grace-period: 50s
@@ -16,6 +17,7 @@ org: my-buildkite-org
 default-image-pull-policy: Never
 default-image-check-pull-policy: IfNotPresent
 graphql-results-limit: 200
+enable-queue-pause: true
 pagination-depth-limit: 5
 
 # Setting a custom GraphQL endpoint is usually only useful if you have a
