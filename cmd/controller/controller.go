@@ -165,7 +165,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 	cmd.Flags().Int(
 		"pagination-depth-limit",
 		config.DefaultPaginationDepthLimit,
-		"Sets the maximum depth of pagination when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite GraphQL API and number of Jobs to be scheduled on the Kubernetes Cluster."
+		"Sets the maximum depth of pagination when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite GraphQL API and number of Jobs to be scheduled on the Kubernetes Cluster.",
 	)
 }
 
