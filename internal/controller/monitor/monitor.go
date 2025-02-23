@@ -126,7 +126,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		var resp *api.GetScheduledJobsResponse
 
 		for {
-			resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit, endCursor)
+			resp, err = api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit, endCursor)
 			if err != nil {
 				return nil, err
 			}
@@ -142,13 +142,10 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		// Create a combined response
 		unclusteredResp := &api.GetScheduledJobsResponse{
 			Organization: api.GetScheduledJobsOrganization{
-				// TODO: Review use of resp.GetOrganization() and GetScheduledJobsResponse
-				// as resp.Organization is highlighted as "nil dereference in field selection"
-				// but not the same when using GetScheduledJobsClusteredResponse
-				Id: resp.GetOrganization().Id,
+				Id: resp.Organization.Id,
 				Jobs: api.GetScheduledJobsOrganizationJobsJobConnection{
 					Count:    len(unclusteredJobs),
-					PageInfo: resp.GetOrganization().Jobs.PageInfo,
+					PageInfo: resp.Organization.Jobs.PageInfo,
 					Edges:    unclusteredJobs,
 				},
 			},
