@@ -128,7 +128,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		for {
 			resp, err = api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit, endCursor)
 			if err != nil {
-				return nil, err
+				return unclusteredJobResp(*resp), err
 			}
 
 			unclusteredJobs = append(unclusteredJobs, resp.Organization.Jobs.Edges...)
@@ -151,7 +151,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 			},
 		}
 
-		return unclusteredJobResp(*unclusteredResp), nil
+		return unclusteredJobResp(*unclusteredResp), err
 	}
 
 	var agentQueryRule []string
@@ -187,7 +187,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 			ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID), m.cfg.GraphQLResultsLimit, endCursor,
 		)
 		if err != nil {
-			return nil, err
+			return clusteredJobResp(*resp), err
 		}
 
 		clusteredJobs = append(clusteredJobs, resp.Organization.Jobs.Edges...)
@@ -210,7 +210,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		},
 	}
 
-	return clusteredJobResp(*clusteredResp), nil
+	return clusteredJobResp(*clusteredResp), err
 }
 
 func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan error {
