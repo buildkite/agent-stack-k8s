@@ -118,7 +118,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		}
 	}()
 
-	var pagninationDepth int
+	var paginationDepth int
 	var endCursor string
 
 	if m.cfg.ClusterUUID == "" {
@@ -132,8 +132,8 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 			}
 
 			unclusteredJobs = append(unclusteredJobs, resp.Organization.Jobs.Edges...)
-			pagninationDepth++
-			if !resp.Organization.Jobs.PageInfo.HasNextPage || pagninationDepth >= m.cfg.PaginationDepthLimit {
+			paginationDepth++
+			if !resp.Organization.Jobs.PageInfo.HasNextPage || paginationDepth >= m.cfg.PaginationDepthLimit {
 				break
 			}
 			endCursor = resp.Organization.Jobs.PageInfo.EndCursor
@@ -191,8 +191,8 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		}
 
 		clusteredJobs = append(clusteredJobs, resp.Organization.Jobs.Edges...)
-		pagninationDepth++
-		if !resp.Organization.Jobs.PageInfo.HasNextPage || pagninationDepth >= m.cfg.PaginationDepthLimit {
+		paginationDepth++
+		if !resp.Organization.Jobs.PageInfo.HasNextPage || paginationDepth >= m.cfg.PaginationDepthLimit {
 			break
 		}
 		endCursor = resp.Organization.Jobs.PageInfo.EndCursor
