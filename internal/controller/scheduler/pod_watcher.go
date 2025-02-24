@@ -380,7 +380,7 @@ func (w *podWatcher) evictPod(ctx context.Context, log *zap.Logger, pod *corev1.
 		ObjectMeta: pod.ObjectMeta,
 	}
 	if err := w.k8s.PolicyV1().Evictions(w.cfg.Namespace).Evict(ctx, eviction); err != nil {
-		podEvictionErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
+		podEvictionErrorsCounter.WithLabelValues("image_pull_failure", string(kerrors.ReasonForError(err))).Inc()
 		log.Error("Couldn't evict pod", zap.Error(err))
 		return
 	}
