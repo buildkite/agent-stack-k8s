@@ -53,6 +53,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultAgentImage,
 		"The image to use for the Buildkite agent",
 	)
+	cmd.Flags().String(
+		"job-prefix",
+		"buildkite-",
+		"The prefix to use when creating Kubernetes job names",
+	)
 	cmd.Flags().StringSlice(
 		"tags",
 		[]string{"queue=kubernetes"},

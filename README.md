@@ -163,6 +163,7 @@ Flags:
       --stale-job-data-timeout duration             Duration after querying jobs in Buildkite that the data is considered valid (default 10s)
       --tags strings                                A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux") (default [queue=kubernetes])
       --enable-queue-pause bool                     Allow the controller to pause processing the jobs when the queue is paused on Buildkite. (default false)
+      --job-prefix string                           The prefix to use when creating Kubernetes job names (default "buildkite-")
 
 
 Use "agent-stack-k8s [command] --help" for more information about a command.
