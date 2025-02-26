@@ -1113,9 +1113,13 @@ func (w *worker) createCheckoutContainer(
 	// If configured, set up a volume mount of a secret containing a
 	// .git-credentials file. k8sPlugin (if allowed) supersedes the default.
 	gitCredsSecret := w.cfg.DefaultCheckoutParams.GitCredsSecret()
-	if k8sPlugin != nil {
-		gitCredsSecret = k8sPlugin.CheckoutParams.GitCredsSecret()
+
+	if k8sPlugin != nil && k8sPlugin.CheckoutParams != nil {
+		if k8sPlugin.CheckoutParams.GitCredentialsSecret != nil {
+			gitCredsSecret = k8sPlugin.CheckoutParams.GitCredsSecret()
+		}
 	}
+
 	gitConfigCmd := "true"
 	if gitCredsSecret != nil {
 		podSpec.Volumes = append(podSpec.Volumes,
