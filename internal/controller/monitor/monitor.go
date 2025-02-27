@@ -119,6 +119,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 	}()
 
 	var paginationDepth int
+	var cursor string
 	var order api.JobOrder
 
 	if m.cfg.PaginationDepthLimit > 1 {
@@ -139,12 +140,15 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 				return unclusteredJobResp(*resp), err
 			}
 
+			endCursor := resp.Organization.Jobs.PageInfo.EndCursor
 			unclusteredJobs = append(unclusteredJobs, resp.Organization.Jobs.Edges...)
 			paginationDepth++
-			if !resp.Organization.Jobs.PageInfo.HasNextPage || paginationDepth >= m.cfg.PaginationDepthLimit {
+
+			if !resp.Organization.Jobs.PageInfo.HasNextPage || paginationDepth >= m.cfg.PaginationDepthLimit || endCursor == nil {
 				break
 			}
-			endCursor = resp.Organization.Jobs.PageInfo.EndCursor
+
+			cursor = *endCursor
 		}
 
 		// Create a combined response
@@ -198,12 +202,15 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 			return clusteredJobResp(*resp), err
 		}
 
+		endCursor := resp.Organization.Jobs.PageInfo.EndCursor
 		clusteredJobs = append(clusteredJobs, resp.Organization.Jobs.Edges...)
 		paginationDepth++
-		if !resp.Organization.Jobs.PageInfo.HasNextPage || paginationDepth >= m.cfg.PaginationDepthLimit {
+
+		if !resp.Organization.Jobs.PageInfo.HasNextPage || paginationDepth >= m.cfg.PaginationDepthLimit || endCursor == nil {
 			break
 		}
-		endCursor = resp.Organization.Jobs.PageInfo.EndCursor
+
+		cursor = *endCursor
 	}
 
 	// Create a combined response
