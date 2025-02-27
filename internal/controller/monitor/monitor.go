@@ -119,14 +119,22 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 	}()
 
 	var paginationDepth int
-	var endCursor string
+	var order api.JobOrder
+
+	if m.cfg.PaginationDepthLimit > 1 {
+		// Change order to newest first in order to paginate
+		order = api.JobOrderRecentlyCreated
+	} else {
+		// Default order is oldest first
+		order = api.JobOrderRecentlyAssigned
+	}
 
 	if m.cfg.ClusterUUID == "" {
 		var unclusteredJobs []api.GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge
 		var resp *api.GetScheduledJobsResponse
 
 		for {
-			resp, err = api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit, endCursor)
+			resp, err = api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit, cursor, order)
 			if err != nil {
 				return unclusteredJobResp(*resp), err
 			}
@@ -184,7 +192,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 
 	for {
 		resp, err = api.GetScheduledJobsClustered(
-			ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID), m.cfg.GraphQLResultsLimit, endCursor,
+			ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID), m.cfg.GraphQLResultsLimit, cursor, order,
 		)
 		if err != nil {
 			return clusteredJobResp(*resp), err
