@@ -1123,7 +1123,7 @@ type GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo struct {
 	// When paginating forwards, are there more items?
 	HasNextPage bool `json:"hasNextPage"`
 	// When paginating forwards, the cursor to continue.
-	EndCursor string `json:"endCursor"`
+	EndCursor *string `json:"endCursor"`
 }
 
 // GetHasNextPage returns GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo.HasNextPage, and is useful for accessing the field via an interface.
@@ -1132,7 +1132,7 @@ func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo) GetHasN
 }
 
 // GetEndCursor returns GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo.EndCursor, and is useful for accessing the field via an interface.
-func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo) GetEndCursor() string {
+func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo) GetEndCursor() *string {
 	return v.EndCursor
 }
 
@@ -1263,7 +1263,7 @@ type GetScheduledJobsOrganizationJobsJobConnectionPageInfo struct {
 	// When paginating forwards, are there more items?
 	HasNextPage bool `json:"hasNextPage"`
 	// When paginating forwards, the cursor to continue.
-	EndCursor string `json:"endCursor"`
+	EndCursor *string `json:"endCursor"`
 }
 
 // GetHasNextPage returns GetScheduledJobsOrganizationJobsJobConnectionPageInfo.HasNextPage, and is useful for accessing the field via an interface.
@@ -1272,7 +1272,7 @@ func (v *GetScheduledJobsOrganizationJobsJobConnectionPageInfo) GetHasNextPage()
 }
 
 // GetEndCursor returns GetScheduledJobsOrganizationJobsJobConnectionPageInfo.EndCursor, and is useful for accessing the field via an interface.
-func (v *GetScheduledJobsOrganizationJobsJobConnectionPageInfo) GetEndCursor() string {
+func (v *GetScheduledJobsOrganizationJobsJobConnectionPageInfo) GetEndCursor() *string {
 	return v.EndCursor
 }
 
@@ -1487,6 +1487,21 @@ type JobJobTypeTrigger struct {
 //
 // Kinds of jobs that can exist on a build
 type JobJobTypeWait struct {
+}
+
+// The different orders you can sort jobs by
+type JobOrder string
+
+const (
+	// Order by the most recently assigned jobs first
+	JobOrderRecentlyAssigned JobOrder = "RECENTLY_ASSIGNED"
+	// Order by the most recently created jobs first
+	JobOrderRecentlyCreated JobOrder = "RECENTLY_CREATED"
+)
+
+var AllJobOrder = []JobOrder{
+	JobOrderRecentlyAssigned,
+	JobOrderRecentlyCreated,
 }
 
 // All the possible states a job can be in
@@ -1764,6 +1779,7 @@ type __GetScheduledJobsClusteredInput struct {
 	Cluster         string   `json:"cluster"`
 	First           int      `json:"first"`
 	After           string   `json:"after"`
+	Order           JobOrder `json:"order"`
 }
 
 // GetSlug returns __GetScheduledJobsClusteredInput.Slug, and is useful for accessing the field via an interface.
@@ -1781,12 +1797,16 @@ func (v *__GetScheduledJobsClusteredInput) GetFirst() int { return v.First }
 // GetAfter returns __GetScheduledJobsClusteredInput.After, and is useful for accessing the field via an interface.
 func (v *__GetScheduledJobsClusteredInput) GetAfter() string { return v.After }
 
+// GetOrder returns __GetScheduledJobsClusteredInput.Order, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsClusteredInput) GetOrder() JobOrder { return v.Order }
+
 // __GetScheduledJobsInput is used internally by genqlient
 type __GetScheduledJobsInput struct {
 	Slug            string   `json:"slug"`
 	AgentQueryRules []string `json:"agentQueryRules"`
 	First           int      `json:"first"`
 	After           string   `json:"after"`
+	Order           JobOrder `json:"order"`
 }
 
 // GetSlug returns __GetScheduledJobsInput.Slug, and is useful for accessing the field via an interface.
@@ -1800,6 +1820,9 @@ func (v *__GetScheduledJobsInput) GetFirst() int { return v.First }
 
 // GetAfter returns __GetScheduledJobsInput.After, and is useful for accessing the field via an interface.
 func (v *__GetScheduledJobsInput) GetAfter() string { return v.After }
+
+// GetOrder returns __GetScheduledJobsInput.Order, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsInput) GetOrder() JobOrder { return v.Order }
 
 // __PipelineDeleteInput is used internally by genqlient
 type __PipelineDeleteInput struct {
@@ -2216,10 +2239,10 @@ func GetOrganization(
 
 // The query executed by GetScheduledJobs.
 const GetScheduledJobs_Operation = `
-query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!], $first: Int, $after: String!) {
+query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!], $first: Int, $after: String!, $order: JobOrder) {
 	organization(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: RECENTLY_ASSIGNED, agentQueryRules: $agentQueryRules, clustered: false, after: $after) {
+		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: $order, agentQueryRules: $agentQueryRules, clustered: false, after: $after) {
 			count
 			edges {
 				node {
@@ -2257,6 +2280,7 @@ func GetScheduledJobs(
 	agentQueryRules []string,
 	first int,
 	after string,
+	order JobOrder,
 ) (data_ *GetScheduledJobsResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobs",
@@ -2266,6 +2290,7 @@ func GetScheduledJobs(
 			AgentQueryRules: agentQueryRules,
 			First:           first,
 			After:           after,
+			Order:           order,
 		},
 	}
 
@@ -2283,10 +2308,10 @@ func GetScheduledJobs(
 
 // The query executed by GetScheduledJobsClustered.
 const GetScheduledJobsClustered_Operation = `
-query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!, $first: Int, $after: String!) {
+query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!, $first: Int, $after: String!, $order: JobOrder) {
 	organization(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: RECENTLY_ASSIGNED, agentQueryRules: $agentQueryRules, cluster: $cluster, after: $after) {
+		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: $order, agentQueryRules: $agentQueryRules, cluster: $cluster, after: $after) {
 			count
 			edges {
 				node {
@@ -2325,6 +2350,7 @@ func GetScheduledJobsClustered(
 	cluster string,
 	first int,
 	after string,
+	order JobOrder,
 ) (data_ *GetScheduledJobsClusteredResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobsClustered",
@@ -2335,6 +2361,7 @@ func GetScheduledJobsClustered(
 			Cluster:         cluster,
 			First:           first,
 			After:           after,
+			Order:           order,
 		},
 	}
 
