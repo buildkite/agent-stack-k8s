@@ -49,7 +49,7 @@ func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, er
 	graphqlClient := api.NewClient(cfg.Token, cfg.GraphQLEndpoint)
 
 	// Poll no more frequently than every 1s (please don't DoS us).
-	cfg.PollInterval = min(cfg.PollInterval, time.Second)
+	cfg.PollInterval = max(cfg.PollInterval, time.Second)
 
 	// Default StaleJobDataTimeout to 10s.
 	if cfg.StaleJobDataTimeout <= 0 {
