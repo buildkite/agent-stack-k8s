@@ -120,35 +120,27 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 
 	var paginationDepth int
 	var cursor string
-	var order api.JobOrder
-
-	if m.cfg.PaginationDepthLimit > 1 {
-		// Change order to newest first in order to paginate
-		order = api.JobOrderRecentlyCreated
-	} else {
-		// Default order is oldest first
-		order = api.JobOrderRecentlyAssigned
-	}
 
 	if m.cfg.ClusterUUID == "" {
 		var unclusteredJobs []api.GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge
 		var resp *api.GetScheduledJobsResponse
 
 		for {
-			resp, err = api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit, cursor, order)
+			resp, err = api.GetScheduledJobs(
+				ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit, cursor,
+			)
 			if err != nil {
 				return unclusteredJobResp(*resp), err
 			}
 
-			endCursor := resp.Organization.Jobs.PageInfo.EndCursor
 			unclusteredJobs = append(unclusteredJobs, resp.Organization.Jobs.Edges...)
 			paginationDepth++
 
-			if !resp.Organization.Jobs.PageInfo.HasNextPage || paginationDepth >= m.cfg.PaginationDepthLimit || endCursor == nil {
+			if !resp.Organization.Jobs.PageInfo.HasPreviousPage || paginationDepth >= m.cfg.PaginationDepthLimit {
 				break
 			}
 
-			cursor = *endCursor
+			cursor = resp.Organization.Jobs.PageInfo.StartCursor
 		}
 
 		// Create a combined response
@@ -196,21 +188,20 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 
 	for {
 		resp, err = api.GetScheduledJobsClustered(
-			ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID), m.cfg.GraphQLResultsLimit, cursor, order,
+			ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID), m.cfg.GraphQLResultsLimit, cursor,
 		)
 		if err != nil {
 			return clusteredJobResp(*resp), err
 		}
 
-		endCursor := resp.Organization.Jobs.PageInfo.EndCursor
 		clusteredJobs = append(clusteredJobs, resp.Organization.Jobs.Edges...)
 		paginationDepth++
 
-		if !resp.Organization.Jobs.PageInfo.HasNextPage || paginationDepth >= m.cfg.PaginationDepthLimit || endCursor == nil {
+		if !resp.Organization.Jobs.PageInfo.HasPreviousPage || paginationDepth >= m.cfg.PaginationDepthLimit {
 			break
 		}
 
-		cursor = *endCursor
+		cursor = resp.Organization.Jobs.PageInfo.StartCursor
 	}
 
 	// Create a combined response
