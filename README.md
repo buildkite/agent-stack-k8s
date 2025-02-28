@@ -103,7 +103,7 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --set graphqlToken=<your Buildkite GraphQL-enabled API token>
 ```
 
-Since [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) was released as generally available in 2024, it's required to specify your cluster's UUID in the configuration for the controller when you deploy with helm. This is done by using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
+With the introduction of [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) 2024, it's now required to specify your cluster's UUID in the configuration for the controller when you deploy with Helm. You can do this by setting a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
 ```yaml
 # values.yaml
 config:
