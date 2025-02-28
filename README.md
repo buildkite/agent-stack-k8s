@@ -108,8 +108,8 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
 ```
 This will create an agent-stack-k8s installation that will listen to the `kubernetes` queue.
 
-See the `--tags` [option](#Options) for specifying a different queue.
-See [here](#buildkite-clusters-uuid) more info on the cluster's UUID.
+See the `--tags` [option](#Options) for specifying a different queue. 
+See [here](#buildkite-clusters-uuid) for more info on the cluster's UUID.
 
 ### Options
 
@@ -180,9 +180,6 @@ You can specify your cluster's UUID by either:
 config:
   cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 ```
-
-> [!NOTE]
-> Don't confuse the Cluster UUID with the UUID for the Queue. See [the Docs](https://buildkite.com/docs/clusters/overview) for an explanation.
 
 #### Externalize Secrets
 
