@@ -10,6 +10,7 @@
     -   [Requirements](#requirements)
     -   [Deploy with Helm](#deploy-with-helm)
     -   [Options](#options)
+    -   [Buildkite cluster's UUID](#buildkite-clusters-uuid) 
 -   [Sample Buildkite Pipelines](#sample-buildkite-pipelines)
     -   [PodSpec command and args interpretation](#podspec-command-and-args-interpretation)
     -   [Cloning repos via SSH](#cloning-repos-via-ssh)
