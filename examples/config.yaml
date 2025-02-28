@@ -18,6 +18,7 @@ default-image-pull-policy: Never
 default-image-check-pull-policy: IfNotPresent
 graphql-results-limit: 200
 enable-queue-pause: true
+pagination-depth-limit: 5
 
 # Setting a custom GraphQL endpoint is usually only useful if you have a
 #  different instance of Buildkite itself available to run.

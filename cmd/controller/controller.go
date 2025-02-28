@@ -162,6 +162,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		false,
 		"Permits PodSpecPatch to modify the command or args fields of stack-provided containers. See the warning in the README before enabling this option",
 	)
+	cmd.Flags().Int(
+		"pagination-depth-limit",
+		config.DefaultPaginationDepthLimit,
+		"Sets the maximum depth of pagination when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite GraphQL API and number of Jobs to be scheduled on the Kubernetes Cluster.",
+	)
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.

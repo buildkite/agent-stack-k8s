@@ -149,6 +149,7 @@ Flags:
       --max-in-flight int                           max jobs in flight, 0 means no max (default 25)
       --namespace string                            kubernetes namespace to create resources in (default "default")
       --org string                                  Buildkite organization name to watch
+      --pagination-depth-limit int                  Sets the maximum depth of pagination when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite GraphQL API and number of Jobs to be scheduled on the Kubernetes Cluster. (default 1)
       --poll-interval duration                      time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start (default 1s)
       --profiler-address string                     Bind address to expose the pprof profiler (e.g. localhost:6060)
       --prohibit-kubernetes-plugin                  Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec

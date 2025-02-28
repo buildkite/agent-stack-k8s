@@ -556,7 +556,15 @@
           "minimum": 1,
           "maximum": 500,
           "title": "The maximum number of GraphQL results to return from GetScheduledJobs and GetScheduledJobsClustered queries"
+        },
+        "pagination-depth-limit": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 20,
+          "title": "The maximum depth of pagination of GraphQL queries, increasing the amount to return from GetScheduledJobs and GetScheduledJobsClustered queries"
         }
+        
       },
       "examples": [
         {
