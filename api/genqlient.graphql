@@ -59,7 +59,8 @@ query GetScheduledJobs(
     $slug: ID!, 
     $agentQueryRules: [String!], 
     $last: Int!
-    $before: String!
+    # @genqlient(pointer: true)
+    $cursor: String
 ) {
     organization(slug: $slug) {
         # @genqlient(pointer: true)
@@ -71,7 +72,7 @@ query GetScheduledJobs(
             order: RECENTLY_CREATED
             agentQueryRules: $agentQueryRules
             clustered: false
-            before: $before
+            before: $cursor
         ) {
             count
             edges {
@@ -93,7 +94,8 @@ query GetScheduledJobsClustered(
     $agentQueryRules: [String!]
     $cluster: ID!
     $last: Int!
-    $before: String!
+    # @genqlient(pointer: true)
+    $cursor: String
 ) {
     organization(slug: $slug) {
         # @genqlient(pointer: true)
@@ -105,7 +107,7 @@ query GetScheduledJobsClustered(
             order: RECENTLY_CREATED
             agentQueryRules: $agentQueryRules
             cluster: $cluster
-            before: $before
+            before: $cursor
         ) {
             count
             edges {

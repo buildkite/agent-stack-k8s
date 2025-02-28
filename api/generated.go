@@ -1763,7 +1763,7 @@ type __GetScheduledJobsClusteredInput struct {
 	AgentQueryRules []string `json:"agentQueryRules"`
 	Cluster         string   `json:"cluster"`
 	Last            int      `json:"last"`
-	Before          string   `json:"before"`
+	Cursor          *string  `json:"cursor"`
 }
 
 // GetSlug returns __GetScheduledJobsClusteredInput.Slug, and is useful for accessing the field via an interface.
@@ -1778,15 +1778,15 @@ func (v *__GetScheduledJobsClusteredInput) GetCluster() string { return v.Cluste
 // GetLast returns __GetScheduledJobsClusteredInput.Last, and is useful for accessing the field via an interface.
 func (v *__GetScheduledJobsClusteredInput) GetLast() int { return v.Last }
 
-// GetBefore returns __GetScheduledJobsClusteredInput.Before, and is useful for accessing the field via an interface.
-func (v *__GetScheduledJobsClusteredInput) GetBefore() string { return v.Before }
+// GetCursor returns __GetScheduledJobsClusteredInput.Cursor, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsClusteredInput) GetCursor() *string { return v.Cursor }
 
 // __GetScheduledJobsInput is used internally by genqlient
 type __GetScheduledJobsInput struct {
 	Slug            string   `json:"slug"`
 	AgentQueryRules []string `json:"agentQueryRules"`
 	Last            int      `json:"last"`
-	Before          string   `json:"before"`
+	Cursor          *string  `json:"cursor"`
 }
 
 // GetSlug returns __GetScheduledJobsInput.Slug, and is useful for accessing the field via an interface.
@@ -1798,8 +1798,8 @@ func (v *__GetScheduledJobsInput) GetAgentQueryRules() []string { return v.Agent
 // GetLast returns __GetScheduledJobsInput.Last, and is useful for accessing the field via an interface.
 func (v *__GetScheduledJobsInput) GetLast() int { return v.Last }
 
-// GetBefore returns __GetScheduledJobsInput.Before, and is useful for accessing the field via an interface.
-func (v *__GetScheduledJobsInput) GetBefore() string { return v.Before }
+// GetCursor returns __GetScheduledJobsInput.Cursor, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsInput) GetCursor() *string { return v.Cursor }
 
 // __PipelineDeleteInput is used internally by genqlient
 type __PipelineDeleteInput struct {
@@ -2216,10 +2216,10 @@ func GetOrganization(
 
 // The query executed by GetScheduledJobs.
 const GetScheduledJobs_Operation = `
-query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!], $last: Int!, $before: String!) {
+query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!], $last: Int!, $cursor: String) {
 	organization(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED], type: [COMMAND], last: $last, order: RECENTLY_CREATED, agentQueryRules: $agentQueryRules, clustered: false, before: $before) {
+		jobs(state: [SCHEDULED], type: [COMMAND], last: $last, order: RECENTLY_CREATED, agentQueryRules: $agentQueryRules, clustered: false, before: $cursor) {
 			count
 			edges {
 				node {
@@ -2256,7 +2256,7 @@ func GetScheduledJobs(
 	slug string,
 	agentQueryRules []string,
 	last int,
-	before string,
+	cursor *string,
 ) (data_ *GetScheduledJobsResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobs",
@@ -2265,7 +2265,7 @@ func GetScheduledJobs(
 			Slug:            slug,
 			AgentQueryRules: agentQueryRules,
 			Last:            last,
-			Before:          before,
+			Cursor:          cursor,
 		},
 	}
 
@@ -2283,10 +2283,10 @@ func GetScheduledJobs(
 
 // The query executed by GetScheduledJobsClustered.
 const GetScheduledJobsClustered_Operation = `
-query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!, $last: Int!, $before: String!) {
+query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!, $last: Int!, $cursor: String) {
 	organization(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED], type: [COMMAND], last: $last, order: RECENTLY_CREATED, agentQueryRules: $agentQueryRules, cluster: $cluster, before: $before) {
+		jobs(state: [SCHEDULED], type: [COMMAND], last: $last, order: RECENTLY_CREATED, agentQueryRules: $agentQueryRules, cluster: $cluster, before: $cursor) {
 			count
 			edges {
 				node {
@@ -2324,7 +2324,7 @@ func GetScheduledJobsClustered(
 	agentQueryRules []string,
 	cluster string,
 	last int,
-	before string,
+	cursor *string,
 ) (data_ *GetScheduledJobsClusteredResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobsClustered",
@@ -2334,7 +2334,7 @@ func GetScheduledJobsClustered(
 			AgentQueryRules: agentQueryRules,
 			Cluster:         cluster,
 			Last:            last,
-			Before:          before,
+			Cursor:          cursor,
 		},
 	}
 

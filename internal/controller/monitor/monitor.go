@@ -119,7 +119,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 	}()
 
 	var paginationDepth int
-	var cursor string
+	var cursor *string
 
 	if m.cfg.ClusterUUID == "" {
 		var unclusteredJobs []api.GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge
@@ -140,7 +140,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 				break
 			}
 
-			cursor = resp.Organization.Jobs.PageInfo.StartCursor
+			cursor = &resp.Organization.Jobs.PageInfo.StartCursor
 		}
 
 		// Create a combined response
@@ -201,7 +201,7 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 			break
 		}
 
-		cursor = resp.Organization.Jobs.PageInfo.StartCursor
+		cursor = &resp.Organization.Jobs.PageInfo.StartCursor
 	}
 
 	// Create a combined response
