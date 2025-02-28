@@ -10,6 +10,7 @@
     -   [Requirements](#requirements)
     -   [Deploy with Helm](#deploy-with-helm)
     -   [Options](#options)
+    -   [Buildkite cluster's UUID](#buildkite-clusters-uuid) 
 -   [Sample Buildkite Pipelines](#sample-buildkite-pipelines)
     -   [PodSpec command and args interpretation](#podspec-command-and-args-interpretation)
     -   [Cloning repos via SSH](#cloning-repos-via-ssh)
@@ -50,7 +51,7 @@ When a job is available, the controller will create a pod to acquire and run the
 - adding an init container to:
   - copy the agent binary onto the workspace volume
   - check that other container images pull successfully before starting
-- adding a container to run the buildkite agent
+- adding a container to run the Buildkite agent
 - adding a container to clone the source repository
 - modifying the user-specified containers to:
   - overwrite the entrypoint to the agent binary
@@ -89,8 +90,11 @@ sequenceDiagram
 - A Kubernetes cluster
 - An API token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
 - An [agent token](https://buildkite.com/docs/agent/v3/tokens)
+- A Buildkite [cluster's UUID](#buildkite-clusters-uuid)
 
 ### Deploy with Helm
+
+You'll need Helm version 3.8.0 or newer since we're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/).
 
 The simplest way to get up and running is by deploying our [Helm](https://helm.sh) chart:
 
@@ -100,25 +104,14 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --namespace buildkite \
     --set config.org=<your Buildkite org slug> \
     --set agentToken=<your Buildkite agent token> \
-    --set graphqlToken=<your Buildkite GraphQL-enabled API token>
+    --set graphqlToken=<your Buildkite GraphQL-enabled API token> \
+    --set config.cluster-uuid=<your Buildkite cluster's UUID>
 ```
-
-If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
-```yaml
-# values.yaml
-config:
-  cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
-```
-The cluster's UUID may be obtained by navigating to the [clusters page](https://buildkite.com/organizations/-/clusters), clicking on the relevant cluster and then clicking on "Settings". It will be in a section titled "GraphQL API Integration".
-
-> [!NOTE]
-> Don't confuse the Cluster UUID with the UUID for the Queue. See [the docs](https://buildkite.com/docs/clusters/overview) for an explanation.
-
-We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
-which means you'll need Helm version 3.8.0 or newer.
-
 This will create an agent-stack-k8s installation that will listen to the `kubernetes` queue.
-See the `--tags` [option](#Options) for specifying a different queue.
+
+See the `--tags` [option](#Options) for specifying a different queue. 
+
+See [here](#buildkite-clusters-uuid) for more info on the cluster's UUID.
 
 ### Options
 
@@ -143,7 +136,7 @@ Flags:
       --default-image-pull-policy string            Configures a default image pull policy for containers that do not specify a pull policy and non-init containers created by the stack itself (default "IfNotPresent")
       --empty-job-grace-period duration             Duration after starting a Kubernetes job that the controller will wait before considering failing the job due to a missing pod (e.g. when the podSpec specifies a missing service account) (default 30s)
       --graphql-endpoint string                     Buildkite GraphQL endpoint URL
-      --graphql-results-limit int                   Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled (default 100)
+      --graphql-results-limit int                   Sets the amount of results returned by GraphQL queries when retrieving Jobs to be Scheduled (default 100)
   -h, --help                                        help for agent-stack-k8s
       --image string                                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent:3.91.0")
       --image-pull-backoff-grace-period duration    Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled) (default 30s)
@@ -172,9 +165,27 @@ Configuration can also be provided by a config file (`--config` or `CONFIG`), or
 
 With release v0.24.0 of `agent-stack-k8s`, we can enable '-enable-queue-pause` in the config, allowing the controller to pause processing the jobs when `queue` is paused on Buildkite.
 
+#### Buildkite Cluster's UUID
+
+With the introduction of [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) in 2024, it's now required to specify your cluster's UUID in the configuration for the controller when you deploy with Helm.
+
+To find the cluster's UUID, go to the [Clusters page](https://buildkite.com/organizations/-/clusters), click on the relevant cluster, and click on "Settings". The cluster's UUID will be in the section titled "GraphQL API Integration".
+
+You can specify your cluster's UUID by either:
+ 
+- Setting a flag on the `helm` command like described earlier: 
+`--set config.cluster-uuid=<your cluster's UUID>` 
+
+- Or adding an entry in your `values.yaml` file:
+```yaml
+# values.yaml
+config:
+  cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
+```
+
 #### Externalize Secrets
 
-You can also have an external provider create a secret for you in the namespace before deploying the chart with helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
+You can also have an external provider create a secret for you in the namespace before deploying the chart with Helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
 
 ```bash
 --set agentStackSecret=<secret-name>
@@ -311,17 +322,17 @@ You should create a secret in your namespace with an environment variable name t
 A script from this project is included in the default entrypoint of the default [`buildkite/agent`](https://hub.docker.com/r/buildkite/agent) Docker image.
 It will process the value of the secret and write out a private key to the `~/.ssh` directory of the checkout container.
 
-However this key will not be available in your job containers.
+However, this key will not be available in your job containers.
 If you need to use git ssh credentials in your job containers, we recommend one of the following options:
-1. Use a container image that's based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
+1. Use a container image based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
 2. Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entrypoint for your job container image
 
-#### NOTE: Support for DSA keys has been removed from OpenSSH as of early 2025. This removal now affects agent version `v3.88.0` and newer. Please migrate to `RSA`, `ECDSA` or `EDDSA` keys.
+#### NOTE: Support for DSA keys has been removed from OpenSSH as of early 2025. This removal now affects agent version `v3.88.0` and newer. Please migrate to `RSA`, `ECDSA`, or `EDDSA` keys.
 
 #### Example secret creation for ssh cloning
 You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
 
-Supposing a SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
+If an SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
 ```bash
 kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_RSA_KEY="$HOME/.ssh/id_rsa"
 ```
@@ -427,7 +438,7 @@ default-metadata:
     mycoollabel: alpacas
 ```
 
-Similarly they can be set for each step in a pipeline individually using the kubernetes plugin,
+Similarly, they can be set for each step in a pipeline individually using the kubernetes plugin,
 e.g.:
 
 ```yaml
@@ -643,7 +654,7 @@ There is no guarantee that your sidecars will have started before your job, so u
 
 ### The workspace volume
 
-By default the workspace directory (`/workspace`) is mounted as an `emptyDir` ephemeral volume. Other volumes may be more desirable (e.g. a volume claim backed by an NVMe device).
+By default, the workspace directory (`/workspace`) is mounted as an `emptyDir` ephemeral volume. Other volumes may be more desirable (e.g. a volume claim backed by an NVMe device).
 The default workspace volume can be set as stack configuration, e.g.
 
 ```yaml
@@ -996,7 +1007,7 @@ There are 3 main aspects we need to make sure that happen for hooks to be availa
               name: buildkite-agent-hooks
             name: agent-hooks
    ```
-   Note: Here defaultMode `493` is setting the Unix permissions to `755` which enables the hooks to be executable. Also another way to make this hooks directory available to containers is to use [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)
+   Note: Here defaultMode `493` is setting the Unix permissions to `755` which enables the hooks to be executable. Another way to make this hooks directory available to containers is to use [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)
    mount but it is not a recommended approach for production environments.
 
 Now when we run this pipeline agent hooks will be available to the container and will run them.
@@ -1004,7 +1015,7 @@ Now when we run this pipeline agent hooks will be available to the container and
 Key difference we will notice with hooks execution with `agent-stack-k8s` is that environment hooks will execute twice, but checkout-related hooks such as `pre-checkout`, `checkout` and `post-checkout`
 will only be executed once in the `checkout` container. Similarly the command-related hooks like `pre-command`, `command` and `post-command` hooks will be executed once by the `command` container(s).
 
-If the env `BUILDKITE_HOOKS_PATH` is set at pipeline level instead of container like shown in above pipeline config then hooks will run for both `checkout` container and `command` container(s).
+If the env `BUILDKITE_HOOKS_PATH` is set at pipeline level instead of container like shown in the above pipeline config then hooks will run for both `checkout` container and `command` container(s).
 
 Here is the pipeline config where env `BUILDKITE_HOOKS_PATH` is exposed to all containers in the pipeline:
 
@@ -1123,7 +1134,7 @@ steps:
 
 ## Securing the stack
 
-### Prohibiting the kubernetes plugin (v0.13.0 and later)
+### Prohibiting the Kubernetes plugin (v0.13.0 and later)
 
 Suppose you want to enforce the podSpec used for all jobs at the controller
 level, and prevent users from setting or overriding that podSpec (or various
@@ -1172,6 +1183,6 @@ tar archive which you can send via email to support@buildkite.com.
 
 - How to deal with stuck jobs? Timeouts?
 - How to deal with pod failures (not job failures)?
-  - Report failure to buildkite from controller?
-  - Emit pod logs to buildkite? If agent isn't starting correctly
+  - Report failure to Buildkite from controller?
+  - Emit pod logs to Buildkite? If agent isn't starting correctly
   - Retry?
