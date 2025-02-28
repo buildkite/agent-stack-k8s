@@ -1120,20 +1120,20 @@ func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge) __p
 //
 // Information about pagination in a connection.
 type GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo struct {
-	// When paginating forwards, are there more items?
-	HasNextPage bool `json:"hasNextPage"`
-	// When paginating forwards, the cursor to continue.
-	EndCursor *string `json:"endCursor"`
+	// When paginating backwards, are there more items?
+	HasPreviousPage bool `json:"hasPreviousPage"`
+	// When paginating backwards, the cursor to continue.
+	StartCursor string `json:"startCursor"`
 }
 
-// GetHasNextPage returns GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo.HasNextPage, and is useful for accessing the field via an interface.
-func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo) GetHasNextPage() bool {
-	return v.HasNextPage
+// GetHasPreviousPage returns GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo.HasPreviousPage, and is useful for accessing the field via an interface.
+func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo) GetHasPreviousPage() bool {
+	return v.HasPreviousPage
 }
 
-// GetEndCursor returns GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo.EndCursor, and is useful for accessing the field via an interface.
-func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo) GetEndCursor() *string {
-	return v.EndCursor
+// GetStartCursor returns GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo.StartCursor, and is useful for accessing the field via an interface.
+func (v *GetScheduledJobsClusteredOrganizationJobsJobConnectionPageInfo) GetStartCursor() string {
+	return v.StartCursor
 }
 
 // GetScheduledJobsClusteredResponse is returned by GetScheduledJobsClustered on success.
@@ -1260,20 +1260,20 @@ func (v *GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge) __premarshal
 //
 // Information about pagination in a connection.
 type GetScheduledJobsOrganizationJobsJobConnectionPageInfo struct {
-	// When paginating forwards, are there more items?
-	HasNextPage bool `json:"hasNextPage"`
-	// When paginating forwards, the cursor to continue.
-	EndCursor *string `json:"endCursor"`
+	// When paginating backwards, are there more items?
+	HasPreviousPage bool `json:"hasPreviousPage"`
+	// When paginating backwards, the cursor to continue.
+	StartCursor string `json:"startCursor"`
 }
 
-// GetHasNextPage returns GetScheduledJobsOrganizationJobsJobConnectionPageInfo.HasNextPage, and is useful for accessing the field via an interface.
-func (v *GetScheduledJobsOrganizationJobsJobConnectionPageInfo) GetHasNextPage() bool {
-	return v.HasNextPage
+// GetHasPreviousPage returns GetScheduledJobsOrganizationJobsJobConnectionPageInfo.HasPreviousPage, and is useful for accessing the field via an interface.
+func (v *GetScheduledJobsOrganizationJobsJobConnectionPageInfo) GetHasPreviousPage() bool {
+	return v.HasPreviousPage
 }
 
-// GetEndCursor returns GetScheduledJobsOrganizationJobsJobConnectionPageInfo.EndCursor, and is useful for accessing the field via an interface.
-func (v *GetScheduledJobsOrganizationJobsJobConnectionPageInfo) GetEndCursor() *string {
-	return v.EndCursor
+// GetStartCursor returns GetScheduledJobsOrganizationJobsJobConnectionPageInfo.StartCursor, and is useful for accessing the field via an interface.
+func (v *GetScheduledJobsOrganizationJobsJobConnectionPageInfo) GetStartCursor() string {
+	return v.StartCursor
 }
 
 // GetScheduledJobsResponse is returned by GetScheduledJobs on success.
@@ -1487,21 +1487,6 @@ type JobJobTypeTrigger struct {
 //
 // Kinds of jobs that can exist on a build
 type JobJobTypeWait struct {
-}
-
-// The different orders you can sort jobs by
-type JobOrder string
-
-const (
-	// Order by the most recently assigned jobs first
-	JobOrderRecentlyAssigned JobOrder = "RECENTLY_ASSIGNED"
-	// Order by the most recently created jobs first
-	JobOrderRecentlyCreated JobOrder = "RECENTLY_CREATED"
-)
-
-var AllJobOrder = []JobOrder{
-	JobOrderRecentlyAssigned,
-	JobOrderRecentlyCreated,
 }
 
 // All the possible states a job can be in
@@ -1777,9 +1762,8 @@ type __GetScheduledJobsClusteredInput struct {
 	Slug            string   `json:"slug"`
 	AgentQueryRules []string `json:"agentQueryRules"`
 	Cluster         string   `json:"cluster"`
-	First           int      `json:"first"`
-	After           string   `json:"after"`
-	Order           JobOrder `json:"order"`
+	Last            int      `json:"last"`
+	Before          string   `json:"before"`
 }
 
 // GetSlug returns __GetScheduledJobsClusteredInput.Slug, and is useful for accessing the field via an interface.
@@ -1791,22 +1775,18 @@ func (v *__GetScheduledJobsClusteredInput) GetAgentQueryRules() []string { retur
 // GetCluster returns __GetScheduledJobsClusteredInput.Cluster, and is useful for accessing the field via an interface.
 func (v *__GetScheduledJobsClusteredInput) GetCluster() string { return v.Cluster }
 
-// GetFirst returns __GetScheduledJobsClusteredInput.First, and is useful for accessing the field via an interface.
-func (v *__GetScheduledJobsClusteredInput) GetFirst() int { return v.First }
+// GetLast returns __GetScheduledJobsClusteredInput.Last, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsClusteredInput) GetLast() int { return v.Last }
 
-// GetAfter returns __GetScheduledJobsClusteredInput.After, and is useful for accessing the field via an interface.
-func (v *__GetScheduledJobsClusteredInput) GetAfter() string { return v.After }
-
-// GetOrder returns __GetScheduledJobsClusteredInput.Order, and is useful for accessing the field via an interface.
-func (v *__GetScheduledJobsClusteredInput) GetOrder() JobOrder { return v.Order }
+// GetBefore returns __GetScheduledJobsClusteredInput.Before, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsClusteredInput) GetBefore() string { return v.Before }
 
 // __GetScheduledJobsInput is used internally by genqlient
 type __GetScheduledJobsInput struct {
 	Slug            string   `json:"slug"`
 	AgentQueryRules []string `json:"agentQueryRules"`
-	First           int      `json:"first"`
-	After           string   `json:"after"`
-	Order           JobOrder `json:"order"`
+	Last            int      `json:"last"`
+	Before          string   `json:"before"`
 }
 
 // GetSlug returns __GetScheduledJobsInput.Slug, and is useful for accessing the field via an interface.
@@ -1815,14 +1795,11 @@ func (v *__GetScheduledJobsInput) GetSlug() string { return v.Slug }
 // GetAgentQueryRules returns __GetScheduledJobsInput.AgentQueryRules, and is useful for accessing the field via an interface.
 func (v *__GetScheduledJobsInput) GetAgentQueryRules() []string { return v.AgentQueryRules }
 
-// GetFirst returns __GetScheduledJobsInput.First, and is useful for accessing the field via an interface.
-func (v *__GetScheduledJobsInput) GetFirst() int { return v.First }
+// GetLast returns __GetScheduledJobsInput.Last, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsInput) GetLast() int { return v.Last }
 
-// GetAfter returns __GetScheduledJobsInput.After, and is useful for accessing the field via an interface.
-func (v *__GetScheduledJobsInput) GetAfter() string { return v.After }
-
-// GetOrder returns __GetScheduledJobsInput.Order, and is useful for accessing the field via an interface.
-func (v *__GetScheduledJobsInput) GetOrder() JobOrder { return v.Order }
+// GetBefore returns __GetScheduledJobsInput.Before, and is useful for accessing the field via an interface.
+func (v *__GetScheduledJobsInput) GetBefore() string { return v.Before }
 
 // __PipelineDeleteInput is used internally by genqlient
 type __PipelineDeleteInput struct {
@@ -2239,10 +2216,10 @@ func GetOrganization(
 
 // The query executed by GetScheduledJobs.
 const GetScheduledJobs_Operation = `
-query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!], $first: Int, $after: String!, $order: JobOrder) {
+query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!], $last: Int!, $before: String!) {
 	organization(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: $order, agentQueryRules: $agentQueryRules, clustered: false, after: $after) {
+		jobs(state: [SCHEDULED], type: [COMMAND], last: $last, order: RECENTLY_CREATED, agentQueryRules: $agentQueryRules, clustered: false, before: $before) {
 			count
 			edges {
 				node {
@@ -2251,8 +2228,8 @@ query GetScheduledJobs ($slug: ID!, $agentQueryRules: [String!], $first: Int, $a
 				}
 			}
 			pageInfo {
-				hasNextPage
-				endCursor
+				hasPreviousPage
+				startCursor
 			}
 		}
 	}
@@ -2278,9 +2255,8 @@ func GetScheduledJobs(
 	client_ graphql.Client,
 	slug string,
 	agentQueryRules []string,
-	first int,
-	after string,
-	order JobOrder,
+	last int,
+	before string,
 ) (data_ *GetScheduledJobsResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobs",
@@ -2288,9 +2264,8 @@ func GetScheduledJobs(
 		Variables: &__GetScheduledJobsInput{
 			Slug:            slug,
 			AgentQueryRules: agentQueryRules,
-			First:           first,
-			After:           after,
-			Order:           order,
+			Last:            last,
+			Before:          before,
 		},
 	}
 
@@ -2308,10 +2283,10 @@ func GetScheduledJobs(
 
 // The query executed by GetScheduledJobsClustered.
 const GetScheduledJobsClustered_Operation = `
-query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!, $first: Int, $after: String!, $order: JobOrder) {
+query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $cluster: ID!, $last: Int!, $before: String!) {
 	organization(slug: $slug) {
 		id
-		jobs(state: [SCHEDULED], type: [COMMAND], first: $first, order: $order, agentQueryRules: $agentQueryRules, cluster: $cluster, after: $after) {
+		jobs(state: [SCHEDULED], type: [COMMAND], last: $last, order: RECENTLY_CREATED, agentQueryRules: $agentQueryRules, cluster: $cluster, before: $before) {
 			count
 			edges {
 				node {
@@ -2320,8 +2295,8 @@ query GetScheduledJobsClustered ($slug: ID!, $agentQueryRules: [String!], $clust
 				}
 			}
 			pageInfo {
-				hasNextPage
-				endCursor
+				hasPreviousPage
+				startCursor
 			}
 		}
 	}
@@ -2348,9 +2323,8 @@ func GetScheduledJobsClustered(
 	slug string,
 	agentQueryRules []string,
 	cluster string,
-	first int,
-	after string,
-	order JobOrder,
+	last int,
+	before string,
 ) (data_ *GetScheduledJobsClusteredResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "GetScheduledJobsClustered",
@@ -2359,9 +2333,8 @@ func GetScheduledJobsClustered(
 			Slug:            slug,
 			AgentQueryRules: agentQueryRules,
 			Cluster:         cluster,
-			First:           first,
-			After:           after,
-			Order:           order,
+			Last:            last,
+			Before:          before,
 		},
 	}
 

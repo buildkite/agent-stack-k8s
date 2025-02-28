@@ -58,9 +58,8 @@ query GetBuild($uuid: ID!) {
 query GetScheduledJobs(
     $slug: ID!, 
     $agentQueryRules: [String!], 
-    $first: Int
-    $after: String!
-    $order: JobOrder
+    $last: Int!
+    $before: String!
 ) {
     organization(slug: $slug) {
         # @genqlient(pointer: true)
@@ -68,11 +67,11 @@ query GetScheduledJobs(
         jobs(
             state: [SCHEDULED]
             type: [COMMAND]
-            first: $first
-            order: $order
+            last: $last
+            order: RECENTLY_CREATED
             agentQueryRules: $agentQueryRules
             clustered: false
-            after: $after
+            before: $before
         ) {
             count
             edges {
@@ -82,9 +81,8 @@ query GetScheduledJobs(
                 }
             }
             pageInfo{
-                hasNextPage
-                # @genqlient(pointer: true)
-                endCursor
+                hasPreviousPage
+                startCursor
             }
         }
     }
@@ -94,9 +92,8 @@ query GetScheduledJobsClustered(
     $slug: ID!
     $agentQueryRules: [String!]
     $cluster: ID!
-    $first: Int
-    $after: String!
-    $order: JobOrder
+    $last: Int!
+    $before: String!
 ) {
     organization(slug: $slug) {
         # @genqlient(pointer: true)
@@ -104,11 +101,11 @@ query GetScheduledJobsClustered(
         jobs(
             state: [SCHEDULED]
             type: [COMMAND]
-            first: $first
-            order: $order
+            last: $last
+            order: RECENTLY_CREATED
             agentQueryRules: $agentQueryRules
             cluster: $cluster
-            after: $after
+            before: $before
         ) {
             count
             edges {
@@ -118,9 +115,8 @@ query GetScheduledJobsClustered(
                 }
             }
             pageInfo{
-                hasNextPage
-                # @genqlient(pointer: true)
-                endCursor
+                hasPreviousPage
+                startCursor
             }
         }
     }
