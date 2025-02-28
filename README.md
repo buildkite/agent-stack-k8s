@@ -109,6 +109,7 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
 This will create an agent-stack-k8s installation that will listen to the `kubernetes` queue.
 
 See the `--tags` [option](#Options) for specifying a different queue. 
+
 See [here](#buildkite-clusters-uuid) for more info on the cluster's UUID.
 
 ### Options
@@ -163,7 +164,7 @@ Configuration can also be provided by a config file (`--config` or `CONFIG`), or
 
 With release v0.24.0 of `agent-stack-k8s`, we can enable '-enable-queue-pause` in the config, allowing the controller to pause processing the jobs when `queue` is paused on Buildkite.
 
-#### Buildkite cluster's UUID
+#### Buildkite Cluster's UUID
 
 With the introduction of [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) in 2024, it's now required to specify your cluster's UUID in the configuration for the controller when you deploy with Helm.
 
