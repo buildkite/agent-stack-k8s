@@ -44,7 +44,7 @@ func acquireAndFailForObject(
 	tags := agenttags.TagsFromLabels(labels)
 	opts := cfg.AgentConfig.ControllerOptions()
 
-	if err := acquireAndFail(ctx, logger, agentToken, jobUUID, tags, message, opts...); err != nil {
+	if err := acquireAndFail(ctx, logger, agentToken, cfg.JobPrefix, jobUUID, tags, message, opts...); err != nil {
 		logger.Error("failed to acquire and fail the job on Buildkite", zap.Error(err))
 		return err
 	}
@@ -57,6 +57,7 @@ func acquireAndFail(
 	ctx context.Context,
 	zapLogger *zap.Logger,
 	agentToken string,
+	jobPrefix string,
 	jobUUID string,
 	tags []string,
 	message string,
@@ -68,7 +69,7 @@ func acquireAndFail(
 	}, options...)
 
 	// queue is required for acquire! maybe more
-	ctr, err := agentcore.NewController(ctx, agentToken, k8sJobName(jobUUID), tags, opts...)
+	ctr, err := agentcore.NewController(ctx, agentToken, k8sJobName(jobPrefix, jobUUID), tags, opts...)
 	if err != nil {
 		zapLogger.Error("registering or connecting ephemeral agent", zap.Error(err))
 		return fmt.Errorf("registering or connecting ephemeral agent: %w", err)

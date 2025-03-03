@@ -42,6 +42,7 @@ type Config struct {
 	AgentTokenSecret         string        `json:"agent-token-secret"       validate:"required"`
 	BuildkiteToken           string        `json:"buildkite-token"          validate:"required"`
 	Image                    string        `json:"image"                    validate:"required"`
+	JobPrefix                string        `json:"job-prefix"               validate:"required"`
 	MaxInFlight              int           `json:"max-in-flight"            validate:"min=0"`
 	Namespace                string        `json:"namespace"                validate:"required"`
 	Org                      string        `json:"org"                      validate:"required"`
@@ -104,6 +105,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("agent-token-secret", c.AgentTokenSecret)
 	enc.AddBool("debug", c.Debug)
 	enc.AddString("image", c.Image)
+	enc.AddString("job-prefix", c.JobPrefix)
 	enc.AddDuration("job-ttl", c.JobTTL)
 	enc.AddInt("job-active-deadline-seconds", c.JobActiveDeadlineSeconds)
 	enc.AddDuration("poll-interval", c.PollInterval)

@@ -25,6 +25,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		Image:                        "my.registry.dev/buildkite-agent:latest",
 		JobTTL:                       300 * time.Second,
 		JobActiveDeadlineSeconds:     21600,
+		JobPrefix:                    "testkite-",
 		ImagePullBackOffGracePeriod:  60 * time.Second,
 		JobCancelCheckerPollInterval: 10 * time.Second,
 		EmptyJobGracePeriod:          50 * time.Second,
@@ -44,7 +45,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		PaginationDepthLimit:         5,
 		DefaultImagePullPolicy:       "Never",
 		DefaultImageCheckPullPolicy:  "IfNotPresent",
-                EnableQueuePause:             true,
+		EnableQueuePause:             true,
 
 		WorkspaceVolume: &corev1.Volume{
 			Name: "workspace-2-the-reckoning",
