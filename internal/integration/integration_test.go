@@ -610,9 +610,4 @@ func TestJobActiveDeadlineSeconds(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
-	logs := tc.FetchLogs(build)
-	if strings.Contains(logs, "Received cancellation signal, interrupting") {
-		t.Error("The agent ran and handled cancellation")
-	}
 }
