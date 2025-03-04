@@ -17,7 +17,7 @@ var ErrDuplicateJob = errors.New("job already scheduled")
 
 // ErrStaleJob is a sentinel error returned when the job becomes too stale to
 // begin scheduling.
-var ErrStaleJob = errors.New("job data stale")
+var ErrStaleJob = errors.New("stale-job-data-timeout")
 
 // JobHandler implementations can handle a job.
 type JobHandler interface {
