@@ -373,6 +373,34 @@ func TestExtraVolumeMounts(t *testing.T) {
 	tc.AssertSuccess(ctx, build)
 }
 
+func TestExtraVolumeMountsCommandContainers(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "extra-volume-mounts-command.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+}
+
+func TestExtraVolumeMountsSidecars(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "extra-volume-mounts-sidecar.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+}
+
 func TestInvalidPodSpec(t *testing.T) {
 	tc := testcase{
 		T:       t,

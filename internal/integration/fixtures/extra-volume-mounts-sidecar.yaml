@@ -1,0 +1,46 @@
+agents:
+  queue: "{{.queue}}"
+steps:
+  - label: ":k8s: Write file to extraVolumeMount on sidecar containers"
+    key: write-file-to-extra-volume-mount-sidecar
+    plugins:
+      - kubernetes:
+          sidecars:
+            - image: alpine:latest
+              command:
+                - touch /tmp/extra-volume-mount/foo-$${BUILDKITE_JOB_ID}.txt
+                - cp /tmp/extra-volume-mount/foo-$${BUILDKITE_JOB_ID}.txt /tmp/extra-volume-mount-command/foo-$${BUILDKITE_JOB_ID}.txt
+                - rm -f /tmp/extra-volume-mount/foo-$${BUILDKITE_JOB_ID}.txt
+          podSpec:
+            containers:
+              - image: alpine:latest
+                command:
+                  - |-
+                    COUNT=0
+                    until [[ $$((COUNT++)) == 9 ]]; do
+                      [[ -f "/tmp/extra-volume-mount-command/foo-$${BUILDKITE_JOB_ID}.txt" ]] && break
+                      echo "⚠️ Waiting for /tmp/extra-volume-mount-command/foo-$${BUILDKITE_JOB_ID}.txt to be written..."
+                      sleep 1
+                    done
+
+                    if ! [[ -f "/tmp/extra-volume-mount-command/foo-$${BUILDKITE_JOB_ID}.txt" ]]; then
+                      echo "⛔ /tmp/extra-volume-mount-command/foo-$${BUILDKITE_JOB_ID}.txt has not been written"
+                      exit 1
+                    fi
+
+                    echo "✅ /tmp/extra-volume-mount-command/foo-$${BUILDKITE_JOB_ID}.txt has been written"
+                    rm -f "/tmp/extra-volume-mount-command/foo-$${BUILDKITE_JOB_ID}.txt"
+            volumes:
+              - name: host-volume
+                hostPath:
+                  path: "/tmp/volumes/{{.queue}}"
+                  type: DirectoryOrCreate
+          commandParams:
+            extraVolumeMounts:
+              - name: host-volume
+                mountPath: /tmp/extra-volume-mount-command
+                subPath: extra-volume-mount-command
+          extraVolumeMounts:
+            - name: host-volume
+              mountPath: /tmp/extra-volume-mount
+              subPath: extra-volume-mount
