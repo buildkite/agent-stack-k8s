@@ -11,7 +11,7 @@ steps:
                 command: ["sh"]
                 args:
                   - "-c"
-                  - "touch /tmp/extra-volume-mount-sidecar/foo-$${BUILDKITE_JOB_ID}.txt"
+                  - "touch /tmp/extra-volume-mount-command/foo-$${BUILDKITE_JOB_ID}.txt"
               - image: alpine:latest
                 command:
                   - |-
