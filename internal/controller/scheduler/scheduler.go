@@ -1230,7 +1230,7 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 		return err
 	}
 	schedulerBuildkiteJobFailsCounter.Inc()
-	return nil
+	return fmt.Errorf("%s", message)
 }
 
 func (w *worker) jobURL(jobUUID string, buildURL string) (string, error) {

@@ -114,6 +114,7 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 		l.logger.Debug("next handler failed",
 			zap.String("job-uuid", job.Uuid),
 			zap.Int("available-tokens", len(l.tokenBucket)),
+			zap.Error(err),
 		)
 		return err
 	}
