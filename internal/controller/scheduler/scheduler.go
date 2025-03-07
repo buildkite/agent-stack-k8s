@@ -497,8 +497,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			if c.Name == "" {
 				c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
 			}
-			c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 			w.cfg.DefaultSidecarParams.ApplyTo(&c)
+			c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 			inputs.k8sPlugin.SidecarParams.ApplyTo(&c)
 			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
 			podSpec.Containers = append(podSpec.Containers, c)

@@ -675,9 +675,138 @@ config:
 
 ### Extra volume mounts
 
+#### All containers
+
 In some situations, for example if you want to use [git mirrors](https://buildkite.com/docs/agent/v3#promoted-experiments-git-mirrors) you may want to attach extra volume mounts (in addition to the `/workspace` one) in all the pod containers.
 
 See [this example](internal/integration/fixtures/extra-volume-mounts.yaml), that will declare a new volume in the `podSpec` and mount it in all the containers. The benefit, is to have the same mounted path in all containers, including the `checkout` container.
+
+#### `checkout` containers
+
+In order to attach extra volumes to your `checkout` containers, define `config.default-checkout-params.extraVolumeMounts` in your configuration. Example:
+```yaml
+# values.yaml
+config:
+  default-checkout-params:
+    gitCredentialsSecret:
+      secretName: my-git-credentials
+    extraVolumeMounts:
+      - name: checkout-extra-dir
+        mountPath: /extra-checkout
+  pod-spec-patch:
+    containers:
+      - name: checkout
+        image: "buildkite/agent:latest"
+    volumes:
+      - name: checkout-extra-dir
+        hostPath:
+          path: /my/extra/dir/checkout
+          type: DirectoryOrCreate
+```
+
+Or `checkout.extraVolumeMounts` in the `kubernetes` plugin. Example:
+```yaml
+# pipeline.yml
+...
+  kubernetes:
+    checkout:
+      extraVolumeMounts:
+        - name: checkout-extra-dir
+          mountPath: /extra-checkout
+    podSpecPatch:
+      containers:
+        - name: checkout
+          image: "buildkite/agent:latest"
+      volumes:
+        - name: checkout-extra-dir
+          hostPath:
+            path: /my/extra/dir/checkout
+            type: DirectoryOrCreate
+```
+
+#### `command` containers
+
+In order to attach extra volumes to your `container-#` (`command`) containers, define `config.default-command-params.extraVolumeMounts` in your configuration. Example:
+```yaml
+# values.yaml
+config:
+  default-command-params:
+    extraVolumeMounts:
+      - name: command-extra-dir
+        mountPath: /extra-command
+  pod-spec-patch:
+    containers:
+      - name: container-0
+        image: "buildkite/agent:latest"
+    volumes:
+      - name: command-extra-dir
+        hostPath:
+          path: /my/extra/dir/command
+          type: DirectoryOrCreate
+```
+
+Or `commandParams.extraVolumeMounts` in the `kubernetes` plugin. Example:
+```yaml
+# pipeline.yml
+...
+  kubernetes:
+    commandParams:
+      extraVolumeMounts:
+        - name: command-extra-dir
+          mountPath: /extra-command
+    podSpecPatch:
+      containers:
+        - name: container-0
+          image: "buildkite/agent:latest"
+      volumes:
+        - name: command-extra-dir
+          hostPath:
+            path: /my/extra/dir/command
+            type: DirectoryOrCreate
+```
+
+#### `sidecar` containers
+
+In order to attach extra volumes to your `sidecar` containers, define `config.default-sidecar-params.extraVolumeMounts` in your configuration. Example:
+```yaml
+# values.yaml
+config:
+  default-sidecar-params:
+    extraVolumeMounts:
+      - name: sidecar-extra-dir
+        mountPath: /extra-sidecar
+  pod-spec-patch:
+    containers:
+      - name: checkout
+        image: "buildkite/agent:latest"
+    volumes:
+      - name: sidecar-extra-dir
+        hostPath:
+          path: /my/extra/dir/sidecar
+          type: DirectoryOrCreate
+```
+
+Or `sidecarParams.extraVolumeMounts` in the `kubernetes` plugin. Example:
+```yaml
+# pipeline.yml
+...
+  kubernetes:
+    sidecars:
+      - image: nginx:latest
+    sidecarParams:
+      extraVolumeMounts:
+        - name: sidecar-extra-dir
+          mountPath: /extra-sidecar
+    podSpecPatch:
+      containers:
+        - name: checkout
+          image: "buildkite/agent:latest"
+      volumes:
+        - name: sidecar-extra-dir
+          hostPath:
+            path: /my/extra/dir/sidecar
+            type: DirectoryOrCreate
+```
 
 ### Skipping checkout (v0.13.0 and later)
 

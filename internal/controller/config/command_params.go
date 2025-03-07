@@ -13,8 +13,9 @@ import (
 // CommandParams contains parameters that provide additional control over all
 // command container(s).
 type CommandParams struct {
-	Interposer Interposer             `json:"interposer,omitempty"`
-	EnvFrom    []corev1.EnvFromSource `json:"envFrom,omitempty"`
+	Interposer        Interposer             `json:"interposer,omitempty"`
+	EnvFrom           []corev1.EnvFromSource `json:"envFrom,omitempty"`
+	ExtraVolumeMounts []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
 }
 
 func (cmd *CommandParams) ApplyTo(ctr *corev1.Container) {
@@ -22,6 +23,7 @@ func (cmd *CommandParams) ApplyTo(ctr *corev1.Container) {
 		return
 	}
 	ctr.EnvFrom = append(ctr.EnvFrom, cmd.EnvFrom...)
+	ctr.VolumeMounts = append(ctr.VolumeMounts, cmd.ExtraVolumeMounts...)
 }
 
 // Command interprets the command and args fields of the container into a
