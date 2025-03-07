@@ -10,8 +10,12 @@ steps:
               command: ["sh"]
               args:
                 - "-c"
-                - "touch /tmp/extra-volume-mount-sidecar/foo-${BUILDKITE_JOB_ID}.txt"
-                - "cp /tmp/extra-volume-mount-sidecar/foo-${BUILDKITE_JOB_ID}.txt /tmp/extra-volume-mount/foo-${BUILDKITE_JOB_ID}.txt"
+                - |-
+                  touch /tmp/extra-volume-mount-sidecar/pass-the-parcel
+                  rm -f "/tmp/extra-volume-mount/pass-the-parcel"
+                  mv /tmp/extra-volume-mount-sidecar/pass-the-parcel /tmp/extra-volume-mount/pass-the-parcel
+                  ls -lah /tmp/extra-volume-mount-sidecar
+                  ls -lah /tmp/extra-volume-mount
           podSpec:
             containers:
               - image: alpine:latest
@@ -19,18 +23,18 @@ steps:
                   - |-
                     COUNT=0
                     until [[ $$((COUNT++)) == 15 ]]; do
-                      [[ -f "/tmp/extra-volume-mount/foo-${BUILDKITE_JOB_ID}.txt" ]] && break
-                      echo "⚠️   Waiting for /tmp/extra-volume-mount/foo-${BUILDKITE_JOB_ID}.txt to be written..."
+                      [[ -f "/tmp/extra-volume-mount/pass-the-parcel" ]] && break
+                      echo "⚠️   Waiting for my package to be delivered..."
                       sleep 1
                     done
 
-                    if ! [[ -f "/tmp/extra-volume-mount/foo-${BUILDKITE_JOB_ID}.txt" ]]; then
-                      echo "⛔ /tmp/extra-volume-mount/foo-${BUILDKITE_JOB_ID}.txt has not been written"
+                    if ! [[ -f "/tmp/extra-volume-mount/pass-the-parcel" ]]; then
+                      echo "⛔ My package has not been delivered!"
                       exit 1
                     fi
 
-                    echo "✅ /tmp/extra-volume-mount/foo-${BUILDKITE_JOB_ID}.txt has been written"
-                    rm -f "/tmp/extra-volume-mount/foo-${BUILDKITE_JOB_ID}.txt"
+                    echo "✅ My package has been delivered!"
+                    rm -f "/tmp/extra-volume-mount/pass-the-parcel"
             volumes:
               - name: host-volume
                 hostPath:
