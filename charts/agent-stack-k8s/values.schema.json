@@ -203,6 +203,12 @@
           "title": "The job-ttl Schema",
           "examples": [""]
         },
+        "job-prefix": {
+          "type": "string",
+          "default": "buildkite-",
+          "title": "The prefix to use when creating Kubernetes job names",
+          "examples": ["kubekite-","buildkube-"]
+        },
         "job-active-deadline-seconds": {
           "type": "integer",
           "default": 21600,
