@@ -481,6 +481,14 @@
               "items": {
                 "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
               }
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "default": [],
+              "title": "extra volumes to mount to all checkout containers",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
+              }
             }
           }
         },
@@ -502,6 +510,14 @@
               "items": {
                 "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
               }
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "default": [],
+              "title": "extra volumes to mount to all command containers",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
+              }
             }
           }
         },
@@ -516,6 +532,14 @@
               "title": "k8s envFrom sources to add",
               "items": {
                 "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
+              }
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "default": [],
+              "title": "extra volumes to mount to all sidecar containers",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
               }
             }
           }
