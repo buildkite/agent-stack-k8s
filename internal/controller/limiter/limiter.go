@@ -88,6 +88,12 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 		return context.Cause(ctx)
 
 	case <-job.StaleCh:
+		// stale-job-data-timeout has elapsed
+		l.logger.Debug("Unable to create job before stale-job-data-timeout",
+			zap.String("job-uuid", job.Uuid),
+			zap.Int("max-in-flight", l.MaxInFlight),
+			zap.Int("running-jobs", l.MaxInFlight-len(l.tokenBucket)),
+		)
 		return model.ErrStaleJob
 
 	case <-l.tokenBucket:
@@ -114,6 +120,7 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 		l.logger.Debug("next handler failed",
 			zap.String("job-uuid", job.Uuid),
 			zap.Int("available-tokens", len(l.tokenBucket)),
+			zap.Error(err),
 		)
 		return err
 	}

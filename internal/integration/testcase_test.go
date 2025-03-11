@@ -42,7 +42,7 @@ type testcase struct {
 // k8s labels are limited to length 63, we use the pipeline name as a label.
 // So we sometimes need to limit the length of the pipeline name too.
 func (t *testcase) ShortPipelineName() string {
-	return t.PipelineName[:min(len(t.PipelineName), 63)]
+	return strings.Trim(t.PipelineName[:min(len(t.PipelineName), 63)], "-")
 }
 
 func (t testcase) Init() testcase {

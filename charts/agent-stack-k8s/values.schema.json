@@ -203,6 +203,12 @@
           "title": "The job-ttl Schema",
           "examples": [""]
         },
+        "job-prefix": {
+          "type": "string",
+          "default": "buildkite-",
+          "title": "The prefix to use when creating Kubernetes job names",
+          "examples": ["kubekite-","buildkube-"]
+        },
         "job-active-deadline-seconds": {
           "type": "integer",
           "default": 21600,
@@ -475,6 +481,14 @@
               "items": {
                 "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
               }
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "default": [],
+              "title": "extra volumes to mount to all checkout containers",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
+              }
             }
           }
         },
@@ -496,6 +510,14 @@
               "items": {
                 "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
               }
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "default": [],
+              "title": "extra volumes to mount to all command containers",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
+              }
             }
           }
         },
@@ -510,6 +532,14 @@
               "title": "k8s envFrom sources to add",
               "items": {
                 "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
+              }
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "default": [],
+              "title": "extra volumes to mount to all sidecar containers",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
               }
             }
           }

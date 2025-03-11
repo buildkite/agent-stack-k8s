@@ -52,6 +52,7 @@ var (
 type Config struct {
 	Namespace                     string
 	Image                         string
+	JobPrefix                     string
 	AgentTokenSecretName          string
 	JobTTL                        time.Duration
 	JobActiveDeadlineSeconds      int
@@ -239,7 +240,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	kjob := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        k8sJobName(inputs.uuid),
+			Name:        k8sJobName(w.cfg.JobPrefix, inputs.uuid),
 			Labels:      make(map[string]string),
 			Annotations: make(map[string]string),
 		},
@@ -497,8 +498,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			if c.Name == "" {
 				c.Name = fmt.Sprintf("%s-%d", "sidecar", i)
 			}
-			c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 			w.cfg.DefaultSidecarParams.ApplyTo(&c)
+			c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 			inputs.k8sPlugin.SidecarParams.ApplyTo(&c)
 			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
 			podSpec.Containers = append(podSpec.Containers, c)
@@ -1224,13 +1225,13 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 	}
 
 	opts := w.cfg.AgentConfig.ControllerOptions()
-	if err := acquireAndFail(ctx, w.logger, agentToken, inputs.uuid, inputs.agentQueryRules, message, opts...); err != nil {
+	if err := acquireAndFail(ctx, w.logger, agentToken, w.cfg.JobPrefix, inputs.uuid, inputs.agentQueryRules, message, opts...); err != nil {
 		w.logger.Error("failed to acquire and fail the job on Buildkite", zap.Error(err))
 		schedulerBuildkiteJobFailErrorsCounter.Inc()
 		return err
 	}
 	schedulerBuildkiteJobFailsCounter.Inc()
-	return nil
+	return fmt.Errorf("%s", message)
 }
 
 func (w *worker) jobURL(jobUUID string, buildURL string) (string, error) {
@@ -1242,8 +1243,8 @@ func (w *worker) jobURL(jobUUID string, buildURL string) (string, error) {
 	return u.String(), nil
 }
 
-func k8sJobName(jobUUID string) string {
-	return fmt.Sprintf("buildkite-%s", jobUUID)
+func k8sJobName(jobPrefix string, jobUUID string) string {
+	return fmt.Sprintf("%s%s", jobPrefix, jobUUID)
 }
 
 // Format each agentTag as key=value and join with ,
