@@ -1,12 +1,14 @@
 # Securing the stack
 
-## Prohibiting the Kubernetes plugin (v0.13.0 and later)
+> Works for v0.13.0 and later.
 
-Suppose you want to enforce the podSpec used for all jobs at the controller
-level, and prevent users from setting or overriding that podSpec (or various
-other parameters) through use of the kubernetes plugin.
-This can be achieved with `prohibit-kubernetes-plugin`, either as a controller
-flag or within the config `values.yaml`:
+If you want to:
+- enforce the podSpec used for all jobs at the controller
+level and
+- prevent users from setting or overriding that podSpec (or various
+other parameters), you can use `prohibit-kubernetes-plugin`.
+
+This can be done by either setting a controller flag or within the config `values.yaml`:
 
 ```yaml
 # values.yaml

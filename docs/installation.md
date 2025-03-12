@@ -1,5 +1,6 @@
 # Installation
 
+[TOC]
     -   [Requirements](#requirements)
     -   [Deploy with Helm](#deploy-with-helm)
     -   [Options](#options)

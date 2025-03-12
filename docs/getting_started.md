@@ -1,8 +1,8 @@
 # Buildkite Agent Stack for Kubernetes Documentation
 
-Welcome to the the Buildkite Agent Stack for Kubernetes Documentation
+Welcome to the the Buildkite Agent Stack for Kubernetes Documentation.
+Choose the topic to start reading:
 
-## Table of Contents
 -   [How does it work (overview and architecture)](#overview-and-architecture)
 -   [Installation](#installation)
 -   [Sample Buildkite Pipelines](#sample-pipelines)

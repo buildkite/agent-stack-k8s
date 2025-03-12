@@ -1,5 +1,6 @@
-## Sample Buildkite Pipelines
+# Sample Buildkite Pipelines
 
+TOC:
     -   [PodSpec command and args interpretation](#podspec-command-and-args-interpretation)
     -   [Cloning repos via SSH](#cloning-repos-via-ssh)
     -   [Cloning repos via HTTPS](#cloning-repos-via-https)
@@ -14,7 +15,8 @@
     -   [Default envFrom](#default-envfrom)
 
 
-For simple commands, you merely have to target the queue you configured agent-stack-k8s with.
+For simple commands, target the queue you configured agent-stack-k8s with. For example:
+
 ```yaml
 steps:
 - label: Hello World!
@@ -22,10 +24,11 @@ steps:
   agents:
     queue: kubernetes
 ```
+
 For more complicated steps, you have access to the [`PodSpec`](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#podspec-v1-core) Kubernetes API resource that will be used in a Kubernetes [`Job`](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.29/#job-v1-batch).
-For now, this is nested under a `kubernetes` plugin.
-But unlike other Buildkite plugins, there is no corresponding plugin repository.
-Rather, this is syntax that is interpreted by the `agent-stack-k8s` controller.
+Currently, this is nested under a `kubernetes` plugin - but unlike other Buildkite plugins, there is no corresponding plugin repository.
+Rather, this is syntax that is interpreted by the `agent-stack-k8s` controller:
+
 ```yaml
 steps:
 - label: Hello World!
@@ -42,7 +45,7 @@ steps:
 
 Almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
 
-### PodSpec command and args interpretation
+## PodSpec command and args interpretation
 
 In a `podSpec`, `command` **must** be a list of strings, since it is [defined by Kubernetes](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#entrypoint).
 However, agent-stack-k8s runs buildkite-agent instead of the container's default entrypoint.
@@ -113,7 +116,7 @@ steps:
 More samples can be found in the
 [integration test fixtures directory](internal/integration/fixtures).
 
-### Cloning repos via SSH
+## Cloning repos via SSH
 
 To use SSH to clone your repos, you'll need to add a secret reference via an [EnvFrom](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#envfromsource-v1-core) to your pipeline to specify where to mount your SSH private key from.
 Place this object under a `gitEnvFrom` key in the `kubernetes` plugin (see the example below).
@@ -127,9 +130,9 @@ If you need to use git ssh credentials in your job containers, we recommend one 
 1. Use a container image based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
 2. Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entrypoint for your job container image
 
-#### NOTE: Support for DSA keys has been removed from OpenSSH as of early 2025. This removal now affects agent version `v3.88.0` and newer. Please migrate to `RSA`, `ECDSA`, or `EDDSA` keys.
+### NOTE: Support for DSA keys has been removed from OpenSSH as of early 2025. This removal now affects agent version `v3.88.0` and newer. Please migrate to `RSA`, `ECDSA`, or `EDDSA` keys.
 
-#### Example secret creation for ssh cloning
+### Example secret creation for ssh cloning
 You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
 
 If an SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
@@ -157,7 +160,7 @@ steps:
                   - --image=ttl.sh/example:1h
 ```
 
-### Cloning repos via HTTPS
+## Cloning repos via HTTPS
 
 To use HTTPS to clone private repos, you can use a `.git-credentials` file stored in a secret, and
 refer to this secret using the `gitCredentialsSecret` checkout parameter.
@@ -168,7 +171,7 @@ If you need the `.git-credentials` file inside the other containers as well, you
 mount for the `git-credentials` volume, and configure Git to use the file within it (e.g. with
 `git config credential.helper 'store --file ...'`)
 
-#### Example secret creation for HTTPS cloning
+### Example secret creation for HTTPS cloning
 Once again, this example is illustrative only.
 
 First, create a Kubernetes secret containing the key `.git-credentials`, formatted in the manner
@@ -222,7 +225,7 @@ default-checkout-params:
 ...
 ```
 
-### Default job metadata
+## Default job metadata
 agent-stack-k8s can automatically add labels and annotations to the Kubernetes jobs it creates.
 Default labels and annotations can be set in `values.yaml` with `default-metadata`, e.g.:
 
@@ -256,7 +259,7 @@ e.g.:
 ```
 
 
-### Pod Spec Patch
+## Pod Spec Patch
 Rather than defining the entire Pod Spec in a step, there is the option to define a [strategic merge patch](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/) in the controller.
 Agent Stack K8s will first generate a K8s Job with a PodSpec from a Buildkite Job and then apply the patch in the controller.
 It will then apply the patch specified in its config file, which is derived from the value in the helm installation.
@@ -304,7 +307,7 @@ steps:
     echo " World!"
 ```
 
-#### Custom Images
+### Custom Images
 You can specify a different image to use for a step in a step level `podSpecPatch`. Previously this could be done with a step level `podSpec`.
 ```yaml
 # pipelines.yaml
@@ -332,7 +335,7 @@ steps:
         image: alpine:latest   #       We are experimenting with ways to make it more ergonomic
 ```
 
-#### Default Resources
+### Default Resources
 In the helm values, you can specify default resources to be used by the containers in Pods that are launched to run Jobs.
 ```yaml
 # values.yaml
@@ -394,7 +397,7 @@ steps:
   command: echo Hello World!
 ```
 
-#### Overriding commands
+### Overriding commands
 
 For command containers, it is possible to alter the `command` or `args` using
 PodSpecPatch. These will be re-wrapped in the necessary `buildkite-agent`
@@ -446,13 +449,13 @@ If you still wish to disable this precaution, and override the raw `command` or
 `args` of these stack-provided containers using PodSpecPatch, you may do so with
 the `allow-pod-spec-patch-unsafe-command-modification` config option.
 
-### Sidecars
+## Sidecars
 
 Sidecar containers can be added to your job by specifying them under the top-level `sidecars` key. See [this example](internal/integration/fixtures/sidecars.yaml) for a simple job that runs `nginx` as a sidecar, and accesses the nginx server from the main job.
 
 There is no guarantee that your sidecars will have started before your job, so using retries or a tool like [wait-for-it](https://github.com/vishnubob/wait-for-it) is a good idea to avoid flaky tests.
 
-### The workspace volume
+## The workspace volume
 
 By default, the workspace directory (`/workspace`) is mounted as an `emptyDir` ephemeral volume. Other volumes may be more desirable (e.g. a volume claim backed by an NVMe device).
 The default workspace volume can be set as stack configuration, e.g.
@@ -472,13 +475,13 @@ config:
               storage: 1Gi
 ```
 
-### Extra volume mounts
+## Extra volume mounts
 
 In some situations, for example if you want to use [git mirrors](https://buildkite.com/docs/agent/v3#promoted-experiments-git-mirrors) you may want to attach extra volume mounts (in addition to the `/workspace` one) in all the pod containers.
 
 See [this example](internal/integration/fixtures/extra-volume-mounts.yaml), that will declare a new volume in the `podSpec` and mount it in all the containers. The benefit, is to have the same mounted path in all containers, including the `checkout` container.
 
-### Skipping checkout (v0.13.0 and later)
+## Skipping checkout (v0.13.0 and later)
 
 For some steps, you may wish to avoid checkout (cloning a source repository).
 This can be done with the `checkout` block under the `kubernetes` plugin:
@@ -494,7 +497,7 @@ steps:
         skip: true # prevents scheduling the checkout container
 ```
 
-### Overriding flags for git clone and git fetch (v0.13.0 and later)
+## Overriding flags for git clone and git fetch (v0.13.0 and later)
 
 Flags for `git clone`, `git fetch` can be overridden per-step (similar to
 `BUILDKITE_GIT_CLONE_FLAGS` and `BUILDLKITE_GIT_FETCH_FLAGS` env vars) with
@@ -513,7 +516,7 @@ steps:
         fetchFlags: -v --prune --tags
 ```
 
-### Overriding other git settings (v0.16.0 and later)
+## Overriding other git settings (v0.16.0 and later)
 
 From v0.16.0 onwards, many more git flags and options supported by the agent are
 also configurable with the `checkout` block. Example:
@@ -561,7 +564,7 @@ config:
           type: Directory
 ```
 
-### Default envFrom
+## Default envFrom
 
 `envFrom` can be added to all checkout, command, and sidecar containers
 separately, either per-step in the pipeline or for all jobs in `values.yaml`.

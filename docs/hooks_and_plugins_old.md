@@ -1,18 +1,18 @@
 # How to set up agent hooks (v0.15.0 and earlier)
 
-This section explains how to setup agent hooks when running Agent Stack K8s. In order for the agent hooks to work, they must be present on the instances where the agent runs.
+This section explains how to setup agent hooks when running Agent Stack Kubernetes v0.15.0 and earlier. In order for the agent hooks to work, they must be present on the instances where the agent runs.
 
-In case of agent-stack-k8s, we need these hooks to be accessible to the kubernetes pod where the `checkout` and `command` containers will be running. Best way to make this happen is to create a configmap with the agent hooks and mount the configmap as volume to the containers.
+In case of Agent Stack Kubernetes v0.15.0 and earlier, we need these hooks to be accessible to the Kubernetes pod where the `checkout` and `command` containers will be running. Best way to make this happen is to create a configmap with the agent hooks and mount the configmap as volume to the containers.
 
 Here is the command to create `configmap` which will have agent hooks in it:
 
 ```shell
 kubectl create configmap buildkite-agent-hooks --from-file=/tmp/hooks -n buildkite
 ```
-We have all the hooks under directory `/tmp/hooks` and we are creating `configmap` with name `buildkite-agent-hooks` in `buildkite`
-namespace in the k8s cluster.
 
-Here is how to make these hooks in configmap available to the containers. Here is the pipeline
+We have all the hooks under directory `/tmp/hooks` and we are creating `configmap` with name `buildkite-agent-hooks` in `buildkite` namespace in the k8s cluster.
+
+Here is how to make these hooks in configmap available to the containers. Use the pipeline
 config for setting up agent hooks:
 
 ```yaml
@@ -71,10 +71,10 @@ There are 3 main aspects we need to make sure that happen for hooks to be availa
    Note: Here defaultMode `493` is setting the Unix permissions to `755` which enables the hooks to be executable. Another way to make this hooks directory available to containers is to use [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)
    mount but it is not a recommended approach for production environments.
 
-Now when we run this pipeline agent hooks will be available to the container and will run them.
+Now, when we run this pipeline, agent hooks will be available to the container and will run them.
 
-Key difference we will notice with hooks execution with `agent-stack-k8s` is that environment hooks will execute twice, but checkout-related hooks such as `pre-checkout`, `checkout` and `post-checkout`
-will only be executed once in the `checkout` container. Similarly the command-related hooks like `pre-command`, `command` and `post-command` hooks will be executed once by the `command` container(s).
+The key difference that we will notice with hooks' execution with `agent-stack-k8s` is that environment hooks will execute twice, but checkout-related hooks such as `pre-checkout`, `checkout` and `post-checkout`
+will only be executed once in the `checkout` container. Similarly, the command-related hooks like `pre-command`, `command` and `post-command` hooks will be executed once by the `command` container(s).
 
 If the env `BUILDKITE_HOOKS_PATH` is set at pipeline level instead of container like shown in the above pipeline config then hooks will run for both `checkout` container and `command` container(s).
 
@@ -106,7 +106,7 @@ steps:
             name: agent-hooks
 ```
 
-This is because agent-hooks will be present in both containers and `environment` hook will run in both containers. Here is how the build output will look like:
+This happens because agent-hooks will be present in both containers and `environment` hook will run in both containers. Here is how the build output will look like:
 
 ```
 Running global environment hook

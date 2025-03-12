@@ -6,15 +6,15 @@ and `pluginVolumeSource`. If used, the corresponding volumes are named
 mounted on checkout and command containers, with the agent configured to use them.
 
 Any volume source can be specified for agent hooks and plugins, but a common
-choice is to use a `configMap`, since hooks generally aren't very big and
+choice is to use a `configMap`, since hooks generally aren't large and
 config maps are made available across the cluster.
 
-1.  Create the config map containing hooks:
+To create the config map containing hooks:
     ```shell
     kubectl create configmap buildkite-agent-hooks --from-file=/tmp/hooks -n buildkite
     ```
 
-2.  Example of using hooks from a config map:
+- Example of using hooks from a config map:
     ```yaml
     # values.yaml
     config:
@@ -26,7 +26,7 @@ config maps are made available across the cluster.
             name: buildkite-agent-hooks
     ```
 
-    Example of using plugins from a host path
+- Example of using plugins from a host path
     ([_caveat lector_](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)):
 
     ```yaml
