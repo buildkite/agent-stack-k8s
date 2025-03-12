@@ -41,13 +41,15 @@ type Config struct {
 	Org                    string
 	Tags                   []string
 	GraphQLResultsLimit    int
+	EnableQueuePause       bool
+	PaginationDepthLimit   int
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, cfg Config) (*Monitor, error) {
 	graphqlClient := api.NewClient(cfg.Token, cfg.GraphQLEndpoint)
 
 	// Poll no more frequently than every 1s (please don't DoS us).
-	cfg.PollInterval = min(cfg.PollInterval, time.Second)
+	cfg.PollInterval = max(cfg.PollInterval, time.Second)
 
 	// Default StaleJobDataTimeout to 10s.
 	if cfg.StaleJobDataTimeout <= 0 {
@@ -116,9 +118,44 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		}
 	}()
 
+	var paginationDepth int
+	var cursor *string
+
 	if m.cfg.ClusterUUID == "" {
-		resp, err := api.GetScheduledJobs(ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit)
-		return unclusteredJobResp(*resp), err
+		var unclusteredJobs []api.GetScheduledJobsOrganizationJobsJobConnectionEdgesJobEdge
+		var resp *api.GetScheduledJobsResponse
+
+		for {
+			resp, err = api.GetScheduledJobs(
+				ctx, m.gql, m.cfg.Org, []string{fmt.Sprintf("queue=%s", queue)}, m.cfg.GraphQLResultsLimit, cursor,
+			)
+			if err != nil {
+				return unclusteredJobResp(*resp), err
+			}
+
+			unclusteredJobs = append(unclusteredJobs, resp.Organization.Jobs.Edges...)
+			paginationDepth++
+
+			if !resp.Organization.Jobs.PageInfo.HasPreviousPage || paginationDepth >= m.cfg.PaginationDepthLimit {
+				break
+			}
+
+			cursor = &resp.Organization.Jobs.PageInfo.StartCursor
+		}
+
+		// Create a combined response
+		unclusteredResp := &api.GetScheduledJobsResponse{
+			Organization: api.GetScheduledJobsOrganization{
+				Id: resp.Organization.Id,
+				Jobs: api.GetScheduledJobsOrganizationJobsJobConnection{
+					Count:    len(unclusteredJobs),
+					PageInfo: resp.Organization.Jobs.PageInfo,
+					Edges:    unclusteredJobs,
+				},
+			},
+		}
+
+		return unclusteredJobResp(*unclusteredResp), err
 	}
 
 	var agentQueryRule []string
@@ -126,10 +163,60 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jo
 		agentQueryRule = append(agentQueryRule, fmt.Sprintf("queue=%s", queue))
 	}
 
-	resp, err := api.GetScheduledJobsClustered(
-		ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID), m.cfg.GraphQLResultsLimit,
-	)
-	return clusteredJobResp(*resp), err
+	if m.cfg.EnableQueuePause {
+		// TODO: use a more targeted query once one becomes available
+		queues, err := api.GetClusterQueues(ctx, m.gql, m.cfg.Org, m.cfg.ClusterUUID, 100)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch cluster queues: %w", err)
+		}
+
+		isQueuePaused := false
+		for _, edge := range queues.Organization.Cluster.Queues.Edges {
+			if edge.Node.Key == queue {
+				isQueuePaused = edge.Node.DispatchPaused
+				break
+			}
+		}
+
+		if isQueuePaused {
+			return nil, fmt.Errorf("the queue %q is paused", queue)
+		}
+	}
+
+	var clusteredJobs []api.GetScheduledJobsClusteredOrganizationJobsJobConnectionEdgesJobEdge
+	var resp *api.GetScheduledJobsClusteredResponse
+
+	for {
+		resp, err = api.GetScheduledJobsClustered(
+			ctx, m.gql, m.cfg.Org, agentQueryRule, encodeClusterGraphQLID(m.cfg.ClusterUUID), m.cfg.GraphQLResultsLimit, cursor,
+		)
+		if err != nil {
+			return clusteredJobResp(*resp), err
+		}
+
+		clusteredJobs = append(clusteredJobs, resp.Organization.Jobs.Edges...)
+		paginationDepth++
+
+		if !resp.Organization.Jobs.PageInfo.HasPreviousPage || paginationDepth >= m.cfg.PaginationDepthLimit {
+			break
+		}
+
+		cursor = &resp.Organization.Jobs.PageInfo.StartCursor
+	}
+
+	// Create a combined response
+	clusteredResp := &api.GetScheduledJobsClusteredResponse{
+		Organization: api.GetScheduledJobsClusteredOrganization{
+			Id: resp.Organization.Id,
+			Jobs: api.GetScheduledJobsClusteredOrganizationJobsJobConnection{
+				Count:    len(clusteredJobs),
+				PageInfo: resp.Organization.Jobs.PageInfo,
+				Edges:    clusteredJobs,
+			},
+		},
+	}
+
+	return clusteredJobResp(*clusteredResp), err
 }
 
 func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan error {

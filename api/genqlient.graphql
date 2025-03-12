@@ -58,7 +58,9 @@ query GetBuild($uuid: ID!) {
 query GetScheduledJobs(
     $slug: ID!, 
     $agentQueryRules: [String!], 
-    $first: Int
+    $last: Int!
+    # @genqlient(pointer: true)
+    $cursor: String
 ) {
     organization(slug: $slug) {
         # @genqlient(pointer: true)
@@ -66,10 +68,11 @@ query GetScheduledJobs(
         jobs(
             state: [SCHEDULED]
             type: [COMMAND]
-            first: $first
-            order: RECENTLY_ASSIGNED
+            last: $last
+            order: RECENTLY_CREATED
             agentQueryRules: $agentQueryRules
             clustered: false
+            before: $cursor
         ) {
             count
             edges {
@@ -77,6 +80,10 @@ query GetScheduledJobs(
                 node {
                     ...Job
                 }
+            }
+            pageInfo{
+                hasPreviousPage
+                startCursor
             }
         }
     }
@@ -86,7 +93,9 @@ query GetScheduledJobsClustered(
     $slug: ID!
     $agentQueryRules: [String!]
     $cluster: ID!
-    $first: Int
+    $last: Int!
+    # @genqlient(pointer: true)
+    $cursor: String
 ) {
     organization(slug: $slug) {
         # @genqlient(pointer: true)
@@ -94,10 +103,11 @@ query GetScheduledJobsClustered(
         jobs(
             state: [SCHEDULED]
             type: [COMMAND]
-            first: $first
-            order: RECENTLY_ASSIGNED
+            last: $last
+            order: RECENTLY_CREATED
             agentQueryRules: $agentQueryRules
             cluster: $cluster
+            before: $cursor
         ) {
             count
             edges {
@@ -105,6 +115,10 @@ query GetScheduledJobsClustered(
                 node {
                     ...Job
                 }
+            }
+            pageInfo{
+                hasPreviousPage
+                startCursor
             }
         }
     }
@@ -155,4 +169,23 @@ query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
             }
         }
     }
+}
+
+query GetClusterQueues($slug: ID!, $cluster: ID!, $first: Int!){
+  organization(slug: $slug) {
+    cluster(id: $cluster){
+      queues(first: $first){
+        edges{
+          node{
+            key
+            dispatchPaused
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
 }

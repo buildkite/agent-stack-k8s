@@ -18,6 +18,7 @@ type CheckoutParams struct {
 	GitMirrors           *GitMirrorsParams          `json:"gitMirrors,omitempty"`
 	GitCredentialsSecret *corev1.SecretVolumeSource `json:"gitCredentialsSecret,omitempty"`
 	EnvFrom              []corev1.EnvFromSource     `json:"envFrom,omitempty"`
+	ExtraVolumeMounts    []corev1.VolumeMount       `json:"extraVolumeMounts,omitempty"`
 }
 
 func (co *CheckoutParams) ApplyTo(podSpec *corev1.PodSpec, ctr *corev1.Container) {
@@ -31,6 +32,7 @@ func (co *CheckoutParams) ApplyTo(podSpec *corev1.PodSpec, ctr *corev1.Container
 	appendCommaSepToEnv(ctr, "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", co.SubmoduleCloneConfig)
 	co.GitMirrors.ApplyTo(podSpec, ctr)
 	ctr.EnvFrom = append(ctr.EnvFrom, co.EnvFrom...)
+	ctr.VolumeMounts = append(ctr.VolumeMounts, co.ExtraVolumeMounts...)
 }
 
 func (co *CheckoutParams) GitCredsSecret() *corev1.SecretVolumeSource {

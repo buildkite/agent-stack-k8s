@@ -203,6 +203,12 @@
           "title": "The job-ttl Schema",
           "examples": [""]
         },
+        "job-prefix": {
+          "type": "string",
+          "default": "buildkite-",
+          "title": "The prefix to use when creating Kubernetes job names",
+          "examples": ["kubekite-","buildkube-"]
+        },
         "job-active-deadline-seconds": {
           "type": "integer",
           "default": 21600,
@@ -293,6 +299,18 @@
           "default": false,
           "title": "Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
           "examples": [true]
+        },
+        "enable-queue-pause": {
+          "type": "boolean",
+          "default": false,
+          "title": "Allow controller to pause processing the jobs when queue is paused on Buildkite",
+          "examples": [false]
+        },
+        "allow-pod-spec-patch-unsafe-command-modification": {
+          "type": "boolean",
+          "default": false,
+          "title": "Permits PodSpecPatch to modify the command or args fields of containers. See the warning in the README before enabling this option",
+          "examples": [false]
         },
         "workspaceVolume": {
           "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
@@ -463,6 +481,14 @@
               "items": {
                 "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
               }
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "default": [],
+              "title": "extra volumes to mount to all checkout containers",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
+              }
             }
           }
         },
@@ -484,6 +510,14 @@
               "items": {
                 "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
               }
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "default": [],
+              "title": "extra volumes to mount to all command containers",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
+              }
             }
           }
         },
@@ -498,6 +532,14 @@
               "title": "k8s envFrom sources to add",
               "items": {
                 "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
+              }
+            },
+            "extraVolumeMounts": {
+              "type": "array",
+              "default": [],
+              "title": "extra volumes to mount to all sidecar containers",
+              "items": {
+                "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
               }
             }
           }
@@ -544,7 +586,15 @@
           "minimum": 1,
           "maximum": 500,
           "title": "The maximum number of GraphQL results to return from GetScheduledJobs and GetScheduledJobsClustered queries"
+        },
+        "pagination-depth-limit": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 20,
+          "title": "The maximum depth of pagination of GraphQL queries, increasing the amount to return from GetScheduledJobs and GetScheduledJobsClustered queries"
         }
+        
       },
       "examples": [
         {

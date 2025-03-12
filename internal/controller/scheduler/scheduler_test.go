@@ -126,7 +126,7 @@ func TestPatchPodSpec(t *testing.T) {
 
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			got, err := PatchPodSpec(test.podspec, test.patch, nil, nil)
+			got, err := PatchPodSpec(test.podspec, test.patch, nil, nil, false)
 			if err != nil {
 				t.Fatalf("PodSpecPatch error = %v", err)
 			}
@@ -229,7 +229,7 @@ func TestPatchPodSpec_ErrNoCommandModification(t *testing.T) {
 
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := PatchPodSpec(test.podspec, test.patch, nil, nil)
+			_, err := PatchPodSpec(test.podspec, test.patch, nil, nil, false)
 			if !errors.Is(err, ErrNoCommandModification) {
 				t.Errorf("PodSpecPatch error = %v, want ErrNoCommandModification (%v)", err, ErrNoCommandModification)
 			}

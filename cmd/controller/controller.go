@@ -53,6 +53,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultAgentImage,
 		"The image to use for the Buildkite agent",
 	)
+	cmd.Flags().String(
+		"job-prefix",
+		"buildkite-",
+		"The prefix to use when creating Kubernetes job names",
+	)
 	cmd.Flags().StringSlice(
 		"tags",
 		[]string{"queue=kubernetes"},
@@ -150,7 +155,23 @@ func AddConfigFlags(cmd *cobra.Command) {
 	cmd.Flags().Int(
 		"graphql-results-limit",
 		config.DefaultGraphQLResultsLimit,
-		"Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled")
+		"Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled",
+	)
+	cmd.Flags().Bool(
+		"enable-queue-pause",
+		false,
+		"Allow controller to pause processing the jobs when queue is paused on Buildkite",
+	)
+	cmd.Flags().Bool(
+		"allow-pod-spec-patch-unsafe-command-modification",
+		false,
+		"Permits PodSpecPatch to modify the command or args fields of stack-provided containers. See the warning in the README before enabling this option",
+	)
+	cmd.Flags().Int(
+		"pagination-depth-limit",
+		config.DefaultPaginationDepthLimit,
+		"Sets the maximum depth of pagination when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite GraphQL API and number of Jobs to be scheduled on the Kubernetes Cluster.",
+	)
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.

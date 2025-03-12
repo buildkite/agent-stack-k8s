@@ -1811,6 +1811,7 @@ type ClusterQueue {
   cluster: Cluster
   createdBy: User
   description: String
+  dispatchPaused: Boolean
   id: ID!
   key: String!
 

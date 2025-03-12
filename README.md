@@ -3,28 +3,40 @@
 [![Build status](https://badge.buildkite.com/d58c90abfe8b48f8d8750dac8e911fc0b6afe026631b4dc97c.svg?branch=main)](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack)
 
 ## Table of Contents
-- [Overview](#Overview)
-- [How does it work](#How-does-it-work)
-- [Architecture](#Architecture)
-- [Installation](#Installation)
-  - [Requirements](#Requirements)
-  - [Deploy with Helm](#Deploy-with-Helm)
-  - [Options](#Options)
-- [Sample Buildkite Pipeline](#Sample-Buildkite-Pipelines)
-  - [Cloning repos via SSH](#Cloning-repos-via-SSH)
-  - [Cloning repos via HTTPS](#Cloning-repos-via-HTTPS)
-  - [Pod Spec Patch](#Pod-Spec-Patch)
-  - [Sidecars](#Sidecars)
-  - [Extra volume mounts](#Extra-volume-mounts)
-  - [Skipping checkout](#Skipping-checkout)
-  - [Overriding flags for git clone/fetch](#Overriding-flags-for-git-clonefetch)
-  - [Validating your pipeline](#Validating-your-pipeline)
-  - [Long-running jobs](#long-running-jobs)
-- [Securing the stack](#securing-the-stack)
-  - [Prohibiting the kubernetes plugin (v0.13.0 and later)](#prohibiting-the-kubernetes-plugin-v0130-and-later)
-- [How to setup agent hooks](#How-to-setup-agent-hooks)
-- [Debugging](#Debugging)
-- [Open Questions](#Open-Questions)
+-   [Overview](#overview)
+-   [How does it work](#how-does-it-work)
+-   [Architecture](#architecture)
+-   [Installation](#installation)
+    -   [Requirements](#requirements)
+    -   [Deploy with Helm](#deploy-with-helm)
+    -   [Options](#options)
+    -   [Buildkite cluster's UUID](#buildkite-clusters-uuid) 
+-   [Sample Buildkite Pipelines](#sample-buildkite-pipelines)
+    -   [PodSpec command and args interpretation](#podspec-command-and-args-interpretation)
+    -   [Cloning repos via SSH](#cloning-repos-via-ssh)
+    -   [Cloning repos via HTTPS](#cloning-repos-via-https)
+    -   [Default job metadata](#default-job-metadata)
+    -   [Pod Spec Patch](#pod-spec-patch)
+    -   [Sidecars](#sidecars)
+    -   [The workspace volume](#the-workspace-volume)
+    -   [Extra volume mounts](#extra-volume-mounts)
+    -   [Skipping checkout (v0.13.0 and later)](#skipping-checkout-v0130-and-later)
+    -   [Overriding flags for git clone and git fetch (v0.13.0 and later)](#overriding-flags-for-git-clone-and-git-fetch-v0130-and-later)
+    -   [Overriding other git settings (v0.16.0 and later)](#overriding-other-git-settings-v0160-and-later)
+    -   [Default envFrom](#default-envfrom)
+-   [Setting agent configuration (v0.16.0 and later)](#setting-agent-configuration-v0160-and-later)
+-   [How to set up pipeline signing (v0.16.0 and later)](#how-to-set-up-pipeline-signing-v0160-and-later)
+-   [How to set up agent hooks and plugins (v0.16.0 and later)](#how-to-set-up-agent-hooks-and-plugins-v0160-and-later)
+-   [How to set up agent hooks (v0.15.0 and earlier)](#how-to-set-up-agent-hooks-v0150-and-earlier)
+-   [Validating your pipeline](#validating-your-pipeline)
+-   [Long-running jobs](#long-running-jobs)
+-   [Securing the stack](#securing-the-stack)
+    -   [Prohibiting the kubernetes plugin (v0.13.0 and later)](#prohibiting-the-kubernetes-plugin-v0130-and-later)
+-   [Debugging](#debugging)
+    -   [Prerequisites](#prerequisites)
+    -   [Inputs to the script](#inputs-to-the-script)
+    -   [Data/logs gathered:](#datalogs-gathered)
+-   [Open questions](#open-questions)
 
 ## Overview
 
@@ -39,7 +51,7 @@ When a job is available, the controller will create a pod to acquire and run the
 - adding an init container to:
   - copy the agent binary onto the workspace volume
   - check that other container images pull successfully before starting
-- adding a container to run the buildkite agent
+- adding a container to run the Buildkite agent
 - adding a container to clone the source repository
 - modifying the user-specified containers to:
   - overwrite the entrypoint to the agent binary
@@ -78,8 +90,11 @@ sequenceDiagram
 - A Kubernetes cluster
 - An API token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
 - An [agent token](https://buildkite.com/docs/agent/v3/tokens)
+- A Buildkite [cluster's UUID](#buildkite-clusters-uuid)
 
 ### Deploy with Helm
+
+You'll need Helm version 3.8.0 or newer since we're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/).
 
 The simplest way to get up and running is by deploying our [Helm](https://helm.sh) chart:
 
@@ -89,25 +104,14 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --namespace buildkite \
     --set config.org=<your Buildkite org slug> \
     --set agentToken=<your Buildkite agent token> \
-    --set graphqlToken=<your Buildkite GraphQL-enabled API token>
+    --set graphqlToken=<your Buildkite GraphQL-enabled API token> \
+    --set config.cluster-uuid=<your Buildkite cluster's UUID>
 ```
-
-If you are using [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) to isolate sets of pipelines from each other, you will need to specify the cluster's UUID in the configuration for the controller. This may be done using a flag on the `helm` command like so: `--set config.cluster-uuid=<your cluster's UUID>`, or an entry in a values file.
-```yaml
-# values.yaml
-config:
-  cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
-```
-The cluster's UUID may be obtained by navigating to the [clusters page](https://buildkite.com/organizations/-/clusters), clicking on the relevant cluster and then clicking on "Settings". It will be in a section titled "GraphQL API Integration".
-
-> [!NOTE]
-> Don't confuse the Cluster UUID with the UUID for the Queue. See [the docs](https://buildkite.com/docs/clusters/overview) for an explanation.
-
-We're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/),
-which means you'll need Helm version 3.8.0 or newer.
-
 This will create an agent-stack-k8s installation that will listen to the `kubernetes` queue.
-See the `--tags` [option](#Options) for specifying a different queue.
+
+See the `--tags` [option](#Options) for specifying a different queue. 
+
+See [here](#buildkite-clusters-uuid) for more info on the cluster's UUID.
 
 ### Options
 
@@ -132,7 +136,7 @@ Flags:
       --default-image-pull-policy string            Configures a default image pull policy for containers that do not specify a pull policy and non-init containers created by the stack itself (default "IfNotPresent")
       --empty-job-grace-period duration             Duration after starting a Kubernetes job that the controller will wait before considering failing the job due to a missing pod (e.g. when the podSpec specifies a missing service account) (default 30s)
       --graphql-endpoint string                     Buildkite GraphQL endpoint URL
-      --graphql-results-limit int                   Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled (default 100)
+      --graphql-results-limit int                   Sets the amount of results returned by GraphQL queries when retrieving Jobs to be Scheduled (default 100)
   -h, --help                                        help for agent-stack-k8s
       --image string                                The image to use for the Buildkite agent (default "ghcr.io/buildkite/agent:3.91.0")
       --image-pull-backoff-grace-period duration    Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled) (default 30s)
@@ -145,21 +149,45 @@ Flags:
       --max-in-flight int                           max jobs in flight, 0 means no max (default 25)
       --namespace string                            kubernetes namespace to create resources in (default "default")
       --org string                                  Buildkite organization name to watch
+      --pagination-depth-limit int                  Sets the maximum depth of pagination when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite GraphQL API and number of Jobs to be scheduled on the Kubernetes Cluster. (default 1)
       --poll-interval duration                      time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start (default 1s)
       --profiler-address string                     Bind address to expose the pprof profiler (e.g. localhost:6060)
       --prohibit-kubernetes-plugin                  Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec
       --prometheus-port uint16                      Bind port to expose Prometheus /metrics; 0 disables it
       --stale-job-data-timeout duration             Duration after querying jobs in Buildkite that the data is considered valid (default 10s)
       --tags strings                                A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux") (default [queue=kubernetes])
+      --enable-queue-pause bool                     Allow the controller to pause processing the jobs when the queue is paused on Buildkite. (default false)
+      --job-prefix string                           The prefix to use when creating Kubernetes job names (default "buildkite-")
+
 
 Use "agent-stack-k8s [command] --help" for more information about a command.
 ```
 
 Configuration can also be provided by a config file (`--config` or `CONFIG`), or environment variables. In the [examples](examples) folder there is a sample [YAML config](examples/config.yaml) and a sample [dotenv config](examples/config.env).
 
+With release v0.24.0 of `agent-stack-k8s`, we can enable '-enable-queue-pause` in the config, allowing the controller to pause processing the jobs when `queue` is paused on Buildkite.
+
+#### Buildkite Cluster's UUID
+
+With the introduction of [Buildkite Clusters](https://buildkite.com/docs/agent/clusters) in 2024, it's now required to specify your cluster's UUID in the configuration for the controller when you deploy with Helm.
+
+To find the cluster's UUID, go to the [Clusters page](https://buildkite.com/organizations/-/clusters), click on the relevant cluster, and click on "Settings". The cluster's UUID will be in the section titled "GraphQL API Integration".
+
+You can specify your cluster's UUID by either:
+ 
+- Setting a flag on the `helm` command like described earlier: 
+`--set config.cluster-uuid=<your cluster's UUID>` 
+
+- Or adding an entry in your `values.yaml` file:
+```yaml
+# values.yaml
+config:
+  cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
+```
+
 #### Externalize Secrets
 
-You can also have an external provider create a secret for you in the namespace before deploying the chart with helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
+You can also have an external provider create a secret for you in the namespace before deploying the chart with Helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
 
 ```bash
 --set agentStackSecret=<secret-name>
@@ -296,17 +324,17 @@ You should create a secret in your namespace with an environment variable name t
 A script from this project is included in the default entrypoint of the default [`buildkite/agent`](https://hub.docker.com/r/buildkite/agent) Docker image.
 It will process the value of the secret and write out a private key to the `~/.ssh` directory of the checkout container.
 
-However this key will not be available in your job containers.
+However, this key will not be available in your job containers.
 If you need to use git ssh credentials in your job containers, we recommend one of the following options:
-1. Use a container image that's based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
+1. Use a container image based on the default `buildkite/agent` docker image and preserve the default entrypoint by not overriding the command in the job spec.
 2. Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entrypoint for your job container image
 
-#### NOTE: Support for DSA keys has been removed from OpenSSH as of early 2025. This removal now affects agent version `v3.88.0` and newer. Please migrate to `RSA`, `ECDSA` or `EDDSA` keys.
+#### NOTE: Support for DSA keys has been removed from OpenSSH as of early 2025. This removal now affects agent version `v3.88.0` and newer. Please migrate to `RSA`, `ECDSA`, or `EDDSA` keys.
 
 #### Example secret creation for ssh cloning
 You most likely want to use a more secure method of managing k8s secrets. This example is illustrative only.
 
-Supposing a SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
+If an SSH private key has been created and its public key has been registered with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)).
 ```bash
 kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_RSA_KEY="$HOME/.ssh/id_rsa"
 ```
@@ -412,7 +440,7 @@ default-metadata:
     mycoollabel: alpacas
 ```
 
-Similarly they can be set for each step in a pipeline individually using the kubernetes plugin,
+Similarly, they can be set for each step in a pipeline individually using the kubernetes plugin,
 e.g.:
 
 ```yaml
@@ -568,6 +596,58 @@ steps:
   command: echo Hello World!
 ```
 
+#### Overriding commands
+
+For command containers, it is possible to alter the `command` or `args` using
+PodSpecPatch. These will be re-wrapped in the necessary `buildkite-agent`
+invocation.
+
+However, PodSpecPatch will not modify the `command` or `args` values
+for these containers (provided by the agent-stack-k8s controller), and will
+instead return an error:
+
+* `copy-agent`
+* `imagecheck-*`
+* `agent`
+* `checkout`
+
+If modifying the commands of these containers is something you want to do, first
+consider other potential solutions:
+
+* To override checkout behaviour, consider writing a `checkout` hook, or
+  disabling the checkout container entirely with `checkout: skip: true`.
+* To run additional containers without `buildkite-agent` in them, consider using
+  a [sidecar](#sidecars).
+
+We are continually investigating ways to make the stack more flexible while
+ensuring core functionality.
+
+> [!CAUTION]
+> Avoid using PodSpecPatch to override `command` or `args` of the containers
+> added by the agent-stack-k8s controller. Such modifications, if not done with
+> extreme care and detailed knowledge about how agent-stack-k8s constructs
+> podspecs, are very likely to break how the agent within the pod works.
+>
+> If the replacement command for the checkout container does not invoke
+> `buildkite-agent bootstrap`:
+>
+>  * the container will not connect to the `agent` container, and the agent will
+>    not finish the job normally because there was not an expected number of
+>    other containers connecting to it
+>  * logs from the container will not be visible in Buildkite
+>  * hooks will not be executed automatically
+>  * plugins will not be checked out or executed automatically
+>
+> and various other functions provided by `buildkite-agent` may not work.
+>
+> If the command for the `agent` container is overridden, and the replacement
+> command does not invoke `buildkite-agent start`, then the job will not be
+> acquired on Buildkite at all.
+
+If you still wish to disable this precaution, and override the raw `command` or
+`args` of these stack-provided containers using PodSpecPatch, you may do so with
+the `allow-pod-spec-patch-unsafe-command-modification` config option.
+
 ### Sidecars
 
 Sidecar containers can be added to your job by specifying them under the top-level `sidecars` key. See [this example](internal/integration/fixtures/sidecars.yaml) for a simple job that runs `nginx` as a sidecar, and accesses the nginx server from the main job.
@@ -576,7 +656,7 @@ There is no guarantee that your sidecars will have started before your job, so u
 
 ### The workspace volume
 
-By default the workspace directory (`/workspace`) is mounted as an `emptyDir` ephemeral volume. Other volumes may be more desirable (e.g. a volume claim backed by an NVMe device).
+By default, the workspace directory (`/workspace`) is mounted as an `emptyDir` ephemeral volume. Other volumes may be more desirable (e.g. a volume claim backed by an NVMe device).
 The default workspace volume can be set as stack configuration, e.g.
 
 ```yaml
@@ -596,9 +676,138 @@ config:
 
 ### Extra volume mounts
 
+#### All containers
+
 In some situations, for example if you want to use [git mirrors](https://buildkite.com/docs/agent/v3#promoted-experiments-git-mirrors) you may want to attach extra volume mounts (in addition to the `/workspace` one) in all the pod containers.
 
 See [this example](internal/integration/fixtures/extra-volume-mounts.yaml), that will declare a new volume in the `podSpec` and mount it in all the containers. The benefit, is to have the same mounted path in all containers, including the `checkout` container.
+
+#### `checkout` containers
+
+In order to attach extra volumes to your `checkout` containers, define `config.default-checkout-params.extraVolumeMounts` in your configuration. Example:
+```yaml
+# values.yaml
+config:
+  default-checkout-params:
+    gitCredentialsSecret:
+      secretName: my-git-credentials
+    extraVolumeMounts:
+      - name: checkout-extra-dir
+        mountPath: /extra-checkout
+  pod-spec-patch:
+    containers:
+      - name: checkout
+        image: "buildkite/agent:latest"
+    volumes:
+      - name: checkout-extra-dir
+        hostPath:
+          path: /my/extra/dir/checkout
+          type: DirectoryOrCreate
+```
+
+Or `checkout.extraVolumeMounts` in the `kubernetes` plugin. Example:
+```yaml
+# pipeline.yml
+...
+  kubernetes:
+    checkout:
+      extraVolumeMounts:
+        - name: checkout-extra-dir
+          mountPath: /extra-checkout
+    podSpecPatch:
+      containers:
+        - name: checkout
+          image: "buildkite/agent:latest"
+      volumes:
+        - name: checkout-extra-dir
+          hostPath:
+            path: /my/extra/dir/checkout
+            type: DirectoryOrCreate
+```
+
+#### `command` containers
+
+In order to attach extra volumes to your `container-#` (`command`) containers, define `config.default-command-params.extraVolumeMounts` in your configuration. Example:
+```yaml
+# values.yaml
+config:
+  default-command-params:
+    extraVolumeMounts:
+      - name: command-extra-dir
+        mountPath: /extra-command
+  pod-spec-patch:
+    containers:
+      - name: container-0
+        image: "buildkite/agent:latest"
+    volumes:
+      - name: command-extra-dir
+        hostPath:
+          path: /my/extra/dir/command
+          type: DirectoryOrCreate
+```
+
+Or `commandParams.extraVolumeMounts` in the `kubernetes` plugin. Example:
+```yaml
+# pipeline.yml
+...
+  kubernetes:
+    commandParams:
+      extraVolumeMounts:
+        - name: command-extra-dir
+          mountPath: /extra-command
+    podSpecPatch:
+      containers:
+        - name: container-0
+          image: "buildkite/agent:latest"
+      volumes:
+        - name: command-extra-dir
+          hostPath:
+            path: /my/extra/dir/command
+            type: DirectoryOrCreate
+```
+
+#### `sidecar` containers
+
+In order to attach extra volumes to your `sidecar` containers, define `config.default-sidecar-params.extraVolumeMounts` in your configuration. Example:
+```yaml
+# values.yaml
+config:
+  default-sidecar-params:
+    extraVolumeMounts:
+      - name: sidecar-extra-dir
+        mountPath: /extra-sidecar
+  pod-spec-patch:
+    containers:
+      - name: checkout
+        image: "buildkite/agent:latest"
+    volumes:
+      - name: sidecar-extra-dir
+        hostPath:
+          path: /my/extra/dir/sidecar
+          type: DirectoryOrCreate
+```
+
+Or `sidecarParams.extraVolumeMounts` in the `kubernetes` plugin. Example:
+```yaml
+# pipeline.yml
+...
+  kubernetes:
+    sidecars:
+      - image: nginx:latest
+    sidecarParams:
+      extraVolumeMounts:
+        - name: sidecar-extra-dir
+          mountPath: /extra-sidecar
+    podSpecPatch:
+      containers:
+        - name: checkout
+          image: "buildkite/agent:latest"
+      volumes:
+        - name: sidecar-extra-dir
+          hostPath:
+            path: /my/extra/dir/sidecar
+            type: DirectoryOrCreate
+```
 
 ### Skipping checkout (v0.13.0 and later)
 
@@ -929,7 +1138,7 @@ There are 3 main aspects we need to make sure that happen for hooks to be availa
               name: buildkite-agent-hooks
             name: agent-hooks
    ```
-   Note: Here defaultMode `493` is setting the Unix permissions to `755` which enables the hooks to be executable. Also another way to make this hooks directory available to containers is to use [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)
+   Note: Here defaultMode `493` is setting the Unix permissions to `755` which enables the hooks to be executable. Another way to make this hooks directory available to containers is to use [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)
    mount but it is not a recommended approach for production environments.
 
 Now when we run this pipeline agent hooks will be available to the container and will run them.
@@ -937,7 +1146,7 @@ Now when we run this pipeline agent hooks will be available to the container and
 Key difference we will notice with hooks execution with `agent-stack-k8s` is that environment hooks will execute twice, but checkout-related hooks such as `pre-checkout`, `checkout` and `post-checkout`
 will only be executed once in the `checkout` container. Similarly the command-related hooks like `pre-command`, `command` and `post-command` hooks will be executed once by the `command` container(s).
 
-If the env `BUILDKITE_HOOKS_PATH` is set at pipeline level instead of container like shown in above pipeline config then hooks will run for both `checkout` container and `command` container(s).
+If the env `BUILDKITE_HOOKS_PATH` is set at pipeline level instead of container like shown in the above pipeline config then hooks will run for both `checkout` container and `command` container(s).
 
 Here is the pipeline config where env `BUILDKITE_HOOKS_PATH` is exposed to all containers in the pipeline:
 
@@ -1020,7 +1229,7 @@ Running commands
 Running global pre-exit hook
 ```
 
-### Validating your pipeline
+## Validating your pipeline
 
 With the unstructured nature of Buildkite plugin specs, it can be frustratingly
 easy to mess up your configuration and then have to debug why your agent pods are failing to start.
@@ -1032,7 +1241,7 @@ This currently can't prevent every sort of error, you might still have a referen
 
 Our JSON schema can also be used with editors that support JSON Schema by configuring your editor to validate against the schema found [here](./cmd/linter/schema.json).
 
-### Long-running jobs
+## Long-running jobs
 
 With the addition of `.spec.job.activeDeadlineSeconds` in version [`v0.24.0`](https://github.com/buildkite/agent-stack-k8s/releases/tag/v0.24.0), Kubernetes jobs will run for a (default) maximum duration of `21600` seconds (6 hours). After this duration has been exceeded, all of the running Pods are terminated and the Job status will be `type: Failed`. This will be reflected in the Buildkite UI as `Exited with status -1 (agent lost)`.
 
@@ -1056,7 +1265,7 @@ steps:
 
 ## Securing the stack
 
-### Prohibiting the kubernetes plugin (v0.13.0 and later)
+### Prohibiting the Kubernetes plugin (v0.13.0 and later)
 
 Suppose you want to enforce the podSpec used for all jobs at the controller
 level, and prevent users from setting or overriding that podSpec (or various
@@ -1105,6 +1314,6 @@ tar archive which you can send via email to support@buildkite.com.
 
 - How to deal with stuck jobs? Timeouts?
 - How to deal with pod failures (not job failures)?
-  - Report failure to buildkite from controller?
-  - Emit pod logs to buildkite? If agent isn't starting correctly
+  - Report failure to Buildkite from controller?
+  - Emit pod logs to Buildkite? If agent isn't starting correctly
   - Retry?
