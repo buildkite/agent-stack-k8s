@@ -172,6 +172,33 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultPaginationDepthLimit,
 		"Sets the maximum depth of pagination when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite GraphQL API and number of Jobs to be scheduled on the Kubernetes Cluster.",
 	)
+
+	// Node scaler configuration
+	cmd.Flags().Bool(
+		"enable-node-scaler",
+		false,
+		"Enable the node scaler to automatically scale in idle nodes",
+	)
+	cmd.Flags().Duration(
+		"node-idle-threshold",
+		10*time.Minute,
+		"How long a node must be idle before it's considered for scale in",
+	)
+	cmd.Flags().Duration(
+		"node-scaler-interval",
+		1*time.Minute,
+		"How often to check for idle nodes to scale in",
+	)
+	cmd.Flags().String(
+		"node-scaler-taint-key",
+		"agent-stack-k8s.io/scaling-in",
+		"The taint key to apply to nodes being scaled in",
+	)
+	cmd.Flags().String(
+		"node-scaler-node-group",
+		"",
+		"Which node group to scale down, applied as a label",
+	)
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.
@@ -296,6 +323,20 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 				return nil, scheduler.ErrNoCommandModification
 			}
 		}
+	}
+
+	// Set defaults for node scaler config if enabled
+	if cfg.EnableNodeScaler {
+		if cfg.NodeIdleThreshold == 0 {
+			cfg.NodeIdleThreshold = 10 * time.Minute
+		}
+		if cfg.NodeScalerInterval == 0 {
+			cfg.NodeScalerInterval = 1 * time.Minute
+		}
+		if cfg.NodeScalerTaintKey == "" {
+			cfg.NodeScalerTaintKey = "agent-stack-k8s.io/scaling-in"
+		}
+		// NodeScalerSelector and NodeScalerNodeGroup are optional
 	}
 
 	return cfg, nil

@@ -44,6 +44,10 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Error parsing config: %s", err)
 	}
 
+	// Disable node scaler for integration tests to prevent background goroutines
+	// from interfering with test execution
+	testCfg.EnableNodeScaler = false
+	
 	cfg = *testCfg
 
 	cleanupPipelines = parseBoolEnvVar("CLEANUP_PIPELINES")

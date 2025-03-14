@@ -30,6 +30,10 @@
 -   [How to set up agent hooks (v0.15.0 and earlier)](#how-to-set-up-agent-hooks-v0150-and-earlier)
 -   [Validating your pipeline](#validating-your-pipeline)
 -   [Long-running jobs](#long-running-jobs)
+-   [Dynamic node scaling](#dynamic-node-scaling)
+    -   [How it works](#how-it-works)
+    -   [Configuration](#configuration)
+    -   [Integration with cluster autoscalers](#integration-with-cluster-autoscalers)
 -   [Securing the stack](#securing-the-stack)
     -   [Prohibiting the kubernetes plugin (v0.13.0 and later)](#prohibiting-the-kubernetes-plugin-v0130-and-later)
 -   [Debugging](#debugging)
@@ -1262,6 +1266,67 @@ steps:
   - kubernetes:
       jobActiveDeadlineSeconds: 43500
 ```
+
+## Dynamic node scaling
+
+The node scaler component allows agent-stack-k8s to automatically identify and scale in idle nodes to optimize cluster resource usage.
+
+### How it works
+
+The node scaler works by:
+
+1. Tracking which Kubernetes nodes run agent jobs
+2. Monitoring node activity and identifying idle nodes
+3. Marking nodes for scale-in after they've been idle for a configurable period
+4. Tainting nodes to prevent new workloads from scheduling on them
+5. Labeling nodes for cleanup by your cluster autoscaler
+
+This approach is especially useful for Buildkite workloads with burst-like behavior, where many agent nodes might be needed temporarily during high load periods but can be safely scaled down when demand decreases.
+
+### Configuration
+
+To enable the node scaler, add the following configuration:
+
+```yaml
+# values.yaml
+config:
+  # Enable the node scaler component
+  enable-node-scaler: true
+  
+  # How long a node must be idle before being considered for scale-in
+  node-idle-threshold: 10m
+  
+  # How often to check for idle nodes
+  node-scaler-interval: 1m
+  
+  # Taint key to apply to nodes marked for scale-in
+  node-scaler-taint-key: "agent-stack-k8s.io/scaling-in"
+  
+  # Optional: Label for node group to scale (used by some cloud providers)
+  node-scaler-node-group: "buildkite-agent-pool"
+  
+  # Optional: Select which nodes to monitor and potentially scale in
+  node-scaler-selector:
+    "buildkite.io/agent-pool": "true"
+    "kubernetes.io/os": "linux"
+```
+
+### Integration with cluster autoscalers
+
+The node scaler component integrates with popular Kubernetes cluster autoscaling solutions like:
+
+1. **Kubernetes Cluster Autoscaler**: Nodes tainted and labeled by the node scaler will be considered for scale-in by the Cluster Autoscaler if all pods can be scheduled elsewhere.
+
+2. **Cloud-specific autoscalers** (AWS, GCP, Azure): These often work with the Kubernetes Cluster Autoscaler and will honor the same taints and labels.
+
+3. **Custom autoscalers**: You can implement custom logic to watch for the `agent-stack-k8s.io/scale-in: "true"` label.
+
+The node scaler implements a safe scale-in process:
+1. First applies a taint to prevent new workloads from scheduling
+2. Then applies a label to mark the node for removal
+3. Provides Prometheus metrics to monitor scale-in events and node utilization
+
+By monitoring the idle time metrics, you can adjust the `node-idle-threshold` to suit your workload patterns.
 
 ## Securing the stack
 

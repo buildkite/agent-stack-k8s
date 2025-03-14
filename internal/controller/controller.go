@@ -16,6 +16,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scaler"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -167,6 +168,25 @@ func Run(
 	)
 	if err := podWatcher.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Fatal("failed to register podWatcher informer", zap.Error(err))
+	}
+
+	// Initialize the node scaler if enabled
+	if cfg.EnableNodeScaler {
+		nodeScaler := scaler.New(logger.Named("scaler"), k8sClient, scaler.Config{
+			IdleThreshold:     cfg.NodeIdleThreshold,
+			CheckInterval:     cfg.NodeScalerInterval,
+			NodeSelector:      map[string]string(cfg.NodeScalerSelector),
+			NodeTaintKey:      cfg.NodeScalerTaintKey,
+			ScaleDownNodeGroup: cfg.NodeScalerNodeGroup,
+		})
+		
+		if err := nodeScaler.RegisterInformer(ctx, informerFactory); err != nil {
+			logger.Fatal("failed to register node scaler informer", zap.Error(err))
+		}
+		
+		logger.Info("node scaler enabled", 
+			zap.Duration("idle_threshold", cfg.NodeIdleThreshold),
+			zap.Duration("check_interval", cfg.NodeScalerInterval))
 	}
 
 	select {

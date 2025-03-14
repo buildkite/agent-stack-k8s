@@ -90,6 +90,14 @@ type Config struct {
 	// replacement command does not execute buildkite-agent in the right way,
 	// then the pod will malfunction.
 	AllowPodSpecPatchUnsafeCmdMod bool `json:"allow-pod-spec-patch-unsafe-command-modification" validate:"omitempty"`
+
+	// Dynamic scaling configuration
+	EnableNodeScaler     bool          `json:"enable-node-scaler"      validate:"omitempty"`
+	NodeIdleThreshold    time.Duration `json:"node-idle-threshold"     validate:"omitempty"`
+	NodeScalerInterval   time.Duration `json:"node-scaler-interval"    validate:"omitempty"`
+	NodeScalerSelector   stringMap     `json:"node-scaler-selector"    validate:"omitempty"`
+	NodeScalerTaintKey   string        `json:"node-scaler-taint-key"   validate:"omitempty"`
+	NodeScalerNodeGroup  string        `json:"node-scaler-node-group"  validate:"omitempty"`
 }
 
 type stringSlice []string
@@ -97,6 +105,15 @@ type stringSlice []string
 func (s stringSlice) MarshalLogArray(enc zapcore.ArrayEncoder) error {
 	for _, x := range s {
 		enc.AppendString(x)
+	}
+	return nil
+}
+
+type stringMap map[string]string
+
+func (m stringMap) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	for k, v := range m {
+		enc.AddString(k, v)
 	}
 	return nil
 }
@@ -148,6 +165,17 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("default-image-pull-policy", string(c.DefaultImagePullPolicy))
 	enc.AddString("default-image-check-pull-policy", string(c.DefaultImageCheckPullPolicy))
 	enc.AddBool("enable-queue-pause", c.EnableQueuePause)
+	
+	// Node scaler config
+	enc.AddBool("enable-node-scaler", c.EnableNodeScaler)
+	enc.AddDuration("node-idle-threshold", c.NodeIdleThreshold)
+	enc.AddDuration("node-scaler-interval", c.NodeScalerInterval)
+	if err := enc.AddReflected("node-scaler-selector", c.NodeScalerSelector); err != nil {
+		return err
+	}
+	enc.AddString("node-scaler-taint-key", c.NodeScalerTaintKey)
+	enc.AddString("node-scaler-node-group", c.NodeScalerNodeGroup)
+	
 	return nil
 }
 
