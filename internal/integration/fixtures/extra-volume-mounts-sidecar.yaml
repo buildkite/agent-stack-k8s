@@ -45,6 +45,9 @@ steps:
               - name: host-volume
                 mountPath: /tmp/extra-volume-mount-sidecar
                 subPath: extra-volume-mount-sidecar
+              - name: host-volume-duplicate
+                mountPath: /tmp/extra-volume-mount-sidecar
+                subPath: extra-volume-mount-sidecar
           extraVolumeMounts:
             - name: host-volume
               mountPath: /tmp/extra-volume-mount

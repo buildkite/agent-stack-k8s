@@ -32,7 +32,7 @@ func (co *CheckoutParams) ApplyTo(podSpec *corev1.PodSpec, ctr *corev1.Container
 	appendCommaSepToEnv(ctr, "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", co.SubmoduleCloneConfig)
 	co.GitMirrors.ApplyTo(podSpec, ctr)
 	ctr.EnvFrom = append(ctr.EnvFrom, co.EnvFrom...)
-	ctr.VolumeMounts = append(ctr.VolumeMounts, co.ExtraVolumeMounts...)
+	ctr.VolumeMounts = appendUniqueVolumeMounts(ctr.VolumeMounts, co.ExtraVolumeMounts)
 }
 
 func (co *CheckoutParams) GitCredsSecret() *corev1.SecretVolumeSource {

@@ -39,3 +39,6 @@ steps:
               - name: host-volume
                 mountPath: /tmp/extra-volume-mount-command
                 subPath: extra-volume-mount-command
+              - name: host-volume-duplicate
+                mountPath: /tmp/extra-volume-mount-command
+                subPath: extra-volume-mount-command
