@@ -151,7 +151,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	return nil
 }
 
-// Helpers for applying configs / params to container env.
+// Helpers for applying configs / params
 
 func appendToEnv(ctr *corev1.Container, name, value string) {
 	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: value})
@@ -186,4 +186,21 @@ func appendCommaSepToEnv(ctr *corev1.Container, name string, values []string) {
 		Name:  name,
 		Value: strings.Join(values, ","),
 	})
+}
+
+// adding multiple mounts with the same path will cause a validation error, so just drop any duplicates
+func appendUniqueVolumeMounts(original, toAppend []corev1.VolumeMount) []corev1.VolumeMount {
+	for _, appendMount := range toAppend {
+		found := false
+		for _, originalMount := range original {
+			if originalMount.MountPath == appendMount.MountPath {
+				found = true
+				break
+			}
+		}
+		if !found {
+			original = append(original, appendMount)
+		}
+	}
+	return original
 }
