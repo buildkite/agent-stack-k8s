@@ -187,3 +187,20 @@ func appendCommaSepToEnv(ctr *corev1.Container, name string, values []string) {
 		Value: strings.Join(values, ","),
 	})
 }
+
+// adding multiple mounts with the same path will cause a validation error, so just drop any duplicates
+func appendUniqueVolumeMounts(original []corev1.VolumeMount, toAppend []corev1.VolumeMount) []corev1.VolumeMount {
+	for _, appendMount := range toAppend {
+		found := false
+		for _, originalMount := range original {
+			if originalMount.MountPath == appendMount.MountPath {
+				found = true
+				break
+			}
+		}
+		if !found {
+			original = append(original, appendMount)
+		}
+	}
+	return original
+}

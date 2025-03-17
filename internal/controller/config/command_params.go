@@ -23,7 +23,7 @@ func (cmd *CommandParams) ApplyTo(ctr *corev1.Container) {
 		return
 	}
 	ctr.EnvFrom = append(ctr.EnvFrom, cmd.EnvFrom...)
-	ctr.VolumeMounts = append(ctr.VolumeMounts, cmd.ExtraVolumeMounts...)
+	ctr.VolumeMounts = appendUniqueVolumeMounts(ctr.VolumeMounts, cmd.ExtraVolumeMounts)
 }
 
 // Command interprets the command and args fields of the container into a
