@@ -8,11 +8,19 @@ steps:
           podSpec:
             containers:
               - image: alpine:latest
+                volumeMounts:
+                  - name: host-volume
+                    mountPath: /tmp/extra-volume-mount-command
+                    subPath: extra-volume-mount-command
                 command: ["sh"]
                 args:
                   - "-c"
                   - "touch /tmp/extra-volume-mount-command/foo-$${BUILDKITE_JOB_ID}.txt"
               - image: alpine:latest
+                volumeMounts:
+                  - name: host-volume-duplicate
+                    mountPath: /tmp/extra-volume-mount-command
+                    subPath: extra-volume-mount-command
                 command:
                   - |-
                     COUNT=0
@@ -31,6 +39,10 @@ steps:
                     rm -f "/tmp/extra-volume-mount-command/foo-$${BUILDKITE_JOB_ID}.txt"
             volumes:
               - name: host-volume
+                hostPath:
+                  path: "/tmp/volumes/{{.queue}}"
+                  type: DirectoryOrCreate
+              - name: host-volume-duplicate
                 hostPath:
                   path: "/tmp/volumes/{{.queue}}"
                   type: DirectoryOrCreate

@@ -7,6 +7,13 @@ steps:
       - kubernetes:
           sidecars:
             - image: alpine:latest
+              volumeMounts:
+                - name: host-volume
+                  mountPath: /tmp/extra-volume-mount
+                  subPath: extra-volume-mount
+                - name: host-volume
+                  mountPath: /tmp/extra-volume-mount-sidecar
+                  subPath: extra-volume-mount-sidecar
               command: ["sh"]
               args:
                 - "-c"
@@ -19,6 +26,13 @@ steps:
           podSpec:
             containers:
               - image: alpine:latest
+                volumeMounts:
+                  - name: host-volume-duplicate
+                    mountPath: /tmp/extra-volume-mount
+                    subPath: extra-volume-mount
+                  - name: host-volume-duplicate
+                    mountPath: /tmp/extra-volume-mount-sidecar
+                    subPath: extra-volume-mount-sidecar
                 command:
                   - |-
                     COUNT=0
@@ -40,6 +54,10 @@ steps:
                 hostPath:
                   path: "/tmp/volumes/{{.queue}}"
                   type: DirectoryOrCreate
+              - name: host-volume-duplicate
+                hostPath:
+                  path: "/tmp/volumes/{{.queue}}"
+                  type: DirectoryOrCreate
           sidecarParams:
             extraVolumeMounts:
               - name: host-volume
@@ -50,5 +68,8 @@ steps:
                 subPath: extra-volume-mount-sidecar
           extraVolumeMounts:
             - name: host-volume
+              mountPath: /tmp/extra-volume-mount
+              subPath: extra-volume-mount
+            - name: host-volume-duplicate
               mountPath: /tmp/extra-volume-mount
               subPath: extra-volume-mount
