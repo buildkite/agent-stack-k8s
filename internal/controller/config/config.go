@@ -188,19 +188,26 @@ func appendCommaSepToEnv(ctr *corev1.Container, name string, values []string) {
 	})
 }
 
-// adding multiple mounts with the same path will cause a validation error, so just drop any duplicates
+// Adding multiple mounts with the same path will cause a validation error, so just drop any duplicates
 func appendUniqueVolumeMounts(original []corev1.VolumeMount, toAppend []corev1.VolumeMount) []corev1.VolumeMount {
-	for _, appendMount := range toAppend {
-		found := false
-		for _, originalMount := range original {
-			if originalMount.MountPath == appendMount.MountPath {
-				found = true
-				break
-			}
-		}
-		if !found {
-			original = append(original, appendMount)
+	seen := make(map[string]bool)
+	var result []corev1.VolumeMount
+
+	// Add mounts from the original list and deduplicate them
+	for _, mount := range original {
+		if !seen[mount.MountPath] {
+			seen[mount.MountPath] = true
+			result = append(result, mount)
 		}
 	}
-	return original
+
+	// Append mounts from toAppend if their mountPath isn’t already seen
+	for _, mount := range toAppend {
+		if !seen[mount.MountPath] {
+			seen[mount.MountPath] = true
+			result = append(result, mount)
+		}
+	}
+
+	return result
 }

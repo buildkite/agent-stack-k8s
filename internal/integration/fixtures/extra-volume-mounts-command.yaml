@@ -8,6 +8,11 @@ steps:
           podSpec:
             containers:
               - image: alpine:latest
+                # Pre-existing volume mount simulating a prior update
+                volumeMounts:
+                  - name: pre-existing-volume
+                    mountPath: /tmp/extra-volume-mount-command
+                    subPath: pre-existing-extra-volume-mount-command
                 command: ["sh"]
                 args:
                   - "-c"
@@ -36,6 +41,8 @@ steps:
                   type: DirectoryOrCreate
           commandParams:
             extraVolumeMounts:
+              # These two mounts have the same mountPath as the pre-existing one
+              # The appendUniqueVolumeMounts function omit them
               - name: host-volume
                 mountPath: /tmp/extra-volume-mount-command
                 subPath: extra-volume-mount-command
