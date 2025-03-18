@@ -5,13 +5,34 @@ steps:
     key: write-file-to-extra-volume-mount-sidecar
     plugins:
       - kubernetes:
+          sidecars:
+            - image: alpine:latest
+              volumeMounts:
+                - name: host-volume
+                  mountPath: /tmp/extra-volume-mount
+                  subPath: extra-volume-mount
+                - name: host-volume
+                  mountPath: /tmp/extra-volume-mount-sidecar
+                  subPath: extra-volume-mount-sidecar
+              command: ["sh"]
+              args:
+                - "-c"
+                - |-
+                  touch /tmp/extra-volume-mount-sidecar/pass-the-parcel
+                  rm -f "/tmp/extra-volume-mount/pass-the-parcel"
+                  mv /tmp/extra-volume-mount-sidecar/pass-the-parcel /tmp/extra-volume-mount/pass-the-parcel
+                  ls -lah /tmp/extra-volume-mount-sidecar
+                  ls -lah /tmp/extra-volume-mount
           podSpec:
             containers:
               - image: alpine:latest
                 volumeMounts:
-                  - name: pre-existing-volume
+                  - name: host-volume-duplicate
                     mountPath: /tmp/extra-volume-mount
-                    subPath: pre-existing-extra-volume-mount
+                    subPath: extra-volume-mount
+                  - name: host-volume-duplicate
+                    mountPath: /tmp/extra-volume-mount-sidecar
+                    subPath: extra-volume-mount-sidecar
                 command:
                   - |-
                     COUNT=0
@@ -33,21 +54,10 @@ steps:
                 hostPath:
                   path: "/tmp/volumes/{{.queue}}"
                   type: DirectoryOrCreate
-          sidecars:
-            - image: alpine:latest
-              volumeMounts:
-                - name: pre-existing-sidecar-volume
-                  mountPath: /tmp/extra-volume-mount-sidecar
-                  subPath: pre-existing-sidecar
-              command: ["sh"]
-              args:
-                - "-c"
-                - |-
-                  touch /tmp/extra-volume-mount-sidecar/pass-the-parcel
-                  rm -f "/tmp/extra-volume-mount/pass-the-parcel"
-                  mv /tmp/extra-volume-mount-sidecar/pass-the-parcel /tmp/extra-volume-mount/pass-the-parcel
-                  ls -lah /tmp/extra-volume-mount-sidecar
-                  ls -lah /tmp/extra-volume-mount
+              - name: host-volume-duplicate
+                hostPath:
+                  path: "/tmp/volumes/{{.queue}}"
+                  type: DirectoryOrCreate
           sidecarParams:
             extraVolumeMounts:
               - name: host-volume
@@ -58,5 +68,8 @@ steps:
                 subPath: extra-volume-mount-sidecar
           extraVolumeMounts:
             - name: host-volume
+              mountPath: /tmp/extra-volume-mount
+              subPath: extra-volume-mount
+            - name: host-volume-duplicate
               mountPath: /tmp/extra-volume-mount
               subPath: extra-volume-mount
