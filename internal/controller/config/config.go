@@ -190,65 +190,40 @@ func appendCommaSepToEnv(ctr *corev1.Container, name string, values []string) {
 
 // adding multiple mounts with the same path will cause a validation error, so just drop any duplicates
 func appendUniqueVolumeMounts(original []corev1.VolumeMount, toAppend []corev1.VolumeMount) []corev1.VolumeMount {
-	result := make([]corev1.VolumeMount, len(original))
-	copy(result, original)
-
-	seenPaths := make(map[string]bool)
-	for _, mount := range result {
-		seenPaths[mount.MountPath] = true
+	seen := make(map[string]bool)
+	result := make([]corev1.VolumeMount, 0, len(original)+len(toAppend))
+	// Add all original mounts while preserving order
+	for _, m := range original {
+		seen[m.MountPath] = true
+		result = append(result, m)
 	}
-
-	for _, mount := range toAppend {
-		if !seenPaths[mount.MountPath] {
-			seenPaths[mount.MountPath] = true
-			result = append(result, mount)
+	// Append mounts from toAppend only if their mountPath wasn’t seen already
+	for _, m := range toAppend {
+		if !seen[m.MountPath] {
+			result = append(result, m)
+			seen[m.MountPath] = true
 		}
 	}
-
 	return result
 }
 
 func PrepareVolumeMounts(podSpec *corev1.PodSpec) {
 	for i := range podSpec.Containers {
-		var filteredMounts []corev1.VolumeMount
-		for _, mount := range podSpec.Containers[i].VolumeMounts {
-			// TODO: Fix validation
-			if mount.Name != "host-volume-duplicate" {
-				filteredMounts = append(filteredMounts, mount)
-			}
-		}
-
-		seen := make(map[string]bool)
-		var result []corev1.VolumeMount
-
-		for _, mount := range filteredMounts {
-			if !seen[mount.MountPath] {
-				seen[mount.MountPath] = true
-				result = append(result, mount)
-			}
-		}
-
-		podSpec.Containers[i].VolumeMounts = result
+		podSpec.Containers[i].VolumeMounts = dedupeVolumeMounts(podSpec.Containers[i].VolumeMounts)
 	}
-
 	for i := range podSpec.InitContainers {
-		var filteredMounts []corev1.VolumeMount
-		for _, mount := range podSpec.InitContainers[i].VolumeMounts {
-			if mount.Name != "host-volume-duplicate" {
-				filteredMounts = append(filteredMounts, mount)
-			}
-		}
-
-		seen := make(map[string]bool)
-		var result []corev1.VolumeMount
-
-		for _, mount := range filteredMounts {
-			if !seen[mount.MountPath] {
-				seen[mount.MountPath] = true
-				result = append(result, mount)
-			}
-		}
-
-		podSpec.InitContainers[i].VolumeMounts = result
+		podSpec.InitContainers[i].VolumeMounts = dedupeVolumeMounts(podSpec.InitContainers[i].VolumeMounts)
 	}
+}
+
+func dedupeVolumeMounts(mounts []corev1.VolumeMount) []corev1.VolumeMount {
+	seen := make(map[string]bool)
+	result := make([]corev1.VolumeMount, 0, len(mounts))
+	for _, m := range mounts {
+		if !seen[m.MountPath] {
+			seen[m.MountPath] = true
+			result = append(result, m)
+		}
+	}
+	return result
 }
