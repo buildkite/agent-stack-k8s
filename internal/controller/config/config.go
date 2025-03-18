@@ -188,19 +188,23 @@ func appendCommaSepToEnv(ctr *corev1.Container, name string, values []string) {
 	})
 }
 
-// adding multiple mounts with the same path will cause a validation error, so just drop any duplicates
-func appendUniqueVolumeMounts(original []corev1.VolumeMount, toAppend []corev1.VolumeMount) []corev1.VolumeMount {
-	for _, appendMount := range toAppend {
-		found := false
-		for _, originalMount := range original {
-			if originalMount.MountPath == appendMount.MountPath {
-				found = true
-				break
+// Iterates over Containers in PodSpec to deduplicate VolumeMounts
+func PrepareVolumeMounts(ctrSpec []corev1.Container) []corev1.Container {
+	for ctr, _ := range ctrSpec {
+		var filteredMounts []corev1.VolumeMount
+
+		for _, mount := range ctrSpec[ctr].VolumeMounts {
+			uniqueMount := true
+			for _, filteredMount := range filteredMounts {
+				if mount.MountPath == filteredMount.MountPath {
+					uniqueMount = false
+				}
+			}
+			if uniqueMount {
+				filteredMounts = append(filteredMounts, mount)
 			}
 		}
-		if !found {
-			original = append(original, appendMount)
-		}
+		ctrSpec[ctr].VolumeMounts = filteredMounts
 	}
-	return original
+	return ctrSpec
 }

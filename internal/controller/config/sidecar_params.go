@@ -14,5 +14,5 @@ func (sc *SidecarParams) ApplyTo(ctr *corev1.Container) {
 		return
 	}
 	ctr.EnvFrom = append(ctr.EnvFrom, sc.EnvFrom...)
-	ctr.VolumeMounts = appendUniqueVolumeMounts(ctr.VolumeMounts, sc.ExtraVolumeMounts)
+	ctr.VolumeMounts = append(ctr.VolumeMounts, sc.ExtraVolumeMounts...)
 }
