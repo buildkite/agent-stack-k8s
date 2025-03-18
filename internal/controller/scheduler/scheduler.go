@@ -861,6 +861,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
 	}
 
+	config.PrepareVolumeMounts(podSpec)
 	kjob.Spec.Template.Spec = *podSpec
 
 	return kjob, nil
