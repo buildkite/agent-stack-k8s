@@ -190,7 +190,7 @@ func appendCommaSepToEnv(ctr *corev1.Container, name string, values []string) {
 
 // Iterates over Containers in PodSpec to deduplicate VolumeMounts
 func PrepareVolumeMounts(ctrSpec []corev1.Container) []corev1.Container {
-	for ctr, _ := range ctrSpec {
+	for ctr := range ctrSpec {
 		var filteredMounts []corev1.VolumeMount
 
 		for _, mount := range ctrSpec[ctr].VolumeMounts {
