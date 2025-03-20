@@ -34,7 +34,14 @@ steps:
                 hostPath:
                   path: "/tmp/volumes/{{.queue}}"
                   type: DirectoryOrCreate
+              - name: host-volume-duplicate
+                hostPath:
+                  path: "/tmp/volumes/{{.queue}}"
+                  type: DirectoryOrCreate
           extraVolumeMounts:
             - name: host-volume
+              mountPath: /tmp/buildkite-git-mirrors
+              subPath: buildkite-git-mirrors
+            - name: host-volume-duplicate
               mountPath: /tmp/buildkite-git-mirrors
               subPath: buildkite-git-mirrors
