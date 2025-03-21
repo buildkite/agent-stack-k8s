@@ -83,6 +83,17 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 	// Block until there's a token in the bucket, or cancel if the job
 	// information becomes too stale.
 	start := time.Now()
+
+	l.logger.Debug("Waiting for token",
+		zap.String("job-uuid", job.Uuid),
+		zap.Int("max-in-flight", l.MaxInFlight),
+		zap.Int("available-tokens", len(l.tokenBucket)),
+		zap.Int("running-jobs", l.MaxInFlight-len(l.tokenBucket)),
+	)
+
+	waitingForTokenGauge.Inc()
+	defer waitingForTokenGauge.Dec()
+
 	select {
 	case <-ctx.Done():
 		return context.Cause(ctx)
@@ -92,8 +103,11 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 		l.logger.Debug("Unable to create job before stale-job-data-timeout",
 			zap.String("job-uuid", job.Uuid),
 			zap.Int("max-in-flight", l.MaxInFlight),
+			zap.Int("available-tokens", len(l.tokenBucket)),
 			zap.Int("running-jobs", l.MaxInFlight-len(l.tokenBucket)),
+			zap.Duration("wait-time", time.Since(start)),
 		)
+		jobStaleWhileWaitingCounter.Inc()
 		return model.ErrStaleJob
 
 	case <-l.tokenBucket:
@@ -198,7 +212,15 @@ func (l *MaxInFlight) tryTakeToken(source string) {
 	select {
 	case <-l.tokenBucket:
 		// Success.
+		l.logger.Debug("Token taken successfully",
+			zap.String("source", source),
+			zap.Int("remaining-tokens", len(l.tokenBucket)),
+		)
 	default:
+		l.logger.Debug("Failed to take token - bucket empty",
+			zap.String("source", source),
+			zap.Int("max-in-flight", l.MaxInFlight),
+		)
 		tokenUnderflowCounter.WithLabelValues(source).Inc()
 	}
 }
@@ -208,7 +230,15 @@ func (l *MaxInFlight) tryReturnToken(source string) {
 	select {
 	case l.tokenBucket <- struct{}{}:
 		// Success.
+		l.logger.Debug("Token returned successfully",
+			zap.String("source", source),
+			zap.Int("available-tokens", len(l.tokenBucket)),
+		)
 	default:
+		l.logger.Warn("Failed to return token - bucket full",
+			zap.String("source", source),
+			zap.Int("max-in-flight", l.MaxInFlight),
+		)
 		tokenOverflowCounter.WithLabelValues(source).Inc()
 	}
 }
