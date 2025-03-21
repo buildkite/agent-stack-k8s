@@ -73,6 +73,18 @@ func (l *MaxInFlight) RegisterInformer(ctx context.Context, factory informers.Sh
 		return fmt.Errorf("failed to sync informer cache")
 	}
 
+	informerStore := jobInformer.GetStore()
+	informerCacheKeys := informerStore.ListKeys()
+	l.logger.Debug("informer cache sync complete, dump informer cache keys...",
+		zap.Int("cache-keys-found", len(informerCacheKeys)),
+	)
+
+	for _, cacheKey := range informerCacheKeys {
+		l.logger.Debug("informer cache key found",
+			zap.String("informer-cache-key", fmt.Sprint(cacheKey)),
+		)
+	}
+
 	return nil
 }
 
