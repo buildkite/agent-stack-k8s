@@ -149,6 +149,9 @@ func TestReadAndParseConfig(t *testing.T) {
 	// container. As this is required, we set it here to avoid the validation error.
 	t.Setenv("BUILDKITE_TOKEN", "my-graphql-enabled-token")
 
+	// Make sure we use the org from the config file, not the environment
+	t.Setenv("ORG", "")
+
 	// These need to be unset to as it is set in CI which pollutes the test environment
 	t.Setenv("IMAGE", "")
 	t.Setenv("NAMESPACE", "")

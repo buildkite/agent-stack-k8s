@@ -630,7 +630,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// policies for the same image, the most preferred policy is used for the
 	// image check.
 	// Always is most preferred, Never is less preferred.
-	var pullPolicyPreference = map[corev1.PullPolicy]int{
+	pullPolicyPreference := map[corev1.PullPolicy]int{
 		corev1.PullNever:        1, // least preferred
 		corev1.PullIfNotPresent: 2,
 		corev1.PullAlways:       3, // most preferred
@@ -873,7 +873,6 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 var ErrNoCommandModification = errors.New("modifying container commands or args via podSpecPatch is not supported")
 
 func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *config.CommandParams, k8sPlugin *KubernetesPlugin, allowUnsafeCmdMod bool) (*corev1.PodSpec, error) {
-
 	// Index containers by name - these should be unique within each podSpec.
 	originalInitContainers := make(map[string]*corev1.Container)
 	for i := range original.InitContainers {
@@ -1022,7 +1021,7 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 		fmt.Fprintf(&containerArgs, "chown -R %d:%d /workspace\n", podUser, podGroup)
 
 	case podUser != 0 && podGroup == 0:
-		//The init container needs to be run as root to create the user and give it ownership to the workspace directory
+		// The init container needs to be run as root to create the user and give it ownership to the workspace directory
 		securityContext = &corev1.SecurityContext{
 			RunAsUser:    ptr.To[int64](0),
 			RunAsGroup:   ptr.To[int64](0),

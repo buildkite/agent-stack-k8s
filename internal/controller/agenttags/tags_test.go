@@ -71,7 +71,6 @@ func TestMapFromTags(t *testing.T) {
 			assert.Equal(t, test.expectedMap, m)
 		})
 	}
-
 }
 
 func TestLabelsFromTags(t *testing.T) {
