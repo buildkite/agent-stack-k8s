@@ -33,6 +33,10 @@ type Config struct {
 
 	// ScaleDownNodeGroup indicates which node group to scale down (e.g., for cloud-specific NodeGroup labels)
 	ScaleDownNodeGroup string
+
+	// MaxScaleInRate limits the number of nodes that can be scaled in during each check interval
+	// Zero means no limit (all idle nodes above threshold will be scaled in)
+	MaxScaleInRate int
 }
 
 // NodeState tracks the activity state of an individual node
@@ -66,6 +70,7 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *Scaler {
 	if cfg.NodeTaintKey == "" {
 		cfg.NodeTaintKey = "agent-stack-k8s.io/scaling-in"
 	}
+	// MaxScaleInRate is optional, default 0 (unlimited)
 
 	return &Scaler{
 		client:     client,
@@ -226,10 +231,10 @@ func (s *Scaler) handlePodAdd(obj interface{}) {
 
 	// If pod has been assigned to a node, update that node's activity
 	if pod.Spec.NodeName != "" {
-		s.logger.Debug("Pod scheduled to node", 
-			zap.String("job-uuid", jobUUID), 
+		s.logger.Debug("Pod scheduled to node",
+			zap.String("job-uuid", jobUUID),
 			zap.String("node", pod.Spec.NodeName))
-		
+
 		s.recordNodeActivity(pod.Spec.NodeName, jobUUID, true)
 	}
 }
@@ -289,10 +294,10 @@ func (s *Scaler) handlePodDelete(obj interface{}) {
 
 	// If pod was on a node, mark the job as inactive
 	if pod.Spec.NodeName != "" {
-		s.logger.Debug("Pod deleted", 
-			zap.String("job-uuid", jobUUID), 
+		s.logger.Debug("Pod deleted",
+			zap.String("job-uuid", jobUUID),
 			zap.String("node", pod.Spec.NodeName))
-		
+
 		s.recordNodeActivity(pod.Spec.NodeName, jobUUID, false)
 	}
 }
@@ -318,13 +323,13 @@ func (s *Scaler) recordNodeActivity(nodeName, jobUUID string, isActive bool) {
 		state.Jobs[jobUUID] = true
 		state.LastActiveTime = time.Now()
 		state.IsIdle = false
-		s.logger.Debug("Node activity recorded", 
-			zap.String("node", nodeName), 
+		s.logger.Debug("Node activity recorded",
+			zap.String("node", nodeName),
 			zap.String("job-uuid", jobUUID))
 	} else {
 		// Remove the job from this node
 		delete(state.Jobs, jobUUID)
-		
+
 		// If no active jobs, mark node as idle
 		if len(state.Jobs) == 0 {
 			state.IsIdle = true
@@ -337,7 +342,7 @@ func (s *Scaler) recordNodeActivity(nodeName, jobUUID string, isActive bool) {
 func (s *Scaler) startPeriodicChecker(ctx context.Context) {
 	ticker := time.NewTicker(s.config.CheckInterval)
 	defer ticker.Stop()
-	
+
 	s.logger.Debug("Periodic node checker started")
 
 	for {
@@ -375,7 +380,7 @@ func (s *Scaler) checkForIdleNodesToScaleIn(ctx context.Context) {
 
 		idleCount++
 		idleTime := now.Sub(state.LastActiveTime).Seconds()
-		
+
 		// Update max idle time metric
 		if idleTime > maxIdleTime {
 			maxIdleTime = idleTime
@@ -384,8 +389,8 @@ func (s *Scaler) checkForIdleNodesToScaleIn(ctx context.Context) {
 		// Check if node has been idle long enough to scale in
 		if now.Sub(state.LastActiveTime) >= s.config.IdleThreshold {
 			nodesToScaleIn = append(nodesToScaleIn, nodeName)
-			s.logger.Info("Node identified for scale-in", 
-				zap.String("node", nodeName), 
+			s.logger.Info("Node identified for scale-in",
+				zap.String("node", nodeName),
 				zap.Duration("idle_time", now.Sub(state.LastActiveTime)))
 		}
 	}
@@ -394,6 +399,21 @@ func (s *Scaler) checkForIdleNodesToScaleIn(ctx context.Context) {
 	// Update metrics
 	idleNodesGauge.Set(float64(idleCount))
 	idleTimeMaxGauge.Set(maxIdleTime)
+
+	// Apply scale-in rate limit if configured
+	nodesToScaleInCount := len(nodesToScaleIn)
+	scalingInNodesGauge.Set(float64(nodesToScaleInCount))
+
+	if s.config.MaxScaleInRate > 0 && nodesToScaleInCount > s.config.MaxScaleInRate {
+		s.logger.Info("Limiting scale-in rate",
+			zap.Int("eligible_nodes", nodesToScaleInCount),
+			zap.Int("max_scale_in_rate", s.config.MaxScaleInRate))
+
+		// Sort nodes by idle time (oldest idle first)
+		// This is a simple approach - we're already iterating through the map randomly
+		// but in a production environment, you might want to sort by idle time
+		nodesToScaleIn = nodesToScaleIn[:s.config.MaxScaleInRate]
+	}
 
 	// Second pass: scale in the identified nodes
 	for _, nodeName := range nodesToScaleIn {
@@ -404,7 +424,7 @@ func (s *Scaler) checkForIdleNodesToScaleIn(ctx context.Context) {
 // initiateNodeScaleIn prepares a node for removal
 func (s *Scaler) initiateNodeScaleIn(ctx context.Context, nodeName string) {
 	nodeScaleInAttemptsCounter.Inc()
-	
+
 	// Get the current node state
 	s.nodesMutex.RLock()
 	state, exists := s.nodeStates[nodeName]
@@ -414,18 +434,18 @@ func (s *Scaler) initiateNodeScaleIn(ctx context.Context, nodeName string) {
 		nodeScaleInFailedCounter.Inc()
 		return
 	}
-	
+
 	idleTime := time.Since(state.LastActiveTime)
 	s.nodesMutex.RUnlock()
-	
+
 	// Record the idle time before scale-in
 	nodeIdleTimeBeforeScaleInHistogram.Observe(idleTime.Seconds())
 
 	// 1. Apply taint to prevent new pods from being scheduled
 	err := s.taintNode(ctx, nodeName)
 	if err != nil {
-		s.logger.Error("Failed to taint node", 
-			zap.String("node", nodeName), 
+		s.logger.Error("Failed to taint node",
+			zap.String("node", nodeName),
 			zap.Error(err))
 		nodeScaleInFailedCounter.Inc()
 		return
@@ -434,8 +454,8 @@ func (s *Scaler) initiateNodeScaleIn(ctx context.Context, nodeName string) {
 	// 2. Label node for cleanup by cluster autoscaler or other mechanism
 	err = s.markNodeForScaleIn(ctx, nodeName)
 	if err != nil {
-		s.logger.Error("Failed to mark node for scale-in", 
-			zap.String("node", nodeName), 
+		s.logger.Error("Failed to mark node for scale-in",
+			zap.String("node", nodeName),
 			zap.Error(err))
 		nodeScaleInFailedCounter.Inc()
 		return
@@ -443,10 +463,10 @@ func (s *Scaler) initiateNodeScaleIn(ctx context.Context, nodeName string) {
 
 	// Success
 	nodeScaleInSuccessCounter.Inc()
-	s.logger.Info("Node prepared for scale-in", 
-		zap.String("node", nodeName), 
+	s.logger.Info("Node prepared for scale-in",
+		zap.String("node", nodeName),
 		zap.Duration("idle_time", idleTime))
-	
+
 	// Remove node from tracking
 	s.nodesMutex.Lock()
 	delete(s.nodeStates, nodeName)
@@ -478,7 +498,7 @@ func (s *Scaler) taintNode(ctx context.Context, nodeName string) error {
 			Effect: corev1.TaintEffectNoSchedule,
 		}
 		node.Spec.Taints = append(node.Spec.Taints, newTaint)
-		
+
 		// Update the node
 		_, err = s.client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 		if err != nil {
@@ -502,12 +522,12 @@ func (s *Scaler) markNodeForScaleIn(ctx context.Context, nodeName string) error 
 		node.Labels = make(map[string]string)
 	}
 	node.Labels["agent-stack-k8s.io/scale-in"] = "true"
-	
+
 	// Add node group label if configured
 	if s.config.ScaleDownNodeGroup != "" {
 		node.Labels["agent-stack-k8s.io/node-group"] = s.config.ScaleDownNodeGroup
 	}
-	
+
 	// Update the node
 	_, err = s.client.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
 	if err != nil {

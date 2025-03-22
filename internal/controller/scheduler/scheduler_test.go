@@ -1101,10 +1101,8 @@ func TestImagePullPolicies(t *testing.T) {
 			if diff := cmp.Diff(gotContainers, test.wantContainers); diff != "" {
 				t.Errorf("other containers diff (-got +want):\n%s", diff)
 			}
-
 		})
 	}
-
 }
 
 func findContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {

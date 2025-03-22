@@ -16,7 +16,7 @@ import (
 func TestRecordNodeActivity(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	client := fake.NewSimpleClientset()
-	
+
 	scaler := New(logger, client, Config{
 		IdleThreshold: 5 * time.Minute,
 		CheckInterval: 1 * time.Minute,
@@ -24,22 +24,22 @@ func TestRecordNodeActivity(t *testing.T) {
 
 	// Test marking a node as active
 	scaler.recordNodeActivity("node1", "job-123", true)
-	
+
 	scaler.nodesMutex.RLock()
 	state, exists := scaler.nodeStates["node1"]
 	scaler.nodesMutex.RUnlock()
-	
+
 	require.True(t, exists, "Node state should exist")
 	assert.False(t, state.IsIdle, "Node should not be idle")
 	assert.True(t, state.Jobs["job-123"], "Job should be marked active")
 
 	// Test marking a job as inactive
 	scaler.recordNodeActivity("node1", "job-123", false)
-	
+
 	scaler.nodesMutex.RLock()
 	state = scaler.nodeStates["node1"]
 	scaler.nodesMutex.RUnlock()
-	
+
 	require.NotNil(t, state, "Node state should exist")
 	assert.True(t, state.IsIdle, "Node should be idle")
 	assert.Empty(t, state.Jobs, "Jobs should be empty")
@@ -47,32 +47,32 @@ func TestRecordNodeActivity(t *testing.T) {
 	// Test multiple jobs on one node
 	scaler.recordNodeActivity("node1", "job-123", true)
 	scaler.recordNodeActivity("node1", "job-456", true)
-	
+
 	scaler.nodesMutex.RLock()
 	state = scaler.nodeStates["node1"]
 	scaler.nodesMutex.RUnlock()
-	
+
 	require.NotNil(t, state, "Node state should exist")
 	assert.False(t, state.IsIdle, "Node should not be idle")
 	assert.Len(t, state.Jobs, 2, "Should have 2 active jobs")
 
 	// Make sure removing one job doesn't make the node idle
 	scaler.recordNodeActivity("node1", "job-123", false)
-	
+
 	scaler.nodesMutex.RLock()
 	state = scaler.nodeStates["node1"]
 	scaler.nodesMutex.RUnlock()
-	
+
 	assert.False(t, state.IsIdle, "Node should not be idle")
 	assert.Len(t, state.Jobs, 1, "Should have 1 active job")
 
 	// Removing last job should mark node as idle
 	scaler.recordNodeActivity("node1", "job-456", false)
-	
+
 	scaler.nodesMutex.RLock()
 	state = scaler.nodeStates["node1"]
 	scaler.nodesMutex.RUnlock()
-	
+
 	assert.True(t, state.IsIdle, "Node should be idle")
 	assert.Empty(t, state.Jobs, "Jobs should be empty")
 }
@@ -80,7 +80,7 @@ func TestRecordNodeActivity(t *testing.T) {
 func TestHandlePodEvents(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	client := fake.NewSimpleClientset()
-	
+
 	scaler := New(logger, client, Config{
 		IdleThreshold: 5 * time.Minute,
 		CheckInterval: 1 * time.Minute,
@@ -113,11 +113,11 @@ func TestHandlePodEvents(t *testing.T) {
 
 	// Test pod add
 	scaler.handlePodAdd(pod)
-	
+
 	scaler.nodesMutex.RLock()
 	state, exists := scaler.nodeStates["node1"]
 	scaler.nodesMutex.RUnlock()
-	
+
 	require.True(t, exists, "Node state should exist")
 	assert.False(t, state.IsIdle, "Node should not be idle")
 	assert.True(t, state.Jobs["job-123"], "Job should be marked active")
@@ -125,13 +125,13 @@ func TestHandlePodEvents(t *testing.T) {
 	// Test pod update to completed
 	updatedPod := pod.DeepCopy()
 	updatedPod.Status.Phase = corev1.PodSucceeded
-	
+
 	scaler.handlePodUpdate(updatedPod)
-	
+
 	scaler.nodesMutex.RLock()
 	state = scaler.nodeStates["node1"]
 	scaler.nodesMutex.RUnlock()
-	
+
 	require.NotNil(t, state, "Node state should exist")
 	assert.True(t, state.IsIdle, "Node should be idle")
 	assert.Empty(t, state.Jobs, "Jobs should be empty")
@@ -139,11 +139,11 @@ func TestHandlePodEvents(t *testing.T) {
 	// Test pod delete
 	scaler.recordNodeActivity("node1", "job-123", true) // Reset to active
 	scaler.handlePodDelete(pod)
-	
+
 	scaler.nodesMutex.RLock()
 	state = scaler.nodeStates["node1"]
 	scaler.nodesMutex.RUnlock()
-	
+
 	require.NotNil(t, state, "Node state should exist")
 	assert.True(t, state.IsIdle, "Node should be idle")
 	assert.Empty(t, state.Jobs, "Jobs should be empty")

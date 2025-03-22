@@ -17,6 +17,11 @@ var (
 		Help: "The maximum idle time for any node in seconds",
 	})
 
+	scalingInNodesGauge = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "agent_stack_k8s_scaling_in_eligible_nodes_count",
+		Help: "The number of nodes eligible for scaling in during the current check",
+	})
+
 	// Counters
 	nodeScaleInAttemptsCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "agent_stack_k8s_node_scale_in_attempts_total",

@@ -92,12 +92,13 @@ type Config struct {
 	AllowPodSpecPatchUnsafeCmdMod bool `json:"allow-pod-spec-patch-unsafe-command-modification" validate:"omitempty"`
 
 	// Dynamic scaling configuration
-	EnableNodeScaler     bool          `json:"enable-node-scaler"      validate:"omitempty"`
-	NodeIdleThreshold    time.Duration `json:"node-idle-threshold"     validate:"omitempty"`
-	NodeScalerInterval   time.Duration `json:"node-scaler-interval"    validate:"omitempty"`
-	NodeScalerSelector   stringMap     `json:"node-scaler-selector"    validate:"omitempty"`
-	NodeScalerTaintKey   string        `json:"node-scaler-taint-key"   validate:"omitempty"`
-	NodeScalerNodeGroup  string        `json:"node-scaler-node-group"  validate:"omitempty"`
+	EnableNodeScaler    bool          `json:"enable-node-scaler"      validate:"omitempty"`
+	NodeIdleThreshold   time.Duration `json:"node-idle-threshold"     validate:"omitempty"`
+	NodeScalerInterval  time.Duration `json:"node-scaler-interval"    validate:"omitempty"`
+	NodeScalerSelector  stringMap     `json:"node-scaler-selector"    validate:"omitempty"`
+	NodeScalerTaintKey  string        `json:"node-scaler-taint-key"   validate:"omitempty"`
+	NodeScalerNodeGroup string        `json:"node-scaler-node-group"  validate:"omitempty"`
+	NodeScalerMaxRate   int           `json:"node-scaler-max-rate"    validate:"omitempty,min=0"`
 }
 
 type stringSlice []string
@@ -165,7 +166,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("default-image-pull-policy", string(c.DefaultImagePullPolicy))
 	enc.AddString("default-image-check-pull-policy", string(c.DefaultImageCheckPullPolicy))
 	enc.AddBool("enable-queue-pause", c.EnableQueuePause)
-	
+
 	// Node scaler config
 	enc.AddBool("enable-node-scaler", c.EnableNodeScaler)
 	enc.AddDuration("node-idle-threshold", c.NodeIdleThreshold)
@@ -175,7 +176,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	}
 	enc.AddString("node-scaler-taint-key", c.NodeScalerTaintKey)
 	enc.AddString("node-scaler-node-group", c.NodeScalerNodeGroup)
-	
+
 	return nil
 }
 
