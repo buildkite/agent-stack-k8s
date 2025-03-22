@@ -35,6 +35,20 @@ var (
 		NativeHistogramZeroThreshold: 0.01,
 	})
 
+	waitingForTokenGauge = promauto.NewGauge(prometheus.GaugeOpts{
+		Namespace: promNamespace,
+		Subsystem: promSubsystem,
+		Name:      "waiting_for_token",
+		Help:      "Number of jobs currently waiting for a token",
+	})
+
+	jobStaleWhileWaitingCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: promSubsystem,
+		Name:      "jobs_stale_while_waiting_total",
+		Help:      "Count of jobs that became stale while waiting for a token",
+	})
+
 	jobHandlerCallsCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,
 		Subsystem: promSubsystem,

@@ -109,6 +109,10 @@ func (r clusteredJobResp) CommandJobs() []*api.JobJobTypeCommand {
 // getScheduledCommandJobs calls either the clustered or unclustered GraphQL API
 // methods, depending on if a cluster uuid was provided in the config
 func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jobResp jobResp, err error) {
+	m.logger.Debug("getting scheduled jobs via GQL query...",
+		zap.Duration("poll-interval", m.cfg.PollInterval),
+	)
+
 	jobQueryCounter.Inc()
 	start := time.Now()
 	defer func() {
@@ -274,6 +278,9 @@ func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan er
 			}
 
 			jobs := resp.CommandJobs()
+			m.logger.Debug("jobs in GQL query response(s)...",
+				zap.Int("jobs-processed", len(jobs)),
+			)
 			if len(jobs) == 0 {
 				continue
 			}
