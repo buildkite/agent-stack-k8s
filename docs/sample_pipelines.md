@@ -15,7 +15,7 @@ TOC:
     -   [Default envFrom](#default-envfrom)
 
 
-For simple commands, target the queue you configured agent-stack-k8s with. For example:
+For simple commands, target the queue you configured `agent-stack-k8s` with. For example:
 
 ```yaml
 steps:
