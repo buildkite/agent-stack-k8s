@@ -1,15 +1,15 @@
 # Overview 
 
-The controller uses the [Buildkite GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled work that uses the `kubernetes` plugin.
+`agent-stack-k8s` is a Kubernetes [controller](https://kubernetes.io/docs/concepts/architecture/controller/) that uses the Buildkite [GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled jobs assigned to the controller's queue.
 
-When a job is available, the controller will create a pod to acquire and run the job. It converts the [PodSpec](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.25/#podspec-v1-core) in the `kubernetes` plugin into a pod by:
+When a matching job is returned from the GraphQL API, the controller will create a Kubernetes Job containing a single Pod with containers that will acquire and run the Buildite job. The [PodSpec](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec) contained in the Job defines a [PodSpec](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec) containing all the containers required to acquire and run a Buildkite job:
 
 - adding an init container to:
-  - copy the agent binary onto the workspace volume
-  - check that other container images pull successfully before starting
-- adding a container to run the Buildkite agent
-- adding a container to clone the source repository
-- modifying the user-specified containers to:
+  - copy the agent binary onto the workspace volume (`copy-agent`)
+  - check that other container images pull successfully before starting (`imagecheck`)
+- adding a container to run the Buildkite agent (`agent`)
+- adding a container to clone the source repository (`checkout`)
+- modifying the (`container-N`) user-specified containers to:
   - overwrite the entrypoint to the agent binary
   - run with the working directory set to the workspace
 
