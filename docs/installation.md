@@ -21,6 +21,7 @@ You'll need [Helm](https://github.com/helm/helm) version `v3.8.0` or newer since
 ### Inline Configuration
 
 The simplest way to get up and running is by deploying our [Helm](https://helm.sh) chart with an inline configuration:
+
 ```bash
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --namespace buildkite \
@@ -33,7 +34,9 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
 ```
 
 ### Configuration Values YAML File
+
 Create a YAML file with the following values:
+
 ```yaml
 # values.yml
 agentToken: <Buildkite Cluster Agent Token>
@@ -44,7 +47,9 @@ config:
   tags:
     - queue=kubernetes
 ```
+
 Now deploy the Helm chart, referencing the configuration values YAML file:
+
 ```bash
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --namespace buildkite \
@@ -67,47 +72,69 @@ To find the UUID of a Cluster:
 - Click on "Settings"
 - The UUID of the Cluster UUID will shown under "GraphQL API Integration"
 
+### Store Buildkite Tokens in Kubernetes Secret
 
+If you would prefer to store your Agent Token and GraphQL API Access Token as a Kubernetes Secret to be referenced by the `agent-stack-k8s` controller:
 
+#### Convert both values to base64:
 
-
-
-
-### Controller Configuration
-
-Detailed configuration options can be found under [Controller Configuration](controller_configuration.md)
-
-### Externalize Secrets
-
-You can also have an external provider create a secret for you in the namespace before deploying the chart with Helm. If the secret is pre-provisioned, replace the `agentToken` and `graphqlToken` arguments with:
-
-```bash
---set agentStackSecret=<secret-name>
+```
+echo -n <Buildkite Cluster Agent Token> | base64
+echo -n <Buildkite GraphQL-enabled API Access Token> | base64
 ```
 
-The format of the required secret can be found in [this file](./charts/agent-stack-k8s/templates/secrets.yaml.tpl).
+#### Run the following command to create a Kubernetes Secret containing the base64 encoded Tokens:
 
+```
+kubectl create secret generic <secret-name> \
+  --from-literal=BUILDKITE_AGENT_TOKEN=<base64 encoded Buildkite Cluster Agent Token> \
+  --from-literal=BUILDKITE_TOKEN=<base64 encoded Buildkite GraphQL-enabled API Access Token>
+```
 
+#### Configure Controller to Use Kubernetes Secret
+This Kubernetes Secret name can be provided to the controller with the `agentStackSecret` option, replacing both `agentToken` and `graphqlToken` options. You can then reference your Kubernetes Secret by name during Helm chart deployments with inline configuration:
 
+```bash
+helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
+    --namespace buildkite \
+    --create-namespace \
+    --set agentStackSecret=<Kubernetes Secret name> \
+    --set config.org=<Buildkite Org Slug> \
+    --set config.cluster-uuid=<Buildkite Cluster UUID> \
+    --tags queue=kubernetes
+```
 
+Or with your configuration values YAML file:
 
+```yaml
+# values.yml
+agentStackSecret: <Kubernetes Secret name>
+config:
+  org: <Buildkite Org Slug>
+  cluster-uuid: <Buildkite Cluster UUID>
+  tags:
+    - queue=kubernetes
+```
 
-
-### Other Installation Methods
+## Other Installation Methods
 
 You can also use this chart as a dependency:
 
 ```yaml
 dependencies:
 - name: agent-stack-k8s
-  version: "0.5.0"
+  version: "0.26.3"
   repository: "oci://ghcr.io/buildkite/helm"
 ```
 
-or use it as a template:
+You can also use this chart as a Helm [template](https://helm.sh/docs/chart_best_practices/templates/):
 
 ```
-helm template oci://ghcr.io/buildkite/helm/agent-stack-k8s -f my-values.yaml
+helm template oci://ghcr.io/buildkite/helm/agent-stack-k8s --values values.yaml
 ```
 
-Available versions and their digests can be found on [the releases page](https://github.com/buildkite/agent-stack-k8s/releases).
+Latest and previous `agent-stack-k8s` versions (with digests) can be found under [Releases](https://github.com/buildkite/agent-stack-k8s/releases).
+
+## Controller Configuration
+
+Detailed configuration options can be found under [Controller Configuration](controller_configuration.md)

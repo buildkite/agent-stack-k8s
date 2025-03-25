@@ -3,7 +3,7 @@
 Welcome to the the Buildkite Agent Stack for Kubernetes Documentation.
 Choose the topic to start reading:
 
--   [How does it work (overview and architecture)](overview_and_architecture.md)
+-   [Overview and Architecture](overview_and_architecture.md)
 -   [Installation](installation.md)
 -   [Sample Buildkite Pipelines](sample_pipelines.md)
 -   [Setting agent configuration (v0.16.0 and later)](agent_configuration.md)
