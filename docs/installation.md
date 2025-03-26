@@ -138,3 +138,7 @@ Latest and previous `agent-stack-k8s` versions (with digests) can be found under
 ## Controller Configuration
 
 Detailed configuration options can be found under [Controller Configuration](controller_configuration.md)
+
+## Running Builds
+
+After the `agent-stack-k8s` Kubernetes controller has been configured and deployed, you are ready to [run Buildkite jobs](running_builds.md).

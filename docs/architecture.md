@@ -1,6 +1,4 @@
-# Overview 
-
-`agent-stack-k8s` is a Kubernetes [controller](https://kubernetes.io/docs/concepts/architecture/controller/) that uses the Buildkite [GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled jobs assigned to the controller's queue.
+# Architecture
 
 When a matching job is returned from the GraphQL API, the controller will create a Kubernetes Job containing a single Pod with containers that will acquire and run the Buildite job. The [PodSpec](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec) contained in the Job defines a [PodSpec](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec) containing all the containers required to acquire and run a Buildkite job:
 
@@ -38,3 +36,5 @@ sequenceDiagram
     kubernetes->>bc: pod completion event
     bc->>kubernetes: cleanup finished pods
 ```
+
+

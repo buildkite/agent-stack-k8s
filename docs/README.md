@@ -3,9 +3,9 @@
 Welcome to the the Buildkite Agent Stack for Kubernetes Documentation.
 Choose the topic to start reading:
 
--   [Overview and Architecture](overview_and_architecture.md)
+-   [Architecture](architecture.md)
 -   [Installation](installation.md)
--   [Sample Buildkite Pipelines](sample_pipelines.md)
+-   [Running Buildkite Builds](running_builds.md)
 -   [Setting agent configuration (v0.16.0 and later)](agent_configuration.md)
 -   [How to set up pipeline signing (v0.16.0 and later)](pipeline_signing.md)
 -   [How to set up agent hooks and plugins (v0.16.0 and later)](hooks_and_plugins_new.md)
