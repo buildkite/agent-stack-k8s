@@ -39,10 +39,17 @@ func TestMain(m *testing.M) {
 		log.Fatalf("Error reading config: %s", err)
 	}
 
+	os.Setenv("BUILDKITE_TOKEN", "not-a-real-token")
+	os.Setenv("ORG", "buildkite")
+
 	testCfg, err := controller.ParseAndValidateConfig(v)
 	if err != nil {
 		log.Fatalf("Error parsing config: %s", err)
 	}
+
+	// Disable node scaler for integration tests to prevent background goroutines
+	// from interfering with test execution
+	testCfg.EnableNodeScaler = false
 
 	cfg = *testCfg
 

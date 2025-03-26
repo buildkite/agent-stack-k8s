@@ -172,6 +172,38 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultPaginationDepthLimit,
 		"Sets the maximum depth of pagination when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite GraphQL API and number of Jobs to be scheduled on the Kubernetes Cluster.",
 	)
+
+	// Node scaler configuration
+	cmd.Flags().Bool(
+		"enable-node-scaler",
+		false,
+		"Enable the node scaler to automatically scale in idle nodes",
+	)
+	cmd.Flags().Duration(
+		"node-idle-threshold",
+		10*time.Minute,
+		"How long a node must be idle before it's considered for scale in",
+	)
+	cmd.Flags().Duration(
+		"node-scaler-interval",
+		1*time.Minute,
+		"How often to check for idle nodes to scale in",
+	)
+	cmd.Flags().String(
+		"node-scaler-taint-key",
+		"agent-stack-k8s.io/scaling-in",
+		"The taint key to apply to nodes being scaled in",
+	)
+	cmd.Flags().String(
+		"node-scaler-node-group",
+		"",
+		"Which node group to scale down, applied as a label",
+	)
+	cmd.Flags().Int(
+		"node-scaler-max-rate",
+		0,
+		"Maximum number of nodes to scale in during each check interval (0 = unlimited)",
+	)
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.
@@ -225,8 +257,10 @@ func ReadConfigFromFileArgsAndEnv(cmd *cobra.Command, args []string) (*viper.Vip
 	return v, nil
 }
 
-var resourceQuantityType = reflect.TypeOf(resource.Quantity{})
-var intOrStringType = reflect.TypeOf(intstr.IntOrString{})
+var (
+	resourceQuantityType = reflect.TypeOf(resource.Quantity{})
+	intOrStringType      = reflect.TypeOf(intstr.IntOrString{})
+)
 
 // This mapstructure.DecodeHookFunc is needed to decode kubernetes objects (as
 // used in podSpecs) properly. Without this, viper (which uses mapstructure) doesn't
@@ -259,7 +293,6 @@ func decodeKubeSpecials(f, t reflect.Type, data any) (any, error) {
 	default:
 		return data, nil
 	}
-
 }
 
 // This viper.DecoderConfigOption is needed to make mapstructure (used by viper)
@@ -296,6 +329,21 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 				return nil, scheduler.ErrNoCommandModification
 			}
 		}
+	}
+
+	// Set defaults for node scaler config if enabled
+	if cfg.EnableNodeScaler {
+		if cfg.NodeIdleThreshold == 0 {
+			cfg.NodeIdleThreshold = 10 * time.Minute
+		}
+		if cfg.NodeScalerInterval == 0 {
+			cfg.NodeScalerInterval = 1 * time.Minute
+		}
+		if cfg.NodeScalerTaintKey == "" {
+			cfg.NodeScalerTaintKey = "agent-stack-k8s.io/scaling-in"
+		}
+		// NodeScalerSelector, NodeScalerNodeGroup, and NodeScalerMaxRate are optional
+		// NodeScalerMaxRate defaults to 0 (unlimited)
 	}
 
 	return cfg, nil
