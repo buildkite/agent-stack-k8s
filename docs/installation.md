@@ -1,10 +1,18 @@
 # Installation
 
-[TOC]
-    -   [Requirements](#requirements)
-    -   [Deploy with Helm](#deploy-with-helm)
-    -   [Options](#options)
-    -   [Buildkite cluster's UUID](#buildkite-clusters-uuid) 
+- [Requirements](#requirements)
+- [Deploy with Helm](#deploy-with-helm)
+   * [Inline Configuration](#inline-configuration)
+   * [Configuration Values YAML File](#configuration-values-yaml-file)
+   * [How to Find a Buildkite Cluster's UUID](#how-to-find-a-buildkite-clusters-uuid)
+   * [Store Buildkite Tokens in Kubernetes Secret](#store-buildkite-tokens-in-kubernetes-secret)
+      + [Convert both values to base64:](#convert-both-values-to-base64)
+      + [Run the following command to create a Kubernetes Secret containing the base64 encoded Tokens:](#run-the-following-command-to-create-a-kubernetes-secret-containing-the-base64-encoded-tokens)
+      + [Configure Controller to Use Kubernetes Secret](#configure-controller-to-use-kubernetes-secret)
+- [Other Installation Methods](#other-installation-methods)
+- [Controller Configuration](#controller-configuration)
+- [Running Builds](#running-builds)
+
 
 ## Requirements
 

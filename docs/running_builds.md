@@ -1,18 +1,34 @@
 # Running Buildkite Builds
 
-TOC:
-    -   [PodSpec command and args interpretation](#podspec-command-and-args-interpretation)
-    -   [Cloning repos via SSH](#cloning-repos-via-ssh)
-    -   [Cloning repos via HTTPS](#cloning-repos-via-https)
-    -   [Default job metadata](#default-job-metadata)
-    -   [Pod Spec Patch](#pod-spec-patch)
-    -   [Sidecars](#sidecars)
-    -   [The workspace volume](#the-workspace-volume)
-    -   [Extra volume mounts](#extra-volume-mounts)
-    -   [Skipping checkout (v0.13.0 and later)](#skipping-checkout-v0130-and-later)
-    -   [Overriding flags for git clone and git fetch (v0.13.0 and later)](#overriding-flags-for-git-clone-and-git-fetch-v0130-and-later)
-    -   [Overriding other git settings (v0.16.0 and later)](#overriding-other-git-settings-v0160-and-later)
-    -   [Default envFrom](#default-envfrom)
+* [Pipeline YAML](#pipeline-yaml)
+  + [Defining Steps](#defining-steps)
+  + [`kubernetes` Plugin](#kubernetes-plugin)
+* [Cloning (Private) Repos](#cloning-private-repos)
+  + [Cloning Repos Using SSH Keys](#cloning-repos-using-ssh-keys)
+    - [Create Kubernetes Secret From SSH Private Key](#create-kubernetes-secret-from-ssh-private-key)
+    - [Provide Kubernetes Secret via Configuration](#provide-kubernetes-secret-via-configuration)
+    - [Provide Kubernetes Secret via `kubernetes` Plugin](#provide-kubernetes-secret-via-kubernetes-plugin)
+    - [Provide SSH Private Key to Non-`checkout` Containers](#provide-ssh-private-key-to-non-checkout-containers)
+  + [Cloning Repos Using Git Credentials](#cloning-repos-using-git-credentials)
+    - [Create Kubernetes Secret From Git Credentials File](#create-kubernetes-secret-from-git-credentials-file)
+    - [Provide Kubernetes Secret via Configuration](#provide-kubernetes-secret-via-configuration-1)
+    - [Provide Kubernetes Secret via `kubernetes` Plugin](#provide-kubernetes-secret-via-kubernetes-plugin-1)
+    - [Provide Git Credentials to Non-`checkout` Containers](#provide-git-credentials-to-non-checkout-containers)
+  + [Kubernetes PodSpec](#kubernetes-podspec)
+    - [Using Custom Container Images](#using-custom-container-images)
+* [PodSpec command and args interpretation](#podspec-command-and-args-interpretation)
+* [Default job metadata](#default-job-metadata)
+* [Pod Spec Patch](#pod-spec-patch)
+  + [Custom Images](#custom-images)
+  + [Default Resources](#default-resources)
+  + [Overriding commands](#overriding-commands)
+* [Sidecars](#sidecars)
+* [The workspace volume](#the-workspace-volume)
+* [Extra volume mounts](#extra-volume-mounts)
+* [Skipping checkout (v0.13.0 and later)](#skipping-checkout-v0130-and-later)
+* [Overriding flags for git clone and git fetch (v0.13.0 and later)](#overriding-flags-for-git-clone-and-git-fetch-v0130-and-later)
+* [Overriding other git settings (v0.16.0 and later)](#overriding-other-git-settings-v0160-and-later)
+* [Default envFrom](#default-envfrom)
 
 ## Pipeline YAML
 
@@ -197,27 +213,13 @@ The above configurations provide Git credentials as a Kubernetes Secret to only 
 containers, you can add a volume mount for the `git-credentials` volume, and configure Git to use the file within it (e.g. with `git config credential.helper 'store --file ...'`).
 
 
-
-
-
-
-
-
 ### Kubernetes PodSpec
 
 Using the `kubernetes` plugin allows specifying a [`PodSpec`](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec) Kubernetes API resource that will be used in a Kubernetes [`Job`](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/job-v1/#Job).
 
-
-
-
 #### Using Custom Container Images
 
 Almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
-
-
-
-
-
 
 
 ## PodSpec command and args interpretation

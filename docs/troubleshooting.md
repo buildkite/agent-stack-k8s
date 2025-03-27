@@ -1,5 +1,12 @@
 # Troubleshooting
 
+- [Enable Debug Mode](#enable-debug-mode)
+- [Common Failures and Fixes](#common-failures-and-fixes)
+- [Kubernetes Log Collection](#kubernetes-log-collection)
+   * [Prerequisites](#prerequisites)
+   * [Inputs to the script](#inputs-to-the-script)
+   * [Data/logs gathered](#datalogs-gathered)
+
 ## Enable Debug Mode
 
 Debug mode can be enabled during the Helm deployment of the `agent-stack-k8s` controller via the command line:
