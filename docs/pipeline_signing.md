@@ -1,43 +1,60 @@
-# How to set up pipeline signing (v0.16.0 and later)
+# Pipeline Signing
 
-The `agent-config` block within `values.yaml` accepts most of the
-[Signed Pipelines](https://buildkite.com/docs/agent/v3/signed-pipelines) options.
+> [!NOTE]
+> Requires `v0.16.0` or newer
 
-Additionally, volume sources for signing and verification keys can be specified and automatically attached to the right containers.
+The `agent-stack-k8s` controller supports Buildkite's [Signed Pipelines](https://buildkite.com/docs/agent/v3/signed-pipelines) feature. A JWKS key pair is stored as Kubernetes Secrets and mounted to the `agent` and user-defined command containers.
 
-For keys, any volume source can be specified but a common choice is to use a
-`secret` source. Keys are generally small, distributed across the cluster,
-and ideally are never shown in plain text.
+## Generate JWKS Key Pair
 
-1.  Create one or two secrets containing signing and verification keys:
-    ```shell
-    kubectl create secret generic my-signing-key --from-file='key'="$HOME/private.jwk"
-    kubectl create secret generic my-verification-key --from-file='key'="$HOME/public.jwk"
-    ```
+Using the `buildkite-agent` CLI, [generate a JWKS key pair](https://buildkite.com/docs/agent/v3/signed-pipelines#self-managed-key-creation-step-1-generate-a-key-pair):
 
-2.  Add `values.yaml` configuration to use the volumes:
-    ```yaml
-    # values.yaml
-    config:
-      agent-config:
-        # The signing key will be attached to command containers, so it can be
-        # used by 'buildkite-agent pipeline upload'.
-        signing-jwks-file: key # optional if the file within the volume is called "key"
-        signing-jwks-key-id: llamas # optional
-        signingJWKSVolume:
-          name: buildkite-signing-jwks
-          secret:
-            secretName: my-signing-key
-        # The verification key will be attached to the 'agent start' container.
-        verification-jwks-file: key # optional if the file within the volume is called "key"
-        verification-failure-behavior: warn # for testing/incremental rollout, use 'block' to enforce
-        verificationJWKSVolume:
-          name: buildkite-verification-jwks
-          secret:
-            secretName: my-verification-key
-    ```
+```shell
+buildkite-agent tool keygen --alg EdDSA --key-id my-jwks-key
+```
 
-Note that `signing-jwks-file` and `verification-jwks-file` agent config options can be used to either change the mount point of the corresponding volume (with an absolute path) or specify a file within the volume (with a relative path).
+This will create a pair of files in the current directory:
 
-The default mount points are `/buildkite/signing-jwks` and
-`/buildkite/verification-jwks`.
+```
+EdDSA-my-jwks-key-private.json
+EdDSA-my-jwks-key-public.json
+```
+
+## Create Kubernetes Secrets for JWKS Key Pair
+
+After using `buildkite-agent` to generate a JWKS key pair, create a Kubernetes Secret for the JWKS signing key that will be used by user-defined command containers:
+
+```shell
+kubectl create secret generic my-signing-key --from-file='key'="./EdDSA-my-jwks-key-private.json"
+```
+
+Now create a Kubernetes Secret for the JWKS verification key that will be used by the `agent` container:
+
+```shell
+kubectl create secret generic my-verification-key --from-file='key'="./EdDSA-my-jwks-key-public.json"
+```
+
+## Update Configuration Values File
+
+To use the Kubernetes Secrets containing your JWKS key pair, update the `agent-config` of your configuration values YAML file:
+
+```yaml
+# values.yaml
+config:
+  agent-config:
+    signing-jwks-file: key
+    signing-jwks-key-id: my-jwks-key
+    signingJWKSVolume:
+      name: buildkite-signing-jwks
+      secret:
+        secretName: my-signing-key
+
+    verification-jwks-file: key
+    verification-failure-behavior: warn # optional, default behavior is 'block'
+    verificationJWKSVolume:
+      name: buildkite-verification-jwks
+      secret:
+        secretName: my-verification-key
+```
+
+Additional information on configuring JWKS key pairs for signing/verification can be found in [agent configuration docs](agent_configuration.md#pipeline-signing).
