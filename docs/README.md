@@ -9,7 +9,7 @@ Choose the topic to start reading:
 -   [Agent Configuration](agent_configuration.md)
 -   [Controller Configuration](controller_configuration.md)
 -   [Pipeline Signing](pipeline_signing.md)
--   [How to set up agent hooks and plugins (v0.16.0 and later)](hooks_and_plugins_new.md)
+-   [How to set up agent hooks and plugins](hooks_and_plugins.md)
 -   [How to set up agent hooks (v0.15.0 and earlier)](hooks_and_plugins_old.md)
 -   [Validating your pipeline](pipeline_validation.md)
 -   [Long-running Jobs](long_running_jobs.md)
