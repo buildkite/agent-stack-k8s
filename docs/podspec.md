@@ -73,9 +73,11 @@ steps:
 More samples can be found in the
 [integration test fixtures directory](internal/integration/fixtures).
 
-
 ### Custom Images
+
+Almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
 You can specify a different image to use for a step in a step level `podSpecPatch`. Previously this could be done with a step level `podSpec`.
+
 ```yaml
 # pipelines.yaml
 agents:

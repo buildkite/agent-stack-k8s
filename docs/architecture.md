@@ -37,4 +37,22 @@ sequenceDiagram
     bc->>kubernetes: cleanup finished pods
 ```
 
+## The workspace volume
 
+By default, the workspace directory (`/workspace`) is mounted as an `emptyDir` ephemeral volume. Other volumes may be more desirable (e.g. a volume claim backed by an NVMe device).
+The default workspace volume can be set as stack configuration, e.g.
+
+```yaml
+# values.yaml
+config:
+  workspace-volume:
+    name: workspace-2-the-reckoning
+    ephemeral:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          storageClassName: my-special-storage-class
+          resources:
+            requests:
+              storage: 1Gi
+```
