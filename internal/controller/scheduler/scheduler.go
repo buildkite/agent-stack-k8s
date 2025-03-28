@@ -578,45 +578,6 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	initContainers := []corev1.Container{w.createWorkspaceSetupContainer(podSpec, workspaceVolume)}
 
-	// Only attempt the job once.
-	podSpec.RestartPolicy = corev1.RestartPolicyNever
-
-	// Allow podSpec to be overridden by the controller config and the k8s plugin.
-	// Patch from the controller config is applied first.
-	if w.cfg.PodSpecPatch != nil {
-		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin, w.cfg.AllowPodSpecPatchUnsafeCmdMod)
-		if err != nil {
-			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
-		}
-		podSpec = patched
-		w.logger.Debug("Applied podSpec patch from agent", zap.Any("patched", patched))
-	}
-
-	// If present, patch from the k8s plugin is applied second.
-	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpecPatch != nil {
-		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin, w.cfg.AllowPodSpecPatchUnsafeCmdMod)
-		if err != nil {
-			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
-		}
-		podSpec = patched
-		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
-	}
-
-	// Removes all containers named "checkout" when checkout disabled via controller config or plugin
-	// This will also remove containers named "checkout" added via PodSpecPatch
-	if skipCheckout {
-		for i, pod := range podSpec.Containers {
-			switch pod.Name {
-			case CheckoutContainerName:
-				podSpec.Containers = slices.Delete(podSpec.Containers, i, i+1)
-				w.logger.Info("skipCheckout is set to 'true', removing 'checkout' container from podSpec.Containers", zap.String("job-uuid", inputs.uuid))
-
-			default:
-				continue
-			}
-		}
-	}
-
 	// Use init containers to check that images can be used or pulled before
 	// any other containers run. These are added _after_ podSpecPatch is applied
 	// since podSpecPatch may freely modify each container's image ref or add
@@ -840,18 +801,18 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// Only attempt the job once.
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
 
-	// Allow podSpec to be overridden by the agent configuration and the k8s plugin
-
-	// Patch from the agent is applied first
+	// Allow podSpec to be overridden by the controller configuration and the k8s plugin
+	// Patch from the controller is applied first
 	if w.cfg.PodSpecPatch != nil {
 		patched, err := PatchPodSpec(podSpec, w.cfg.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin, w.cfg.AllowPodSpecPatchUnsafeCmdMod)
 		if err != nil {
-			return nil, fmt.Errorf("failed to apply podSpec patch from agent: %w", err)
+			return nil, fmt.Errorf("failed to apply podSpec patch from controller: %w", err)
 		}
 		podSpec = patched
-		w.logger.Debug("Applied podSpec patch from agent", zap.Any("patched", patched))
+		w.logger.Debug("Applied podSpec patch from controller", zap.Any("patched", patched))
 	}
 
+	// If present, patch from the k8s plugin is applied second.
 	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpecPatch != nil {
 		patched, err := PatchPodSpec(podSpec, inputs.k8sPlugin.PodSpecPatch, w.cfg.DefaultCommandParams, inputs.k8sPlugin, w.cfg.AllowPodSpecPatchUnsafeCmdMod)
 		if err != nil {
@@ -859,6 +820,21 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		}
 		podSpec = patched
 		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
+	}
+
+	// Removes all containers named "checkout" when checkout disabled via controller config or plugin
+	// This will also remove containers named "checkout" added via PodSpecPatch
+	if skipCheckout {
+		for i, pod := range podSpec.Containers {
+			switch pod.Name {
+			case CheckoutContainerName:
+				podSpec.Containers = slices.Delete(podSpec.Containers, i, i+1)
+				w.logger.Info("skipCheckout is set to 'true', removing 'checkout' container from podSpec.Containers", zap.String("job-uuid", inputs.uuid))
+
+			default:
+				continue
+			}
+		}
 	}
 
 	// Dedupe VolumeMounts for both InitContainers and Containers
