@@ -3,7 +3,7 @@
 * [Pipeline YAML](#pipeline-yaml)
   + [Defining steps](#defining-steps)
   + [`kubernetes` plugin](#kubernetes-plugin)
-* [Cloning (private) repos](#cloning-private-repos)
+* [Cloning (private) repositories](#cloning-private-repositories)
 
 ## Pipeline YAML
 
@@ -49,4 +49,4 @@ steps:
 Just like with a standalone installation of the Buildkite Agent, in order to access and clone private repositories you will need to make Git credentials available for the Agent to use.
 These credentials can be in the form of a SSH key for cloning over `ssh://` or with a `.git-credentials` file for cloning over `https://`.
 
-Configuring Git credentials can be found under [Git credentials](git_credentials.md).
+Details about configuring Git credentials can be found under [Git Credentials](git_credentials.md).

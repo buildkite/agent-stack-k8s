@@ -19,6 +19,7 @@ After creating an SSH keypair and registering its public key with the remote rep
 > * `SSH_PRIVATE_ECDSA_KEY`
 > * `SSH_PRIVATE_ED25519_KEY`
 > * `SSH_PRIVATE_RSA_KEY`
+>
 > A script from this project is included in the default entry point of the default [`buildkite/agent`](https://hub.docker.com/r/buildkite/agent) Docker image.
 > It will process the value of the secret and write out a private key to the `~/.ssh` directory of the checkout container.
 

@@ -6,9 +6,6 @@
    * [Configuration values YAML file](#configuration-values-yaml-file)
    * [How to find a Buildkite cluster's UUID](#how-to-find-a-buildkite-clusters-uuid)
    * [Store Buildkite tokens in a Kubernetes Secret](#store-buildkite-tokens-in-kubernetes-secret)
-      + [Convert both values to base64:](#convert-both-values-to-base64)
-      + [Run the following command to create a Kubernetes Secret containing the base64 encoded Tokens:](#run-the-following-command-to-create-a-kubernetes-secret-containing-the-base64-encoded-tokens)
-      + [Configure Controller to use Kubernetes Secret](#configure-controller-to-use-kubernetes-secret)
 - [Other installation methods](#other-installation-methods)
 - [Controller configuration](#controller-configuration)
 - [Running builds](#running-builds)
@@ -82,24 +79,21 @@ To find the UUID of a Cluster:
 
 ### Store Buildkite tokens in Kubernetes Secret
 
-If you would prefer to store your Agent Token and GraphQL API Access Token as a Kubernetes Secret to be referenced by the `agent-stack-k8s` controller:
-
-#### Convert both values to base64:
+If you would prefer to store your Agent Token and GraphQL API Access Token as a Kubernetes Secret to be referenced by the `agent-stack-k8s` controller.
+Start by converting the tokens to base64-encoded strings:
 
 ```
 echo -n <Buildkite Cluster Agent Token> | base64
 echo -n <Buildkite GraphQL-enabled API Access Token> | base64
 ```
 
-#### Run the following command to create a Kubernetes Secret containing the base64 encoded Tokens:
-
+Now create a Kubernetes Secret containing both of the base64-encoded tokens:
 ```
 kubectl create secret generic <secret-name> \
   --from-literal=BUILDKITE_AGENT_TOKEN=<base64 encoded Buildkite Cluster Agent Token> \
   --from-literal=BUILDKITE_TOKEN=<base64 encoded Buildkite GraphQL-enabled API Access Token>
 ```
 
-#### Configure Controller to Use Kubernetes Secret
 This Kubernetes Secret name can be provided to the controller with the `agentStackSecret` option, replacing both `agentToken` and `graphqlToken` options. You can then reference your Kubernetes Secret by name during Helm chart deployments with inline configuration:
 
 ```bash
@@ -149,4 +143,4 @@ Detailed configuration options can be found under [Controller Configuration](con
 
 ## Running builds
 
-After the `agent-stack-k8s` Kubernetes controller has been configured and deployed, you are ready to [run Buildkite jobs](running_builds.md).
+After the `agent-stack-k8s` Kubernetes controller has been configured and deployed, you are ready to [run a Buildkite build](running_builds.md).
