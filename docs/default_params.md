@@ -1,8 +1,8 @@
-# Default Parameters
+# Default parameters
 
 This document outlines the default parameters for the Buildkite Agent K8s Stack.
 
-## Default `checkout` Parameters
+## Default `checkout` parameters
 
 ### `envFrom`
 
@@ -33,7 +33,7 @@ config:
 ...
 ```
 
-## Default `command` Parameters
+## Default `command` parameters
 
 ### `envFrom`
 
@@ -66,7 +66,7 @@ config:
 ...
 ```
 
-## Default `sidecar` Parameters
+## Default `sidecar` parameters
 
 ### `envFrom`
 
