@@ -1,6 +1,7 @@
 module github.com/buildkite/agent-stack-k8s/v2
 
 go 1.23.3
+toolchain go1.24.1
 
 require (
 	github.com/Khan/genqlient v0.8.0
@@ -9,7 +10,7 @@ require (
 	github.com/distribution/reference v0.6.0
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
-	github.com/go-playground/validator/v10 v10.25.0
+	github.com/go-playground/validator/v10 v10.26.0
 	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty/v6 v6.6.7
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
