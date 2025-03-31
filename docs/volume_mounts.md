@@ -1,6 +1,4 @@
-# Volume Mounts
-
-**Extra Volume Mounts**
+# Volume mounts
 
 In some situations, for example if you want to use [git mirrors](https://buildkite.com/docs/agent/v3#promoted-experiments-git-mirrors), you may want to attach extra volume mounts (in addition to the `/workspace` one) in all the pod containers.
 

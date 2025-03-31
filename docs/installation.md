@@ -26,7 +26,7 @@
 
 You'll need [Helm](https://github.com/helm/helm) version `v3.8.0` or newer since we're using Helm's support for [OCI-based registries](https://helm.sh/docs/topics/registries/).
 
-### Inline Configuration
+### Inline configuration
 
 The simplest way to get up and running is by deploying our [Helm](https://helm.sh) chart with an inline configuration:
 
@@ -41,7 +41,7 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
 --set config.tags="{queue=kubernetes}"
 ```
 
-### Configuration Values YAML File
+### Configuration values YAML file
 
 Create a YAML file with the following values:
 
@@ -72,7 +72,7 @@ Both of these deployment methods will:
   - In your Organization (`config.org`)
   - Assigned to the `kubernetes` Queue in your Cluster (`config.cluster-uuid`)
 
-### How to Find a Buildkite Cluster's UUID
+### How to find a Buildkite Cluster's UUID
 
 To find the UUID of a Cluster:
 - Go to the [Clusters page](https://buildkite.com/organizations/-/clusters)
@@ -80,7 +80,7 @@ To find the UUID of a Cluster:
 - Click on "Settings"
 - The UUID of the Cluster UUID will shown under "GraphQL API Integration"
 
-### Store Buildkite Tokens in Kubernetes Secret
+### Store Buildkite tokens in Kubernetes Secret
 
 If you would prefer to store your Agent Token and GraphQL API Access Token as a Kubernetes Secret to be referenced by the `agent-stack-k8s` controller:
 
@@ -124,7 +124,7 @@ config:
     - queue=kubernetes
 ```
 
-## Other Installation Methods
+## Other installation methods
 
 You can also use this chart as a dependency:
 
@@ -143,10 +143,10 @@ helm template oci://ghcr.io/buildkite/helm/agent-stack-k8s --values values.yaml
 
 Latest and previous `agent-stack-k8s` versions (with digests) can be found under [Releases](https://github.com/buildkite/agent-stack-k8s/releases).
 
-## Controller Configuration
+## Controller configuration
 
 Detailed configuration options can be found under [Controller Configuration](controller_configuration.md)
 
-## Running Builds
+## Running builds
 
 After the `agent-stack-k8s` Kubernetes controller has been configured and deployed, you are ready to [run Buildkite jobs](running_builds.md).

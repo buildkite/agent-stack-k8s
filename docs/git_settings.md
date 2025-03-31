@@ -1,8 +1,8 @@
-# Git Settings
+# Git settings
 
-This document outlines how to override git settings.
+This document outlines how to override Git settings.
 
-## Overriding flags for git clone and git fetch (v0.13.0 and later)
+## Overriding flags for `git clone` and `git fetch` (v0.13.0 and later)
 
 Flags for `git clone`, `git fetch` can be overridden per-step (similar to
 `BUILDKITE_GIT_CLONE_FLAGS` and `BUILDLKITE_GIT_FETCH_FLAGS` env vars) with
@@ -21,9 +21,9 @@ steps:
         fetchFlags: -v --prune --tags
 ```
 
-## Overriding other git settings (v0.16.0 and later)
+## Overriding other Git settings (v0.16.0 and later)
 
-From v0.16.0 onwards, many more git flags and options supported by the agent are
+From v0.16.0 onwards, many more Git flags and options supported by the agent are
 also configurable with the `checkout` block. Example:
 
 ```yaml

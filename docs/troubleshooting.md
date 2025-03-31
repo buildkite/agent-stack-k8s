@@ -29,11 +29,11 @@ config:
 ...
 ```
 
-## Common Failures and Fixes
+## Common failures and fixes
 
 <need to enumerate common failures and fixes>
 
-## Kubernetes Log Collection
+## Kubernetes log collection
 
 Use the [`utils/log-collector`](utils/log-collector) script to collect logs for the `agent-stack-k8s` controller.
 

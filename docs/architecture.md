@@ -11,9 +11,9 @@ When a matching job is returned from the GraphQL API, the controller will create
   - overwrite the entrypoint to the agent binary
   - run with the working directory set to the workspace
 
-The entrypoint rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
+The entry point rewriting and ordering logic is heavily inspired by [the approach used in Tekton](https://github.com/tektoncd/pipeline/blob/933e4f667c19eaf0a18a19557f434dbabe20d063/docs/developers/README.md#entrypoint-rewriting-and-step-ordering).
 
-## Architecture
+## Architecture 
 
 ```mermaid
 sequenceDiagram

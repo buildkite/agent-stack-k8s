@@ -8,7 +8,7 @@
 The `prohibit-kubernetes-plugin` configuration option can be used to prevent users from overriding a controller-defined `pod-spec-patch`.
 With the `prohibit-kubernetes-plugin` configuration enabled, any Buildkite job including the `kubernetes` plugin will fail.
 
-### Inline Configuration
+### Inline configuration
 
 Add the `--prohibit-kubernetes-plugin` argument to your Helm deployment:
 
@@ -24,7 +24,7 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --prohibit-kubernetes-plugin
 ```
 
-### Configuration Values YAML File
+### Configuration values YAML File
 
 You can also enable the `prohibit-kubernetes-plugin` option in your configuration values YAML file:
 

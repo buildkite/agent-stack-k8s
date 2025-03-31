@@ -1,4 +1,4 @@
-# Kubernetes PodSpec
+# Kubernetes podSpec
 
 Using the `kubernetes` plugin allows specifying a [`PodSpec`](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec) Kubernetes API resource that will be used in a Kubernetes [`Job`](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/job-v1/#Job).
 
@@ -73,7 +73,7 @@ steps:
 More samples can be found in the
 [integration test fixtures directory](internal/integration/fixtures).
 
-### Custom Images
+### Custom images
 
 Almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
 You can specify a different image to use for a step in a step level `podSpecPatch`. Previously this could be done with a step level `podSpec`.
@@ -104,7 +104,7 @@ steps:
         image: alpine:latest   #       We are experimenting with ways to make it more ergonomic
 ```
 
-## Pod Spec Patch
+## Pod Spec patch
 Rather than defining the entire Pod Spec in a step, there is the option to define a [strategic merge patch](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/) in the controller.
 Agent Stack K8s will first generate a K8s Job with a PodSpec from a Buildkite Job and then apply the patch in the controller.
 It will then apply the patch specified in its config file, which is derived from the value in the helm installation.

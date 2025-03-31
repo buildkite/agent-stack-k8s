@@ -1,4 +1,4 @@
-# Pipeline Signing
+# Pipeline signing
 
 > [!NOTE]
 > Requires `v0.16.0` or newer
@@ -34,7 +34,7 @@ Now create a Kubernetes Secret for the JWKS verification key that will be used b
 kubectl create secret generic my-verification-key --from-file='key'="./EdDSA-my-jwks-key-public.json"
 ```
 
-## Update Configuration Values File
+## Update configuration values file
 
 To use the Kubernetes Secrets containing your JWKS key pair, update the `agent-config` of your configuration values YAML file:
 

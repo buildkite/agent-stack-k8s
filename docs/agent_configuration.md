@@ -32,7 +32,7 @@ stack controller, not the agent. `no-command-eval` or `no-plugins` should be
 used together with [`prohibit-kubernetes-plugin`](#securing-stack).
 
 
-## Pipeline Signing
+## Pipeline signing
 
 > [!NOTE]
 > Requires `v0.16.0` or newer
