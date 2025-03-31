@@ -38,7 +38,7 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --set graphqlToken=<Buildkite GraphQL-enabled API Access Token> \
     --set config.org=<Buildkite Org Slug> \
     --set config.cluster-uuid=<Buildkite Cluster UUID> \
-    --tags queue=kubernetes
+--set config.tags="{queue=kubernetes}"
 ```
 
 ### Configuration Values YAML File
