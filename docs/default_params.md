@@ -1,5 +1,7 @@
 # Default Params
 
+This document outlines the default parameters.
+
 ## Default `checkout` Params
 
 ### `envFrom`

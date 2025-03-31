@@ -1,5 +1,7 @@
 # Git Settings
 
+This document outlines how to override git settings.
+
 ## Overriding flags for git clone and git fetch (v0.13.0 and later)
 
 Flags for `git clone`, `git fetch` can be overridden per-step (similar to

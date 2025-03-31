@@ -1,4 +1,5 @@
 # Configure Git Credentials
+This document outlines how to configure your GitParameters correctly.
 
 ## Cloning (Private) Repos
 
