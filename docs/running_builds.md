@@ -1,9 +1,9 @@
 # Running Buildkite builds
 
 * [Pipeline YAML](#pipeline-yaml)
-  + [Defining Steps](#defining-steps)
-  + [`kubernetes` Plugin](#kubernetes-plugin)
-* [Cloning (Private) Repos](#cloning-private-repos)
+  + [Defining steps](#defining-steps)
+  + [`kubernetes` plugin](#kubernetes-plugin)
+* [Cloning (private) repos](#cloning-private-repos)
 
 ## Pipeline YAML
 

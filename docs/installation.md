@@ -2,16 +2,16 @@
 
 - [Requirements](#requirements)
 - [Deploy with Helm](#deploy-with-helm)
-   * [Inline Configuration](#inline-configuration)
-   * [Configuration Values YAML File](#configuration-values-yaml-file)
-   * [How to Find a Buildkite Cluster's UUID](#how-to-find-a-buildkite-clusters-uuid)
-   * [Store Buildkite Tokens in Kubernetes Secret](#store-buildkite-tokens-in-kubernetes-secret)
+   * [Inline configuration](#inline-configuration)
+   * [Configuration values YAML file](#configuration-values-yaml-file)
+   * [How to find a Buildkite cluster's UUID](#how-to-find-a-buildkite-clusters-uuid)
+   * [Store Buildkite tokens in a Kubernetes Secret](#store-buildkite-tokens-in-kubernetes-secret)
       + [Convert both values to base64:](#convert-both-values-to-base64)
       + [Run the following command to create a Kubernetes Secret containing the base64 encoded Tokens:](#run-the-following-command-to-create-a-kubernetes-secret-containing-the-base64-encoded-tokens)
-      + [Configure Controller to Use Kubernetes Secret](#configure-controller-to-use-kubernetes-secret)
-- [Other Installation Methods](#other-installation-methods)
-- [Controller Configuration](#controller-configuration)
-- [Running Builds](#running-builds)
+      + [Configure Controller to use Kubernetes Secret](#configure-controller-to-use-kubernetes-secret)
+- [Other installation methods](#other-installation-methods)
+- [Controller configuration](#controller-configuration)
+- [Running builds](#running-builds)
 
 
 ## Requirements

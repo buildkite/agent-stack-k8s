@@ -3,7 +3,7 @@
 > [!NOTE]
 > Requires `v0.16.0` or newer
 
-## Agent Configuration Options
+## Agent configuration options
 The `agent-config` block within `values.yaml` can be used to set a subset of
 [the agent configuration file options](https://buildkite.com/docs/agent/v3/configuration).
 
