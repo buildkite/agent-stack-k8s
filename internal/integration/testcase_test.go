@@ -320,11 +320,11 @@ func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[st
 	require.Len(t, jobs.Items, 1)
 
 	for k, v := range annotations {
-		assert.Equal(t, jobs.Items[0].ObjectMeta.Annotations[k], v)
+		assert.Equal(t, jobs.Items[0].Annotations[k], v)
 		assert.Equal(t, jobs.Items[0].Spec.Template.Annotations[k], v)
 	}
 	for k, v := range labelz {
-		assert.Equal(t, jobs.Items[0].ObjectMeta.Labels[k], v)
+		assert.Equal(t, jobs.Items[0].Labels[k], v)
 		assert.Equal(t, jobs.Items[0].Spec.Template.Labels[k], v)
 	}
 }
