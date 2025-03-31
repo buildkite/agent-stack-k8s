@@ -1,7 +1,8 @@
 # Buildkite Agent Stack for Kubernetes Documentation
 
-Welcome to the Buildkite Agent Stack for Kubernetes Documentation.
-Choose the topic to start reading:
+Welcome to the Buildkite Agent Stack for Kubernetes Documentation!
+
+Whether you're looking to set up your first Buildkite agent in a Kubernetes cluster or optimize an existing setup, this documentation provides everything you need to succeed. Explore the sections below to get started:
 
 -   [Architecture](architecture.md)
 -   [Installation](installation.md)
@@ -19,6 +20,6 @@ Choose the topic to start reading:
 -   [Long-running Jobs](long_running_jobs.md)
 -   [Container resource limits](container_resource_limits.md)
 -   [Override commands](override_commands.md)
-    [Volume mounts](volume_mounts.md)
+-   [Volume mounts](volume_mounts.md)
 -   [Securing the Stack](securing_stack.md)
 -   [Troubleshooting](troubleshooting.md)
