@@ -5,7 +5,7 @@
 > [!NOTE]
 > Requires `v0.24.0` or newer
 
-The `agent-stack-k8s` controller supports the `activeDeadlineSeconds` field of the JobSpec. From Kubernetes [documentation]():
+The `agent-stack-k8s` controller supports the `activeDeadlineSeconds` field of the JobSpec. From Kubernetes [documentation](https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup):
 
 > Another way to terminate a Job is by setting an active deadline. Do this by setting the `.spec.activeDeadlineSeconds` field of the Job to a number of seconds. The `activeDeadlineSeconds` applies to the duration of the job, no matter how many Pods are created. Once a Job reaches `activeDeadlineSeconds`, all of its running Pods are terminated and the Job status will become `type: Failed` with `reason: DeadlineExceeded`.
 

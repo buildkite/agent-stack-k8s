@@ -21,3 +21,5 @@ For installation, see [Installation](docs/installation.md)
 ## Documentation
 
 Documentation can be found under [`docs/`](docs/README.md).
+
+For a broader context of what is Buildkite, see the [Buildkite Documentation](https://buildkite.com/docs).

@@ -19,7 +19,7 @@ consider other potential solutions:
 * To override checkout behaviour, consider writing a `checkout` hook, or
   disabling the checkout container entirely with `checkout: skip: true`.
 * To run additional containers without `buildkite-agent` in them, consider using
-  a [sidecar](#sidecars).
+  a [sidecar](#sidecars.md).
 
 We are continually investigating ways to make the stack more flexible while
 ensuring core functionality.
