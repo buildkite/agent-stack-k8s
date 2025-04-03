@@ -182,7 +182,7 @@ func (w *jobWatcher) checkFinishedWithoutPod(ctx context.Context, log *zap.Logge
 	log.Info("The Kubernetes job ended without starting a pod. Failing the corresponding Buildkite job")
 	message := "The Kubernetes job ended without starting a pod.\n"
 	message += w.fetchEvents(ctx, log, kjob)
-	w.failJob(ctx, log, kjob, message)
+	w.failJob(ctx, log, kjob, -1, message)
 }
 
 func (w *jobWatcher) checkStalledWithoutPod(log *zap.Logger, jobUUID uuid.UUID, kjob *batchv1.Job) {
@@ -230,8 +230,8 @@ func (w *jobWatcher) fetchEvents(ctx context.Context, log *zap.Logger, kjob *bat
 	return w.formatEvents(evlist)
 }
 
-func (w *jobWatcher) failJob(ctx context.Context, log *zap.Logger, kjob *batchv1.Job, message string) {
-	if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, kjob, message); err != nil {
+func (w *jobWatcher) failJob(ctx context.Context, log *zap.Logger, kjob *batchv1.Job, code int, message string) {
+	if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, kjob, code, message); err != nil {
 		// Maybe the job was cancelled in the meantime?
 		log.Error("Could not fail Buildkite job", zap.Error(err))
 		jobWatcherBuildkiteJobFailErrorsCounter.Inc()
@@ -318,7 +318,7 @@ func (w *jobWatcher) cleanupStalledJob(ctx context.Context, kjob *batchv1.Job) {
 	stallDuration := duration.HumanDuration(time.Since(kjob.Status.StartTime.Time))
 	message := fmt.Sprintf("The Kubernetes job spent %s without starting a pod.\n", stallDuration)
 	message += w.fetchEvents(ctx, log, kjob)
-	w.failJob(ctx, log, kjob, message)
+	w.failJob(ctx, log, kjob, -1, message)
 
 	// Use ActiveDeadlineSeconds to fail the job, which makes k8s delete the job
 	// in the future.
