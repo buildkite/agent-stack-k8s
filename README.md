@@ -87,7 +87,7 @@ sequenceDiagram
 
 **(For simplicity, this guide uses AWS EKS, but you can use any cloud provider or on-premises Kubernetes cluster.)**
 
-To begin, we need to create the infrastuture that we are going to deploy our Agent into. 
+To begin, we need to create the infrastuture that we are going to deploy agent-stack-k8s into. 
 
 You will need to download and install `eksctl` first by following the [official installation guide](https://eksctl.io/installation/)
 
