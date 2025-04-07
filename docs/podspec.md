@@ -70,9 +70,6 @@ steps:
             cat hello.txt | buildkite-agent annotate
 ```
 
-More samples can be found in the
-[integration test fixtures directory](internal/integration/fixtures).
-
 ### Custom images
 
 Almost any container image may be used, but it MUST have a POSIX shell available to be executed at `/bin/sh`.
