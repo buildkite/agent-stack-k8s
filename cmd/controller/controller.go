@@ -20,7 +20,7 @@ import (
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	en_translations "github.com/go-playground/validator/v10/translations/en"
-	"github.com/mitchellh/mapstructure"
+	mapstructure "github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -266,6 +266,7 @@ func decodeKubeSpecials(f, t reflect.Type, data any) (any, error) {
 // use the same struct tags that the k8s libraries provide.
 func useJSONTagForDecoder(c *mapstructure.DecoderConfig) {
 	c.TagName = "json"
+	c.SquashTagOption = "inline"
 }
 
 // ParseAndValidateConfig parses the config into a struct and validates the values.
