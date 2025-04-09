@@ -15,7 +15,6 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
-
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -266,6 +265,7 @@ func decodeKubeSpecials(f, t reflect.Type, data any) (any, error) {
 // use the same struct tags that the k8s libraries provide.
 func useJSONTagForDecoder(c *mapstructure.DecoderConfig) {
 	c.TagName = "json"
+	c.SquashTagOption = "inline"
 }
 
 // ParseAndValidateConfig parses the config into a struct and validates the values.
