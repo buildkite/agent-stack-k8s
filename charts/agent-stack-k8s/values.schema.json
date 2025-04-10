@@ -217,7 +217,7 @@
         },
         "max-in-flight": {
           "type": "integer",
-          "default": 0,
+          "default": 25,
           "title": "Sets an upper limit on the number of Kubernetes jobs that the controller will run",
           "examples": [100]
         },
