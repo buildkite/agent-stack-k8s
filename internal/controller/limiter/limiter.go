@@ -112,7 +112,7 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 
 	case <-job.StaleCh:
 		// stale-job-data-timeout has elapsed
-		l.logger.Debug("Unable to create job before stale-job-data-timeout",
+		l.logger.Info("Unable to create job due to max-in-flight capacity",
 			zap.String("job-uuid", job.Uuid),
 			zap.Int("max-in-flight", l.MaxInFlight),
 			zap.Int("available-tokens", len(l.tokenBucket)),

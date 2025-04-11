@@ -109,8 +109,9 @@ func (r clusteredJobResp) CommandJobs() []*api.JobJobTypeCommand {
 // getScheduledCommandJobs calls either the clustered or unclustered GraphQL API
 // methods, depending on if a cluster uuid was provided in the config
 func (m *Monitor) getScheduledCommandJobs(ctx context.Context, queue string) (jobResp jobResp, err error) {
-	m.logger.Debug("getting scheduled jobs via GQL query...",
+	m.logger.Info("retrieving scheduled jobs via GraphQL API...",
 		zap.Duration("poll-interval", m.cfg.PollInterval),
+		zap.String("queue-tag", queue),
 	)
 
 	jobQueryCounter.Inc()
@@ -278,8 +279,9 @@ func (m *Monitor) Start(ctx context.Context, handler model.JobHandler) <-chan er
 			}
 
 			jobs := resp.CommandJobs()
-			m.logger.Debug("jobs in GQL query response(s)...",
-				zap.Int("jobs-processed", len(jobs)),
+			m.logger.Info("job processing of GraphQL API results completed...",
+				zap.Int("graphql-jobs-processed", len(jobs)),
+				zap.String("queue-tag", queue),
 			)
 			if len(jobs) == 0 {
 				continue
@@ -384,12 +386,18 @@ func jobHandlerWorker(
 				logger.Warn("making a map of job tags", zap.Errors("err", tagErrs))
 			}
 
+			// If the job does not return a 'queue' tag, skip
+			if jobTags["queue"] == "" {
+				logger.Info("job missing 'queue' tag, skipping...", zap.String("job-uuid", j.GetUuid()), zap.Any("buildkite-job-tags", jobTags))
+				return
+			}
+
 			// The api returns jobs that match ANY agent tags (the agent query rules)
 			// However, we can only acquire jobs that match ALL agent tags
 			if !agenttags.JobTagsMatchAgentTags(maps.All(jobTags), agentTags) {
-				logger.Debug("skipping job because it did not match all tags", zap.Any("job", j))
 				jobsFilteredOutCounter.Inc()
-				continue
+				logger.Info("job tags do not match expected tags in configuration, skipping...", zap.String("job-uuid", j.GetUuid()), zap.Any("controller-tags", agentTags), zap.Any("buildkite-job-tags", jobTags))
+				return
 			}
 
 			job := model.Job{
