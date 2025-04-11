@@ -386,15 +386,16 @@ func jobHandlerWorker(
 				logger.Warn("making a map of job tags", zap.Errors("err", tagErrs))
 			}
 
+			// If the job does not return a 'queue' tag, skip
+			if jobTags["queue"] == "" {
+				logger.Info("job missing 'queue' tag, skipping...", zap.String("job-uuid", j.GetUuid()), zap.Any("buildkite-job-tags", jobTags))
+				return
+			}
+
 			// The api returns jobs that match ANY agent tags (the agent query rules)
 			// However, we can only acquire jobs that match ALL agent tags
 			if !agenttags.JobTagsMatchAgentTags(maps.All(jobTags), agentTags) {
 				jobsFilteredOutCounter.Inc()
-				// If the job does not return a 'queue' tag, skip
-				if jobTags["queue"] == "" {
-					logger.Info("job missing 'queue' tag, skipping...", zap.String("job-uuid", j.GetUuid()), zap.Any("buildkite-job-tags", jobTags))
-					return
-				}
 				logger.Info("job tags do not match expected tags in configuration, skipping...", zap.String("job-uuid", j.GetUuid()), zap.Any("controller-tags", agentTags), zap.Any("buildkite-job-tags", jobTags))
 				return
 			}
