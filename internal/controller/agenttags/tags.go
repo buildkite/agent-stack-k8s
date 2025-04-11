@@ -75,6 +75,7 @@ func LabelsFromTags(tags []string) (map[string]string, []error) {
 // set of strings defined by the tag value in `jobTags` (eg a glob or regex)
 // See https://buildkite.com/docs/agent/v3/cli-start#agent-targeting
 func JobTagsMatchAgentTags(jobTags iter.Seq2[string, string], agentTags map[string]string) bool {
+	queueTagFound := false
 	for k, v := range jobTags {
 		agentTagValue, exists := agentTags[k]
 		if !exists {
@@ -83,8 +84,11 @@ func JobTagsMatchAgentTags(jobTags iter.Seq2[string, string], agentTags map[stri
 		if v != "*" && v != agentTagValue {
 			return false
 		}
+		if k == "queue" {
+			queueTagFound = true
+		}
 	}
-	return true
+	return queueTagFound
 }
 
 // ScanLabels returns an iterator over all labels that are tags.
