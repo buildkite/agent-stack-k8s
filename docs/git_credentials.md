@@ -15,7 +15,7 @@ To use SSH to clone your repos, you'll need to create a Kubernetes Secret contai
 After creating an SSH keypair and registering its public key with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)), you can create a Kubernetes Secret using the SSH private key file.
 
 > [!NOTE]
-> Ensure the environment variable name matches the recognized names (`SSH_PRIVATE_*_KEY`) in [`docker`](https://github.com/buildkite/docker-ssh-env-config).
+> Ensure the environment variable name matches the recognized names (`SSH_PRIVATE_*_KEY`) in [`docker-ssh-env-config`](https://github.com/buildkite/docker-ssh-env-config).
 > * `SSH_PRIVATE_ECDSA_KEY`
 > * `SSH_PRIVATE_ED25519_KEY`
 > * `SSH_PRIVATE_RSA_KEY`
