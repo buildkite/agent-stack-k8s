@@ -6,12 +6,6 @@ fragment Job on Job {
 
 fragment CommandJob on JobTypeCommand {
     uuid
-    env
-    priority {
-        number
-    }
-    agentQueryRules
-    command
 }
 
 fragment Build on Build {
@@ -43,84 +37,9 @@ mutation BuildCancel($input: BuildCancelInput!) {
     }
 }
 
-query GetOrganization($slug: ID!) {
-    organization(slug: $slug) {
-        id
-    }
-}
-
 query GetBuild($uuid: ID!) {
     build(uuid: $uuid) {
         ...Build
-    }
-}
-
-query GetScheduledJobs(
-    $slug: ID!, 
-    $agentQueryRules: [String!], 
-    $last: Int!
-    # @genqlient(pointer: true)
-    $cursor: String
-) {
-    organization(slug: $slug) {
-        # @genqlient(pointer: true)
-        id
-        jobs(
-            state: [SCHEDULED]
-            type: [COMMAND]
-            last: $last
-            order: RECENTLY_CREATED
-            agentQueryRules: $agentQueryRules
-            clustered: false
-            before: $cursor
-        ) {
-            count
-            edges {
-                # @genqlient(flatten: true)
-                node {
-                    ...Job
-                }
-            }
-            pageInfo{
-                hasPreviousPage
-                startCursor
-            }
-        }
-    }
-}
-
-query GetScheduledJobsClustered(
-    $slug: ID!
-    $agentQueryRules: [String!]
-    $cluster: ID!
-    $last: Int!
-    # @genqlient(pointer: true)
-    $cursor: String
-) {
-    organization(slug: $slug) {
-        # @genqlient(pointer: true)
-        id
-        jobs(
-            state: [SCHEDULED]
-            type: [COMMAND]
-            last: $last
-            order: RECENTLY_CREATED
-            agentQueryRules: $agentQueryRules
-            cluster: $cluster
-            before: $cursor
-        ) {
-            count
-            edges {
-                # @genqlient(flatten: true)
-                node {
-                    ...Job
-                }
-            }
-            pageInfo{
-                hasPreviousPage
-                startCursor
-            }
-        }
     }
 }
 
@@ -133,21 +52,6 @@ query GetBuilds($slug: ID!, $state: [BuildStates!], $first: Int) {
                 }
             }
         }
-    }
-}
-
-query GetCommandJob($uuid: ID!) {
-    job(uuid: $uuid) {
-        ... on JobTypeCommand {
-            id
-            state
-        }
-    }
-}
-
-mutation CancelCommandJob($input: JobTypeCommandCancelInput!) {
-    jobTypeCommandCancel(input: $input) {
-        clientMutationId
     }
 }
 
@@ -169,23 +73,4 @@ query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
             }
         }
     }
-}
-
-query GetClusterQueues($slug: ID!, $cluster: ID!, $first: Int!){
-  organization(slug: $slug) {
-    cluster(id: $cluster){
-      queues(first: $first){
-        edges{
-          node{
-            key
-            dispatchPaused
-          }
-        }
-        pageInfo {
-          hasNextPage
-          endCursor
-        }
-      }
-    }
-  }
 }
