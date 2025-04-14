@@ -3,7 +3,6 @@ package scheduler
 import (
 	"cmp"
 	"context"
-	"errors"
 	"regexp"
 	"slices"
 	"strconv"
@@ -15,9 +14,6 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/roko"
 
-	agentcore "github.com/buildkite/agent/v3/core"
-
-	"github.com/Khan/genqlient/graphql"
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"go.uber.org/zap"
@@ -34,7 +30,6 @@ type podWatcher struct {
 	logger      *zap.Logger
 	k8s         kubernetes.Interface
 	agentClient *api.AgentClient
-	gql         graphql.Client
 	cfg         *config.Config
 
 	// ImagePullBackOff detection waits at least this duration after pod
@@ -93,7 +88,6 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, agentClient *ap
 		logger:                      logger,
 		k8s:                         k8s,
 		agentClient:                 agentClient,
-		gql:                         api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 		cfg:                         cfg,
 		imagePullBackOffGracePeriod: imagePullBackOffGracePeriod,
 		jobCancelCheckerInterval:    jobCancelCheckerInterval,
@@ -396,29 +390,6 @@ func (w *podWatcher) evictPod(ctx context.Context, log *zap.Logger, pod *corev1.
 	w.ignoreJob(jobUUID)
 }
 
-func (w *podWatcher) cancelJob(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
-	_, err := api.CancelCommandJob(ctx, w.gql, api.JobTypeCommandCancelInput{
-		ClientMutationId: pod.Name,
-		Id:               jobUUID.String(),
-	})
-	if err != nil {
-		log.Warn("Failed to cancel command job", zap.Error(err))
-		podWatcherBuildkiteJobCancelErrorsCounter.Inc()
-		// Could be network problems
-		// Could be in non-cancelable state
-		// Try again later?
-		return
-	}
-	podWatcherBuildkiteJobCancelsCounter.Inc()
-
-	// Note that evicting the pod might prevent the agent from logging its
-	// last-gasp "it could be ImagePullBackOff" message.
-
-	// We can avoid repeating the GraphQL queries to fetch and cancel the job
-	// (between cancelling and Kubernetes cleaning up the pod) if we got here.
-	w.ignoreJob(jobUUID)
-}
-
 // imageFailureChecker is a goroutine that periodically checks pending and
 // running pods for container statuses such as ImagePullBackOff,
 // ErrImageNeverPull, etc.
@@ -497,21 +468,11 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		// We can acquire it and fail it ourselves.
 		log.Info("One or more job containers are waiting too long for images. Failing.")
 		message := w.formatImagePullFailureMessage(statuses)
-		switch err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, message); {
-		case errors.Is(err, agentcore.ErrJobAcquisitionRejected):
+		if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, message); err != nil {
 			podWatcherBuildkiteJobFailErrorsCounter.Inc()
-			// If the error was because BK rejected the job acquisition, then
-			// it's moved on to a state where we need to cancel instead.
-			// (The init container probably successfully pulled, but another
-			// pull of the same image later on failed after the agent started.)
-			log.Info("Attempting to cancel job instead")
-			w.cancelJob(ctx, log, pod, jobUUID)
-			return
-
-		case err != nil:
-			podWatcherBuildkiteJobFailErrorsCounter.Inc()
-
+			// Maybe the job was acquired by an agent in the meantime?
 			// Maybe the job was cancelled in the meantime?
+			// Either way we've done what we can here.
 			log.Error("Could not fail Buildkite job", zap.Error(err))
 			return
 		}
@@ -520,10 +481,8 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		w.evictPod(ctx, log, pod, jobUUID)
 
 	case api.JobStatesAccepted, api.JobStatesAssigned, api.JobStatesRunning:
-		// An agent is already doing something with the job - now canceling
-		// is the only lever available.
-		log.Info("One or more job containers are in ImagePullBackOff. Cancelling.")
-		w.cancelJob(ctx, log, pod, jobUUID)
+		// An agent is already doing something with the job. Let it fail.
+		log.Debug("Job is the responsibility of an agent")
 
 	case api.JobStatesCanceling, api.JobStatesCanceled, api.JobStatesFinished, api.JobStatesSkipped:
 		// If the job is in one of these states, we can neither acquire nor

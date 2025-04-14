@@ -188,18 +188,6 @@ var (
 		Name:      "job_fail_on_buildkite_errors_total",
 		Help:      "Count of errors when podWatcher tried to acquire and fail a job on Buildkite",
 	})
-	podWatcherBuildkiteJobCancelsCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: promNamespace,
-		Subsystem: "pod_watcher",
-		Name:      "jobs_cancelled_on_buildkite_total",
-		Help:      "Count of jobs that podWatcher successfully cancelled on Buildkite",
-	})
-	podWatcherBuildkiteJobCancelErrorsCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: promNamespace,
-		Subsystem: "pod_watcher",
-		Name:      "job_cancel_on_buildkite_errors_total",
-		Help:      "Count of errors when podWatcher tried to cancel a job on Buildkite",
-	})
 
 	podsEvictedCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: promNamespace,
