@@ -1,11 +1,16 @@
 package limiter
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
+	"slices"
+	"sync"
 	"time"
 
+	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
@@ -15,13 +20,16 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// MaxInFlight is a job handler that wraps another job handler
-// (typically the actual job scheduler) and only creates new jobs if the total
-// number of jobs currently running is below a limit.
-type MaxInFlight struct {
+// Limiter manages a queue of jobs. While there are jobs available and less
+// than the MaxInFlight limit running, it will take jobs from the queue to pass
+// the next handler in the chain.
+type Limiter struct {
 	// MaxInFlight sets the upper limit on number of jobs running concurrently
 	// in the cluster. Must be at least 1.
 	MaxInFlight int
+
+	// Controls the number of workers that pass along jobs.
+	JobCreationConcurrency int
 
 	// Next handler in the chain.
 	handler model.JobHandler
@@ -29,38 +37,90 @@ type MaxInFlight struct {
 	// Logs go here
 	logger *zap.Logger
 
+	// tokenBucket implements the max-in-flight limit using a channel.
 	// When a job starts, it takes a token from the bucket.
 	// When a job ends, it puts a token back in the bucket.
 	tokenBucket chan struct{}
+
+	// A channel to notify workers that there is new work.
+	newWork chan struct{}
+
+	// A priority queue of pending jobs, and pause flag.
+	queueMu sync.Mutex
+	queue   []*api.AgentScheduledJob
+	paused  bool
+
+	// A wait group for workers (mainly for the benefit of unit tests).
+	workerWG sync.WaitGroup
 }
 
-// New creates a MaxInFlight limiter. maxInFlight must be at least 1.
-func New(logger *zap.Logger, scheduler model.JobHandler, maxInFlight int) *MaxInFlight {
-	if maxInFlight <= 0 {
+// New creates a Limiter. maxInFlight must be non-negative, but 0 is interpreted
+// as no limit. Zero or negative concurrency is replaced with the default.
+func New(ctx context.Context, logger *zap.Logger, scheduler model.JobHandler, maxInFlight, concurrency int) *Limiter {
+	if maxInFlight < 0 {
 		// Using panic, because getting here is severe programmer error and the
 		// whole controller is still just starting up.
-		panic(fmt.Sprintf("maxInFlight <= 0 (got %d)", maxInFlight))
+		panic(fmt.Sprintf("maxInFlight < 0 (got %d)", maxInFlight))
 	}
 	maxInFlightGauge.Set(float64(maxInFlight))
-	l := &MaxInFlight{
-		handler:     scheduler,
-		MaxInFlight: maxInFlight,
-		logger:      logger,
-		tokenBucket: make(chan struct{}, maxInFlight),
+	if concurrency <= 0 {
+		concurrency = config.DefaultJobCreationConcurrency
 	}
-	for range maxInFlight {
-		// Fill the bucket with tokens.
-		l.tokenBucket <- struct{}{}
+	l := &Limiter{
+		handler:                scheduler,
+		MaxInFlight:            maxInFlight,
+		JobCreationConcurrency: concurrency,
+		logger:                 logger,
+		tokenBucket:            make(chan struct{}, maxInFlight),
+		newWork:                make(chan struct{}, concurrency),
+	}
+	if maxInFlight == 0 {
+		// Reads on a closed channel always succeed immediately.
+		close(l.tokenBucket)
+	} else {
+		for range maxInFlight {
+			// Fill the bucket with tokens.
+			l.tokenBucket <- struct{}{}
+		}
 	}
 	// Rather than calling gauge.Set, get the number of tokens during scrape.
 	// Provide a callback for tokensAvailableGauge.
 	tokensAvailableFunc = func() int { return len(l.tokenBucket) }
+	workQueueLengthFunc = func() int {
+		l.queueMu.Lock()
+		defer l.queueMu.Unlock()
+		return len(l.queue)
+	}
+
+	l.workerWG.Add(concurrency)
+	for range concurrency {
+		go l.worker(ctx)
+	}
 	return l
+}
+
+// Pause pauses (or un-pauses) the queue.
+func (l *Limiter) Pause(pause bool) {
+	l.queueMu.Lock()
+	defer l.queueMu.Unlock()
+
+	l.paused = pause
+	if pause {
+		return
+	}
+
+	// Not paused. Let the workers know that work is available.
+	for range min(l.JobCreationConcurrency, len(l.queue)) {
+		select {
+		case l.newWork <- struct{}{}:
+		default:
+		}
+	}
 }
 
 // RegisterInformer registers the limiter to listen for Kubernetes job events,
 // and waits for cache sync.
-func (l *MaxInFlight) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
+func (l *Limiter) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
 	informer := factory.Batch().V1().Jobs()
 	jobInformer := informer.Informer()
 	reg, err := jobInformer.AddEventHandler(l)
@@ -88,73 +148,148 @@ func (l *MaxInFlight) RegisterInformer(ctx context.Context, factory informers.Sh
 	return nil
 }
 
-// Handle either passes the job onto the next handler immediately, or blocks
-// until there is capacity. It returns [model.ErrStaleJob] if the job data
-// becomes too stale while waiting for capacity.
-func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
-	// Block until there's a token in the bucket, or cancel if the job
-	// information becomes too stale.
-	start := time.Now()
+// HandleMany enqueues jobs. Workers dequeue jobs and schedule them.
+func (l *Limiter) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob) error {
+	l.queueMu.Lock()
+	defer l.queueMu.Unlock()
 
-	l.logger.Debug("Waiting for token",
-		zap.String("job-uuid", job.Uuid),
-		zap.Int("max-in-flight", l.MaxInFlight),
-		zap.Int("available-tokens", len(l.tokenBucket)),
-		zap.Int("running-jobs", l.MaxInFlight-len(l.tokenBucket)),
-	)
-
-	waitingForTokenGauge.Inc()
-	defer waitingForTokenGauge.Dec()
-
-	select {
-	case <-ctx.Done():
-		return context.Cause(ctx)
-
-	case <-job.StaleCh:
-		// stale-job-data-timeout has elapsed
-		l.logger.Info("Unable to create job due to max-in-flight capacity",
-			zap.String("job-uuid", job.Uuid),
-			zap.Int("max-in-flight", l.MaxInFlight),
-			zap.Int("available-tokens", len(l.tokenBucket)),
-			zap.Int("running-jobs", l.MaxInFlight-len(l.tokenBucket)),
-			zap.Duration("wait-time", time.Since(start)),
-		)
-		jobStaleWhileWaitingCounter.Inc()
-		return model.ErrStaleJob
-
-	case <-l.tokenBucket:
-		// Continue below.
+	l.queue = append(l.queue, jobs...)
+	if len(l.queue) == 0 {
+		return nil
 	}
-	tokenWaitDurationHistogram.Observe(time.Since(start).Seconds())
-	l.logger.Debug("token acquired",
-		zap.String("job-uuid", job.Uuid),
-		zap.Int("available-tokens", len(l.tokenBucket)),
-	)
 
-	// We got a token from the bucket above! Proceed to schedule the pod.
-	// The next handler should be Scheduler (except in some tests).
-	l.logger.Debug("passing job to next handler",
-		zap.Stringer("handler", reflect.TypeOf(l.handler)),
-		zap.String("job-uuid", job.Uuid),
-	)
-	jobHandlerCallsCounter.Inc()
-	if err := l.handler.Handle(ctx, job); err != nil {
-		jobHandlerErrorCounter.Inc()
-		// Oh well. Return the token.
-		l.tryReturnToken("Handle")
+	// Sort by priority, preserving existing ordering between jobs with equal
+	// priority.
+	slices.SortStableFunc(jobs, func(a, b *api.AgentScheduledJob) int {
+		// Higher number = higher priority.
+		// See https://buildkite.com/docs/pipelines/configure/workflows/managing-priorities
+		return cmp.Compare(b.Priority, a.Priority)
+	})
 
-		l.logger.Debug("next handler failed",
-			zap.String("job-uuid", job.Uuid),
-			zap.Int("available-tokens", len(l.tokenBucket)),
-			zap.Error(err),
-		)
-		return err
+	if l.paused {
+		return nil
+	}
+
+	// Tell the workers that work exists.
+	for range min(l.JobCreationConcurrency, len(l.queue)) {
+		select {
+		case l.newWork <- struct{}{}:
+		default:
+		}
 	}
 	return nil
 }
 
+func (l *Limiter) tryDequeueWork() (job *api.AgentScheduledJob) {
+	l.queueMu.Lock()
+	defer l.queueMu.Unlock()
+	if len(l.queue) == 0 || l.paused {
+		return nil
+	}
+	job, l.queue = l.queue[0], l.queue[1:]
+	if len(l.queue) > 0 {
+		// More work exists.
+		select {
+		case l.newWork <- struct{}{}:
+		default:
+		}
+	}
+	return job
+}
+
+func (l *Limiter) worker(ctx context.Context) {
+	defer l.workerWG.Done()
+
+	for {
+		// Track time to acquire a token.
+		start := time.Now()
+
+		l.logger.Debug("Waiting for token",
+			zap.Int("max-in-flight", l.MaxInFlight),
+			zap.Int("available-tokens", len(l.tokenBucket)),
+			zap.Int("new-work", len(l.newWork)),
+		)
+
+		// Block until there's a token in the bucket.
+		waitingForTokenGauge.Inc()
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-l.tokenBucket:
+			// Continue below.
+		}
+		waitingForTokenGauge.Dec()
+		tokenWaitDurationHistogram.Observe(time.Since(start).Seconds())
+		l.logger.Debug("token acquired",
+			zap.Int("available-tokens", len(l.tokenBucket)),
+		)
+
+		// We got a token from the bucket above! Is there work we can do?
+		// Track time to acquire work.
+		start = time.Now()
+		l.logger.Debug("Waiting for work",
+			zap.Int("max-in-flight", l.MaxInFlight),
+			zap.Int("available-tokens", len(l.tokenBucket)),
+			zap.Int("new-work", len(l.newWork)),
+		)
+		waitingForWorkGauge.Inc()
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-l.newWork:
+			// Continue below.
+		}
+		waitingForWorkGauge.Dec()
+		workWaitDurationHistogram.Observe(time.Since(start).Seconds())
+
+		l.logger.Debug("Dequeueing some work",
+			zap.Int("max-in-flight", l.MaxInFlight),
+			zap.Int("available-tokens", len(l.tokenBucket)),
+			zap.Int("new-work", len(l.newWork)),
+		)
+		job := l.tryDequeueWork()
+		if job == nil {
+			// Got a token and even got notified of some work, but got no job
+			// (maybe another worker got it, maybe the queue is paused).
+			l.tryReturnToken("Handle")
+			continue
+		}
+
+		l.logger.Debug("passing job to next handler",
+			zap.Stringer("handler", reflect.TypeOf(l.handler)),
+		)
+		jobHandlerCallsCounter.Inc()
+		if err := l.handler.Handle(ctx, job); err != nil {
+			// Oh well. Return the token.
+			l.tryReturnToken("Handle")
+
+			switch {
+			case errors.Is(err, model.ErrDuplicateJob):
+				jobHandlerErrorCounter.WithLabelValues("duplicate").Inc()
+			case errors.Is(err, model.ErrStaleJob):
+				jobHandlerErrorCounter.WithLabelValues("stale").Inc()
+			default:
+				jobHandlerErrorCounter.WithLabelValues("other").Inc()
+			}
+
+			l.logger.Debug("next handler failed",
+				zap.String("job-uuid", job.ID),
+				zap.Int("available-tokens", len(l.tokenBucket)),
+				zap.Int("new-work", len(l.newWork)),
+				zap.Error(err),
+			)
+			continue
+		}
+	}
+}
+
+// Wait blocks until all worker goroutines return.
+func (l *Limiter) Wait() { l.workerWG.Wait() }
+
 // OnAdd is called by k8s to inform us a resource is added.
-func (l *MaxInFlight) OnAdd(obj any, inInitialList bool) {
+func (l *Limiter) OnAdd(obj any, inInitialList bool) {
 	onAddEventCounter.Inc()
 	job, _ := obj.(*batchv1.Job)
 	if job == nil {
@@ -180,7 +315,7 @@ func (l *MaxInFlight) OnAdd(obj any, inInitialList bool) {
 }
 
 // OnUpdate is called by k8s to inform us a resource is updated.
-func (l *MaxInFlight) OnUpdate(prev, curr any) {
+func (l *Limiter) OnUpdate(prev, curr any) {
 	onUpdateEventCounter.Inc()
 	prevState, _ := prev.(*batchv1.Job)
 	currState, _ := curr.(*batchv1.Job)
@@ -199,7 +334,7 @@ func (l *MaxInFlight) OnUpdate(prev, curr any) {
 }
 
 // OnDelete is called by k8s to inform us a resource is deleted.
-func (l *MaxInFlight) OnDelete(obj any) {
+func (l *Limiter) OnDelete(obj any) {
 	onDeleteEventCounter.Inc()
 	prevState, _ := obj.(*batchv1.Job)
 	if prevState == nil {
@@ -220,7 +355,7 @@ func (l *MaxInFlight) OnDelete(obj any) {
 
 // tryTakeToken takes a token from the bucket, if one is available. It does not
 // block.
-func (l *MaxInFlight) tryTakeToken(source string) {
+func (l *Limiter) tryTakeToken(source string) {
 	select {
 	case <-l.tokenBucket:
 		// Success.
@@ -238,7 +373,10 @@ func (l *MaxInFlight) tryTakeToken(source string) {
 }
 
 // tryReturnToken returns a token to the bucket, if not full. It does not block.
-func (l *MaxInFlight) tryReturnToken(source string) {
+func (l *Limiter) tryReturnToken(source string) {
+	if l.MaxInFlight == 0 {
+		return
+	}
 	select {
 	case l.tokenBucket <- struct{}{}:
 		// Success.

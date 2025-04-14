@@ -10,8 +10,11 @@ const (
 	promSubsystem = "limiter"
 )
 
-// Overridden by New to return len(tokenBucket).
-var tokensAvailableFunc = func() int { return 0 }
+var (
+	// Overridden by New to return len(tokenBucket).
+	tokensAvailableFunc = func() int { return 0 }
+	workQueueLengthFunc = func() int { return 0 }
+)
 
 var (
 	maxInFlightGauge = promauto.NewGauge(prometheus.GaugeOpts{
@@ -26,6 +29,13 @@ var (
 		Name:      "tokens_available",
 		Help:      "Limiter tokens currently available",
 	}, func() float64 { return float64(tokensAvailableFunc()) })
+	_ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace: promNamespace,
+		Subsystem: promSubsystem,
+		Name:      "work_queue_length",
+		Help:      "Amount of enqueued work in the limiter",
+	}, func() float64 { return float64(workQueueLengthFunc()) })
+
 	tokenWaitDurationHistogram = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace:                    promNamespace,
 		Subsystem:                    promSubsystem,
@@ -34,19 +44,26 @@ var (
 		NativeHistogramBucketFactor:  1.1,
 		NativeHistogramZeroThreshold: 0.01,
 	})
+	workWaitDurationHistogram = promauto.NewHistogram(prometheus.HistogramOpts{
+		Namespace:                    promNamespace,
+		Subsystem:                    promSubsystem,
+		Name:                         "work_wait_duration_seconds",
+		Help:                         "Time spent waiting in the limiter for work to become available",
+		NativeHistogramBucketFactor:  1.1,
+		NativeHistogramZeroThreshold: 0.01,
+	})
 
 	waitingForTokenGauge = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: promNamespace,
 		Subsystem: promSubsystem,
 		Name:      "waiting_for_token",
-		Help:      "Number of jobs currently waiting for a token",
+		Help:      "Number of limiter workers currently waiting for a token",
 	})
-
-	jobStaleWhileWaitingCounter = promauto.NewCounter(prometheus.CounterOpts{
+	waitingForWorkGauge = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: promNamespace,
 		Subsystem: promSubsystem,
-		Name:      "jobs_stale_while_waiting_total",
-		Help:      "Count of jobs that became stale while waiting for a token",
+		Name:      "waiting_for_work",
+		Help:      "Number of limiter workers currently waiting for work",
 	})
 
 	jobHandlerCallsCounter = promauto.NewCounter(prometheus.CounterOpts{
@@ -55,12 +72,12 @@ var (
 		Name:      "job_handler_calls_total",
 		Help:      "Count of jobs that were passed to the next handler in the chain",
 	})
-	jobHandlerErrorCounter = promauto.NewCounter(prometheus.CounterOpts{
+	jobHandlerErrorCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: promNamespace,
 		Subsystem: promSubsystem,
 		Name:      "job_handler_errors_total",
 		Help:      "Count of jobs that weren't scheduled because the next handler in the chain returned an error",
-	})
+	}, []string{"reason"})
 
 	onAddEventCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,

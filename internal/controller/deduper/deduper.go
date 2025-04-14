@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
@@ -67,8 +68,8 @@ func (d *Deduper) RegisterInformer(ctx context.Context, factory informers.Shared
 
 // Handle passes the job to the next handler if the job is not already
 // scheduled. Otherwise, it returns [model.ErrDuplicateJob].
-func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
-	uuid, err := uuid.Parse(job.Uuid)
+func (d *Deduper) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
+	uuid, err := uuid.Parse(job.ID)
 	if err != nil {
 		d.logger.Error("invalid UUID in CommandJob", zap.Error(err))
 		return err
@@ -76,7 +77,7 @@ func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
 	if numInFlight, ok := d.casa(uuid, true); !ok {
 		jobsAlreadyRunningCounter.WithLabelValues("Handle").Inc()
 		d.logger.Debug("job is already in-flight",
-			zap.String("job-uuid", job.Uuid),
+			zap.String("job-uuid", job.ID),
 			zap.Int("num-in-flight", numInFlight),
 		)
 		return model.ErrDuplicateJob
@@ -87,7 +88,7 @@ func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
 	// limiter or the scheudler.
 	d.logger.Debug("passing job to next handler",
 		zap.Stringer("handler", reflect.TypeOf(d.handler)),
-		zap.String("job-uuid", job.Uuid),
+		zap.String("job-uuid", job.ID),
 	)
 	jobHandlerCallsCounter.Inc()
 
@@ -110,7 +111,7 @@ func (d *Deduper) Handle(ctx context.Context, job model.Job) error {
 		}
 
 		d.logger.Debug("next handler failed",
-			zap.String("job-uuid", job.Uuid),
+			zap.String("job-uuid", job.ID),
 			zap.Int("num-in-flight", numInFlight),
 			zap.Error(err),
 		)

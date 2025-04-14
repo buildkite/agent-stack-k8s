@@ -8,7 +8,6 @@ image-pull-backoff-grace-period: 60s
 job-cancel-checker-poll-interval: 10s
 empty-job-grace-period: 50s
 poll-interval: 5s
-stale-job-data-timeout: 10s
 job-creation-concurrency: 5
 max-in-flight: 100
 k8s-client-rate-limiter-qps: 20
@@ -17,9 +16,10 @@ namespace: my-buildkite-ns
 org: my-buildkite-org
 default-image-pull-policy: Never
 default-image-check-pull-policy: IfNotPresent
-graphql-results-limit: 200
 enable-queue-pause: true
+pagination-page-size: 1000
 pagination-depth-limit: 5
+query-reset-interval: 10s
 
 # Setting a custom GraphQL endpoint is usually only useful if you have a
 #  different instance of Buildkite itself available to run.
@@ -54,7 +54,7 @@ workspace-volume:
 # Applies to all agents
 agent-config:
   # Setting a custom Agent REST API endpoint is usually only useful if you have
-  #  a different instance of Buildkite itself available to run.
+  # a different instance of Buildkite itself available to run.
   endpoint: http://agent.buildkite.localhost/v3
 
 # Applies to the checkout container in all spawned pods

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"slices"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -25,6 +26,20 @@ func TagMapFromTags(tags []string) (map[string]string, []error) {
 		m[k] = v
 	}
 	return m, errs
+}
+
+// SetTag sets a tag in the tags slice. Because the tag might not already exist,
+// it returns an updated slice (use like append:
+// tags = SetTag(tags, "key", "value")).
+func SetTag(tags []string, key, val string) []string {
+	i := slices.IndexFunc(tags, func(tag string) bool {
+		return strings.HasPrefix(tag, key+"=")
+	})
+	if i < 0 {
+		return append(tags, key+"="+val)
+	}
+	tags[i] = key + "=" + val
+	return tags
 }
 
 // labelsFromTagMap converts map[key->value] to map[tag.buildkite.com/key->value],
@@ -74,7 +89,7 @@ func LabelsFromTags(tags []string) (map[string]string, []error) {
 // In the future, this may be expanded to: if the tag value `agentTags` is in some
 // set of strings defined by the tag value in `jobTags` (eg a glob or regex)
 // See https://buildkite.com/docs/agent/v3/cli-start#agent-targeting
-func JobTagsMatchAgentTags(jobTags iter.Seq2[string, string], agentTags map[string]string) bool {
+func JobTagsMatchAgentTags(jobTags, agentTags map[string]string) bool {
 	for k, v := range jobTags {
 		agentTagValue, exists := agentTags[k]
 		if !exists {
