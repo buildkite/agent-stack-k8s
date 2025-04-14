@@ -225,6 +225,26 @@ func TestPatchPodSpec_ErrNoCommandModification(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "uppercase image name should fail",
+			podspec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:    CheckoutContainerName,
+						Image:   "ALPINE:latest",
+						Command: []string{"echo hello world"},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name: CheckoutContainerName,
+						Args: []string{"this", "shouldn't", "work"},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range cases {
