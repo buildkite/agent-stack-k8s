@@ -39,7 +39,6 @@ type Config struct {
 	PollInterval             time.Duration `json:"poll-interval"`
 	JobCreationConcurrency   int           `json:"job-creation-concurrency" validate:"omitempty"`
 	AgentTokenSecret         string        `json:"agent-token-secret"       validate:"required"`
-	BuildkiteToken           string        `json:"buildkite-token"          validate:"required"`
 	Image                    string        `json:"image"                    validate:"required"`
 	JobPrefix                string        `json:"job-prefix"               validate:"required"`
 	MaxInFlight              int           `json:"max-in-flight"            validate:"min=0"`
@@ -48,7 +47,6 @@ type Config struct {
 	Tags                     stringSlice   `json:"tags"                     validate:"min=1"`
 	PrometheusPort           uint16        `json:"prometheus-port"          validate:"omitempty"`
 	ProfilerAddress          string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
-	GraphQLEndpoint          string        `json:"graphql-endpoint"         validate:"omitempty"`
 	PaginationPageSize       int           `json:"pagination-page-size"     validate:"min=1,max=1000"`
 	PaginationDepthLimit     int           `json:"pagination-depth-limit"   validate:"min=1,max=20"`
 	QueryResetInterval       time.Duration `json:"query-reset-interval"     validate:"omitempty"`
@@ -90,6 +88,11 @@ type Config struct {
 	// replacement command does not execute buildkite-agent in the right way,
 	// then the pod will malfunction.
 	AllowPodSpecPatchUnsafeCmdMod bool `json:"allow-pod-spec-patch-unsafe-command-modification" validate:"omitempty"`
+
+	// BuildkiteToken and GraphQLEndpoint are deprecated - they are only used
+	// for integration tests.
+	BuildkiteToken  string `json:"buildkite-token" validate:"omitempty"`
+	GraphQLEndpoint string `json:"graphql-endpoint" validate:"omitempty"`
 }
 
 type stringSlice []string

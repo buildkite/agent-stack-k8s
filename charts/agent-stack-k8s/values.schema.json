@@ -4,20 +4,20 @@
   "type": "object",
   "default": {},
   "title": "Root Schema",
-  "required": ["agentToken", "graphqlToken", "image", "config"],
+  "required": ["agentToken", "image", "config"],
   "properties": {
     "agentToken": {
       "type": "string",
       "default": "",
       "minLength": 0,
-      "title": "The agentToken Schema",
+      "title": "The agent token",
       "examples": [""]
     },
     "graphqlToken": {
       "type": "string",
       "default": "",
       "minLength": 0,
-      "title": "The graphqlToken Schema",
+      "title": "Deprecated - The GraphQL token is no longer needed",
       "examples": [""]
     },
     "agentStackSecret": {
@@ -182,7 +182,8 @@
         "graphql-endpoint": {
           "type": "string",
           "default": "",
-          "title": "The GraphQL endpoint URL",
+          "deprecated": true,
+          "title": "Deprecated - The GraphQL endpoint URL",
           "examples": [""]
         },
         "image": {

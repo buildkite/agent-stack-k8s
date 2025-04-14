@@ -44,7 +44,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"buildkite-agent-token",
 		"name of the Buildkite agent token secret",
 	)
-	cmd.Flags().String("buildkite-token", "", "Buildkite API token with GraphQL scopes")
+	cmd.Flags().String("buildkite-token", "", "Deprecated - Buildkite API token with GraphQL scopes")
 
 	// in the config file
 	cmd.Flags().String("org", "", "Buildkite organization name to watch")
@@ -100,7 +100,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 		0,
 		"Bind port to expose Prometheus /metrics; 0 disables it",
 	)
-	cmd.Flags().String("graphql-endpoint", "", "Buildkite GraphQL endpoint URL")
+	cmd.Flags().String("graphql-endpoint", "", "Deprecated - Buildkite GraphQL endpoint URL")
 
 	cmd.Flags().Int(
 		"job-creation-concurrency",
