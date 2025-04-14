@@ -15,7 +15,7 @@ To use SSH to clone your repos, you'll need to create a Kubernetes Secret contai
 After creating an SSH keypair and registering its public key with the remote repository provider (e.g. [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account)), you can create a Kubernetes Secret using the SSH private key file.
 
 > [!NOTE]
-> Ensure the environment variable name matches the recognized names (`SSH_PRIVATE_*_KEY`) in [`docker-ssh-env-config`](https://github.com/buildkite/docker-ssh-env-config).
+> Ensure the environment variable name matches the recognized names (`SSH_PRIVATE_*_KEY`) in [`docker`](https://github.com/buildkite/docker-ssh-env-config).
 > * `SSH_PRIVATE_ECDSA_KEY`
 > * `SSH_PRIVATE_ED25519_KEY`
 > * `SSH_PRIVATE_RSA_KEY`
@@ -77,6 +77,28 @@ The above configurations provide the SSH private key as a Kubernetes Secret to o
 containers, there are a few options:
 * Use a container image based on the default `buildkite/agent` Docker image, which preserves the default entry point by not overriding the command in the job spec
 * Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entry point for your job container image to source from recognized environment variable names.
+
+Here is an example how to setup an SSH Private key in `container-0`
+
+```yaml
+# values.yaml
+...
+config:
+  ...
+  pod-spec-patch:
+    containers:
+    ...
+    - name: container-0
+      env:
+        - name: SSH_PRIVATE_RSA_KEY
+          valueFrom:
+            secretKeyRef:
+              name: private-ssh-key # <---- this is the name of the Kubernetes Secret to use for container-0 (setup on the same way as the command above)
+              key: SSH_PRIVATE_RSA_KEY
+
+```
+
+After setting the SSH key to use on `container-0`, you will need to setup `container-0` for `git` operations. The suggested approach is to implement a `pre-command` hook to run `ssh-keyscan` and generate the `known_hosts` files.
 
 ## Cloning repos using Git credentials
 
