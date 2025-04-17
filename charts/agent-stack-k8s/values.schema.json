@@ -229,9 +229,8 @@
         },
         "stale-job-data-timeout": {
           "type": "string",
-          "default": "10s",
-          "title": "After polling Buildkite for jobs, the job data is considered valid up to this timeout",
-          "examples": ["1s", "1m"]
+          "deprecated": true,
+          "title": "Deprecated - query results no longer become stale"
         },
         "job-creation-concurrency": {
           "type": "integer",
@@ -581,20 +580,32 @@
           "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
         },
         "graphql-results-limit": {
+          "deprecated": true,
           "type": "integer",
           "default": 100,
           "minimum": 1,
           "maximum": 500,
-          "title": "The maximum number of GraphQL results to return from GetScheduledJobs and GetScheduledJobsClustered queries"
+          "title": "Deprecated - use pagination-page-size"
+        },
+        "pagination-page-size": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 1,
+          "maximum": 1000,
+          "title": "Sets the maximum number of Jobs per page when retreiving Buildkite Jobs to be Scheduled"
         },
         "pagination-depth-limit": {
           "type": "integer",
           "default": 1,
           "minimum": 1,
           "maximum": 20,
-          "title": "The maximum depth of pagination of GraphQL queries, increasing the amount to return from GetScheduledJobs and GetScheduledJobsClustered queries"
+          "title": "Sets the maximum number of pages when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite API and number of Jobs to be scheduled on the Kubernetes Cluster."
+        },
+        "query-reset-interval": {
+          "type": "string",
+          "default": "5s",
+          "title": "Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query."
         }
-        
       },
       "examples": [
         {

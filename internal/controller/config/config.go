@@ -16,15 +16,15 @@ const (
 	JobURLAnnotation                    = "buildkite.com/job-url"
 	PriorityAnnotation                  = "buildkite.com/job-priority"
 	DefaultNamespace                    = "default"
-	DefaultStaleJobDataTimeout          = 10 * time.Second
 	DefaultImagePullBackOffGracePeriod  = 30 * time.Second
 	DefaultJobCancelCheckerPollInterval = 5 * time.Second
 	DefaultEmptyJobGracePeriod          = 30 * time.Second
 	DefaultJobCreationConcurrency       = 5
 	DefaultK8sClientRateLimiterQPS      = 10
 	DefaultK8sClientRateLimiterBurst    = 20
-	DefaultGraphQLResultsLimit          = 100
+	DefaultPaginationPageSize           = 500
 	DefaultPaginationDepthLimit         = 1
+	DefaultQueryResetInterval           = 5 * time.Second
 )
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
@@ -37,7 +37,6 @@ type Config struct {
 	JobTTL                   time.Duration `json:"job-ttl"`
 	JobActiveDeadlineSeconds int           `json:"job-active-deadline-seconds" validate:"required"`
 	PollInterval             time.Duration `json:"poll-interval"`
-	StaleJobDataTimeout      time.Duration `json:"stale-job-data-timeout"   validate:"omitempty"`
 	JobCreationConcurrency   int           `json:"job-creation-concurrency" validate:"omitempty"`
 	AgentTokenSecret         string        `json:"agent-token-secret"       validate:"required"`
 	BuildkiteToken           string        `json:"buildkite-token"          validate:"required"`
@@ -50,8 +49,9 @@ type Config struct {
 	PrometheusPort           uint16        `json:"prometheus-port"          validate:"omitempty"`
 	ProfilerAddress          string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
 	GraphQLEndpoint          string        `json:"graphql-endpoint"         validate:"omitempty"`
-	GraphQLResultsLimit      int           `json:"graphql-results-limit"    validate:"min=1,max=500"`
+	PaginationPageSize       int           `json:"pagination-page-size"     validate:"min=1,max=1000"`
 	PaginationDepthLimit     int           `json:"pagination-depth-limit"   validate:"min=1,max=20"`
+	QueryResetInterval       time.Duration `json:"query-reset-interval"     validate:"omitempty"`
 	EnableQueuePause         bool          `json:"enable-queue-pause"       validate:"omitempty"`
 	// Agent endpoint is set in agent-config.
 
@@ -109,7 +109,6 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("job-ttl", c.JobTTL)
 	enc.AddInt("job-active-deadline-seconds", c.JobActiveDeadlineSeconds)
 	enc.AddDuration("poll-interval", c.PollInterval)
-	enc.AddDuration("stale-job-data-timeout", c.StaleJobDataTimeout)
 	enc.AddInt("job-creation-concurrency", c.JobCreationConcurrency)
 	enc.AddInt("max-in-flight", c.MaxInFlight)
 	enc.AddString("namespace", c.Namespace)
@@ -148,6 +147,9 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("default-image-pull-policy", string(c.DefaultImagePullPolicy))
 	enc.AddString("default-image-check-pull-policy", string(c.DefaultImageCheckPullPolicy))
 	enc.AddBool("enable-queue-pause", c.EnableQueuePause)
+	enc.AddInt("pagination-page-size", c.PaginationPageSize)
+	enc.AddInt("pagination-depth-limit", c.PaginationDepthLimit)
+	enc.AddDuration("query-reset-interval", c.QueryResetInterval)
 	return nil
 }
 

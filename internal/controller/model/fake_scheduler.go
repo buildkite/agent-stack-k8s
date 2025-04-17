@@ -3,9 +3,9 @@ package model
 import (
 	"context"
 	"fmt"
-	"slices"
 	"sync"
 
+	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -30,45 +30,53 @@ type FakeScheduler struct {
 
 	mu       sync.Mutex
 	wg       sync.WaitGroup
-	Running  []string
-	Finished []string
+	Running  map[string]struct{}
+	Finished map[string]struct{}
 	Errors   int
 }
 
-func (f *FakeScheduler) Handle(_ context.Context, job Job) error {
+func NewFakeScheduler(maxRunning int, err error) *FakeScheduler {
+	return &FakeScheduler{
+		MaxRunning: maxRunning,
+		Err:        err,
+		Running:    make(map[string]struct{}),
+		Finished:   make(map[string]struct{}),
+	}
+}
+
+func (f *FakeScheduler) Handle(_ context.Context, job *api.AgentScheduledJob) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.Err != nil {
 		f.Errors++
+		f.wg.Done()
 		return f.Err
 	}
 
-	if slices.Contains(f.Running, job.Uuid) {
-		return fmt.Errorf("job %s already running", job.Uuid)
+	if _, running := f.Running[job.ID]; running {
+		return fmt.Errorf("job %s already running", job.ID)
 	}
-	if slices.Contains(f.Finished, job.Uuid) {
-		return fmt.Errorf("job %s already finished", job.Uuid)
+	if _, finished := f.Finished[job.ID]; finished {
+		return fmt.Errorf("job %s already finished", job.ID)
 	}
 
 	if f.MaxRunning > 0 && len(f.Running) >= f.MaxRunning {
 		return fmt.Errorf("limit exceeded: len(f.Running) = %d >= %d = f.MaxRunning", len(f.Running), f.MaxRunning)
 	}
 
-	f.Running = append(f.Running, job.Uuid)
+	f.Running[job.ID] = struct{}{}
 
 	if f.EventHandler != nil {
 		// Concurrently simulate the job completion.
-		f.wg.Add(1)
-		go f.complete(job.Uuid)
+		go f.complete(job.ID)
 	}
 	return nil
 }
 
 func (f *FakeScheduler) complete(uuid string) {
 	f.mu.Lock()
-	i := slices.Index(f.Running, uuid)
-	f.Running = slices.Delete(f.Running, i, i+1)
-	f.Finished = append(f.Finished, uuid)
+	delete(f.Running, uuid)
+	f.Finished[uuid] = struct{}{}
 	f.mu.Unlock()
 
 	f.EventHandler.OnUpdate(
@@ -87,9 +95,13 @@ func (f *FakeScheduler) complete(uuid string) {
 			Status: batchv1.JobStatus{
 				Conditions: []batchv1.JobCondition{{Type: batchv1.JobComplete}},
 			},
-		})
+		},
+	)
 	f.wg.Done()
 }
+
+// Add adds n to the fake work waitgroup.
+func (f *FakeScheduler) Add(n int) { f.wg.Add(n) }
 
 // Wait waits for all fake work to complete. Call this before inspecting
 // Running, Finished, and Errors.

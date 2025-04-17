@@ -18,6 +18,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
+	"github.com/buildkite/roko"
 
 	"github.com/buildkite/agent/v3/clicommand"
 
@@ -53,6 +54,7 @@ type Config struct {
 	Namespace                     string
 	Image                         string
 	JobPrefix                     string
+	AgentToken                    string
 	AgentTokenSecretName          string
 	JobTTL                        time.Duration
 	JobActiveDeadlineSeconds      int
@@ -70,7 +72,7 @@ type Config struct {
 	AllowPodSpecPatchUnsafeCmdMod bool
 }
 
-func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
+func New(logger *zap.Logger, client kubernetes.Interface, agentClient *api.AgentClient, cfg Config) *worker {
 	ref, err := reference.Parse(cfg.Image)
 	if err != nil {
 		logger.Fatal("Invalid default image reference!", zap.Error(err))
@@ -79,6 +81,7 @@ func New(logger *zap.Logger, client kubernetes.Interface, cfg Config) *worker {
 		cfg:             cfg,
 		defaultImageRef: ref,
 		client:          client,
+		agentClient:     agentClient,
 		logger:          logger.Named("worker"),
 	}
 }
@@ -100,14 +103,40 @@ type worker struct {
 	cfg             Config
 	defaultImageRef reference.Reference
 	client          kubernetes.Interface
+	agentClient     *api.AgentClient
 	logger          *zap.Logger
 }
 
-func (w *worker) Handle(ctx context.Context, job model.Job) error {
-	logger := w.logger.With(zap.String("job-uuid", job.Uuid))
-	logger.Info("creating job")
+func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
+	logger := w.logger.With(zap.String("job-uuid", job.ID))
+	logger.Info("fetching job info")
 
-	inputs, err := w.ParseJob(job.CommandJob)
+	retrier := roko.NewRetrier(
+		roko.WithStrategy(roko.ExponentialSubsecond(1*time.Second)),
+		roko.WithJitterRange(-1*time.Second, 1*time.Second),
+		roko.WithMaxAttempts(5),
+	)
+	jobToRun, err := roko.DoFunc(ctx, retrier, func(*roko.Retrier) (*api.AgentJob, error) {
+		jtr, err := w.agentClient.GetJobToRun(ctx, job.ID)
+		if api.IsPermanentError(err) {
+			retrier.Break()
+		}
+		if err != nil {
+			return nil, err
+		}
+		return jtr, nil
+	})
+	if err != nil {
+		logger.Error("Couldn't get critical job information to run job", zap.Error(err))
+		return err
+	}
+	if jobToRun == nil {
+		logger.Info("Job became ineligible to run between queries - dropping")
+		return model.ErrStaleJob
+	}
+
+	logger.Info("creating job")
+	inputs, err := w.ParseJob(jobToRun, job)
 	if err != nil {
 		logger.Warn("Job parsing failed, failing job", zap.Error(err))
 		return w.failJob(ctx, inputs, fmt.Sprintf("agent-stack-k8s failed to parse the job: %v", err))
@@ -118,7 +147,7 @@ func (w *worker) Handle(ctx context.Context, job model.Job) error {
 		Containers: []corev1.Container{
 			{
 				Image:   w.cfg.Image,
-				Command: []string{job.Command},
+				Command: []string{jobToRun.Command},
 			},
 		},
 	}
@@ -177,19 +206,15 @@ type buildInputs struct {
 	otherPlugins []map[string]json.RawMessage
 }
 
-func (w *worker) ParseJob(job *api.CommandJob) (buildInputs, error) {
+func (w *worker) ParseJob(job *api.AgentJob, sjob *api.AgentScheduledJob) (buildInputs, error) {
 	parsed := buildInputs{
-		uuid:            job.Uuid,
+		uuid:            job.ID,
 		command:         job.Command,
-		agentQueryRules: job.AgentQueryRules,
-		priority:        job.Priority.Number,
-		envMap:          make(map[string]string),
+		agentQueryRules: sjob.AgentQueryRules,
+		priority:        sjob.Priority,
+		envMap:          job.Env,
 	}
 
-	for _, val := range job.Env {
-		parts := strings.SplitN(val, "=", 2)
-		parsed.envMap[parts[0]] = parts[1]
-	}
 	var plugins []map[string]json.RawMessage
 	if pluginsJSON, ok := parsed.envMap["BUILDKITE_PLUGINS"]; ok {
 		if err := json.Unmarshal([]byte(pluginsJSON), &plugins); err != nil {
@@ -330,7 +355,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		}
 	}
 
-	redactedVars := append([]string(nil), clicommand.RedactedVars.Value.Value()...)
+	redactedVars := slices.Clone(clicommand.RedactedVars.Value.Value())
 	redactedVars = append(redactedVars, w.cfg.AdditionalRedactedVars...)
 	env = append(env, corev1.EnvVar{
 		Name:  clicommand.RedactedVars.EnvVar,
@@ -377,7 +402,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	}
 
 	// Env vars used for command containers
-	containerEnv := append([]corev1.EnvVar{}, env...)
+	containerEnv := slices.Clone(env)
 	containerEnv = append(containerEnv, []corev1.EnvVar{
 		{
 			Name:  "BUILDKITE_KUBERNETES_EXEC",
@@ -1002,7 +1027,7 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 		securityContext = &corev1.SecurityContext{
 			RunAsUser:    ptr.To[int64](0),
 			RunAsGroup:   ptr.To[int64](0),
-			RunAsNonRoot: ptr.To[bool](false),
+			RunAsNonRoot: ptr.To(false),
 		}
 
 		fmt.Fprintf(&containerArgs, "chown -R %d /workspace\n", podUser)
@@ -1169,7 +1194,7 @@ su buildkite-agent -c "%s && buildkite-agent-entrypoint bootstrap"`,
 		checkoutContainer.SecurityContext = &corev1.SecurityContext{
 			RunAsUser:    ptr.To[int64](0),
 			RunAsGroup:   ptr.To[int64](0),
-			RunAsNonRoot: ptr.To[bool](false),
+			RunAsNonRoot: ptr.To(false),
 		}
 
 		checkoutContainer.Command = []string{"ash", "-c"}
