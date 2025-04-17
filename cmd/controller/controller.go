@@ -293,6 +293,9 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 
 	if cfg.PodSpecPatch != nil {
 		for _, c := range cfg.PodSpecPatch.Containers {
+			if c.Image != strings.ToLower(c.Image) {
+				return nil, fmt.Errorf("container image contains uppercase letters: %s", c.Image)
+			}
 			if len(c.Command) != 0 || len(c.Args) != 0 {
 				return nil, scheduler.ErrNoCommandModification
 			}
