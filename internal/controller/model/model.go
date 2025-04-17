@@ -4,7 +4,6 @@ package model
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 
@@ -19,21 +18,15 @@ var ErrDuplicateJob = errors.New("job already scheduled")
 // begin scheduling.
 var ErrStaleJob = errors.New("stale-job-data-timeout")
 
-// JobHandler implementations can handle a job.
+// JobHandler implementations can handle one jobs.
 type JobHandler interface {
-	Handle(context.Context, Job) error
+	Handle(context.Context, *api.AgentScheduledJob) error
 }
 
-// Job wraps the Buildkite command job with extra information.
-type Job struct {
-	// The job information.
-	*api.CommandJob
-
-	// Closed when the job information becomes stale.
-	StaleCh <-chan struct{}
-
-	// When we began the Buildkite GraphQL query that returned this job.
-	QueriedAt time.Time
+// ManyJobHandler implementations can handle batches of jobs.
+type ManyJobHandler interface {
+	HandleMany(context.Context, []*api.AgentScheduledJob) error
+	Pause(bool)
 }
 
 // JobFinished reports if the job has a Complete or Failed status condition.

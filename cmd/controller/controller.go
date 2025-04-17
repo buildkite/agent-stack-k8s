@@ -20,7 +20,7 @@ import (
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	en_translations "github.com/go-playground/validator/v10/translations/en"
-	"github.com/mitchellh/mapstructure"
+	mapstructure "github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -102,11 +102,6 @@ func AddConfigFlags(cmd *cobra.Command) {
 	)
 	cmd.Flags().String("graphql-endpoint", "", "Buildkite GraphQL endpoint URL")
 
-	cmd.Flags().Duration(
-		"stale-job-data-timeout",
-		config.DefaultStaleJobDataTimeout,
-		"Duration after querying jobs in Buildkite that the data is considered valid",
-	)
 	cmd.Flags().Int(
 		"job-creation-concurrency",
 		config.DefaultJobCreationConcurrency,
@@ -152,11 +147,6 @@ func AddConfigFlags(cmd *cobra.Command) {
 		false,
 		"Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
 	)
-	cmd.Flags().Int(
-		"graphql-results-limit",
-		config.DefaultGraphQLResultsLimit,
-		"Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled",
-	)
 	cmd.Flags().Bool(
 		"enable-queue-pause",
 		false,
@@ -168,9 +158,19 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"Permits PodSpecPatch to modify the command or args fields of stack-provided containers. See the warning in the README before enabling this option",
 	)
 	cmd.Flags().Int(
+		"pagination-page-size",
+		config.DefaultPaginationPageSize,
+		"Sets the maximum number of Jobs per page when retreiving Buildkite Jobs to be Scheduled.",
+	)
+	cmd.Flags().Int(
 		"pagination-depth-limit",
 		config.DefaultPaginationDepthLimit,
-		"Sets the maximum depth of pagination when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite GraphQL API and number of Jobs to be scheduled on the Kubernetes Cluster.",
+		"Sets the maximum number of pages when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite API and number of Jobs to be scheduled on the Kubernetes Cluster.",
+	)
+	cmd.Flags().Duration(
+		"query-reset-interval",
+		config.DefaultQueryResetInterval,
+		"Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query.",
 	)
 }
 
@@ -266,6 +266,7 @@ func decodeKubeSpecials(f, t reflect.Type, data any) (any, error) {
 // use the same struct tags that the k8s libraries provide.
 func useJSONTagForDecoder(c *mapstructure.DecoderConfig) {
 	c.TagName = "json"
+	c.SquashTagOption = "inline"
 }
 
 // ParseAndValidateConfig parses the config into a struct and validates the values.
@@ -292,6 +293,9 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 
 	if cfg.PodSpecPatch != nil {
 		for _, c := range cfg.PodSpecPatch.Containers {
+			if c.Image != strings.ToLower(c.Image) {
+				return nil, fmt.Errorf("container image contains uppercase letters: %s", c.Image)
+			}
 			if len(c.Command) != 0 || len(c.Args) != 0 {
 				return nil, scheduler.ErrNoCommandModification
 			}

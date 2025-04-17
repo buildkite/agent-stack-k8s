@@ -3,7 +3,6 @@ package limiter_test
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
@@ -18,68 +17,69 @@ func TestLimiter(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	t.Cleanup(cancel)
 
-	handler := &model.FakeScheduler{
-		MaxRunning: 1,
-	}
-	limiter := limiter.New(zaptest.NewLogger(t), handler, 1)
-	handler.EventHandler = limiter
+	fakeSched := model.NewFakeScheduler(1, nil)
+	limiter := limiter.New(ctx, zaptest.NewLogger(t), fakeSched, 1, 1)
+	fakeSched.EventHandler = limiter
+	fakeSched.Add(50)
 
 	// simulate receiving a bunch of jobs
-	var wg sync.WaitGroup
-	wg.Add(50)
+	var jobs []*api.AgentScheduledJob
 	for range 50 {
-		go func() {
-			defer wg.Done()
-			err := limiter.Handle(ctx, model.Job{CommandJob: &api.CommandJob{Uuid: uuid.New().String()}})
-			if err != nil {
-				t.Errorf("limiter.Handle(ctx, &job) = %v", err)
-			}
-		}()
+		jobs = append(jobs, &api.AgentScheduledJob{ID: uuid.New().String()})
 	}
-	wg.Wait()
+	if err := limiter.HandleMany(ctx, jobs); err != nil {
+		t.Errorf("limiter.HandleMany(ctx, jobs) = %v", err)
+	}
+	fakeSched.Wait()
 
-	handler.Wait()
+	if got, want := len(fakeSched.Running), 0; got != want {
+		t.Errorf("len(fakeSched.Running) = %d, want %d", got, want)
+	}
+	if got, want := len(fakeSched.Finished), 50; got != want {
+		t.Errorf("len(fakeSched.Finished) = %d, want %d", got, want)
+	}
+	if got, want := fakeSched.Errors, 0; got != want {
+		t.Errorf("fakeSched.Errors = %d, want %d", got, want)
+	}
 
-	if got, want := len(handler.Running), 0; got != want {
-		t.Errorf("len(handler.running) = %d, want %d", got, want)
-	}
-	if got, want := len(handler.Finished), 50; got != want {
-		t.Errorf("len(handler.finished) = %d, want %d", got, want)
-	}
-	if got, want := handler.Errors, 0; got != want {
-		t.Errorf("handler.errors = %d, want %d", got, want)
-	}
+	// Wait for the limiter workers to exit (to avoid logging after the test)
+	cancel()
+	limiter.Wait()
 }
 
-func TestLimiter_SkipsCreateErrors(t *testing.T) {
+func TestLimiter_SchedulerErrors(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	handler := &model.FakeScheduler{
-		Err: errors.New("invalid"),
-	}
-	limiter := limiter.New(zaptest.NewLogger(t), handler, 1)
-	handler.EventHandler = limiter
+	fakeSched := model.NewFakeScheduler(0, errors.New("invalid"))
+	limiter := limiter.New(ctx, zaptest.NewLogger(t), fakeSched, 1, 1)
+	fakeSched.EventHandler = limiter
+	fakeSched.Add(50)
 
+	var jobs []*api.AgentScheduledJob
 	for range 50 {
-		err := limiter.Handle(ctx, model.Job{CommandJob: &api.CommandJob{Uuid: uuid.New().String()}})
-		if !errors.Is(err, handler.Err) {
-			t.Errorf("limiter.Handle(ctx, some-job) error = %v, want %v", err, handler.Err)
-		}
+		jobs = append(jobs, &api.AgentScheduledJob{ID: uuid.New().String()})
+	}
+	if err := limiter.HandleMany(ctx, jobs); err != nil {
+		t.Errorf("limiter.HandleMany(ctx, jobs) = %v", err)
+	}
+	fakeSched.Wait()
+
+	if got, want := len(fakeSched.Running), 0; got != want {
+		t.Errorf("len(fakeSched.Running) = %d, want %d", got, want)
+	}
+	if got, want := len(fakeSched.Finished), 0; got != want {
+		t.Errorf("len(fakeSched.Finished) = %d, want %d", got, want)
+	}
+	if got, want := fakeSched.Errors, 50; got != want {
+		t.Errorf("fakeSched.Errors = %d, want %d", got, want)
 	}
 
-	handler.Wait()
-	if got, want := len(handler.Running), 0; got != want {
-		t.Errorf("len(handler.running) = %d, want %d", got, want)
-	}
-	if got, want := len(handler.Finished), 0; got != want {
-		t.Errorf("len(handler.finished) = %d, want %d", got, want)
-	}
-	if got, want := handler.Errors, 50; got != want {
-		t.Errorf("handler.errors = %d, want %d", got, want)
-	}
+	// Wait for the limiter workers to exit (to avoid logging after the test)
+	cancel()
+	limiter.Wait()
 }

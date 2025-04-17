@@ -3,7 +3,6 @@ package agenttags_test
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
@@ -206,7 +205,7 @@ func TestJobTagsMatchAgentTags(t *testing.T) {
 
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			t.Parallel()
-			actualResult := agenttags.JobTagsMatchAgentTags(maps.All(test.jobTags), test.agentTags)
+			actualResult := agenttags.JobTagsMatchAgentTags(test.jobTags, test.agentTags)
 			assert.Equal(
 				t,
 				test.expectedResult,

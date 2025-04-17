@@ -7,11 +7,13 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/buildkite/roko"
 
 	agentcore "github.com/buildkite/agent/v3/core"
 
@@ -29,10 +31,11 @@ import (
 )
 
 type podWatcher struct {
-	logger *zap.Logger
-	k8s    kubernetes.Interface
-	gql    graphql.Client
-	cfg    *config.Config
+	logger      *zap.Logger
+	k8s         kubernetes.Interface
+	agentClient *api.AgentClient
+	gql         graphql.Client
+	cfg         *config.Config
 
 	// ImagePullBackOff detection waits at least this duration after pod
 	// creation before it cancels the job.
@@ -76,7 +79,7 @@ type podWatcher struct {
 //   - If a pod is pending, every so often Buildkite will be checked to see if
 //     the corresponding job has been cancelled so that the pod can be evicted
 //     early.
-func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, cfg *config.Config) *podWatcher {
+func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, agentClient *api.AgentClient, cfg *config.Config) *podWatcher {
 	imagePullBackOffGracePeriod := cfg.ImagePullBackOffGracePeriod
 	if imagePullBackOffGracePeriod <= 0 {
 		imagePullBackOffGracePeriod = config.DefaultImagePullBackOffGracePeriod
@@ -89,7 +92,8 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, cfg *config.Con
 	pw := &podWatcher{
 		logger:                      logger,
 		k8s:                         k8s,
-		gql:                         api.NewClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+		agentClient:                 agentClient,
+		gql:                         api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 		cfg:                         cfg,
 		imagePullBackOffGracePeriod: imagePullBackOffGracePeriod,
 		jobCancelCheckerInterval:    jobCancelCheckerInterval,
@@ -470,20 +474,25 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 
 	// Get the current job state from BK.
 	// What we do next depends on what state it is in.
-	resp, err := api.GetCommandJob(ctx, w.gql, jobUUID.String())
+	retrier := roko.NewRetrier(
+		roko.WithStrategy(roko.ExponentialSubsecond(1*time.Second)),
+		roko.WithJitterRange(-1*time.Second, 1*time.Second),
+		roko.WithMaxAttempts(5),
+	)
+	job, err := roko.DoFunc(ctx, retrier, func(*roko.Retrier) (*api.AgentJobState, error) {
+		job, err := w.agentClient.GetJobState(ctx, jobUUID.String())
+		if api.IsPermanentError(err) {
+			retrier.Break()
+		}
+		return job, err
+	})
 	if err != nil {
-		log.Warn("Failed to query command job", zap.Error(err))
+		log.Warn("Failed to fetch state of job", zap.Error(err))
 		return
 	}
-	job, ok := resp.Job.(*api.GetCommandJobJobJobTypeCommand)
-	if !ok {
-		log.Warn("Job was not a command job")
-		return
-	}
+	log = log.With(zap.String("job_state", job.State))
 
-	log = log.With(zap.String("job_state", string(job.State)))
-
-	switch job.State {
+	switch api.JobStates(strings.ToUpper(job.State)) {
 	case api.JobStatesScheduled:
 		// We can acquire it and fail it ourselves.
 		log.Info("One or more job containers are waiting too long for images. Failing.")
@@ -571,19 +580,18 @@ func (w *podWatcher) jobCancelChecker(ctx context.Context, stopCh <-chan struct{
 			return
 
 		case <-ticker.C:
-			resp, err := api.GetCommandJob(ctx, w.gql, jobUUID.String())
+			job, err := w.agentClient.GetJobState(ctx, jobUUID.String())
+			if api.IsPermanentError(err) {
+				log.Error("Couldn't fetch state of job", zap.Error(err))
+				return
+			}
 			if err != nil {
 				// *shrug* Check again soon.
 				continue
 			}
-			job, ok := resp.Job.(*api.GetCommandJobJobJobTypeCommand)
-			if !ok {
-				log.Warn("Job was not a command job")
-				continue
-			}
 			log := log.With(zap.String("job_state", string(job.State)))
 
-			switch job.State {
+			switch api.JobStates(job.State) {
 			case api.JobStatesCanceled, api.JobStatesCanceling:
 				log.Info("Evicting pending pod for cancelled job")
 				eviction := &policyv1.Eviction{ObjectMeta: podMeta}

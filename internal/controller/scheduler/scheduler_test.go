@@ -3,7 +3,6 @@ package scheduler
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -225,6 +224,26 @@ func TestPatchPodSpec_ErrNoCommandModification(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "uppercase image name should fail",
+			podspec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:    CheckoutContainerName,
+						Image:   "ALPINE:latest",
+						Command: []string{"echo hello world"},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name: CheckoutContainerName,
+						Args: []string{"this", "shouldn't", "work"},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range cases {
@@ -265,32 +284,35 @@ func TestJobPluginConversion(t *testing.T) {
 			},
 		},
 	}
-	pluginsJSON, err := json.Marshal([]map[string]interface{}{
+	pluginsJSON, err := json.Marshal([]map[string]any{
 		{
 			"github.com/buildkite-plugins/kubernetes-buildkite-plugin": pluginConfig,
 		},
 		{
-			"github.com/buildkite-plugins/some-other-buildkite-plugin": map[string]interface{}{
+			"github.com/buildkite-plugins/some-other-buildkite-plugin": map[string]any{
 				"foo": "bar",
 			},
 		},
 	})
 	require.NoError(t, err)
 
-	job := &api.CommandJob{
-		Uuid:            "abc",
-		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
+	job := &api.AgentJob{
+		ID:  "abc",
+		Env: map[string]string{"BUILDKITE_PLUGINS": string(pluginsJSON)},
+	}
+	sjob := &api.AgentScheduledJob{
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	worker := New(
 		zaptest.NewLogger(t),
+		nil,
 		nil,
 		Config{
 			AgentTokenSecretName: "token-secret",
 			Image:                "buildkite/agent:latest",
 		},
 	)
-	inputs, err := worker.ParseJob(job)
+	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
 	kjob, err := worker.Build(pluginConfig.PodSpec, false, inputs)
 	require.NoError(t, err)
@@ -362,20 +384,23 @@ func TestTagEnv(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	job := &api.CommandJob{
-		Uuid:            "abc",
-		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", string(pluginsJSON))},
+	job := &api.AgentJob{
+		ID:  "abc",
+		Env: map[string]string{"BUILDKITE_PLUGINS": string(pluginsJSON)},
+	}
+	sjob := &api.AgentScheduledJob{
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	worker := New(
 		logger,
+		nil,
 		nil,
 		Config{
 			AgentTokenSecretName: "token-secret",
 			Image:                "buildkite/agent:latest",
 		},
 	)
-	inputs, err := worker.ParseJob(job)
+	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
 	kjob, err := worker.Build(pluginConfig.PodSpec, false, inputs)
 	require.NoError(t, err)
@@ -401,15 +426,15 @@ func assertEnvFieldPath(t *testing.T, container corev1.Container, envVarName, fi
 
 func TestJobWithNoKubernetesPlugin(t *testing.T) {
 	t.Parallel()
-	job := &api.CommandJob{
-		Uuid:            "abc",
-		Command:         "echo hello world",
-		AgentQueryRules: []string{},
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
 	}
-	worker := New(zaptest.NewLogger(t), nil, Config{
+	sjob := &api.AgentScheduledJob{}
+	worker := New(zaptest.NewLogger(t), nil, nil, Config{
 		Image: "buildkite/agent:latest",
 	})
-	inputs, err := worker.ParseJob(job)
+	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
 	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
 	require.NoError(t, err)
@@ -435,15 +460,18 @@ func TestBuild(t *testing.T) {
 	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
 	require.NoError(t, err)
 
-	job := &api.CommandJob{
-		Uuid:            "abc",
-		Command:         "echo hello world",
-		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+		Env:     map[string]string{"BUILDKITE_PLUGINS": string(pluginsJSON)},
+	}
+	sjob := &api.AgentScheduledJob{
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 
 	worker := New(
 		zaptest.NewLogger(t),
+		nil,
 		nil,
 		Config{
 			Namespace:            "buildkite",
@@ -467,7 +495,7 @@ func TestBuild(t *testing.T) {
 			},
 		},
 	)
-	inputs, err := worker.ParseJob(job)
+	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
 	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
 	require.NoError(t, err)
@@ -503,15 +531,18 @@ func TestBuildSkipCheckout(t *testing.T) {
 	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
 	require.NoError(t, err)
 
-	job := &api.CommandJob{
-		Uuid:            "abc",
-		Command:         "echo hello world",
-		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+		Env:     map[string]string{"BUILDKITE_PLUGINS": string(pluginsJSON)},
+	}
+	sjob := &api.AgentScheduledJob{
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 
 	worker := New(
 		zaptest.NewLogger(t),
+		nil,
 		nil,
 		Config{
 			Namespace:            "buildkite",
@@ -519,7 +550,7 @@ func TestBuildSkipCheckout(t *testing.T) {
 			AgentTokenSecretName: "bkcq_1234567890",
 		},
 	)
-	inputs, err := worker.ParseJob(job)
+	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
 	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
 	require.NoError(t, err)
@@ -548,15 +579,18 @@ func TestBuildCheckoutEmptyConfigEnv(t *testing.T) {
 	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
 	require.NoError(t, err)
 
-	job := &api.CommandJob{
-		Uuid:            "abc",
-		Command:         "echo hello world",
-		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+		Env:     map[string]string{"BUILDKITE_PLUGINS": string(pluginsJSON)},
+	}
+	sjob := &api.AgentScheduledJob{
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 
 	worker := New(
 		zaptest.NewLogger(t),
+		nil,
 		nil,
 		Config{
 			Namespace:            "buildkite",
@@ -564,7 +598,7 @@ func TestBuildCheckoutEmptyConfigEnv(t *testing.T) {
 			AgentTokenSecretName: "bkcq_1234567890",
 		},
 	)
-	inputs, err := worker.ParseJob(job)
+	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
 	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
 	require.NoError(t, err)
@@ -589,15 +623,17 @@ func TestFailureJobs(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	job := &api.CommandJob{
-		Uuid:            "abc",
-		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+	job := &api.AgentJob{
+		ID:  "abc",
+		Env: map[string]string{"BUILDKITE_PLUGINS": string(pluginsJSON)},
+	}
+	sjob := &api.AgentScheduledJob{
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	wrapper := New(zaptest.NewLogger(t), nil, Config{
+	wrapper := New(zaptest.NewLogger(t), nil, nil, Config{
 		Image: "buildkite/agent:latest",
 	})
-	_, err = wrapper.ParseJob(job)
+	_, err = wrapper.ParseJob(job, sjob)
 	require.Error(t, err)
 }
 
@@ -610,16 +646,18 @@ func TestProhibitKubernetesPlugin(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	job := &api.CommandJob{
-		Uuid:            "abc",
-		Env:             []string{fmt.Sprintf("BUILDKITE_PLUGINS=%s", pluginsJSON)},
+	job := &api.AgentJob{
+		ID:  "abc",
+		Env: map[string]string{"BUILDKITE_PLUGINS": string(pluginsJSON)},
+	}
+	sjob := &api.AgentScheduledJob{
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	worker := New(zaptest.NewLogger(t), nil, Config{
+	worker := New(zaptest.NewLogger(t), nil, nil, Config{
 		Image:             "buildkite/agent:latest",
 		ProhibitK8sPlugin: true,
 	})
-	_, err = worker.ParseJob(job)
+	_, err = worker.ParseJob(job, sjob)
 	require.Error(t, err)
 }
 
@@ -1049,6 +1087,7 @@ func TestImagePullPolicies(t *testing.T) {
 
 			worker := New(
 				zaptest.NewLogger(t),
+				nil,
 				nil,
 				Config{
 					Namespace:                   "buildkite",

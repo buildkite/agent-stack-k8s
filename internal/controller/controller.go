@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/deduper"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/limiter"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 
@@ -25,6 +25,8 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 )
+
+const agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 
 func Run(
 	ctx context.Context,
@@ -66,22 +68,60 @@ func Run(
 		}()
 	}
 
-	// Monitor polls Buildkite GraphQL for jobs. It passes them to Deduper.
-	// Job flow: monitor -> deduper -> limiter -> scheduler.
-	m, err := monitor.New(logger.Named("monitor"), k8sClient, monitor.Config{
-		GraphQLEndpoint:        cfg.GraphQLEndpoint,
-		Namespace:              cfg.Namespace,
-		Org:                    cfg.Org,
-		ClusterUUID:            cfg.ClusterUUID,
-		MaxInFlight:            cfg.MaxInFlight,
-		PollInterval:           cfg.PollInterval,
-		StaleJobDataTimeout:    cfg.StaleJobDataTimeout,
-		JobCreationConcurrency: cfg.JobCreationConcurrency,
-		Tags:                   cfg.Tags,
-		Token:                  cfg.BuildkiteToken,
-		GraphQLResultsLimit:    cfg.GraphQLResultsLimit,
-		EnableQueuePause:       cfg.EnableQueuePause,
-		PaginationDepthLimit:   cfg.PaginationDepthLimit,
+	// Agent token required to query for jobs.
+	agentToken, err := fetchAgentToken(ctx, logger, k8sClient, cfg.Namespace, cfg.AgentTokenSecret)
+	if err != nil {
+		logger.Error("Couldn't get agent token from secret", zap.Error(err))
+		return
+	}
+
+	agentEndpoint := ""
+	if cfg.AgentConfig != nil && cfg.AgentConfig.Endpoint != nil {
+		agentEndpoint = *cfg.AgentConfig.Endpoint
+	}
+
+	agentTags, tagErrs := agenttags.TagMapFromTags(cfg.Tags)
+	if err := errors.Join(tagErrs...); err != nil {
+		logger.Error("Couldn't process the configured agent tags", zap.Error(err))
+		return
+	}
+
+	queue := agentTags["queue"]
+	if queue == "" {
+		logger.Error("The 'queue' tag is missing, but it is required", zap.Error(err))
+		return
+	}
+
+	agentClient, err := api.NewAgentClient(
+		agentToken,
+		agentEndpoint,
+		cfg.Org,
+		cfg.ClusterUUID,
+		queue,
+		cfg.Tags,
+	)
+	if err != nil {
+		logger.Error("Couldn't create Agent API client", zap.Error(err))
+		return
+	}
+
+	// **************************************************************
+	// ***                        JOB FLOW                        ***
+	// ***       Monitor -> Limiter -> Deduper -> Scheduler       ***
+	// **************************************************************
+	//
+	// Monitor polls Buildkite for jobs. It passes them to Limiter.
+	m, err := monitor.New(logger.Named("monitor"), k8sClient, agentClient, monitor.Config{
+		Namespace:            cfg.Namespace,
+		Org:                  cfg.Org,
+		ClusterUUID:          cfg.ClusterUUID,
+		Queue:                queue,
+		MaxInFlight:          cfg.MaxInFlight,
+		PollInterval:         cfg.PollInterval,
+		Tags:                 cfg.Tags,
+		TagMap:               agentTags,
+		PaginationPageSize:   cfg.PaginationPageSize,
+		PaginationDepthLimit: cfg.PaginationDepthLimit,
 	})
 	if err != nil {
 		logger.Fatal("failed to create monitor", zap.Error(err))
@@ -89,7 +129,7 @@ func Run(
 
 	// Scheduler does the complicated work of converting a Buildkite job into
 	// a pod to run that job. It talks to the k8s API to create pods.
-	sched := scheduler.New(logger.Named("scheduler"), k8sClient, scheduler.Config{
+	sched := scheduler.New(logger.Named("scheduler"), k8sClient, agentClient, scheduler.Config{
 		Namespace:                     cfg.Namespace,
 		Image:                         cfg.Image,
 		AgentTokenSecretName:          cfg.AgentTokenSecret,
@@ -115,24 +155,19 @@ func Run(
 		logger.Fatal("failed to create informer", zap.Error(err))
 	}
 
-	nextHandler := model.JobHandler(sched)
-	if cfg.MaxInFlight > 0 {
-		// Limiter prevents scheduling more than cfg.MaxInFlight jobs at once
-		//    (if configured)
-		// Once it figures out a job can be scheduled, it passes to the scheduler.
-		limiter := limiter.New(logger.Named("limiter"), sched, cfg.MaxInFlight)
-		if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
-			logger.Fatal("failed to register limiter informer", zap.Error(err))
-		}
-		nextHandler = limiter
-	}
-
 	// Deduper prevents multiple pods being scheduled for the same job.
-	// It passes jobs to the limiter if there is a limit, or directly to the
-	// scheduler if there is no limit.
-	deduper := deduper.New(logger.Named("deduper"), nextHandler)
+	// It passes jobs to the scheduler.
+	deduper := deduper.New(logger.Named("deduper"), sched)
 	if err := deduper.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Fatal("failed to register deduper informer", zap.Error(err))
+	}
+
+	// Limiter prevents scheduling more than cfg.MaxInFlight jobs at once
+	// (if configured) and is responsible for the priority queue of jobs.
+	// Once it figures out a job can be scheduled, it passes to the deduper.
+	limiter := limiter.New(ctx, logger.Named("limiter"), deduper, cfg.MaxInFlight, cfg.JobCreationConcurrency)
+	if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
+		logger.Fatal("failed to register limiter informer", zap.Error(err))
 	}
 
 	// PodCompletionWatcher watches k8s for pods where the agent has terminated,
@@ -163,6 +198,7 @@ func Run(
 	podWatcher := scheduler.NewPodWatcher(
 		logger.Named("podWatcher"),
 		k8sClient,
+		agentClient,
 		cfg,
 	)
 	if err := podWatcher.RegisterInformer(ctx, informerFactory); err != nil {
@@ -172,7 +208,7 @@ func Run(
 	select {
 	case <-ctx.Done():
 		logger.Info("controller exiting", zap.Error(ctx.Err()))
-	case err := <-m.Start(ctx, deduper):
+	case err := <-m.Start(ctx, limiter):
 		logger.Info("monitor failed", zap.Error(err))
 	}
 }
@@ -213,4 +249,20 @@ func NewInformerFactory(
 			opt.LabelSelector = labels.NewSelector().Add(requirements...).String()
 		}),
 	), nil
+}
+
+// fetchAgentToken fetches the agent token from the agent token secret.
+func fetchAgentToken(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface, namespace, agentTokenSecretName string) (string, error) {
+	// Need to fetch the agent token ourselves.
+	tokenSecret, err := k8sClient.CoreV1().Secrets(namespace).Get(ctx, agentTokenSecretName, metav1.GetOptions{})
+	if err != nil {
+		logger.Error("fetching agent token from secret", zap.Error(err))
+		return "", err
+	}
+	agentToken := string(tokenSecret.Data[agentTokenKey])
+	if agentToken == "" {
+		logger.Error("agent token is empty")
+		return "", errors.New("agent token is empty")
+	}
+	return agentToken, nil
 }
