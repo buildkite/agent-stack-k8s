@@ -93,12 +93,39 @@ config:
         - name: SSH_PRIVATE_RSA_KEY
           valueFrom:
             secretKeyRef:
-              name: private-ssh-key # <---- this is the name of the Kubernetes Secret to use for container-0 (setup on the same way as the command above)
+              name: my-git-ssh-credentials # <---- this is the name of the Kubernetes Secret to use for container-0 (setup on the same way as the command above)
               key: SSH_PRIVATE_RSA_KEY
 
 ```
 
 After setting the SSH key to use on `container-0`, you will need to setup `container-0` for `git` operations. The suggested approach is to implement a `pre-command` hook to run `ssh-keyscan` and generate the `known_hosts` files.
+
+```bash
+#!/bin/bash
+set -ueo pipefail
+
+eval $(ssh-agent -s)
+echo "$SSH_PRIVATE_RSA_KEY" | tr -d '\r' | ssh-add -
+mkdir -p ~/.ssh
+touch ~/.ssh/config
+touch ~/.ssh/known_hosts
+chmod -R 400 ~/.ssh
+ssh-keyscan github.com >> ~/.ssh/known_hosts
+```
+
+In your pipeline yaml, you can now add git operations such as `git clone` in the command step.
+
+```yaml
+# pipeline.yaml
+steps:
+  - label: :kubernetes: Hello World!
+    command:  git clone -v git@github.com:{repo_name}.git
+    plugins:
+      - kubernetes: 
+          podSpec:
+            containers:
+                - image: buildkite/agent:alpine-k8s
+```
 
 ## Cloning repos using Git credentials
 
