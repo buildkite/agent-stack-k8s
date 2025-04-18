@@ -1,6 +1,27 @@
-# Kubernetes podSpec
+# Kubernetes PodSpec
 
 Using the `kubernetes` plugin allows specifying a [`PodSpec`](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec) Kubernetes API resource that will be used in a Kubernetes [`Job`](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/job-v1/#Job).
+
+## Kubernetes PodSpec Generation
+
+The `agent-stack-k8s` controller allows users to define some or all of a Kubernetes `PodSpec` from the following locations:
+* Controller configuration: `pod-spec-patch`
+* Buildkite job, using the `kubernetes` plugin: `podSpec`, `podSpecPatch`
+
+With multiple `PodSpec` inputs provided, here is how the `agent-stack-k8s` controller generates a Kubernetes `PodSpec`:
+1. Create a simple `PodSpec` containing a single container with the `Image` defined in the controller's configuration and the value of the Buildkite job's command (`BUILDKITE_COMMAND`)
+2. If the `kubernetes` plugin is present in the Buildkite job's plugins, and contains a `podSpec`, use this as the starting `PodSpec` instead
+3. Apply the `/workspace` Volume
+4. Apply any `extra-volume-mounts` defined by the `kubernetes` plugin
+5. Modify any `containers` defined by the `kubernetes` plugin, overriding the `command` and `args`
+6. Add the `agent` container to the `PodSpec`
+7. Add the `checkout` container to the `PodSpec` (if `skip.checkout` is set to `false`)
+8. Add `init` containers for the `imagecheck-#` containers, based on the number of unique images defined in the `PodSpec`
+9. Apply `pod-spec-patch` from the controller's configuration, using a [strategic merge patch](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/) in the controller.
+10. Apply `podSpecPatch` from the `kubernetes` plugin, using a [strategic merge patch](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/) in the controller.
+11. Ensure `checkout` container not present after applying patching via `pod-spec-patch`, `podSpecPatch` (if `skip.checkout` is set to `true`)
+12. Remove any duplicate `VolumeMounts` present in `PodSpec` after patching
+13. Create Kubernetes Job with final `PodSpec`
 
 ## PodSpec command and args interpretation
 
@@ -87,8 +108,9 @@ steps:
   plugins:
   - kubernetes:
       podSpecPatch:
-      - name: container-0
-        image: alpine:latest
+        containers:
+        - name: container-0
+          image: alpine:latest
 
 - name: Hello World from alpine!
   commands:
@@ -97,12 +119,7 @@ steps:
   plugins:
   - kubernetes:
       podSpecPatch:
-      - name: container-0      # <---- You must specify this as exactly `container-0` for now.
-        image: alpine:latest   #       We are experimenting with ways to make it more ergonomic
+        containers:
+        - name: container-0      # <---- You must specify this as exactly `container-0` for now.
+          image: alpine:latest   #       We are experimenting with ways to make it more ergonomic
 ```
-
-## Pod Spec patch
-Rather than defining the entire Pod Spec in a step, there is the option to define a [strategic merge patch](https://kubernetes.io/docs/tasks/manage-kubernetes-objects/update-api-object-kubectl-patch/) in the controller.
-Agent Stack K8s will first generate a K8s Job with a PodSpec from a Buildkite Job and then apply the patch in the controller.
-It will then apply the patch specified in its config file, which is derived from the value in the helm installation.
-This can replace much of the functionality of some of the other fields in the plugin, like `gitEnvFrom`.
