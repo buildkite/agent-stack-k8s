@@ -227,11 +227,6 @@
           "title": "Interval between polling Buildkite for jobs. Values below 1 second will be ignored and 1 second will be used instead",
           "examples": ["1s", "1m"]
         },
-        "stale-job-data-timeout": {
-          "type": "string",
-          "deprecated": true,
-          "title": "Deprecated - query results no longer become stale"
-        },
         "job-creation-concurrency": {
           "type": "integer",
           "default": 5,
