@@ -120,7 +120,7 @@ func (a *AgentConfig) applyCommonTo(ctr *corev1.Container) {
 			a.PluginsPath = &pluginsPath
 		}
 		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
-			Name:      a.HooksVolume.Name,
+			Name:      a.PluginsVolume.Name,
 			MountPath: *a.PluginsPath,
 		})
 	}

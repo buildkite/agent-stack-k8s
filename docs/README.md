@@ -18,6 +18,7 @@ Whether you're looking to set up your first Buildkite agent in a Kubernetes clus
 -   [Validating your pipeline](pipeline_validation.md)
 -   [Job metadata](job_metadata.md)
 -   [Sidecars](sidecars.md)
+-   [Kubernetes PodSpec](podspec.md)
 -   [Container resource limits](container_resource_limits.md)
 -   [Volume mounts](volume_mounts.md)
 -   [Override commands](override_commands.md)
