@@ -1,11 +1,17 @@
 # Controller Configuration
 
+* [Command Line Arguments](#command-line-arguments)
+* [Kubernetes Node Selection](#kubernetes-node-selection)
 
-**Usage:**
-- `agent-stack-k8s [flags]`
+## Command Line Arguments
+
+### Usage
+
 - `agent-stack-k8s [command]`
+- `agent-stack-k8s [flags]`
 
-**Available Commands:**
+### Available Commands
+
 | Command     | Description                                                       |
 |-------------|-------------------------------------------------------------------|
 | `completion`| Generate the autocompletion script for the specified shell        |
@@ -13,7 +19,9 @@
 | `lint`      | A tool for linting Buildkite pipelines                            |
 | `version`   | Prints the version                                                |
 
-**Flags:**
+Use `agent-stack-k8s [command] --help` for more information about a command.
+
+### Flags
 
 | Flag                                           | Description                                                                                                                                                                                                                                                                                                                   |
 |------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -45,12 +53,21 @@
 | `--prohibit-kubernetes-plugin`                 | Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec                                                                                            |
 | `--prometheus-port uint16`                     | Bind port to expose Prometheus /metrics; 0 disables it                                                                                                                                                                                                                                                                        |
 | `--tags strings`                               | A comma-separated list of agent tags. The "queue" tag must be unique (e.g., "queue=kubernetes,os=linux") (default [queue=kubernetes])                                                                                                                                                                                         |
-| `--enable-queue-pause bool`                    | Allow the controller to pause processing the jobs when the queue is paused on Buildkite. (default false)
+| `--enable-queue-pause bool`                    | Allow the controller to pause processing the jobs when the queue is paused on Buildkite (requires `v0.24.0` or greater) (default false)
 
+## Kubernetes Node Selection
 
+The `agent-stack-k8s` controller can be deployed to particular Kubernetes Nodes, using the Kubernetes PodSpec [`nodeSelector`](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes/#create-a-pod-that-gets-scheduled-to-your-chosen-node) field.
 
-Use `agent-stack-k8s [command] --help` for more information about a command.
+### Configuration values YAML file
 
+The `nodeSelector` field can be defined in the controller's configuration:
 
-> With release `v0.24.0` of `agent-stack-k8s`, we can enable `--enable-queue-pause` in the config, allowing the controller to pause processing the jobs when `queue` is paused on Buildkite.
-
+```yaml
+# values.yml
+...
+nodeSelector:
+  teamowner: "services"
+config:
+...
+```

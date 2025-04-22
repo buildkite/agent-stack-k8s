@@ -55,7 +55,7 @@ Under the `kubernetes` plugin, specify the name of the Kubernetes Secret via the
 ```yaml
 # pipeline.yaml
 steps:
-- label: :kubernetes: Hello World!
+- label: ":kubernetes: Hello World!"
   command: echo Hello World!
   agents:
     queue: kubernetes
@@ -128,7 +128,7 @@ Under the `kubernetes` plugin, specify the name of the Kubernetes Secret via the
 ```yaml
 # pipeline.yaml
 steps:
-- label: :kubernetes: Hello World!
+- label: ":kubernetes: Hello World!"
   command: echo Hello World!
   agents:
     queue: kubernetes
