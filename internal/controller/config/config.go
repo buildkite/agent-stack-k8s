@@ -19,12 +19,12 @@ const (
 	DefaultImagePullBackOffGracePeriod  = 30 * time.Second
 	DefaultJobCancelCheckerPollInterval = 5 * time.Second
 	DefaultEmptyJobGracePeriod          = 30 * time.Second
-	DefaultJobCreationConcurrency       = 5
+	DefaultJobCreationConcurrency       = 25
 	DefaultK8sClientRateLimiterQPS      = 10
 	DefaultK8sClientRateLimiterBurst    = 20
-	DefaultPaginationPageSize           = 500
-	DefaultPaginationDepthLimit         = 1
-	DefaultQueryResetInterval           = 5 * time.Second
+	DefaultPaginationPageSize           = 1000
+	DefaultPaginationDepthLimit         = 2
+	DefaultQueryResetInterval           = 10 * time.Second
 )
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
