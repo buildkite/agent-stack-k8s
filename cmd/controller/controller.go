@@ -100,7 +100,6 @@ func AddConfigFlags(cmd *cobra.Command) {
 		0,
 		"Bind port to expose Prometheus /metrics; 0 disables it",
 	)
-	cmd.Flags().String("graphql-endpoint", "", "Buildkite GraphQL endpoint URL")
 
 	cmd.Flags().Int(
 		"job-creation-concurrency",

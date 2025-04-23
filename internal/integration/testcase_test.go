@@ -12,7 +12,6 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
@@ -33,7 +32,7 @@ type testcase struct {
 	Logger       *zap.Logger
 	Fixture      string
 	Repo         string
-	GraphQL      graphql.Client
+	API          *api.AgentClient
 	Kubernetes   kubernetes.Interface
 	Buildkite    *buildkite.Client
 	PipelineName string

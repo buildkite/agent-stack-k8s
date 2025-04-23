@@ -22,12 +22,6 @@ lint *FLAGS: gomod
 generate:
   go generate ./...
 
-# requires $GITHUB_TOKEN to be set to a personal access token with access to the buildkite repository
-get-schema:
-  wget --header "Authorization: token $GITHUB_TOKEN" \
-    -O api/schema.graphql \
-    https://raw.githubusercontent.com/buildkite/buildkite/main/lib/graphql/schema.graphql
-
 gomod:
   #!/usr/bin/env sh
   set -euf
