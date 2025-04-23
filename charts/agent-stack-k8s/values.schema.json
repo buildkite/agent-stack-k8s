@@ -229,7 +229,7 @@
         },
         "job-creation-concurrency": {
           "type": "integer",
-          "default": 5,
+          "default": 25,
           "title": "Sets a limit on the number of Kubernetes jobs that will be attempted to be created simultaneously in parallel",
           "examples": [1, 2, 5, 10]
         },
@@ -584,21 +584,21 @@
         },
         "pagination-page-size": {
           "type": "integer",
-          "default": 500,
+          "default": 1000,
           "minimum": 1,
           "maximum": 1000,
-          "title": "Sets the maximum number of Jobs per page when retreiving Buildkite Jobs to be Scheduled"
+          "title": "Sets the maximum number of Jobs per page when retrieving Buildkite Jobs to be Scheduled"
         },
         "pagination-depth-limit": {
           "type": "integer",
-          "default": 1,
+          "default": 2,
           "minimum": 1,
           "maximum": 20,
-          "title": "Sets the maximum number of pages when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite API and number of Jobs to be scheduled on the Kubernetes Cluster."
+          "title": "Sets the maximum number of pages when retrieving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite API and number of Jobs to be scheduled on the Kubernetes Cluster."
         },
         "query-reset-interval": {
           "type": "string",
-          "default": "5s",
+          "default": "10s",
           "title": "Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query."
         }
       },
