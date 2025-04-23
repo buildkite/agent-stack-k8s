@@ -160,12 +160,12 @@ func AddConfigFlags(cmd *cobra.Command) {
 	cmd.Flags().Int(
 		"pagination-page-size",
 		config.DefaultPaginationPageSize,
-		"Sets the maximum number of Jobs per page when retreiving Buildkite Jobs to be Scheduled.",
+		"Sets the maximum number of Jobs per page when retrieving Buildkite Jobs to be Scheduled.",
 	)
 	cmd.Flags().Int(
 		"pagination-depth-limit",
 		config.DefaultPaginationDepthLimit,
-		"Sets the maximum number of pages when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite API and number of Jobs to be scheduled on the Kubernetes Cluster.",
+		"Sets the maximum number of pages when retrieving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite API and number of Jobs to be scheduled on the Kubernetes Cluster.",
 	)
 	cmd.Flags().Duration(
 		"query-reset-interval",
