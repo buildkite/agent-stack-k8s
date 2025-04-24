@@ -1,11 +1,17 @@
 # Controller Configuration
 
+* [Command Line Arguments](#command-line-arguments)
+* [Kubernetes Node Selection](#kubernetes-node-selection)
 
-**Usage:**
-- `agent-stack-k8s [flags]`
+## Command Line Arguments
+
+### Usage
+
 - `agent-stack-k8s [command]`
+- `agent-stack-k8s [flags]`
 
-**Available Commands:**
+### Available Commands
+
 | Command     | Description                                                       |
 |-------------|-------------------------------------------------------------------|
 | `completion`| Generate the autocompletion script for the specified shell        |
@@ -13,7 +19,9 @@
 | `lint`      | A tool for linting Buildkite pipelines                            |
 | `version`   | Prints the version                                                |
 
-**Flags:**
+Use `agent-stack-k8s [command] --help` for more information about a command.
+
+### Flags
 
 | Flag                                           | Description                                                                                                                                                                                                                                                                                                                   |
 |------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -25,7 +33,7 @@
 | `--default-image-check-pull-policy string`     | Sets a default PullPolicy for image-check init containers, used if an image pull policy is not set for the corresponding container in a podSpec or podSpecPatch                                                                                                                                                               |
 | `--default-image-pull-policy string`           | Configures a default image pull policy for containers that do not specify a pull policy and non-init containers created by the stack itself (default "IfNotPresent")                                                                                                                                                          |
 | `--empty-job-grace-period duration`            | Duration after starting a Kubernetes job that the controller will wait before considering failing the job due to a missing pod (e.g., when the podSpec specifies a missing service account) (default 30s)                                                                                                                     |
-| `--enable-queue-pause bool`                    | Allow the controller to pause processing the jobs when the queue is paused on Buildkite. (default false)                                                                                                                                                                                                                      |
+| `--enable-queue-pause bool`                    | Allow the controller to pause processing the jobs when the queue is paused on Buildkite (requires `v0.24.0` or greater) (default false)                                                                                                                                                                                                                      |
 | `--graphql-endpoint string`                    | Buildkite GraphQL endpoint URL                                                                                                                                                                                                                                                                                                |
 | `--graphql-results-limit int`                  | Sets the amount of results returned by GraphQL queries when retrieving Jobs to be Scheduled (default 100)                                                                                                                                                                                                                     |
 | `-h, --help`                                   | help for agent-stack-k8s                                                                                                                                                                                                                                                                                                      |
@@ -49,9 +57,19 @@
 | `--query-reset-interval duration`              | Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query. (default 10s)                                                                                                 |
 | `--tags strings`                               | A comma-separated list of agent tags. The "queue" tag must be unique (e.g., "queue=kubernetes,os=linux") (default [queue=kubernetes])                                                                                                                                                                                         |
 
+## Kubernetes Node Selection
 
+The `agent-stack-k8s` controller can be deployed to particular Kubernetes Nodes, using the Kubernetes PodSpec [`nodeSelector`](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes/#create-a-pod-that-gets-scheduled-to-your-chosen-node) field.
 
-Use `agent-stack-k8s [command] --help` for more information about a command.
+### Configuration values YAML file
 
+The `nodeSelector` field can be defined in the controller's configuration:
 
-> With release `v0.24.0` of `agent-stack-k8s`, we can enable `--enable-queue-pause` in the config, allowing the controller to pause processing the jobs when `queue` is paused on Buildkite.
+```yaml
+# values.yml
+...
+nodeSelector:
+  teamowner: "services"
+config:
+...
+```
