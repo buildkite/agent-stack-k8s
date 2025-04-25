@@ -47,6 +47,14 @@
       "title": "The chart's overridden full name",
       "examples": ["agent-stack-k8s-green"]
     },
+    "controllerEnv": {
+      "type": "array",
+      "default": [],
+      "title": "K8s EnvVar environment variables to add to the agent-stack-k8s controller container",
+      "items": {
+        "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.EnvVar"
+      }
+    },
     "nodeSelector": {
       "type": "object",
       "default": {},

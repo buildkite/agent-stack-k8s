@@ -73,3 +73,23 @@ nodeSelector:
 config:
 ...
 ```
+
+## Additional Environment Variables for `agent-stack-k8s` Controller Container
+
+If the `agent-stack-k8s` controller container requires extra environment variables in order to correctly operate inside your Kubernetes cluster, they can be added to your values YAML file and applied during a deployment with Helm.
+
+### Configuration values YAML file
+
+The `controllerEnv` field can be used to define extra Kubernetes EnvVar environment variables that will apply to the `agent-stack-k8s` controller container:
+
+```yaml
+# values.yml
+...
+controllerEnv:
+  - name: KUBERNETES_SERVICE_HOST
+    value: "10.10.10.10"
+  - name: KUBERNETES_SERVICE_PORT
+    value: "8443"
+config:
+...
+```
