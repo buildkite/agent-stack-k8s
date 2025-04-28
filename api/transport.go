@@ -9,6 +9,14 @@ import (
 	"time"
 )
 
+func NewAuthedTransportWithBearer(inner http.RoundTripper, bearer string) http.RoundTripper {
+	return &authedTransport{wrapped: inner, bearer: bearer}
+}
+
+func NewAuthedTransportWithToken(inner http.RoundTripper, token string) http.RoundTripper {
+	return &authedTransport{wrapped: inner, token: token}
+}
+
 type authedTransport struct {
 	bearer  string
 	token   string

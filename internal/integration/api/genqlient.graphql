@@ -1,0 +1,76 @@
+fragment Job on Job {
+    ... on JobTypeCommand {
+        ...CommandJob
+    }
+}
+
+fragment CommandJob on JobTypeCommand {
+    uuid
+}
+
+fragment Build on Build {
+    uuid
+    id
+    number
+    state
+    jobs(first: 100) {
+        edges {
+            # @genqlient(flatten: true)
+            node {
+                ...Job
+            }
+        }
+    }
+}
+
+mutation BuildCreate($input: BuildCreateInput!) {
+    buildCreate(input: $input) {
+        build {
+            ...Build
+        }
+    }
+}
+
+mutation BuildCancel($input: BuildCancelInput!) {
+    buildCancel(input: $input) {
+        clientMutationId
+    }
+}
+
+query GetBuild($uuid: ID!) {
+    build(uuid: $uuid) {
+        ...Build
+    }
+}
+
+query GetBuilds($slug: ID!, $state: [BuildStates!], $first: Int) {
+    pipeline(slug: $slug) {
+        builds(state: $state, first: $first) {
+            edges {
+                node {
+                    ...Build
+                }
+            }
+        }
+    }
+}
+
+### The following are used in the cleanup integration "test"
+mutation PipelineDelete($input: PipelineDeleteInput!) {
+    pipelineDelete(input: $input) {
+        clientMutationId
+    }
+}
+
+query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
+    organization(slug: $slug) {
+        pipelines(search: $search, first: $first) {
+            edges {
+                node {
+                    id
+                    name
+                }
+            }
+        }
+    }
+}

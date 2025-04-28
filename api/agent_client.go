@@ -26,11 +26,8 @@ func NewAgentClient(token, endpoint, orgSlug, clusterID, queue string, agentQuer
 	return &AgentClient{
 		endpoint: endpointURL,
 		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
-			Transport: NewLogger(&authedTransport{
-				token:   token,
-				wrapped: http.DefaultTransport,
-			}),
+			Timeout:   60 * time.Second,
+			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, token)),
 		},
 		orgSlug:   orgSlug,
 		clusterID: clusterID,

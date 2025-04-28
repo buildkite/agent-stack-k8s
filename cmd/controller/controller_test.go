@@ -39,7 +39,6 @@ func TestReadAndParseConfig(t *testing.T) {
 		Tags:                         []string{"queue=my-queue", "priority=high"},
 		ClusterUUID:                  "beefcafe-abbe-baba-abba-deedcedecade",
 		ProhibitKubernetesPlugin:     true,
-		GraphQLEndpoint:              "http://graphql.buildkite.localhost/v1",
 		PaginationPageSize:           1000,
 		PaginationDepthLimit:         5,
 		QueryResetInterval:           10 * time.Second,

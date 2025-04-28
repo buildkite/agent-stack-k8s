@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
-	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

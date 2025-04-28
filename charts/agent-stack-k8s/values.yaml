@@ -1,5 +1,4 @@
 agentToken: ""
-graphqlToken: ""
 
 nodeSelector: {}
 tolerations: []
