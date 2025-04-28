@@ -1,7 +1,5 @@
 package api
 
-//go:generate go run github.com/Khan/genqlient
-
 import (
 	"fmt"
 	"log"
@@ -9,26 +7,11 @@ import (
 	"net/http/httputil"
 	"os"
 	"time"
-
-	"github.com/Khan/genqlient/graphql"
 )
 
-func NewClient(token, endpoint string) graphql.Client {
-	if endpoint == "" {
-		endpoint = "https://graphql.buildkite.com/v1"
-	}
-	httpClient := http.Client{
-		Timeout: 60 * time.Second,
-		Transport: NewLogger(&authedTransport{
-			key:     token,
-			wrapped: http.DefaultTransport,
-		}),
-	}
-	return graphql.NewClient(endpoint, &httpClient)
-}
-
 type authedTransport struct {
-	key     string
+	bearer  string
+	token   string
 	wrapped http.RoundTripper
 }
 
@@ -47,7 +30,12 @@ func (t *authedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 
 	reqCopy := req.Clone(req.Context())
-	reqCopy.Header.Set("Authorization", "Bearer "+t.key)
+	switch {
+	case t.bearer != "":
+		reqCopy.Header.Set("Authorization", "Bearer "+t.bearer)
+	case t.token != "":
+		reqCopy.Header.Set("Authorization", "Token "+t.token)
+	}
 
 	reqBodyClosed = true
 	return t.wrapped.RoundTrip(reqCopy)

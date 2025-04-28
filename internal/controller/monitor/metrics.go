@@ -44,12 +44,6 @@ var (
 		Name:      "jobs_returned_total",
 		Help:      "Count of jobs returned from queries to Buildkite",
 	})
-	jobsReachedWorkerCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: promNamespace,
-		Subsystem: promSubsystem,
-		Name:      "jobs_reached_worker_total",
-		Help:      "Count of jobs received by a jobHandlerWorker",
-	})
 	jobsFilteredOutCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,
 		Subsystem: promSubsystem,
@@ -62,16 +56,10 @@ var (
 		Name:      "jobs_handled_total",
 		Help:      "Count of jobs that were passed to the next handler in the chain",
 	})
-	jobHandlerErrorCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	jobHandlerErrorCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,
 		Subsystem: promSubsystem,
 		Name:      "job_handler_errors_total",
 		Help:      "Count of jobs that weren't scheduled because the next handler in the chain returned an error",
-	}, []string{"reason"})
-	staleJobsCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: promNamespace,
-		Subsystem: promSubsystem,
-		Name:      "stale_jobs_total",
-		Help:      "Count of jobs that weren't scheduled because their information was queried too long ago",
 	})
 )

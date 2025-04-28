@@ -102,11 +102,6 @@ func AddConfigFlags(cmd *cobra.Command) {
 	)
 	cmd.Flags().String("graphql-endpoint", "", "Buildkite GraphQL endpoint URL")
 
-	cmd.Flags().Duration(
-		"stale-job-data-timeout",
-		config.DefaultStaleJobDataTimeout,
-		"Duration after querying jobs in Buildkite that the data is considered valid",
-	)
 	cmd.Flags().Int(
 		"job-creation-concurrency",
 		config.DefaultJobCreationConcurrency,
@@ -152,11 +147,6 @@ func AddConfigFlags(cmd *cobra.Command) {
 		false,
 		"Causes the controller to prohibit the kubernetes plugin specified within jobs (pipeline YAML) - enabling this causes jobs with a kubernetes plugin to fail, preventing the pipeline YAML from having any influence over the podSpec",
 	)
-	cmd.Flags().Int(
-		"graphql-results-limit",
-		config.DefaultGraphQLResultsLimit,
-		"Sets the amount of results returned by GraphQL queries when retreiving Jobs to be Scheduled",
-	)
 	cmd.Flags().Bool(
 		"enable-queue-pause",
 		false,
@@ -168,9 +158,19 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"Permits PodSpecPatch to modify the command or args fields of stack-provided containers. See the warning in the README before enabling this option",
 	)
 	cmd.Flags().Int(
+		"pagination-page-size",
+		config.DefaultPaginationPageSize,
+		"Sets the maximum number of Jobs per page when retrieving Buildkite Jobs to be Scheduled.",
+	)
+	cmd.Flags().Int(
 		"pagination-depth-limit",
 		config.DefaultPaginationDepthLimit,
-		"Sets the maximum depth of pagination when retreiving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite GraphQL API and number of Jobs to be scheduled on the Kubernetes Cluster.",
+		"Sets the maximum number of pages when retrieving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite API and number of Jobs to be scheduled on the Kubernetes Cluster.",
+	)
+	cmd.Flags().Duration(
+		"query-reset-interval",
+		config.DefaultQueryResetInterval,
+		"Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query.",
 	)
 }
 

@@ -1,9 +1,8 @@
 # Running Buildkite builds
 
 * [Pipeline YAML](#pipeline-yaml)
-  + [Defining steps](#defining-steps)
-  + [`kubernetes` plugin](#kubernetes-plugin)
 * [Cloning (private) repositories](#cloning-private-repositories)
+* [Kubernetes Node Selection](#kubernetes-node-selection)
 
 ## Pipeline YAML
 
@@ -15,7 +14,7 @@ The simplest pipeline step can target the `kubernetes` queue with [agent tags](h
 
 ```yaml
 steps:
-- label: :kubernetes: Hello World!
+- label: ":kubernetes: Hello World!"
   command: echo Hello World!
   agents:
     queue: kubernetes
@@ -34,7 +33,7 @@ For example, defining `checkout.skip: true` will skip cloning the pipeline's rep
 
 ```yaml
 steps:
-- label: :kubernetes: Hello World!
+- label: ":kubernetes: Hello World!"
   command: echo Hello World!
   agents:
     queue: kubernetes
@@ -50,3 +49,79 @@ Just like with a standalone installation of the Buildkite Agent, in order to acc
 These credentials can be in the form of a SSH key for cloning over `ssh://` or with a `.git-credentials` file for cloning over `https://`.
 
 Details about configuring Git credentials can be found under [Git Credentials](git_credentials.md).
+
+## Kubernetes Node Selection
+
+The `agent-stack-k8s` controller can schedule your Buildkite jobs to run on particular Kubernetes Nodes, using Kubernetes PodSpec fields for `nodeSelector` and `nodeName`.
+
+### `nodeSelector`
+
+The `agent-stack-k8s` controller can schedule your Buildkite jobs to run on particular Kubernetes Nodes with matching Labels. The [`nodeSelector`](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes/#create-a-pod-that-gets-scheduled-to-your-chosen-node) field of the PodSpec can be used to schedule your Buildkite jobs on a chosen Kubernetes Node with matching Labels.
+
+#### Configuration values YAML file
+
+The `nodeSelector` field can be defined in the controller's configuration via `pod-spec-patch`. This will apply to all Buildkite jobs processed by the controller:
+
+```yaml
+# values.yml
+...
+config:
+  pod-spec-patch:
+    nodeSelector:
+      nodecputype: "amd64"  # <--- run on nodes labelled as 'nodecputype=amd64'
+...
+```
+
+#### `kubernetes` plugin
+
+The `nodeSelector` field can be defined in under `podSpecPatch` using the `kubernetes` plugin. It will apply only to this job and will override any __matching__ labels defined under `nodeSelector` in the controller's configuration:
+
+```yaml
+# pipeline.yaml
+steps:
+- label: ":kubernetes: Hello World!"
+  command: echo Hello World!
+  agents:
+    queue: kubernetes
+  plugins:
+  - kubernetes:
+      podSpecPatch:
+        nodeSelector:
+          nodecputype: "arm64"  # <--- override nodeSelector `nodecputype` label from 'amd64' -> 'arm64'
+...
+```
+
+### `nodeName`
+
+The [`nodeName`](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes/#create-a-pod-that-gets-scheduled-to-specific-node) field of the PodSpec can also be used to schedule your Buildkite jobs on a specific Kubernetes Node.
+
+#### Configuration values YAML file
+
+The `nodeName` field can be defined in the controller's configuration via `pod-spec-patch`. This will apply to all Buildkite jobs processed by the controller:
+
+```yaml
+# values.yml
+...
+config:
+  pod-spec-patch:
+    nodeName: "k8s-worker-01"
+...
+```
+
+#### `kubernetes` plugin
+
+The `nodeName` field can be defined in under `podSpecPatch` using the `kubernetes` plugin. It will apply only to this job and will override `nodeName` in the controller's configuration:
+
+```yaml
+# pipeline.yaml
+steps:
+- label: ":kubernetes: Hello World!"
+  command: echo Hello World!
+  agents:
+    queue: kubernetes
+  plugins:
+  - kubernetes:
+      podSpecPatch:
+        nodeName: "k8s-worker-03"  # <--- override nodeName 'k8s-worker-01' -> 'k8s-worker-03'
+...
+```

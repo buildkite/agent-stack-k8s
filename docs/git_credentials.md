@@ -26,7 +26,7 @@ After creating an SSH keypair and registering its public key with the remote rep
 To create a Kubernetes Secret named `my-git-ssh-credentials` containing the contents of the SSH private key file `$HOME/.ssh/id_rsa`:
 
 ```bash
-kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_RSA_KEY="$HOME/.ssh/id_rsa"
+kubectl create secret generic my-git-ssh-credentials --from-file=SSH_PRIVATE_RSA_KEY="$HOME/.ssh/id_rsa" -n buildkite
 ```
 
 This Secret can be referenced by the `agent-stack-k8s` controller using [EnvFrom](https://kubernetes.io/docs/tasks/inject-data-application/distribute-credentials-secure/#configure-all-key-value-pairs-in-a-secret-as-container-environment-variables) from within the controller configuration or via the `gitEnvFrom` config of the `kubernetes` plugin.
@@ -55,7 +55,7 @@ Under the `kubernetes` plugin, specify the name of the Kubernetes Secret via the
 ```yaml
 # pipeline.yaml
 steps:
-- label: :kubernetes: Hello World!
+- label: ":kubernetes: Hello World!"
   command: echo Hello World!
   agents:
     queue: kubernetes
@@ -138,7 +138,7 @@ Create a `.git-credentials` file formatted in the manner expected by the `store`
 After this file has been created, you can create a Kubernetes Secret containing the contents of this file:
 
 ```bash
-kubectl create secret generic my-git-https-credentials --from-file='.git-credentials'="$HOME/.git-credentials"
+kubectl create secret generic my-git-https-credentials --from-file='.git-credentials'="$HOME/.git-credentials" -n buildkite
 ```
 
 ### Provide Kubernetes Secret via configuration
@@ -177,7 +177,7 @@ Under the `kubernetes` plugin, specify the name of the Kubernetes Secret via the
 ```yaml
 # pipeline.yaml
 steps:
-- label: :kubernetes: Hello World!
+- label: ":kubernetes: Hello World!"
   command: echo Hello World!
   agents:
     queue: kubernetes
