@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
 	"github.com/buildkite/roko"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
