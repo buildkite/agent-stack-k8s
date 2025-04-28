@@ -27,6 +27,9 @@ spec:
         env:
         - name: CONFIG
           value: /etc/config.yaml
+        {{- if .Values.controllerEnv -}}
+        {{- .Values.controllerEnv | toYaml | nindent 8 }}
+        {{- end }}
         envFrom:
           - secretRef:
               name: {{ if .Values.agentStackSecret }}{{ .Values.agentStackSecret }}{{ else }}{{ include "agent-stack-k8s.fullname" . }}-secrets{{ end }}
