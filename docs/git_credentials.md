@@ -118,7 +118,7 @@ In your pipeline yaml, you can now add git operations such as `git clone` in the
 ```yaml
 # pipeline.yaml
 steps:
-  - label: :kubernetes: Hello World!
+  - label: ":kubernetes: Hello World!"
     command:  git clone -v git@github.com:{repo_name}.git
     plugins:
       - kubernetes: 
@@ -200,7 +200,7 @@ This can be done with the `checkout` block under the `kubernetes` plugin:
 
 ```yaml
 steps:
-- label: Hello World!
+- label: ":kubernetes: Hello World!"
   agents:
     queue: kubernetes
   plugins:
