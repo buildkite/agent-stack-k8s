@@ -486,6 +486,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		}
 		podSpec.Containers[i] = c
 	}
+	// TODO: Apply pre-exit hooksVolume to last command container
 
 	containerCount := len(podSpec.Containers) + systemContainerCount
 
@@ -515,6 +516,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			inputs.k8sPlugin.CommandParams.ApplyTo(&c)
 			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
 		}
+		// TODO: Apply pre-exit hooksVolume to only command container
 		podSpec.Containers = append(podSpec.Containers, c)
 	}
 

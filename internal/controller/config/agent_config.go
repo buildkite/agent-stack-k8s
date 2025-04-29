@@ -9,6 +9,23 @@ import (
 	agentcore "github.com/buildkite/agent/v3/core"
 )
 
+const (
+	agentHookPhases = [...]string{
+		"pre-bootstrap",
+		"environment",
+		"pre-checkout",
+		"checkout",
+		"post-checkout",
+		"pre-command",
+		"command",
+		"post-command",
+		"pre-artifact",
+		"artifact",
+		"post-artifact",
+		"pre-exit",
+	}
+)
+
 // AgentConfig stores shared parameters for things that run buildkite-agent in
 // one form or another. They should correspond to the flags for
 // `buildkite-agent start`. Note that not all agent flags make sense as config
@@ -107,10 +124,12 @@ func (a *AgentConfig) applyCommonTo(ctr *corev1.Container) {
 		if a.HooksPath == nil {
 			a.HooksPath = &hooksPath
 		}
-		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
-			Name:      a.HooksVolume.Name,
-			MountPath: *a.HooksPath,
-		})
+		for hookPhase := range agentHookPhases {
+			ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
+				Name:      a.HooksVolume.Name,
+				MountPath: *a.HooksPath,
+			})
+		}
 	}
 	appendToEnvOpt(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)
 

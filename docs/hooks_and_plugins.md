@@ -1,54 +1,55 @@
-# How to set up agent hooks and plugins (v0.16.0 and later)
+# Agent Hooks and Plugins
 
 The `agent-config` block within `values.yaml` accepts a `hookVolumeSource`
 and `pluginVolumeSource`. If used, the corresponding volumes are named
 `buildkite-hooks` and `buildkite-plugins`, and will be automatically
 mounted on checkout and command containers, with the agent configured to use them.
 
+## Configure agent hooks and plugins (v0.16.0 and later)
+
 Any volume source can be specified for agent hooks and plugins, but a common
 choice is to use a `configMap`, since hooks generally aren't large and
 config maps are made available across the cluster.
 
 To create the config map containing hooks:
-    ```shell
-    kubectl create configmap buildkite-agent-hooks --from-file=/tmp/hooks -n buildkite
-    ```
 
-- Example of using hooks from a config map:
-    ```yaml
-    # values.yaml
-    config:
-      agent-config:
-        hooksVolume:
-          name: buildkite-hooks
-          configMap:
-            defaultMode: 493
-            name: buildkite-agent-hooks
-    ```
+```shell
+kubectl create configmap buildkite-agent-hooks --from-file=/tmp/hooks -n buildkite
+```
 
-- Example of using plugins from a host path
-    ([_caveat lector_](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)):
+Using hooks from a config map:
 
-    ```yaml
-    # values.yaml
-    config:
-      agent-config:
-        pluginsVolume:
-          name: buildkite-plugins
-          hostPath:
-            type: Directory
-            path: /etc/buildkite-agent/plugins
-    ```
+```yaml
+# values.yaml
+config:
+  agent-config:
+    hooksVolume:
+      name: buildkite-hooks
+      configMap:
+        defaultMode: 493
+        name: buildkite-agent-hooks
+```
+
+Using plugins from a host path ([_caveat lector_](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)):
+
+```yaml
+# values.yaml
+config:
+  agent-config:
+    pluginsVolume:
+      name: buildkite-plugins
+      hostPath:
+        type: Directory
+        path: /etc/buildkite-agent/plugins
+```
 
 Note that `hooks-path` and `plugins-path` agent config options can be used to
 change the mount point of the corresponding volume. The default mount points are
 `/buildkite/hooks` and `/buildkite/plugins`.
 
-## How to set up agent hooks v0.15.0 and earlier
+## Configure agent hooks and plugins (v0.15.0 and earlier)
 
-This section explains how to setup agent hooks is you are running Agent Stack Kubernetes v0.15.0 and earlier. In order for the agent hooks to work, they must be present on the instances where the agent runs.
-
-In case of Agent Stack Kubernetes v0.15.0 and earlier, we need these hooks to be accessible to the Kubernetes pod where the `checkout` and `command` containers will be running. Best way to make this happen is to create a configmap with the agent hooks and mount the configmap as volume to the containers.
+This section explains how to setup agent hooks is you are running the `agent-stack-k8s` controller `v0.15.0` and earlier. In order for the agent hooks to work, they must be present on the instances where the agent runs. These hooks need to be accessible to the Kubernetes Pod where the `checkout` and `command` containers will be running. Best way to make this happen is to create a ConfigMap with the agent hooks and mount the ConfigMap as a Volume to the containers.
 
 Here is the command to create `configmap` which will have agent hooks in it:
 
@@ -56,10 +57,9 @@ Here is the command to create `configmap` which will have agent hooks in it:
 kubectl create configmap buildkite-agent-hooks --from-file=/tmp/hooks -n buildkite
 ```
 
-We have all the hooks under directory `/tmp/hooks` and we are creating `configmap` with name `buildkite-agent-hooks` in `buildkite` namespace in the k8s cluster.
+We have all the hooks under directory `/tmp/hooks` and we are creating a ConfigMap with name `buildkite-agent-hooks` in `buildkite` namespace of the K8s cluster.
 
-Here is how to make these hooks in configmap available to the containers. Use the pipeline
-config for setting up agent hooks:
+Here is how to make these hooks in configmap available to the containers. Use the pipeline config for setting up agent hooks:
 
 ```yaml
 # pipeline.yml
