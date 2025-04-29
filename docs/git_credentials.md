@@ -102,15 +102,19 @@ After setting the SSH key to use on `container-0`, you will need to setup `conta
 
 ```bash
 #!/bin/bash
-set -ueo pipefail
+set -eufo pipefail
 
 eval $(ssh-agent -s)
-echo "$SSH_PRIVATE_RSA_KEY" | tr -d '\r' | ssh-add -
 mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+
 touch ~/.ssh/config
+chmod 600 ~/.ssh/config
 touch ~/.ssh/known_hosts
-chmod -R 400 ~/.ssh
+chmod 600 ~/.ssh/known_hosts
+
 ssh-keyscan github.com >> ~/.ssh/known_hosts
+echo "$SSH_PRIVATE_RSA_KEY" | tr -d '\r' | ssh-add -
 ```
 
 In your pipeline yaml, you can now add git operations such as `git clone` in the command step.
