@@ -79,19 +79,11 @@ To find the UUID of a Cluster:
 
 ### Store Buildkite tokens in Kubernetes Secret
 
-If you would prefer to store your Agent Token and GraphQL API Access Token as a Kubernetes Secret to be referenced by the `agent-stack-k8s` controller.
-Start by converting the tokens to base64-encoded strings:
-
+If you would prefer to store your Agent Token and GraphQL API Access Token as a Kubernetes Secret to be referenced by the `agent-stack-k8s` controller, you can create a Kubernetes Secret containing both of the tokens:
 ```
-echo -n <Buildkite Cluster Agent Token> | base64
-echo -n <Buildkite GraphQL-enabled API Access Token> | base64
-```
-
-Now create a Kubernetes Secret containing both of the base64-encoded tokens:
-```
-kubectl create secret generic <secret-name> \
-  --from-literal=BUILDKITE_AGENT_TOKEN=<base64 encoded Buildkite Cluster Agent Token> \
-  --from-literal=BUILDKITE_TOKEN=<base64 encoded Buildkite GraphQL-enabled API Access Token>
+kubectl create secret generic <secret-name> -n buildkite \
+  --from-literal=BUILDKITE_AGENT_TOKEN='<Buildkite Cluster Agent Token>' \
+  --from-literal=BUILDKITE_TOKEN='<Buildkite GraphQL-enabled API Access Token>'
 ```
 
 This Kubernetes Secret name can be provided to the controller with the `agentStackSecret` option, replacing both `agentToken` and `graphqlToken` options. You can then reference your Kubernetes Secret by name during Helm chart deployments with inline configuration:
