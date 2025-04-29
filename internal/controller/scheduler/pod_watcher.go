@@ -451,10 +451,11 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		roko.WithMaxAttempts(5),
 	)
 	job, err := roko.DoFunc(ctx, retrier, func(*roko.Retrier) (*api.AgentJobState, error) {
-		job, err := w.agentClient.GetJobState(ctx, jobUUID.String())
+		job, retryAfter, err := w.agentClient.GetJobState(ctx, jobUUID.String())
 		if api.IsPermanentError(err) {
 			retrier.Break()
 		}
+		retrier.SetNextInterval(max(retryAfter, retrier.NextInterval()))
 		return job, err
 	})
 	if err != nil {
@@ -530,6 +531,8 @@ func (w *podWatcher) jobCancelChecker(ctx context.Context, stopCh <-chan struct{
 	ticker := time.NewTicker(w.jobCancelCheckerInterval)
 	defer ticker.Stop()
 
+	retryAfterCh := time.After(0)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -539,40 +542,56 @@ func (w *podWatcher) jobCancelChecker(ctx context.Context, stopCh <-chan struct{
 			return
 
 		case <-ticker.C:
-			job, err := w.agentClient.GetJobState(ctx, jobUUID.String())
-			if api.IsPermanentError(err) {
-				log.Error("Couldn't fetch state of job", zap.Error(err))
-				return
-			}
-			if err != nil {
-				// *shrug* Check again soon.
+			// continue below
+		}
+
+		// Also wait for retryAfter, if set
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-stopCh:
+			return
+
+		case <-retryAfterCh:
+			// continue below
+		}
+
+		job, retryAfter, err := w.agentClient.GetJobState(ctx, jobUUID.String())
+		if api.IsPermanentError(err) {
+			log.Error("Couldn't fetch state of job", zap.Error(err))
+			return
+		}
+		retryAfterCh = time.After(retryAfter)
+		if err != nil {
+			// *shrug* Check again soon.
+			continue
+		}
+		log := log.With(zap.String("job_state", string(job.State)))
+
+		switch api.JobStates(job.State) {
+		case api.JobStatesCanceled, api.JobStatesCanceling:
+			log.Info("Evicting pending pod for cancelled job")
+			eviction := &policyv1.Eviction{ObjectMeta: podMeta}
+			if err := w.k8s.PolicyV1().Evictions(w.cfg.Namespace).Evict(ctx, eviction); err != nil {
+				log.Error("Couldn't evict pod", zap.Error(err))
+				podEvictionErrorsCounter.WithLabelValues("bk_job_cancelled", string(kerrors.ReasonForError(err))).Inc()
 				continue
 			}
-			log := log.With(zap.String("job_state", string(job.State)))
+			podsEvictedCounter.WithLabelValues("bk_job_cancelled").Inc()
+			return
 
-			switch api.JobStates(job.State) {
-			case api.JobStatesCanceled, api.JobStatesCanceling:
-				log.Info("Evicting pending pod for cancelled job")
-				eviction := &policyv1.Eviction{ObjectMeta: podMeta}
-				if err := w.k8s.PolicyV1().Evictions(w.cfg.Namespace).Evict(ctx, eviction); err != nil {
-					log.Error("Couldn't evict pod", zap.Error(err))
-					podEvictionErrorsCounter.WithLabelValues("bk_job_cancelled", string(kerrors.ReasonForError(err))).Inc()
-					continue
-				}
-				podsEvictedCounter.WithLabelValues("bk_job_cancelled").Inc()
-				return
+		case api.JobStatesScheduled:
+			// The pod can continue waiting for resources / initializing.
 
-			case api.JobStatesScheduled:
-				// The pod can continue waiting for resources / initializing.
-
-			default:
-				// Assigned, Accepted, Running: Too late. Let the agent within
-				// the pod handle cancellation. Finished, etc: it's already over.
-				// If it's any other state, we probably shouldn't interfere.
-				log.Debug("Ending job cancel checker due to job state")
-				return
-			}
+		default:
+			// Assigned, Accepted, Running: Too late. Let the agent within
+			// the pod handle cancellation. Finished, etc: it's already over.
+			// If it's any other state, we probably shouldn't interfere.
+			log.Debug("Ending job cancel checker due to job state")
+			return
 		}
+
 	}
 }
 

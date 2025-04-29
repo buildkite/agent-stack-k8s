@@ -52,7 +52,7 @@ func New(logger *zap.Logger, k8s kubernetes.Interface, agentClient *api.AgentCli
 }
 
 // getScheduledCommandJobs gets scheduled jobs from the API.
-func (m *Monitor) getScheduledCommandJobs(ctx context.Context) (jobs []*api.AgentScheduledJob, err error) {
+func (m *Monitor) getScheduledCommandJobs(ctx context.Context) (jobs []*api.AgentScheduledJob, retryAfter time.Duration, err error) {
 	m.logger.Info("retrieving scheduled jobs via Agent API...",
 		zap.Duration("poll-interval", m.cfg.PollInterval),
 	)
@@ -79,21 +79,26 @@ func (m *Monitor) getScheduledCommandJobs(ctx context.Context) (jobs []*api.Agen
 		// Get all jobs in the (org,cluster,queue) since m.lastScheduledAt.
 		// There's no retry loop because the monitor queries this once every
 		// cfg.PollInterval (default 1 sec).
-		resp, err := m.agentClient.GetScheduledJobs(ctx, m.cursor, m.cfg.PaginationPageSize)
+		resp, ra, err := m.agentClient.GetScheduledJobs(ctx, m.cursor, m.cfg.PaginationPageSize)
 		if err != nil {
 			// Reset the cursor for next time.
 			m.cursor = ""
-			return nil, err
+			return nil, ra, err
 		}
 		// The query was successful, update the cursor to be the ID of the last job
 		// in the response (if there are any).
 		m.cursor = resp.PageInfo.EndCursor
 		jobs = append(jobs, resp.Jobs...)
+		// No error, but Retry-After was set to something, so do the next query
+		// later.
+		if ra > 0 {
+			return jobs, ra, nil
+		}
 		if !resp.PageInfo.HasNextPage {
 			break
 		}
 	}
-	return jobs, nil
+	return jobs, 0, nil
 }
 
 func (m *Monitor) Start(ctx context.Context, handler model.ManyJobHandler) <-chan error {
@@ -112,19 +117,39 @@ func (m *Monitor) Start(ctx context.Context, handler model.ManyJobHandler) <-cha
 		first := make(chan struct{}, 1)
 		first <- struct{}{}
 
+		retryAfterCh := time.After(0)
+
 		for {
 			select {
 			case <-ctx.Done():
 				return
+
 			case <-ticker.C:
+				// continue below
+
 			case <-first:
+				// continue below
 			}
 
-			jobs, err := m.getScheduledCommandJobs(ctx)
+			// Also wait for retryAfter, if set
+			select {
+			case <-ctx.Done():
+				return
+
+			case <-retryAfterCh:
+				// continue below
+			}
+
+			jobs, retryAfter, err := m.getScheduledCommandJobs(ctx)
 			if api.IsPermanentError(err) { // it's not temporary!
 				errs <- fmt.Errorf("while fetching scheduled jobs: %w", err)
 				return
 			}
+			// Whether there's an error or not, respect the Retry-After header.
+			// If Retry-After is not present, retryAfter <= 0, so
+			// time.After(retryAfter) can be read from immediately.
+			retryAfterCh = time.After(retryAfter)
+
 			if err != nil {
 				// Avoid logging if the context is already closed.
 				if ctx.Err() != nil {

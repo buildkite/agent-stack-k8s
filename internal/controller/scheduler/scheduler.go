@@ -117,10 +117,11 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 		roko.WithMaxAttempts(5),
 	)
 	jobToRun, err := roko.DoFunc(ctx, retrier, func(*roko.Retrier) (*api.AgentJob, error) {
-		jtr, err := w.agentClient.GetJobToRun(ctx, job.ID)
+		jtr, retryAfter, err := w.agentClient.GetJobToRun(ctx, job.ID)
 		if api.IsPermanentError(err) {
 			retrier.Break()
 		}
+		retrier.SetNextInterval(max(retryAfter, retrier.NextInterval()))
 		if err != nil {
 			return nil, err
 		}
