@@ -99,7 +99,7 @@ type AgentScheduledJob struct {
 }
 
 // GetScheduledJobs gets a page of jobs that could be run.
-func (c *AgentClient) GetScheduledJobs(ctx context.Context, afterCursor string, limit int) (*AgentScheduledJobs, error) {
+func (c *AgentClient) GetScheduledJobs(ctx context.Context, afterCursor string, limit int) (result *AgentScheduledJobs, retryAfter time.Duration, err error) {
 	u := c.endpoint.JoinPath(
 		"clusters", railsPathEscape(c.clusterID),
 		"queues", railsPathEscape(c.queue),
@@ -114,24 +114,18 @@ func (c *AgentClient) GetScheduledJobs(ctx context.Context, afterCursor string, 
 
 	resp, err := c.httpClient.Get(u.String())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode >= 400 {
-		return nil, decodeError(resp)
+	result, retryAfter, err = decodeResponse[AgentScheduledJobs](resp)
+	if result != nil {
+		now := time.Now()
+		for _, j := range result.Jobs {
+			j.QueriedAt = now
+		}
 	}
-
-	jobs := new(AgentScheduledJobs)
-	if err := json.NewDecoder(resp.Body).Decode(jobs); err != nil {
-		return nil, err
-	}
-
-	now := time.Now()
-	for _, j := range jobs.Jobs {
-		j.QueriedAt = now
-	}
-	return jobs, nil
+	return result, retryAfter, err
 }
 
 // AgentJob is enough info to run a job (includes command and env).
@@ -142,7 +136,7 @@ type AgentJob struct {
 }
 
 // GetJobToRun gets info about a specific job needed to run it.
-func (c *AgentClient) GetJobToRun(ctx context.Context, id string) (*AgentJob, error) {
+func (c *AgentClient) GetJobToRun(ctx context.Context, id string) (result *AgentJob, retryAfter time.Duration, err error) {
 	u := c.endpoint.JoinPath(
 		"clusters", railsPathEscape(c.clusterID),
 		"queues", railsPathEscape(c.queue),
@@ -151,24 +145,16 @@ func (c *AgentClient) GetJobToRun(ctx context.Context, id string) (*AgentJob, er
 
 	resp, err := c.httpClient.Get(u.String())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
 		// It's no longer available to run (cancelled, probably).
-		return nil, nil
+		return nil, 0, nil
 	}
 
-	if resp.StatusCode >= 400 {
-		return nil, decodeError(resp)
-	}
-
-	job := new(AgentJob)
-	if err := json.NewDecoder(resp.Body).Decode(job); err != nil {
-		return nil, err
-	}
-	return job, nil
+	return decodeResponse[AgentJob](resp)
 }
 
 // AgentJobState describes the current state of a job.
@@ -178,7 +164,7 @@ type AgentJobState struct {
 }
 
 // GetJobState gets the state of a specific job.
-func (c *AgentClient) GetJobState(ctx context.Context, id string) (*AgentJobState, error) {
+func (c *AgentClient) GetJobState(ctx context.Context, id string) (result *AgentJobState, retryAfter time.Duration, err error) {
 	u := c.endpoint.JoinPath(
 		"clusters", railsPathEscape(c.clusterID),
 		"queues", railsPathEscape(c.queue),
@@ -188,19 +174,25 @@ func (c *AgentClient) GetJobState(ctx context.Context, id string) (*AgentJobStat
 
 	resp, err := c.httpClient.Get(u.String())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer resp.Body.Close()
 
+	return decodeResponse[AgentJobState](resp)
+}
+
+func decodeResponse[T any](resp *http.Response) (result *T, retryAfter time.Duration, err error) {
+	retryAfter = readRetryAfter(resp)
+
 	if resp.StatusCode >= 400 {
-		return nil, decodeError(resp)
+		return nil, retryAfter, decodeError(resp)
 	}
 
-	job := new(AgentJobState)
-	if err := json.NewDecoder(resp.Body).Decode(job); err != nil {
-		return nil, err
+	result = new(T)
+	if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+		return nil, retryAfter, err
 	}
-	return job, nil
+	return result, retryAfter, nil
 }
 
 func decodeError(resp *http.Response) error {
@@ -212,6 +204,18 @@ func decodeError(resp *http.Response) error {
 		return fmt.Errorf("while decoding error response on %q: %w", resp.Status, err)
 	}
 	return ae
+}
+
+func readRetryAfter(resp *http.Response) time.Duration {
+	h := resp.Header.Get("Retry-After")
+	if h == "" {
+		return 0
+	}
+	ra, err := time.ParseDuration(h + "s")
+	if err != nil {
+		return 0
+	}
+	return ra
 }
 
 // Rails doesn't accept dots in some path segments.
