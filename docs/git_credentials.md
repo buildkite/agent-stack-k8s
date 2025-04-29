@@ -78,6 +78,59 @@ containers, there are a few options:
 * Use a container image based on the default `buildkite/agent` Docker image, which preserves the default entry point by not overriding the command in the job spec
 * Include or reproduce the functionality of the [`ssh-env-config.sh`](https://github.com/buildkite/docker-ssh-env-config/blob/-/ssh-env-config.sh) script in the entry point for your job container image to source from recognized environment variable names.
 
+Here is an example how to setup an SSH Private key in `container-0`
+
+```yaml
+# values.yaml
+...
+config:
+  ...
+  pod-spec-patch:
+    containers:
+    ...
+    - name: container-0
+      env:
+        - name: SSH_PRIVATE_RSA_KEY
+          valueFrom:
+            secretKeyRef:
+              name: my-git-ssh-credentials # <---- this is the name of the Kubernetes Secret to use for container-0 (setup on the same way as the command above)
+              key: SSH_PRIVATE_RSA_KEY
+
+```
+
+After setting the SSH key to use on `container-0`, you will need to setup `container-0` for `git` operations. The suggested approach is to implement a `pre-command` hook to run `ssh-keyscan` and generate the `known_hosts` files.
+
+```bash
+#!/bin/bash
+set -eufo pipefail
+
+eval $(ssh-agent -s)
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+
+touch ~/.ssh/config
+chmod 600 ~/.ssh/config
+touch ~/.ssh/known_hosts
+chmod 600 ~/.ssh/known_hosts
+
+ssh-keyscan github.com >> ~/.ssh/known_hosts
+echo "$SSH_PRIVATE_RSA_KEY" | tr -d '\r' | ssh-add -
+```
+
+In your pipeline yaml, you can now add git operations such as `git clone` in the command step.
+
+```yaml
+# pipeline.yaml
+steps:
+  - label: ":kubernetes: Hello World!"
+    command:  git clone -v git@github.com:{repo_name}.git
+    plugins:
+      - kubernetes: 
+          podSpec:
+            containers:
+                - image: buildkite/agent:alpine-k8s
+```
+
 ## Cloning repos using Git credentials
 
 To use HTTPS to clone private repos, you can use a `.git-credentials` file stored in a secret, and
@@ -151,7 +204,7 @@ This can be done with the `checkout` block under the `kubernetes` plugin:
 
 ```yaml
 steps:
-- label: Hello World!
+- label: ":kubernetes: Hello World!"
   agents:
     queue: kubernetes
   plugins:
