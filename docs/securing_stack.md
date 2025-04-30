@@ -15,7 +15,6 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --namespace buildkite \
     --create-namespace \
     --set agentToken=<Buildkite Cluster Agent Token> \
-    --set graphqlToken=<Buildkite GraphQL-enabled API Access Token> \
     --set config.org=<Buildkite Org Slug> \
     --set config.cluster-uuid=<Buildkite Cluster UUID> \
     --set-json='config.tags=["queue=kubernetes"]' \

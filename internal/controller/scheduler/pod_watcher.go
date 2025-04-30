@@ -70,7 +70,8 @@ type podWatcher struct {
 //     will be evicted.
 //   - If a container stays in ImagePullBackOff or ErrImageNeverPull, and the
 //     pod somehow got through all the init containers (including the image
-//     checks...) the BK GraphQL API will be used to cancel the job instead.
+//     checks...) the Agent container should eventually detect a "lost client"
+//     and fail the job.
 //   - If a pod is pending, every so often Buildkite will be checked to see if
 //     the corresponding job has been cancelled so that the pod can be evicted
 //     early.

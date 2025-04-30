@@ -6,7 +6,7 @@
 
 ## Pipeline YAML
 
-After your `agent-stack-k8s` controller has been configured, deployed and is monitoring the GraphQL API for jobs assigned to the `kubernetes` queue, you can create builds in your pipelines.
+After your `agent-stack-k8s` controller has been configured, deployed and is monitoring the Agent API for jobs assigned to the `kubernetes` queue, you can create builds in your pipelines.
 
 ### Defining steps
 
@@ -21,7 +21,7 @@ steps:
 ```
 
 This will create a Buildkite job containing an agent tag of `queue=kubernetes`.
-The `agent-stack-k8s` controller will retrieve this job via the GraphQL API and convert it into a Kubernetes Job.
+The `agent-stack-k8s` controller will retrieve this job via the Agent API and convert it into a Kubernetes Job.
 The Kubernetes Job will contain a single Pod, with containers that will checkout the pipeline's Git repository and use the (default image) `buildkite/agent:latest` container to run the `echo Hello World!` command.
 
 ### `kubernetes` plugin

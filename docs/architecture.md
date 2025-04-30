@@ -1,6 +1,6 @@
 # Architecture
 
-When a matching job is returned from the GraphQL API, the controller will create a Kubernetes Job containing a single Pod with containers that will acquire and run the Buildite job. The [PodSpec](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec) contained in the Job defines a [PodSpec](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec) containing all the containers required to acquire and run a Buildkite job:
+When a matching job is returned from the Agent API, the controller will create a Kubernetes Job containing a single Pod with containers that will acquire and run the Buildite job. The [PodSpec](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec) contained in the Job defines a [PodSpec](https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/pod-v1/#PodSpec) containing all the containers required to acquire and run a Buildkite job:
 
 - adding an init container to:
   - copy the agent binary onto the workspace volume (`copy-agent`)
@@ -18,20 +18,19 @@ The entry point rewriting and ordering logic is heavily inspired by [the approac
 ```mermaid
 sequenceDiagram
     participant bc as buildkite controller
-    participant gql as Buildkite GraphQL API
-    participant bapi as Buildkite API
+    participant aapi as Buildkite Agent API
     participant kubernetes
-    bc->>gql: Get scheduled builds & jobs
-    gql-->>bc: {build: jobs: [{uuid: "abc"}]}
+    bc->>aapi: Get scheduled builds & jobs
+    aapi-->>bc: {build: jobs: [{uuid: "abc"}]}
     kubernetes->>pod: start
     bc->>kubernetes: watch for pod completions
     bc->>kubernetes: create pod with agent sidecar
     kubernetes->>pod: create
-    pod->>bapi: agent accepts & starts job
+    pod->>aapi: agent accepts & starts job
     pod->>pod: run sidecars
     pod->>pod: agent bootstrap
     pod->>pod: run user pods to completion
-    pod->>bapi: upload artifacts, exit code
+    pod->>aapi: upload artifacts, exit code
     pod->>pod: agent exit
     kubernetes->>bc: pod completion event
     bc->>kubernetes: cleanup finished pods

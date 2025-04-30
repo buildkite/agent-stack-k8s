@@ -4,12 +4,13 @@
 
 ## Overview
 
-`agent-stack-k8s` is a Kubernetes [controller](https://kubernetes.io/docs/concepts/architecture/controller/) that uses the Buildkite [GraphQL API](https://buildkite.com/docs/apis/graphql-api) to watch for scheduled jobs assigned to the controller's queue.
+`agent-stack-k8s` is a Kubernetes [controller](https://kubernetes.io/docs/concepts/architecture/controller/) that uses the Buildkite [Agent API](https://buildkite.com/docs/apis/agent-api) to watch for scheduled jobs assigned to the controller's queue.
+
+> [!NOTE] Starting with v0.28.0, the Buildkite GraphQL API is no longer used. If you are upgrading from an older version, your GraphQL-enabled token can be safely removed from your configuration or Kubernetes secret. Only the Agent token is required.
 
 ## Requirements
 
 - A Kubernetes cluster
-- A Buildkite API Access Token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
 - A Cluster [Agent Token](https://buildkite.com/docs/agent/v3/tokens#create-a-token)
 - A Cluster [Queue](https://buildkite.com/docs/pipelines/clusters/manage-queues#create-a-self-hosted-queue)
   - The UUID of this Cluster is also required. See [Obtain Cluster UUID](docs/installation.md#how-to-find-a-buildkite-clusters-uuid)

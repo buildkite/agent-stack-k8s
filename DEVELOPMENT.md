@@ -41,6 +41,10 @@ To run integration test locally, we recommend you to run individual test. For ex
 just test -run TestWalkingSkeleton
 ```
 
+## Requirements
+
+In addition to the usual requirements, the integration tests make use of a GraphQL-enabled Buildkite API token in order to create pipelines, start builds, read logs, and clean up afterwards.
+
 ## Setup
 
 Any member of the public should be able to run our integration as long as you are an user of Buildkite, and you have
@@ -166,7 +170,7 @@ To do clean them up:
 just cleanup-orphans
 ```
 
-The token will need to have GraphQL access as well as:
+For this to work you will need a "classic" GraphQL-enabled token as well as:
 
 - `read_artifacts`
 - `write_pipelines`
