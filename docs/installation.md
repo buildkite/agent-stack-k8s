@@ -2,19 +2,17 @@
 
 - [Requirements](#requirements)
 - [Deploy with Helm](#deploy-with-helm)
-   * [Inline configuration](#inline-configuration)
-   * [Configuration values YAML file](#configuration-values-yaml-file)
-   * [How to find a Buildkite cluster's UUID](#how-to-find-a-buildkite-clusters-uuid)
-   * [Store Buildkite tokens in a Kubernetes Secret](#store-buildkite-tokens-in-kubernetes-secret)
+   - [Inline configuration](#inline-configuration)
+   - [Configuration values YAML file](#configuration-values-yaml-file)
+   - [How to find a Buildkite cluster's UUID](#how-to-find-a-buildkite-clusters-uuid)
+   - [Store Buildkite tokens in a Kubernetes Secret](#store-buildkite-tokens-in-kubernetes-secret)
 - [Other installation methods](#other-installation-methods)
 - [Controller configuration](#controller-configuration)
 - [Running builds](#running-builds)
 
-
 ## Requirements
 
 - A Kubernetes cluster
-- A Buildkite API Access Token with the [GraphQL scope enabled](https://buildkite.com/docs/apis/graphql-api#authentication)
 - A Cluster [Agent Token](https://buildkite.com/docs/agent/v3/tokens#create-a-token)
 - A Cluster [Queue](https://buildkite.com/docs/pipelines/clusters/manage-queues#create-a-self-hosted-queue)
   - The UUID of this Cluster is also required. See [Obtain Cluster UUID](#how-to-find-a-buildkite-clusters-uuid)
@@ -32,7 +30,6 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
     --namespace buildkite \
     --create-namespace \
     --set agentToken=<Buildkite Cluster Agent Token> \
-    --set graphqlToken=<Buildkite GraphQL-enabled API Access Token> \
     --set config.org=<Buildkite Org Slug> \
     --set config.cluster-uuid=<Buildkite Cluster UUID> \
     --set-json='config.tags=["queue=kubernetes"]'
@@ -45,7 +42,6 @@ Create a YAML file with the following values:
 ```yaml
 # values.yml
 agentToken: <Buildkite Cluster Agent Token>
-graphqlToken: <Buildkite GraphQL-enabled API Access Token>
 config:
   org: <Buildkite Org Slug>
   cluster-uuid: <Buildkite Cluster UUID>
@@ -65,7 +61,7 @@ helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-
 Both of these deployment methods will:
 - Create a Kubernetes deployment and install the `agent-stack-k8s` controller as a Pod running in the `buildkite` Namespace
   - The `buildkite` Namespace is created if it does not already exist in the Kubernetes cluster
-- The controller will use the provided `graphqlToken` to query the Buildkite GraphQL API looking for jobs:
+- The controller will use the provided `agentToken` to query the Buildkite Agent API looking for jobs:
   - In your Organization (`config.org`)
   - Assigned to the `kubernetes` Queue in your Cluster (`config.cluster-uuid`)
 
@@ -79,22 +75,15 @@ To find the UUID of a Cluster:
 
 ### Store Buildkite tokens in Kubernetes Secret
 
-If you would prefer to store your Agent Token and GraphQL API Access Token as a Kubernetes Secret to be referenced by the `agent-stack-k8s` controller.
-Start by converting the tokens to base64-encoded strings:
+If you would prefer to self-manage a Kubernetes Secret containing the Agent Token, instead of allowing the Helm chart to create a secret automatically, then a custom secret can be referenced by the `agent-stack-k8s` controller.
+Here's how such a secret can be created:
 
-```
-echo -n <Buildkite Cluster Agent Token> | base64
-echo -n <Buildkite GraphQL-enabled API Access Token> | base64
-```
-
-Now create a Kubernetes Secret containing both of the base64-encoded tokens:
-```
-kubectl create secret generic <secret-name> \
-  --from-literal=BUILDKITE_AGENT_TOKEN=<base64 encoded Buildkite Cluster Agent Token> \
-  --from-literal=BUILDKITE_TOKEN=<base64 encoded Buildkite GraphQL-enabled API Access Token>
+```bash
+kubectl create secret generic <secret-name> -n buildkite \
+  --from-literal=BUILDKITE_AGENT_TOKEN='<Buildkite Cluster Agent Token>'
 ```
 
-This Kubernetes Secret name can be provided to the controller with the `agentStackSecret` option, replacing both `agentToken` and `graphqlToken` options. You can then reference your Kubernetes Secret by name during Helm chart deployments with inline configuration:
+This Kubernetes Secret name can be provided to the controller with the `agentStackSecret` option, replacing the `agentToken` option. You can then reference your Kubernetes Secret by name during Helm chart deployments with inline configuration:
 
 ```bash
 helm upgrade --install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
@@ -125,7 +114,7 @@ You can also use this chart as a dependency:
 ```yaml
 dependencies:
 - name: agent-stack-k8s
-  version: "0.26.3"
+  version: "0.28.0"
   repository: "oci://ghcr.io/buildkite/helm"
 ```
 

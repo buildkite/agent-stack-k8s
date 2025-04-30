@@ -16,9 +16,8 @@
     "graphqlToken": {
       "type": "string",
       "default": "",
-      "minLength": 0,
-      "title": "Deprecated - The GraphQL token is no longer needed",
-      "examples": [""]
+      "deprecated": true,
+      "title": "Deprecated as of v0.28 - The GraphQL token is no longer needed"
     },
     "agentStackSecret": {
       "type": "string",
@@ -191,8 +190,7 @@
           "type": "string",
           "default": "",
           "deprecated": true,
-          "title": "Deprecated - The GraphQL endpoint URL",
-          "examples": [""]
+          "title": "Deprecated as of v0.28 - The GraphQL endpoint URL is no longer used"
         },
         "image": {
           "type": "string",
@@ -586,10 +584,7 @@
         "graphql-results-limit": {
           "deprecated": true,
           "type": "integer",
-          "default": 100,
-          "minimum": 1,
-          "maximum": 500,
-          "title": "Deprecated - use pagination-page-size"
+          "title": "Deprecated as of v0.28 - use pagination-page-size"
         },
         "pagination-page-size": {
           "type": "integer",
