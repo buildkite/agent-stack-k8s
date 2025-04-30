@@ -51,25 +51,27 @@ var (
 )
 
 type Config struct {
-	Namespace                     string
-	Image                         string
-	JobPrefix                     string
-	AgentToken                    string
-	AgentTokenSecretName          string
-	JobTTL                        time.Duration
-	JobActiveDeadlineSeconds      int
-	AdditionalRedactedVars        []string
-	WorkspaceVolume               *corev1.Volume
-	AgentConfig                   *config.AgentConfig
-	DefaultCheckoutParams         *config.CheckoutParams
-	DefaultCommandParams          *config.CommandParams
-	DefaultSidecarParams          *config.SidecarParams
-	DefaultMetadata               config.Metadata
-	DefaultImagePullPolicy        corev1.PullPolicy
-	DefaultImageCheckPullPolicy   corev1.PullPolicy
-	PodSpecPatch                  *corev1.PodSpec
-	ProhibitK8sPlugin             bool
-	AllowPodSpecPatchUnsafeCmdMod bool
+	Namespace                      string
+	Image                          string
+	JobPrefix                      string
+	AgentToken                     string
+	AgentTokenSecretName           string
+	JobTTL                         time.Duration
+	JobActiveDeadlineSeconds       int
+	AdditionalRedactedVars         []string
+	WorkspaceVolume                *corev1.Volume
+	AgentConfig                    *config.AgentConfig
+	DefaultCheckoutParams          *config.CheckoutParams
+	DefaultCommandParams           *config.CommandParams
+	DefaultSidecarParams           *config.SidecarParams
+	DefaultMetadata                config.Metadata
+	DefaultImagePullPolicy         corev1.PullPolicy
+	DefaultImageCheckPullPolicy    corev1.PullPolicy
+	PodSpecPatch                   *corev1.PodSpec
+	ProhibitK8sPlugin              bool
+	AllowPodSpecPatchUnsafeCmdMod  bool
+	ImageCheckContainerCpuLimit    string
+	ImageCheckContainerMemoryLimit string
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, agentClient *api.AgentClient, cfg Config) *worker {
@@ -815,6 +817,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("100m"),
 					corev1.ResourceMemory: resource.MustParse("64Mi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse(w.cfg.ImageCheckContainerCpuLimit),
+					corev1.ResourceMemory: resource.MustParse(w.cfg.ImageCheckContainerMemoryLimit),
 				},
 			},
 		})

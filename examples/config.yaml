@@ -20,6 +20,8 @@ enable-queue-pause: true
 pagination-page-size: 1000
 pagination-depth-limit: 5
 query-reset-interval: 10s
+image-check-container-cpu-limit: 201m
+image-check-container-memory-limit: 129Mi
 
 # only set cluster-uuid if the pipelines are in a cluster
 # the UUID may be found in the cluster settings
