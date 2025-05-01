@@ -51,29 +51,27 @@ var (
 )
 
 type Config struct {
-	Namespace                             string
-	Image                                 string
-	JobPrefix                             string
-	AgentToken                            string
-	AgentTokenSecretName                  string
-	JobTTL                                time.Duration
-	JobActiveDeadlineSeconds              int
-	AdditionalRedactedVars                []string
-	WorkspaceVolume                       *corev1.Volume
-	AgentConfig                           *config.AgentConfig
-	DefaultCheckoutParams                 *config.CheckoutParams
-	DefaultCommandParams                  *config.CommandParams
-	DefaultSidecarParams                  *config.SidecarParams
-	DefaultMetadata                       config.Metadata
-	DefaultImagePullPolicy                corev1.PullPolicy
-	DefaultImageCheckPullPolicy           corev1.PullPolicy
-	PodSpecPatch                          *corev1.PodSpec
-	ProhibitK8sPlugin                     bool
-	AllowPodSpecPatchUnsafeCmdMod         bool
-	DefaultImageCheckContainerCpuLimit    string
-	DefaultImageCheckContainerMemoryLimit string
-	ImageCheckContainerCpuLimit           string
-	ImageCheckContainerMemoryLimit        string
+	Namespace                      string
+	Image                          string
+	JobPrefix                      string
+	AgentToken                     string
+	AgentTokenSecretName           string
+	JobTTL                         time.Duration
+	JobActiveDeadlineSeconds       int
+	AdditionalRedactedVars         []string
+	WorkspaceVolume                *corev1.Volume
+	AgentConfig                    *config.AgentConfig
+	DefaultCheckoutParams          *config.CheckoutParams
+	DefaultCommandParams           *config.CommandParams
+	DefaultSidecarParams           *config.SidecarParams
+	DefaultMetadata                config.Metadata
+	DefaultImagePullPolicy         corev1.PullPolicy
+	DefaultImageCheckPullPolicy    corev1.PullPolicy
+	PodSpecPatch                   *corev1.PodSpec
+	ProhibitK8sPlugin              bool
+	AllowPodSpecPatchUnsafeCmdMod  bool
+	ImageCheckContainerCpuLimit    string
+	ImageCheckContainerMemoryLimit string
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, agentClient *api.AgentClient, cfg Config) *worker {
@@ -788,11 +786,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	}
 
 	// Use default resource limits for pre-flight image check containers, if not provided
-	if imageCheckContainerCpuLimit, err := resource.ParseQuantity(cfg.ImageCheckContainerCpuLimit); err != nil {
-		imageCheckContainerCpuLimit = w.cfg.DefaultImageCheckContainerCpuLimit
+	if imageCheckContainerCpuLimit, err := resource.ParseQuantity(w.cfg.ImageCheckContainerCpuLimit); err != nil {
+		imageCheckContainerCpuLimit = config.DefaultImageCheckContainerCpuLimit
 	}
-	if imageCheckContainerMemoryLimit, err := resource.ParseQuantity(cfg.ImageCheckContainerMemoryLimit); err != nil {
-		imageCheckContainerMemoryLimit = w.cfg.DefaultImageCheckContainerMemoryLimit
+	if imageCheckContainerMemoryLimit, err := resource.ParseQuantity(w.cfg.ImageCheckContainerMemoryLimit); err != nil {
+		imageCheckContainerMemoryLimit = config.DefaultImageCheckContainerMemoryLimit
 	}
 
 	// Create the pre-flight image check containers.
