@@ -785,6 +785,14 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		return nil, errors.New("invalid image references\n\n" + tw.Render())
 	}
 
+	// Use default resource limits for pre-flight image check containers, if not provided
+	if _, err := resource.ParseQuantity(cfg.ImageCheckContainerCpuLimit); err != nil {
+		w.cfg.ImageCheckContainerCpuLimit = resource.MustParse(w.cfg.DefaultImageCheckContainerCpuLimit)
+	}
+	if _, err := resource.ParseQuantity(cfg.ImageCheckContainerMemoryLimit); err != nil {
+		w.cfg.ImageCheckContainerMemoryLimit = resource.MustParse(w.cfg.DefaultImageCheckContainerMemoryLimit)
+	}
+
 	// Create the pre-flight image check containers.
 	i := 0
 	for image, pnr := range preflightImageChecks {
