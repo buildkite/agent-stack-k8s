@@ -789,10 +789,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	// Use default resource limits for pre-flight image check containers, if not provided
 	if _, err := resource.ParseQuantity(cfg.ImageCheckContainerCpuLimit); err != nil {
-		w.cfg.ImageCheckContainerCpuLimit = resource.MustParse(w.cfg.DefaultImageCheckContainerCpuLimit)
+		w.cfg.ImageCheckContainerCpuLimit = w.cfg.DefaultImageCheckContainerCpuLimit
 	}
 	if _, err := resource.ParseQuantity(cfg.ImageCheckContainerMemoryLimit); err != nil {
-		w.cfg.ImageCheckContainerMemoryLimit = resource.MustParse(w.cfg.DefaultImageCheckContainerMemoryLimit)
+		w.cfg.ImageCheckContainerMemoryLimit = w.cfg.DefaultImageCheckContainerMemoryLimit
 	}
 
 	// Create the pre-flight image check containers.
