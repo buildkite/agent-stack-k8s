@@ -51,27 +51,29 @@ var (
 )
 
 type Config struct {
-	Namespace                      string
-	Image                          string
-	JobPrefix                      string
-	AgentToken                     string
-	AgentTokenSecretName           string
-	JobTTL                         time.Duration
-	JobActiveDeadlineSeconds       int
-	AdditionalRedactedVars         []string
-	WorkspaceVolume                *corev1.Volume
-	AgentConfig                    *config.AgentConfig
-	DefaultCheckoutParams          *config.CheckoutParams
-	DefaultCommandParams           *config.CommandParams
-	DefaultSidecarParams           *config.SidecarParams
-	DefaultMetadata                config.Metadata
-	DefaultImagePullPolicy         corev1.PullPolicy
-	DefaultImageCheckPullPolicy    corev1.PullPolicy
-	PodSpecPatch                   *corev1.PodSpec
-	ProhibitK8sPlugin              bool
-	AllowPodSpecPatchUnsafeCmdMod  bool
-	ImageCheckContainerCpuLimit    string
-	ImageCheckContainerMemoryLimit string
+	Namespace                             string
+	Image                                 string
+	JobPrefix                             string
+	AgentToken                            string
+	AgentTokenSecretName                  string
+	JobTTL                                time.Duration
+	JobActiveDeadlineSeconds              int
+	AdditionalRedactedVars                []string
+	WorkspaceVolume                       *corev1.Volume
+	AgentConfig                           *config.AgentConfig
+	DefaultCheckoutParams                 *config.CheckoutParams
+	DefaultCommandParams                  *config.CommandParams
+	DefaultSidecarParams                  *config.SidecarParams
+	DefaultMetadata                       config.Metadata
+	DefaultImagePullPolicy                corev1.PullPolicy
+	DefaultImageCheckPullPolicy           corev1.PullPolicy
+	PodSpecPatch                          *corev1.PodSpec
+	ProhibitK8sPlugin                     bool
+	AllowPodSpecPatchUnsafeCmdMod         bool
+	DefaultImageCheckContainerCpuLimit    string
+	DefaultImageCheckContainerMemoryLimit string
+	ImageCheckContainerCpuLimit           string
+	ImageCheckContainerMemoryLimit        string
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, agentClient *api.AgentClient, cfg Config) *worker {
