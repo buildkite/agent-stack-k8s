@@ -14,6 +14,7 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/config.yaml.tpl") . | sha256sum }}
         checksum/secrets: {{ include (print $.Template.BasePath "/secrets.yaml.tpl") . | sha256sum }}
+        {{- include "agent-stack-k8s.annotations" . | nindent 8 }}
     spec:
       serviceAccountName: {{ include "agent-stack-k8s.fullname" . }}-controller
       nodeSelector:
