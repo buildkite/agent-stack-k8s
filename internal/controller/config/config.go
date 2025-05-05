@@ -25,7 +25,7 @@ const (
 	DefaultPaginationPageSize             = 1000
 	DefaultPaginationDepthLimit           = 2
 	DefaultQueryResetInterval             = 10 * time.Second
-	DefaultImageCheckContainerCpuLimit    = "200m"
+	DefaultImageCheckContainerCPULimit    = "200m"
 	DefaultImageCheckContainerMemoryLimit = "128Mi"
 )
 
@@ -80,7 +80,7 @@ type Config struct {
 	DefaultImagePullPolicy      corev1.PullPolicy `json:"default-image-pull-policy"       validate:"omitempty"`
 	DefaultImageCheckPullPolicy corev1.PullPolicy `json:"default-image-check-pull-policy" validate:"omitempty"`
 
-	ImageCheckContainerCpuLimit    string `json:"image-check-container-cpu-limit"       validate:"omitempty"`
+	ImageCheckContainerCPULimit    string `json:"image-check-container-cpu-limit"       validate:"omitempty"`
 	ImageCheckContainerMemoryLimit string `json:"image-check-container-memory-limit"    validate:"omitempty"`
 
 	// ProhibitKubernetesPlugin can be used to prevent alterations to the pod

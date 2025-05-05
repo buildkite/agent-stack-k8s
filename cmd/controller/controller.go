@@ -174,7 +174,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 	)
 	cmd.Flags().String(
 		"image-check-container-cpu-limit",
-		config.DefaultImageCheckContainerCpuLimit,
+		config.DefaultImageCheckContainerCPULimit,
 		"Configures the CPU resource limits for all imagecheck-* containers",
 	)
 	cmd.Flags().String(
@@ -312,8 +312,8 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 		}
 	}
 
-	if _, err := resource.ParseQuantity(cfg.ImageCheckContainerCpuLimit); err != nil {
-		return nil, fmt.Errorf("invalid CPU resource limit defined: %s", cfg.ImageCheckContainerCpuLimit)
+	if _, err := resource.ParseQuantity(cfg.ImageCheckContainerCPULimit); err != nil {
+		return nil, fmt.Errorf("invalid CPU resource limit defined: %s", cfg.ImageCheckContainerCPULimit)
 	}
 
 	if _, err := resource.ParseQuantity(cfg.ImageCheckContainerMemoryLimit); err != nil {

@@ -70,7 +70,7 @@ type Config struct {
 	PodSpecPatch                   *corev1.PodSpec
 	ProhibitK8sPlugin              bool
 	AllowPodSpecPatchUnsafeCmdMod  bool
-	ImageCheckContainerCpuLimit    string
+	ImageCheckContainerCPULimit    string
 	ImageCheckContainerMemoryLimit string
 }
 
@@ -786,11 +786,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	}
 
 	// Use default resource limits for pre-flight image check containers, if not provided
-	var imageCheckContainerCpuLimit resource.Quantity
+	var imageCheckContainerCPULimit resource.Quantity
 	var imageCheckContainerMemoryLimit resource.Quantity
 
-	if imageCheckContainerCpuLimit, err = resource.ParseQuantity(w.cfg.ImageCheckContainerCpuLimit); err != nil {
-		imageCheckContainerCpuLimit, _ = resource.ParseQuantity(config.DefaultImageCheckContainerCpuLimit)
+	if imageCheckContainerCPULimit, err = resource.ParseQuantity(w.cfg.ImageCheckContainerCPULimit); err != nil {
+		imageCheckContainerCPULimit, _ = resource.ParseQuantity(config.DefaultImageCheckContainerCPULimit)
 	}
 	if imageCheckContainerMemoryLimit, err = resource.ParseQuantity(w.cfg.ImageCheckContainerMemoryLimit); err != nil {
 		imageCheckContainerMemoryLimit, _ = resource.ParseQuantity(config.DefaultImageCheckContainerMemoryLimit)
@@ -830,7 +830,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 					corev1.ResourceMemory: resource.MustParse("64Mi"),
 				},
 				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    imageCheckContainerCpuLimit,
+					corev1.ResourceCPU:    imageCheckContainerCPULimit,
 					corev1.ResourceMemory: imageCheckContainerMemoryLimit,
 				},
 			},

@@ -148,7 +148,7 @@ func Run(
 		PodSpecPatch:                   cfg.PodSpecPatch,
 		ProhibitK8sPlugin:              cfg.ProhibitKubernetesPlugin,
 		AllowPodSpecPatchUnsafeCmdMod:  cfg.AllowPodSpecPatchUnsafeCmdMod,
-		ImageCheckContainerCpuLimit:    cfg.ImageCheckContainerCpuLimit,
+		ImageCheckContainerCPULimit:    cfg.ImageCheckContainerCPULimit,
 		ImageCheckContainerMemoryLimit: cfg.ImageCheckContainerMemoryLimit,
 	})
 
