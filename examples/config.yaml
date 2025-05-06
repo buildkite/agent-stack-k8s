@@ -14,6 +14,7 @@ k8s-client-rate-limiter-qps: 20
 k8s-client-rate-limiter-burst: 30
 namespace: my-buildkite-ns
 org: my-buildkite-org
+prometheus-port: 9216
 default-image-pull-policy: Never
 default-image-check-pull-policy: IfNotPresent
 enable-queue-pause: true
