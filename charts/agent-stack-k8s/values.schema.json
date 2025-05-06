@@ -322,6 +322,13 @@
           "title": "Allow controller to pause processing the jobs when queue is paused on Buildkite",
           "examples": [false]
         },
+        "prometheus-port": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 65535,
+          "title": "Bind port to expose Prometheus /metrics; 0 disables it"
+        },
         "allow-pod-spec-patch-unsafe-command-modification": {
           "type": "boolean",
           "default": false,

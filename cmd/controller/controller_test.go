@@ -38,6 +38,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		Org:                            "my-buildkite-org",
 		Tags:                           []string{"queue=my-queue", "priority=high"},
 		ClusterUUID:                    "beefcafe-abbe-baba-abba-deedcedecade",
+		PrometheusPort:                 9216,
 		ProhibitKubernetesPlugin:       true,
 		PaginationPageSize:             1000,
 		PaginationDepthLimit:           5,
