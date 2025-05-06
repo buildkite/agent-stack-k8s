@@ -25,6 +25,7 @@ const (
 	DefaultPaginationPageSize             = 1000
 	DefaultPaginationDepthLimit           = 2
 	DefaultQueryResetInterval             = 10 * time.Second
+	DefaultWorkQueueLimit                 = 1_000_000
 	DefaultImageCheckContainerCPULimit    = "200m"
 	DefaultImageCheckContainerMemoryLimit = "128Mi"
 )
@@ -53,6 +54,7 @@ type Config struct {
 	PaginationDepthLimit     int           `json:"pagination-depth-limit"   validate:"min=1,max=20"`
 	QueryResetInterval       time.Duration `json:"query-reset-interval"     validate:"omitempty"`
 	EnableQueuePause         bool          `json:"enable-queue-pause"       validate:"omitempty"`
+	WorkQueueLimit           int           `json:"work-queue-limit"         validate:"omitempty"`
 	// Agent endpoint is set in agent-config.
 
 	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps" validate:"omitempty"`
@@ -158,6 +160,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt("pagination-page-size", c.PaginationPageSize)
 	enc.AddInt("pagination-depth-limit", c.PaginationDepthLimit)
 	enc.AddDuration("query-reset-interval", c.QueryResetInterval)
+	enc.AddInt("work-queue-limit", c.WorkQueueLimit)
 	return nil
 }
 

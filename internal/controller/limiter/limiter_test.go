@@ -20,7 +20,7 @@ func TestLimiter(t *testing.T) {
 	t.Cleanup(cancel)
 
 	fakeSched := model.NewFakeScheduler(1, nil)
-	limiter := limiter.New(ctx, zaptest.NewLogger(t), fakeSched, 1, 1)
+	limiter := limiter.New(ctx, zaptest.NewLogger(t), fakeSched, 1, 1, -1)
 	fakeSched.EventHandler = limiter
 	fakeSched.Add(50)
 
@@ -56,7 +56,7 @@ func TestLimiter_SchedulerErrors(t *testing.T) {
 	defer cancel()
 
 	fakeSched := model.NewFakeScheduler(0, errors.New("invalid"))
-	limiter := limiter.New(ctx, zaptest.NewLogger(t), fakeSched, 1, 1)
+	limiter := limiter.New(ctx, zaptest.NewLogger(t), fakeSched, 1, 1, -1)
 	fakeSched.EventHandler = limiter
 	fakeSched.Add(50)
 

@@ -172,6 +172,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultQueryResetInterval,
 		"Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query.",
 	)
+	cmd.Flags().Int(
+		"work-queue-limit",
+		config.DefaultWorkQueueLimit,
+		"Sets the maximum number of Jobs the controller will hold in the work queue.",
+	)
 	cmd.Flags().String(
 		"image-check-container-cpu-limit",
 		config.DefaultImageCheckContainerCPULimit,
