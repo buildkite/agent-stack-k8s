@@ -93,3 +93,22 @@ controllerEnv:
 config:
 ...
 ```
+
+## Custom Annotations for `agent-stack-k8s` controller
+
+If you need to add custom annotations to the `agent-stack-k8s` controller pod, they can be defined in your values YAML file and applied during a deployment with Helm. Note that the controller pod will also have the annotations `checksum/config` and `checksum/secrets` to track changes to the configuration and secrets.
+
+### Configuration
+
+The `annotations` field can be used to define custom annotations that will be applied to the `agent-stack-k8s` controller pod:
+
+```yaml
+# values.yml
+...
+annotations:
+  kubernetes.io/description: "Agent Stack K8s Controller"
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+config:
+...
+```

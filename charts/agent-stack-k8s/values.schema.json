@@ -96,6 +96,21 @@
         }
       ]
     },
+    "annotations": {
+      "type": "object",
+      "default": {},
+      "title": "The annotations Schema",
+      "additionalProperties": {
+        "type": "string",
+        "default": ""
+      },
+      "example": [
+        {
+          "kubernetes.io/description": "Agent Stack K8s Controller",
+          "prometheus.io/scrape": "true"
+        }
+      ]
+    },
     "secretsMetadata": {
       "type": "object",
       "default": {},
