@@ -167,7 +167,11 @@ func Run(
 	// Limiter prevents scheduling more than cfg.MaxInFlight jobs at once
 	// (if configured) and is responsible for the priority queue of jobs.
 	// Once it figures out a job can be scheduled, it passes to the deduper.
-	limiter := limiter.New(ctx, logger.Named("limiter"), deduper, cfg.MaxInFlight, cfg.JobCreationConcurrency)
+	limiter := limiter.New(ctx, logger.Named("limiter"), deduper,
+		cfg.MaxInFlight,
+		cfg.JobCreationConcurrency,
+		cfg.WorkQueueLimit,
+	)
 	if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Fatal("failed to register limiter informer", zap.Error(err))
 	}

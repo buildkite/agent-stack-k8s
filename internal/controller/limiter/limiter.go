@@ -31,6 +31,9 @@ type Limiter struct {
 	// Controls the number of workers that pass along jobs.
 	JobCreationConcurrency int
 
+	// Maximum number of jobs to store in the work queue.
+	WorkQueueLimit int
+
 	// Next handler in the chain.
 	handler model.JobHandler
 
@@ -56,7 +59,7 @@ type Limiter struct {
 
 // New creates a Limiter. maxInFlight must be non-negative, but 0 is interpreted
 // as no limit. Zero or negative concurrency is replaced with the default.
-func New(ctx context.Context, logger *zap.Logger, scheduler model.JobHandler, maxInFlight, concurrency int) *Limiter {
+func New(ctx context.Context, logger *zap.Logger, scheduler model.JobHandler, maxInFlight, concurrency, workQueueLimit int) *Limiter {
 	if maxInFlight < 0 {
 		// Using panic, because getting here is severe programmer error and the
 		// whole controller is still just starting up.
@@ -66,10 +69,14 @@ func New(ctx context.Context, logger *zap.Logger, scheduler model.JobHandler, ma
 	if concurrency <= 0 {
 		concurrency = config.DefaultJobCreationConcurrency
 	}
+	if workQueueLimit <= 0 {
+		workQueueLimit = config.DefaultWorkQueueLimit
+	}
 	l := &Limiter{
 		handler:                scheduler,
 		MaxInFlight:            maxInFlight,
 		JobCreationConcurrency: concurrency,
+		WorkQueueLimit:         workQueueLimit,
 		logger:                 logger,
 		tokenBucket:            make(chan struct{}, maxInFlight),
 		newWork:                make(chan struct{}, concurrency),
@@ -158,6 +165,10 @@ func (l *Limiter) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob)
 		return nil
 	}
 
+	// Deduplicate the queue by ID. The deduper component (next in the chain)
+	// does this too but deals with jobs in the k8s cluster.
+	l.queue = inPlaceDedup(l.queue)
+
 	// Sort by priority, preserving existing ordering between jobs with equal
 	// priority.
 	slices.SortStableFunc(jobs, func(a, b *api.AgentScheduledJob) int {
@@ -165,6 +176,11 @@ func (l *Limiter) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob)
 		// See https://buildkite.com/docs/pipelines/configure/workflows/managing-priorities
 		return cmp.Compare(b.Priority, a.Priority)
 	})
+
+	// Drop from the end of the queue to fit within the WorkQueueLimit.
+	// Do this after sorting so the highest priority jobs are more likely to
+	// remain.
+	l.queue = l.queue[:min(len(l.queue), l.WorkQueueLimit)]
 
 	if l.paused {
 		return nil
@@ -391,4 +407,20 @@ func (l *Limiter) tryReturnToken(source string) {
 		)
 		tokenOverflowCounter.WithLabelValues(source).Inc()
 	}
+}
+
+func inPlaceDedup(jobs []*api.AgentScheduledJob) []*api.AgentScheduledJob {
+	ids := make(map[string]struct{})
+	i := 0 // here's where the next unique job will go
+	for j, job := range jobs {
+		if _, exists := ids[job.ID]; exists {
+			continue // not unique
+		}
+		ids[job.ID] = struct{}{}
+		if i != j {
+			jobs[i] = job
+		}
+		i++
+	}
+	return jobs[:i]
 }

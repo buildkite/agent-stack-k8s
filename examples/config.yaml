@@ -20,6 +20,7 @@ enable-queue-pause: true
 pagination-page-size: 1000
 pagination-depth-limit: 5
 query-reset-interval: 10s
+work-queue-limit: 2000000
 image-check-container-cpu-limit: 201m
 image-check-container-memory-limit: 129Mi
 
