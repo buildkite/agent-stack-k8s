@@ -172,6 +172,16 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultQueryResetInterval,
 		"Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query.",
 	)
+	cmd.Flags().String(
+		"image-check-container-cpu-limit",
+		config.DefaultImageCheckContainerCPULimit,
+		"Configures the CPU resource limits for all imagecheck-* containers",
+	)
+	cmd.Flags().String(
+		"image-check-container-memory-limit",
+		config.DefaultImageCheckContainerMemoryLimit,
+		"Configures the memory resource limits for all imagecheck-* containers",
+	)
 }
 
 // ReadConfigFromFileArgsAndEnv reads the config from the file, env and args in that order.
@@ -300,6 +310,14 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 				return nil, scheduler.ErrNoCommandModification
 			}
 		}
+	}
+
+	if _, err := resource.ParseQuantity(cfg.ImageCheckContainerCPULimit); err != nil {
+		return nil, fmt.Errorf("invalid CPU resource limit defined: %s", cfg.ImageCheckContainerCPULimit)
+	}
+
+	if _, err := resource.ParseQuantity(cfg.ImageCheckContainerMemoryLimit); err != nil {
+		return nil, fmt.Errorf("invalid memory resource limit defined: %s", cfg.ImageCheckContainerMemoryLimit)
 	}
 
 	return cfg, nil

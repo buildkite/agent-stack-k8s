@@ -51,25 +51,27 @@ var (
 )
 
 type Config struct {
-	Namespace                     string
-	Image                         string
-	JobPrefix                     string
-	AgentToken                    string
-	AgentTokenSecretName          string
-	JobTTL                        time.Duration
-	JobActiveDeadlineSeconds      int
-	AdditionalRedactedVars        []string
-	WorkspaceVolume               *corev1.Volume
-	AgentConfig                   *config.AgentConfig
-	DefaultCheckoutParams         *config.CheckoutParams
-	DefaultCommandParams          *config.CommandParams
-	DefaultSidecarParams          *config.SidecarParams
-	DefaultMetadata               config.Metadata
-	DefaultImagePullPolicy        corev1.PullPolicy
-	DefaultImageCheckPullPolicy   corev1.PullPolicy
-	PodSpecPatch                  *corev1.PodSpec
-	ProhibitK8sPlugin             bool
-	AllowPodSpecPatchUnsafeCmdMod bool
+	Namespace                      string
+	Image                          string
+	JobPrefix                      string
+	AgentToken                     string
+	AgentTokenSecretName           string
+	JobTTL                         time.Duration
+	JobActiveDeadlineSeconds       int
+	AdditionalRedactedVars         []string
+	WorkspaceVolume                *corev1.Volume
+	AgentConfig                    *config.AgentConfig
+	DefaultCheckoutParams          *config.CheckoutParams
+	DefaultCommandParams           *config.CommandParams
+	DefaultSidecarParams           *config.SidecarParams
+	DefaultMetadata                config.Metadata
+	DefaultImagePullPolicy         corev1.PullPolicy
+	DefaultImageCheckPullPolicy    corev1.PullPolicy
+	PodSpecPatch                   *corev1.PodSpec
+	ProhibitK8sPlugin              bool
+	AllowPodSpecPatchUnsafeCmdMod  bool
+	ImageCheckContainerCPULimit    string
+	ImageCheckContainerMemoryLimit string
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, agentClient *api.AgentClient, cfg Config) *worker {
@@ -783,6 +785,17 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		return nil, errors.New("invalid image references\n\n" + tw.Render())
 	}
 
+	// Use default resource limits for pre-flight image check containers, if not provided
+	var imageCheckContainerCPULimit resource.Quantity
+	var imageCheckContainerMemoryLimit resource.Quantity
+
+	if imageCheckContainerCPULimit, err = resource.ParseQuantity(w.cfg.ImageCheckContainerCPULimit); err != nil {
+		imageCheckContainerCPULimit, _ = resource.ParseQuantity(config.DefaultImageCheckContainerCPULimit)
+	}
+	if imageCheckContainerMemoryLimit, err = resource.ParseQuantity(w.cfg.ImageCheckContainerMemoryLimit); err != nil {
+		imageCheckContainerMemoryLimit, _ = resource.ParseQuantity(config.DefaultImageCheckContainerMemoryLimit)
+	}
+
 	// Create the pre-flight image check containers.
 	i := 0
 	for image, pnr := range preflightImageChecks {
@@ -815,6 +828,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("100m"),
 					corev1.ResourceMemory: resource.MustParse("64Mi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    imageCheckContainerCPULimit,
+					corev1.ResourceMemory: imageCheckContainerMemoryLimit,
 				},
 			},
 		})

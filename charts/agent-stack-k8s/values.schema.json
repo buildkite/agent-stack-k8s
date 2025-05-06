@@ -581,6 +581,18 @@
             }
           }
         },
+        "image-check-container-cpu-limit": {
+          "type": "string",
+          "description": "Configures the CPU resource limits for all imagecheck-* containers",
+          "default": "200m",
+          "examples": ["500m", "1", "2000m"]
+        },
+        "image-check-container-memory-limit": {
+          "type": "string",
+          "description": "Configures the memory resource limits for all imagecheck-* containers",
+          "default": "128Mi",
+          "examples": ["1Gi", "512Mi"]
+        },
         "default-image-pull-policy": {
           "type": "string",
           "description": "Configures a default image pull policy for containers that do not specify a pull policy, or containers created by the stack itself",
