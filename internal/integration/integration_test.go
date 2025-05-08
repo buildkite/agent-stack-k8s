@@ -3,17 +3,18 @@ package integration_test
 import (
 	"context"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
 	"github.com/google/uuid"
+	"github.com/kylelemons/godebug/pretty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 )
 
 func TestWalkingSkeleton(t *testing.T) {
@@ -609,8 +610,6 @@ func TestCancelCheckerEvictsPod(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 
-	time.Sleep(10 * time.Second)
-
 	_, err := api.BuildCancel(ctx, tc.GraphQL, api.BuildCancelInput{
 		ClientMutationId: uuid.New().String(),
 		Id:               build.Id,
@@ -619,10 +618,24 @@ func TestCancelCheckerEvictsPod(t *testing.T) {
 		t.Errorf("api.BuildCancel(... %q) error: %v", build.Id, err)
 	}
 	tc.AssertCancelled(ctx, build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
-	logs := tc.FetchLogs(build)
-	if strings.Contains(logs, "Received cancellation signal, interrupting") {
-		t.Error("The agent ran and handled cancellation")
+
+	// Give it time to evict
+	time.Sleep(10 * time.Second)
+
+	// TriggerBuild performs this type assertion
+	job := build.Jobs.Edges[0].Node.(*api.JobJobTypeCommand)
+
+	jobName := cfg.JobPrefix + job.Uuid
+	opts := metav1.ListOptions{
+		LabelSelector: fields.OneTermEqualSelector("batch.kubernetes.io/job-name", jobName).String(),
+	}
+	pods, err := tc.Kubernetes.CoreV1().Pods(cfg.Namespace).List(ctx, opts)
+	if err != nil {
+		t.Fatalf("kubernetes.CoreV1().Pods(%q).List(ctx, %v) error = %v", cfg.Namespace, opts, err)
+	}
+	if len(pods.Items) > 0 {
+		t.Fatalf("kubernetes.CoreV1().Pods(%q).List(ctx, %v): found %d pods, there should be none (they should have been evicted). Pods:\n%s",
+			cfg.Namespace, opts, len(pods.Items), pretty.Sprint(pods.Items))
 	}
 }
 
