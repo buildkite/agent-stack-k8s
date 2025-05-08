@@ -60,7 +60,7 @@ steps:
       - kubernetes:
           podSpec:
             containers:
-              - image: golang:1.23-alpine
+              - image: golang:1.24-alpine
                 command: [.buildkite/steps/tidy.sh]
                 env: *go-env
                 volumeMounts: *go-mounts
@@ -104,7 +104,7 @@ steps:
           podSpec:
             containers:
               - name: docker
-                image: golang:1.23-alpine
+                image: golang:1.24-alpine
                 command: [.buildkite/steps/check-code-generation.sh]
                 env: *go-env
                 volumeMounts: *go-mounts
@@ -169,7 +169,7 @@ steps:
           podSpec:
             containers:
               - name: ko
-                image: golang:1.23
+                image: golang:1.24
                 command: [.buildkite/steps/build-and-push-controller.sh]
                 envFrom:
                   - secretRef:
@@ -237,7 +237,7 @@ steps:
             serviceAccountName: release
             containers:
               - name: release
-                image: golang:1.23-alpine # Note goreleaser shells out to go!
+                image: golang:1.24-alpine # Note goreleaser shells out to go!
                 command: [.buildkite/steps/release.sh]
                 envFrom:
                   - secretRef:
