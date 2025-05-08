@@ -43,7 +43,7 @@ var (
 	onUpdateEventCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,
 		Subsystem: promSubsystem,
-		Name:      "onupdate_event_total",
+		Name:      "onupdate_events_total",
 		Help:      "Count of OnUpdate informer events",
 	})
 	onDeleteEventCounter = promauto.NewCounter(prometheus.CounterOpts{

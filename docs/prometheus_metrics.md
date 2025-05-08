@@ -60,7 +60,7 @@ Full metric name | Labels | Description
 `buildkite_deduper_jobs_unmarked_running_total` | `source` | Count of times a job was removed from inFlight
 `buildkite_deduper_onadd_events_total` | - | Count of OnAdd informer events
 `buildkite_deduper_ondelete_events_total` | - | Count of OnDelete informer events
-`buildkite_deduper_onupdate_event_total` | - | Count of OnUpdate informer events
+`buildkite_deduper_onupdate_events_total` | - | Count of OnUpdate informer events
 
 ## job_watcher
 
