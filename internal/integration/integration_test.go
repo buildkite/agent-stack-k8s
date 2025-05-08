@@ -356,7 +356,7 @@ func TestSidecars(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	time.Sleep(5 * time.Second)
+	time.Sleep(15 * time.Second)
 	tc.AssertLogsContain(build, "Welcome to nginx!")
 }
 
@@ -414,7 +414,7 @@ func TestInvalidPodSpec(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
+	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	tc.AssertLogsContain(
 		build,
 		`is invalid: spec.template.spec.containers[0].volumeMounts[0].name: Not found: "this-doesnt-exist"`,
@@ -433,7 +433,7 @@ func TestInvalidPodJSON(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
+	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	tc.AssertLogsContain(
 		build,
 		"failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.podSpec.containers.env.value of type string",
@@ -452,7 +452,7 @@ func TestMissingServiceAccount(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
+	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	tc.AssertLogsContain(build, "error looking up service account")
 }
 
@@ -468,7 +468,7 @@ func TestEnvVariables(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
+	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	tc.AssertLogsContain(build, "Testing some env variables: set")
 }
 
@@ -484,7 +484,7 @@ func TestImagePullBackOffFailed(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
+	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	logs := tc.FetchLogs(build)
 	assert.Contains(t, logs, "other job has run")
 	assert.Contains(t, logs, "The following images could not be pulled or were unavailable:\n")
@@ -504,7 +504,7 @@ func TestPullPolicyNeverMissingImage(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
+	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	logs := tc.FetchLogs(build)
 	assert.Contains(t, logs, "The following images could not be pulled or were unavailable:\n")
 	assert.Contains(t, logs, `"buildkite/agent-extreme:never"`)
@@ -523,7 +523,7 @@ func TestBrokenInitContainer(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
+	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	logs := tc.FetchLogs(build)
 	assert.Contains(t, logs, "The following init containers failed:")
 	assert.Contains(t, logs, "well this isn't going to work")
@@ -541,7 +541,7 @@ func TestInvalidImageRefFormat(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
+	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	tc.AssertLogsContain(build, `invalid reference format "buildkite/agent:latest plus some extra junk" for container "container-0"`)
 }
 
@@ -572,7 +572,7 @@ func TestInterposerBuildkite(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
+	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	logs := tc.FetchLogs(build)
 	assert.Contains(t, logs, "Hello World!")
 	assert.Contains(t, logs, "Goodbye World!")
@@ -593,7 +593,7 @@ func TestInterposerVector(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 	logs := tc.FetchLogs(build)
-	time.Sleep(5 * time.Second) // trying to reduce flakes: logs not immediately available
+	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	assert.Contains(t, logs, "Hello World!")
 	assert.Contains(t, logs, "Goodbye World!")
 }
@@ -620,7 +620,7 @@ func TestCancelCheckerEvictsPod(t *testing.T) {
 	tc.AssertCancelled(ctx, build)
 
 	// Give it time to evict
-	time.Sleep(10 * time.Second)
+	time.Sleep(30 * time.Second)
 
 	// TriggerBuild performs this type assertion
 	job := build.Jobs.Edges[0].Node.(*api.JobJobTypeCommand)
