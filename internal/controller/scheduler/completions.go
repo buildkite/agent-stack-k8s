@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	v1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -90,7 +91,7 @@ func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *v1.Pod) {
 		zap.Int32("exit code", terminated.ExitCode),
 	)
 
-	for annotation, _ := range pod.Annotations {
+	for annotation := range pod.Annotations {
 		if !strings.HasPrefix(annotation, "buildkite.com/sidecar-") {
 			continue
 		}
@@ -112,6 +113,7 @@ func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *v1.Pod) {
 
 		executor, err := remotecommand.NewSPDYExecutor(restconfig.GetConfigOrDie(), "POST", req.URL())
 		if err != nil {
+			completionWatcherJobCleanupErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
 			w.logger.Error("failed to create remotecommand executor", zap.Error(err))
 			return
 		}
@@ -131,6 +133,7 @@ func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *v1.Pod) {
 			Tty:    false,
 		})
 		if err != nil {
+			completionWatcherJobCleanupErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
 			w.logger.Error("failed to send SIGTERM to sidecar", zap.String("sidecar", pod.Annotations[annotation]), zap.Error(err))
 			return
 		}
