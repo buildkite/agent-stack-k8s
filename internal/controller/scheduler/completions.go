@@ -2,19 +2,20 @@ package scheduler
 
 import (
 	"context"
+	"os"
+	"strings"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 
 	"go.uber.org/zap"
 
 	v1 "k8s.io/api/core/v1"
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/ptr"
+	"k8s.io/client-go/tools/remotecommand"
+	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 const defaultTermGracePeriodSeconds = 60
@@ -89,18 +90,50 @@ func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *v1.Pod) {
 		zap.Int32("exit code", terminated.ExitCode),
 	)
 
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		job, err := w.k8s.BatchV1().Jobs(pod.Namespace).Get(ctx, pod.Labels["job-name"], metav1.GetOptions{})
-		if err != nil {
-			return err
+	for annotation, _ := range pod.Annotations {
+		if !strings.HasPrefix(annotation, "buildkite.com/sidecar-") {
+			continue
 		}
-		job.Spec.ActiveDeadlineSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
-		_, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(ctx, job, metav1.UpdateOptions{})
-		return err
-	}); err != nil {
-		completionWatcherJobCleanupErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
-		w.logger.Error("failed to update job with ActiveDeadlineSeconds", zap.Error(err))
-		return
+
+		req := w.k8s.CoreV1().RESTClient().
+			Post().
+			Resource("pods").
+			Name(pod.Name).
+			Namespace(pod.Namespace).
+			SubResource("exec").
+			VersionedParams(&v1.PodExecOptions{
+				Container: pod.Annotations[annotation],
+				Command:   strings.Fields("kill 1"),
+				Stdin:     true,
+				Stdout:    true,
+				Stderr:    true,
+				TTY:       false,
+			}, scheme.ParameterCodec)
+
+		executor, err := remotecommand.NewSPDYExecutor(restconfig.GetConfigOrDie(), "POST", req.URL())
+		if err != nil {
+			w.logger.Error("failed to create remotecommand executor", zap.Error(err))
+			return
+		}
+
+		w.logger.Debug(
+			"Sending SIGTERM to sidecar...",
+			zap.String("pod", pod.Name),
+			zap.String("namespace", pod.Namespace),
+			zap.String("job-uuid", pod.Labels[config.UUIDLabel]),
+			zap.String("sidecar", pod.Annotations[annotation]),
+		)
+
+		err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
+			Stdin:  os.Stdin,
+			Stdout: os.Stdout,
+			Stderr: os.Stderr,
+			Tty:    false,
+		})
+		if err != nil {
+			w.logger.Error("failed to send SIGTERM to sidecar", zap.String("sidecar", pod.Annotations[annotation]), zap.Error(err))
+			return
+		}
 	}
 	completionWatcherJobCleanupsCounter.Inc()
 }
