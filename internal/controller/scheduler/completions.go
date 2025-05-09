@@ -76,10 +76,8 @@ func (w *completionsWatcher) OnUpdate(old any, new any) {
 }
 
 // cleanupSidecars first checks if the container status of the agent container
-// in the pod is Terminated. If so, it ensures the job is cleaned up by updating
-// it with an ActiveDeadlineSeconds value (defaultTermGracePeriodSeconds).
-// (So this is not actually sidecar-specific, but is needed because sidecars
-// would otherwise cause the pod to continue running.)
+// in the pod is Terminated. If so, it sends a SIGTERM to PID 1 of each
+// sidecar container identified by the "buildkite.com/sidecar-*" annotations
 func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *v1.Pod) {
 	terminated := getTermination(pod)
 	if terminated == nil {
