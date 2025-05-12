@@ -10,6 +10,7 @@ import (
 // checkout container.
 type CheckoutParams struct {
 	Skip                 *bool                      `json:"skip,omitempty"`
+	CheckoutFlags        *string                    `json:"checkoutFlags,omitempty"`
 	CleanFlags           *string                    `json:"cleanFlags,omitempty"`
 	CloneFlags           *string                    `json:"cloneFlags,omitempty"`
 	FetchFlags           *string                    `json:"fetchFlags,omitempty"`
@@ -21,14 +22,17 @@ type CheckoutParams struct {
 	ExtraVolumeMounts    []corev1.VolumeMount       `json:"extraVolumeMounts,omitempty"`
 }
 
-func (co *CheckoutParams) ApplyTo(podSpec *corev1.PodSpec, ctr *corev1.Container) {
+func (co *CheckoutParams) ApplyToAgentStart(podSpec *corev1.PodSpec, ctr *corev1.Container) {
 	if co == nil || podSpec == nil || ctr == nil {
 		return
 	}
+	appendToEnvOpt(ctr, "BUILDKITE_GIT_CHECKOUT_FLAGS", co.CheckoutFlags)
 	appendToEnvOpt(ctr, "BUILDKITE_GIT_CLEAN_FLAGS", co.CleanFlags)
 	appendToEnvOpt(ctr, "BUILDKITE_GIT_CLONE_FLAGS", co.CloneFlags)
 	appendToEnvOpt(ctr, "BUILDKITE_GIT_FETCH_FLAGS", co.FetchFlags)
-	appendNegatedToEnvOpt(ctr, "BUILDKITE_GIT_SUBMODULES", co.NoSubmodules)
+	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_GIT_SUBMODULES", co.NoSubmodules)
+	// TODO: Agent start doesn't know about submodule clone config, but
+	// agent bootstrap does...
 	appendCommaSepToEnv(ctr, "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", co.SubmoduleCloneConfig)
 	co.GitMirrors.ApplyTo(podSpec, ctr)
 	ctr.EnvFrom = append(ctr.EnvFrom, co.EnvFrom...)

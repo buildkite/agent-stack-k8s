@@ -1,17 +1,18 @@
 agents:
   queue: "{{.queue}}"
-env:
-  BUILDKITE_GIT_MIRRORS_PATH: /tmp/buildkite-git-mirrors
 steps:
   - label: ":git: Write File to Git Mirror Dir"
     key: write-file-to-git-mirror-dir
     plugins:
       - kubernetes:
+          checkout:
+            gitMirrors:
+              path: /tmp/buildkite-git-mirrors
           podSpec:
             containers:
               - image: alpine:latest
                 command:
-                  - touch /tmp/buildkite-git-mirrors/foo-$$(BUILDKITE_JOB_ID).txt
+                  - touch /tmp/buildkite-git-mirrors/foo-$${BUILDKITE_JOB_ID}.txt
               - image: alpine:latest
                 command:
                   - |-
