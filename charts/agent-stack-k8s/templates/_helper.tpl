@@ -24,6 +24,11 @@ app: {{ include "agent-stack-k8s.fullname" . }}
 {{- toYaml (mustMerge (fromYaml (include "agent-stack-k8s.mandatoryLabels" .)) .Values.labels) }}
 {{- end }}
 
+{{/* Generate annotations */}}
+{{- define "agent-stack-k8s.annotations" }}
+{{- toYaml .Values.annotations }}
+{{- end }}
+
 {{/* Generate basic secrets metadata */}}
 {{- define "agent-stack-k8s.mandatorySecretsMetadata" }}
 name: {{ include "agent-stack-k8s.fullname" . }}-secrets

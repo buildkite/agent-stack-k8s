@@ -1,6 +1,8 @@
-# Default Resources
+# Default Container Resources (Requests/Limits)
 
-In the helm values, you can specify default resources to be used by the containers in Pods that are launched to run Jobs.
+## Using `pod-spec-patch` in the Controller's Configuration
+
+In the controller's values YAML, you can specify the default resources (requests/limits) to apply to Pods/containers:
 
 ```yaml
 # values.yaml
@@ -40,7 +42,7 @@ config:
           memory: 1Gi
 ```
 
-and then every job that's handled by this installation of agent-stack-k8s will default to these values. To override it for a step, use a step level `podSpecPatch`.
+All Jobs created by the `agent-stack-k8s` controller will have these resources applied. To override these resources for a single job, use the `kubernetes` plugin with `podSpecPatch` to define container resources:
 
 ```yaml
 # pipelines.yaml
@@ -63,4 +65,15 @@ steps:
 
 - name: Hello from a container with default resources
   command: echo Hello World!
+```
+
+## `imagecheck-*` Containers
+
+Defining [CPU](https://kubernetes.io/docs/tasks/configure-pod-container/assign-cpu-resource/#cpu-units) and [memory](https://kubernetes.io/docs/tasks/configure-pod-container/assign-memory-resource/#memory-units) resource limits can be set with the `image-check-container-cpu-limit` and `image-check-container-memory-limit` configuration values:
+
+```
+# values.yaml
+config:
+  image-check-container-cpu-limit: 100m
+  image-check-container-memory-limit: 128Mi
 ```

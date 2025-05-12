@@ -13,6 +13,8 @@ resources:
 
 labels: {}
 
+annotations: {}
+
 secretsMetadata: {}
 
 serviceAccountMetadata: {}

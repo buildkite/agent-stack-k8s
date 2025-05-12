@@ -96,6 +96,21 @@
         }
       ]
     },
+    "annotations": {
+      "type": "object",
+      "default": {},
+      "title": "The annotations Schema",
+      "additionalProperties": {
+        "type": "string",
+        "default": ""
+      },
+      "example": [
+        {
+          "kubernetes.io/description": "Agent Stack K8s Controller",
+          "prometheus.io/scrape": "true"
+        }
+      ]
+    },
     "secretsMetadata": {
       "type": "object",
       "default": {},
@@ -306,6 +321,13 @@
           "default": false,
           "title": "Allow controller to pause processing the jobs when queue is paused on Buildkite",
           "examples": [false]
+        },
+        "prometheus-port": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 65535,
+          "title": "Bind port to expose Prometheus /metrics; 0 disables it"
         },
         "allow-pod-spec-patch-unsafe-command-modification": {
           "type": "boolean",
@@ -566,6 +588,18 @@
             }
           }
         },
+        "image-check-container-cpu-limit": {
+          "type": "string",
+          "description": "Configures the CPU resource limits for all imagecheck-* containers",
+          "default": "200m",
+          "examples": ["500m", "1", "2000m"]
+        },
+        "image-check-container-memory-limit": {
+          "type": "string",
+          "description": "Configures the memory resource limits for all imagecheck-* containers",
+          "default": "128Mi",
+          "examples": ["1Gi", "512Mi"]
+        },
         "default-image-pull-policy": {
           "type": "string",
           "description": "Configures a default image pull policy for containers that do not specify a pull policy, or containers created by the stack itself",
@@ -604,6 +638,12 @@
           "type": "string",
           "default": "10s",
           "title": "Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query."
+        },
+        "work-queue-limit": {
+          "type": "integer",
+          "default": 1000000,
+          "minimum": 1,
+          "title": "Sets the maximum number of Jobs the controller will hold in the work queue."
         }
       },
       "examples": [

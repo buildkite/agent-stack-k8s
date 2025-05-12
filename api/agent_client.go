@@ -159,8 +159,8 @@ func (c *AgentClient) GetJobToRun(ctx context.Context, id string) (result *Agent
 
 // AgentJobState describes the current state of a job.
 type AgentJobState struct {
-	ID    string `json:"id"`
-	State string `json:"state"`
+	ID    string   `json:"id"`
+	State JobState `json:"state"`
 }
 
 // GetJobState gets the state of a specific job.

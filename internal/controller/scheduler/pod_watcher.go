@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -463,10 +462,10 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		log.Warn("Failed to fetch state of job", zap.Error(err))
 		return
 	}
-	log = log.With(zap.String("job_state", job.State))
+	log = log.With(zap.String("job_state", string(job.State)))
 
-	switch api.JobStates(strings.ToUpper(job.State)) {
-	case api.JobStatesScheduled:
+	switch job.State {
+	case api.JobStateScheduled:
 		// We can acquire it and fail it ourselves.
 		log.Info("One or more job containers are waiting too long for images. Failing.")
 		message := w.formatImagePullFailureMessage(statuses)
@@ -482,11 +481,11 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		// Also evict the pod, because it won't die on its own.
 		w.evictPod(ctx, log, pod, jobUUID)
 
-	case api.JobStatesAccepted, api.JobStatesAssigned, api.JobStatesRunning:
+	case api.JobStateAccepted, api.JobStateAssigned, api.JobStateRunning:
 		// An agent is already doing something with the job. Let it fail.
 		log.Debug("Job is the responsibility of an agent")
 
-	case api.JobStatesCanceling, api.JobStatesCanceled, api.JobStatesFinished, api.JobStatesSkipped:
+	case api.JobStateCanceling, api.JobStateCanceled, api.JobStateFinished, api.JobStateSkipped:
 		// If the job is in one of these states, we can neither acquire nor
 		// cancel it (now or in the future).
 		log.Debug("Job not acquirable or cancelable")
@@ -570,8 +569,8 @@ func (w *podWatcher) jobCancelChecker(ctx context.Context, stopCh <-chan struct{
 		}
 		log := log.With(zap.String("job_state", string(job.State)))
 
-		switch api.JobStates(job.State) {
-		case api.JobStatesCanceled, api.JobStatesCanceling:
+		switch job.State {
+		case api.JobStateCanceled, api.JobStateCanceling:
 			log.Info("Evicting pending pod for cancelled job")
 			eviction := &policyv1.Eviction{ObjectMeta: podMeta}
 			if err := w.k8s.PolicyV1().Evictions(w.cfg.Namespace).Evict(ctx, eviction); err != nil {
@@ -582,7 +581,7 @@ func (w *podWatcher) jobCancelChecker(ctx context.Context, stopCh <-chan struct{
 			podsEvictedCounter.WithLabelValues("bk_job_cancelled").Inc()
 			return
 
-		case api.JobStatesScheduled:
+		case api.JobStateScheduled:
 			// The pod can continue waiting for resources / initializing.
 
 		default:

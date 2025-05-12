@@ -11,20 +11,23 @@ import (
 )
 
 const (
-	UUIDLabel                           = "buildkite.com/job-uuid"
-	BuildURLAnnotation                  = "buildkite.com/build-url"
-	JobURLAnnotation                    = "buildkite.com/job-url"
-	PriorityAnnotation                  = "buildkite.com/job-priority"
-	DefaultNamespace                    = "default"
-	DefaultImagePullBackOffGracePeriod  = 30 * time.Second
-	DefaultJobCancelCheckerPollInterval = 5 * time.Second
-	DefaultEmptyJobGracePeriod          = 30 * time.Second
-	DefaultJobCreationConcurrency       = 25
-	DefaultK8sClientRateLimiterQPS      = 10
-	DefaultK8sClientRateLimiterBurst    = 20
-	DefaultPaginationPageSize           = 1000
-	DefaultPaginationDepthLimit         = 2
-	DefaultQueryResetInterval           = 10 * time.Second
+	UUIDLabel                             = "buildkite.com/job-uuid"
+	BuildURLAnnotation                    = "buildkite.com/build-url"
+	JobURLAnnotation                      = "buildkite.com/job-url"
+	PriorityAnnotation                    = "buildkite.com/job-priority"
+	DefaultNamespace                      = "default"
+	DefaultImagePullBackOffGracePeriod    = 30 * time.Second
+	DefaultJobCancelCheckerPollInterval   = 5 * time.Second
+	DefaultEmptyJobGracePeriod            = 30 * time.Second
+	DefaultJobCreationConcurrency         = 25
+	DefaultK8sClientRateLimiterQPS        = 10
+	DefaultK8sClientRateLimiterBurst      = 20
+	DefaultPaginationPageSize             = 1000
+	DefaultPaginationDepthLimit           = 2
+	DefaultQueryResetInterval             = 10 * time.Second
+	DefaultWorkQueueLimit                 = 1_000_000
+	DefaultImageCheckContainerCPULimit    = "200m"
+	DefaultImageCheckContainerMemoryLimit = "128Mi"
 )
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
@@ -51,6 +54,7 @@ type Config struct {
 	PaginationDepthLimit     int           `json:"pagination-depth-limit"   validate:"min=1,max=20"`
 	QueryResetInterval       time.Duration `json:"query-reset-interval"     validate:"omitempty"`
 	EnableQueuePause         bool          `json:"enable-queue-pause"       validate:"omitempty"`
+	WorkQueueLimit           int           `json:"work-queue-limit"         validate:"omitempty"`
 	// Agent endpoint is set in agent-config.
 
 	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps" validate:"omitempty"`
@@ -77,6 +81,9 @@ type Config struct {
 
 	DefaultImagePullPolicy      corev1.PullPolicy `json:"default-image-pull-policy"       validate:"omitempty"`
 	DefaultImageCheckPullPolicy corev1.PullPolicy `json:"default-image-check-pull-policy" validate:"omitempty"`
+
+	ImageCheckContainerCPULimit    string `json:"image-check-container-cpu-limit"       validate:"omitempty"`
+	ImageCheckContainerMemoryLimit string `json:"image-check-container-memory-limit"    validate:"omitempty"`
 
 	// ProhibitKubernetesPlugin can be used to prevent alterations to the pod
 	// from the job (the kubernetes "plugin" in pipeline.yml). If enabled,
@@ -153,6 +160,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt("pagination-page-size", c.PaginationPageSize)
 	enc.AddInt("pagination-depth-limit", c.PaginationDepthLimit)
 	enc.AddDuration("query-reset-interval", c.QueryResetInterval)
+	enc.AddInt("work-queue-limit", c.WorkQueueLimit)
 	return nil
 }
 

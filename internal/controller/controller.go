@@ -130,24 +130,26 @@ func Run(
 	// Scheduler does the complicated work of converting a Buildkite job into
 	// a pod to run that job. It talks to the k8s API to create pods.
 	sched := scheduler.New(logger.Named("scheduler"), k8sClient, agentClient, scheduler.Config{
-		Namespace:                     cfg.Namespace,
-		Image:                         cfg.Image,
-		AgentTokenSecretName:          cfg.AgentTokenSecret,
-		JobTTL:                        cfg.JobTTL,
-		JobPrefix:                     cfg.JobPrefix,
-		JobActiveDeadlineSeconds:      cfg.JobActiveDeadlineSeconds,
-		AdditionalRedactedVars:        cfg.AdditionalRedactedVars,
-		WorkspaceVolume:               cfg.WorkspaceVolume,
-		AgentConfig:                   cfg.AgentConfig,
-		DefaultCheckoutParams:         cfg.DefaultCheckoutParams,
-		DefaultCommandParams:          cfg.DefaultCommandParams,
-		DefaultSidecarParams:          cfg.DefaultSidecarParams,
-		DefaultMetadata:               cfg.DefaultMetadata,
-		DefaultImagePullPolicy:        cfg.DefaultImagePullPolicy,
-		DefaultImageCheckPullPolicy:   cfg.DefaultImageCheckPullPolicy,
-		PodSpecPatch:                  cfg.PodSpecPatch,
-		ProhibitK8sPlugin:             cfg.ProhibitKubernetesPlugin,
-		AllowPodSpecPatchUnsafeCmdMod: cfg.AllowPodSpecPatchUnsafeCmdMod,
+		Namespace:                      cfg.Namespace,
+		Image:                          cfg.Image,
+		AgentTokenSecretName:           cfg.AgentTokenSecret,
+		JobTTL:                         cfg.JobTTL,
+		JobPrefix:                      cfg.JobPrefix,
+		JobActiveDeadlineSeconds:       cfg.JobActiveDeadlineSeconds,
+		AdditionalRedactedVars:         cfg.AdditionalRedactedVars,
+		WorkspaceVolume:                cfg.WorkspaceVolume,
+		AgentConfig:                    cfg.AgentConfig,
+		DefaultCheckoutParams:          cfg.DefaultCheckoutParams,
+		DefaultCommandParams:           cfg.DefaultCommandParams,
+		DefaultSidecarParams:           cfg.DefaultSidecarParams,
+		DefaultMetadata:                cfg.DefaultMetadata,
+		DefaultImagePullPolicy:         cfg.DefaultImagePullPolicy,
+		DefaultImageCheckPullPolicy:    cfg.DefaultImageCheckPullPolicy,
+		PodSpecPatch:                   cfg.PodSpecPatch,
+		ProhibitK8sPlugin:              cfg.ProhibitKubernetesPlugin,
+		AllowPodSpecPatchUnsafeCmdMod:  cfg.AllowPodSpecPatchUnsafeCmdMod,
+		ImageCheckContainerCPULimit:    cfg.ImageCheckContainerCPULimit,
+		ImageCheckContainerMemoryLimit: cfg.ImageCheckContainerMemoryLimit,
 	})
 
 	informerFactory, err := NewInformerFactory(k8sClient, cfg.Namespace, cfg.Tags)
@@ -165,7 +167,11 @@ func Run(
 	// Limiter prevents scheduling more than cfg.MaxInFlight jobs at once
 	// (if configured) and is responsible for the priority queue of jobs.
 	// Once it figures out a job can be scheduled, it passes to the deduper.
-	limiter := limiter.New(ctx, logger.Named("limiter"), deduper, cfg.MaxInFlight, cfg.JobCreationConcurrency)
+	limiter := limiter.New(ctx, logger.Named("limiter"), deduper,
+		cfg.MaxInFlight,
+		cfg.JobCreationConcurrency,
+		cfg.WorkQueueLimit,
+	)
 	if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Fatal("failed to register limiter informer", zap.Error(err))
 	}

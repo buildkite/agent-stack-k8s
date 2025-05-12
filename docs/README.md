@@ -23,4 +23,5 @@ Whether you're looking to set up your first Buildkite agent in a Kubernetes clus
 -   [Volume mounts](volume_mounts.md)
 -   [Override commands](override_commands.md)
 -   [Securing the Stack](securing_stack.md)
+-   [Prometheus metrics](prometheus_metrics.md)
 -   [Troubleshooting](troubleshooting.md)
