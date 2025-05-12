@@ -13,14 +13,19 @@
 - A Kubernetes cluster
 - A Cluster [Agent Token](https://buildkite.com/docs/agent/v3/tokens#create-a-token)
 - A Cluster [Queue](https://buildkite.com/docs/pipelines/clusters/manage-queues#create-a-self-hosted-queue)
-  - The UUID of this Cluster is also required. See [Obtain Cluster UUID](docs/installation.md#how-to-find-a-buildkite-clusters-uuid)
+  - The UUID of this Cluster is also required. See [Obtain Cluster UUID](https://buildkite.com/docs/agent/v3/agent-stack-k8s/installation#how-to-find-a-buildkite-clusters-uuid)
 
 ## Installation
 
-For installation, see [Installation](docs/installation.md)
+For installation, see [Installation](https://buildkite.com/docs/agent/v3/agent-stack-k8s/installation).
 
 ## Documentation
 
-Documentation can be found under [`docs/`](docs/README.md).
+Documentation for the Buildkite Agent Stack for Kubernetes controller can be found in the [Buildkite Documentation](https://buildkite.com/docs/agent/v3/agent-stack-k8s).
 
-For a broader context of what is Buildkite, see the [Buildkite Documentation](https://buildkite.com/docs).
+## Development 
+
+For guidelines and requirements regarding contributing to the Buildkite Agent Stack for Kubernetes controller, please see the [Development page](DEVELOPMENT.md).
+
+
+
