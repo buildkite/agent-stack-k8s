@@ -1,7 +1,23 @@
-# Agent Stack K8s Development
+# The development guide for the Buildkite Agent Stack for Kubernetes controller
 
-## Local Dependencies
-Install dependencies with Homebrew via:
+This guide covers everything you need to know to contribute to and develop the Buildkite Agent Stack for Kubernetes controller codebase.
+
+Note that our development approach emphasizes testability, reliability, and maintainability. 
+Contributors should focus on writing clean, well-tested code that follows established Go patterns and practices.
+
+When contributing:
+
+- Create feature branches from `main`
+- Add appropriate tests for new functionality
+- Ensure all tests pass locally before submitting PRs
+- Follow [Go code style](https://google.github.io/styleguide/go/) conventions
+- Include detailed commit messages explaining changes
+
+The integration test suite is crucial to our development workflow - it verifies that changes maintain compatibility with both Buildkite and Kubernetes APIs.
+
+## Local dependencies
+
+To start developing for the Buildkite Agent Stack for Kubernetes controller, you'll need to install dependencies with Homebrew via:
 
 ```bash
 brew bundle
@@ -13,11 +29,9 @@ Run tasks via [just](https://github.com/casey/just):
 just --list
 ```
 
-## Integration Tests
+## Integration tests
 
-### Architecture
-
-Agent Stack K8s integration tests depend on a running Buildkite instance. By default, they use the production Buildkite.
+The Buildkite Agent Stack for Kubernetes controller integration tests depend on a running Buildkite instance. By default, they use the production version of Buildkite.
 
 ```mermaid
 flowchart LR
@@ -29,37 +43,36 @@ flowchart LR
 ```
 
 During test run, the test suites:
-1. create ephemeral pipelines and queues for a given [Buildkite Agent Cluster](https://buildkite.com/docs/clusters/overview).
-2. Run executor, which will monitor jobs from the target queue in target Buildkite Cluster,
-   starts new Jobs in a Kubernetes cluster.
-3. Test suite will clean up those ephemeral objects in the end.
+1. Create ephemeral pipelines and queues for a given [Buildkite Agent Cluster](https://buildkite.com/docs/clusters/overview).
+2. Run executor, which will monitor jobs from the target queue in target Buildkite Cluster and start new Jobs in a Kubernetes cluster.
+3. Clean up those ephemeral objects in the end.
 
-To run integration test locally, we recommend you to run individual test. For example,
+To run integration test locally, we recommend you to run individual tests. For example,
 
 ```bash
 just test -run TestWalkingSkeleton
 ```
 
-### Requirements
+### Integration test requirements
 
 In addition to the usual requirements, the integration tests make use of a GraphQL-enabled Buildkite API token in order to create pipelines, start builds, read logs, and clean up afterwards.
 
 ### Setup
 
-Any member of the public should be able to run our integration as long as you are an user of Buildkite, and you have
-access to a Kubernetes cluster.
+Any Buildkite user who has an access to a Kubernetes cluster should be able to run our integration test.
 
-Concretely, to get the integration test running locally, you will need:
-1. A valid Buildkite API token (presuming you are a customer of Buildkite).
-2. A valid Buildkite Agent Token in your target Buildkite Cluster. The agent token needs to be installed in your K8s
+To get the integration test running locally, you will need:
+
+1. A valid Buildkite API token.
+2. A valid Buildkite Agent Token in your target Buildkite Cluster. The agent token needs to be installed in your Kubernetes
    cluster.
-3. Your organization name in Buildkite and your target Buildkite Cluster UUID.
-4. Depending on test cases, you may also need a SSH keys, please read below.
-5. Your shell environment will need CLI write access to a k8s cluster such as the one provided by https://orbstack.dev/.
+3. The name of your Buildkite organization (slug) and your target Buildkite Cluster UUID.
+4. Depending on test cases, you may also need SSH keys, please keep reading.
+5. Your shell environment will need CLI write access to a Kubernetes cluster such as the one provided by https://orbstack.dev/.
 
-#### Use environment variables
+#### Using environment variables
 
-We found it's convenient to supply API token, organization name, and cluster UUID as environment variables. This can be done using an `.envrc` file loaded by using [direnv](https://direnv.net/).
+It's generally convenient to supply the API token, your Buildkite organization name, and cluster UUID as environment variables. This can be done using an `.envrc` file loaded by using [direnv](https://direnv.net/).
 
 ```bash
 export BUILDKITE_TOKEN="bkua_**************"
@@ -67,23 +80,23 @@ export ORG="your-cool-org-slug"
 export CLUSTER_UUID="UUID-UUID-UUID-UUID"
 ```
 
-## Running Locally
+## Running locally
 
-To run the controller locally, with the environment variables, note in this example I am overriding the queue to ensure jobs from the default queue which is "", are picked up by this agent.
+To run the controller locally, with the environment variables, run the following example. Note that note in this example the queue is overridden to ensure jobs from the default queue, which is "", are picked up by the Buildkite agent.
 
 ```
 just run --org $ORG --buildkite-token $BUILDKITE_TOKEN --debug --tags 'queue=,os=linux'
 ```
 
-## Testing Locally
+## Testing locally
 
-Before you start, check which kubernetes cluster configuration your using by default.
+Before you start, check which Kubernetes cluster configuration you are using by default:
 
 ```
 kubectl config current-context
 ```
 
-To see the entire configuration.
+To see the entire configuration:
 
 ```
 kubectl config view
@@ -107,7 +120,7 @@ To run a single test, following goes `-run` convention will provide this capabil
 just test -timeout 10m -v ./internal/integration/... -run TestImagePullBackOffFailed -args --org $ORG --buildkite-token $BUILDKITE_TOKEN
 ```
 
-#### Token Scopes
+## Token scopes
 
 Required Buildkite API token scopes:
 
@@ -116,31 +129,31 @@ Required Buildkite API token scopes:
 - `write_pipelines`
 - `write_clusters`
 
-#### Install Agent Token
+## Providing the agent token
 
-Agent token is used by the k8s jobs instead of controller, so:
+Agent token is used by the Kubernetes jobs instead of controller, so:
 
 ```bash
 kubectl create secret generic buildkite-agent-token --from-literal=BUILDKITE_AGENT_TOKEN=my-agent-token
 ```
 
-#### SSH secret
+## SSH secret
 
-You'll also need to create an SSH secret in your cluster to run [this test pipeline](internal/integration/fixtures/secretref.yaml). This SSH key needs to be associated with your GitHub account to be able to clone this public repo, and must be in a form acceptable to OpenSSH (aka `BEGIN OPENSSH PRIVATE KEY`, not `BEGIN PRIVATE KEY`).
+You'll need to create an SSH secret in your cluster to run [this test pipeline](internal/integration/fixtures/secretref.yaml). This SSH key needs to be associated with your GitHub account to be able to clone this public repo, and must be in a form acceptable to OpenSSH (aka `BEGIN OPENSSH PRIVATE KEY`, not `BEGIN PRIVATE KEY`).
 
 ```bash
 kubectl create secret generic integration-test-ssh-key --from-file=SSH_PRIVATE_RSA_KEY=$HOME/.ssh/id_github
 ```
 
-### Debugging
+## Debugging
 
 The integration tests on the [`kubernetes-agent-stack`](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack) pipeline will create additional pipelines in the [`buildkite-kubernetes-stack`](https://buildkite.com/buildkite-kubernetes-stack) organization.
 
-#### Agent unable to connect
+## If the Buildkite agent is unable to connect
 
-In circumstances where the Buildkite token is allowing jobs to be picked up, and each job
-continuously fails with a HTTP 422 error, this is likely the stored agent token being invalid.
-Validate that the token is indeed the value as expected:
+If the Buildkite agent token is allowing jobs to be picked up, and each job
+continuously fails with a HTTP 422 error, the most likely cause here is that the stored agent token is invalid.
+To confirm this, validate that the token value is indeed provided as expected:
 
 ```bash
 kubectl get secret buildkite-agent-token -o jsonpath='{.data.BUILDKITE_AGENT_TOKEN}' \
@@ -148,7 +161,7 @@ kubectl get secret buildkite-agent-token -o jsonpath='{.data.BUILDKITE_AGENT_TOK
     | xxd
 ```
 
-Different shells behave differently, if a newline is being added to the value before it is being
+Different shells behave differently so if a newline is being added to the value before it is being
 encoded, using the following could be helpful:
 
 ```bash
@@ -159,57 +172,57 @@ kubectl edit secret buildkite-agent-token
 The `edit secret` command will open `$EDITOR` with the spec of the secret. The output from the
 previous command can be copied into the spec as the new value for the secret.
 
-### Cleanup
+## Cleanup
 
-In general, pipelines will be deleted automatically for successful tests, but for unsuccessful tests, then will remain after then end of the test job to allow you to debug them.
+In general, for successful tests, pipelines will be deleted automatically. However, for unsuccessful tests, then will remain after then end of the test job to allow you to debug them.
 
-To do clean them up:
+To do clean them up, run:
 
 ```bash
 just cleanup-orphans
 ```
 
-For this to work you will need a "classic" GraphQL-enabled token as well as:
+For this to work, you will need a "classic" GraphQL-enabled token as well as:
 
 - `read_artifacts`
 - `write_pipelines`
 
-This is usually enough, but there is another situation where the cluster could be clogged with K8s jobs.
-To clean these out you should run the following in a kubernetes context in the namespace containing the controller used to run the CI pipeline.
+This is usually enough, but there is another situation where the cluster could be clogged with Kubernetes jobs.
+To clean these out, you should run the following in a Kubernetes context in the namespace containing the controller used to run the CI pipeline.
 
 ```bash
 kubectl get -o jsonpath='{.items[*].metadata.name}' jobs | xargs -L1 kubectl delete job
 ```
 
-### CI ❤️  Integration Test
+### CI ❤️  integration test
 
 At the time of writing, the CI pipeline run in an EKS cluster, `agent-stack-k8s-ci` in the `buildkite-agent` AWS account.
 CI deployes the controller onto `buildkite` namespace in that cluster.
 
-## Run from source
+## Running from source
 
-Running from the source can be useful for debugging purpose, you will generally need to meet the same requirement of
+Running from the source can be useful for debugging purpose, and you will generally need to meet the same requirement of
 running a integration test.
 
-In this case, you can choose to supply some inputs via CLI parameters instead of environment variable.
+In this case, you can choose to supply some inputs via CLI parameters instead of environment variables:
 
 ```bash
 just run --org my-org --buildkite-token my-api-token --debug --cluster-uuid my-cluster-uuid
 ```
 
-### Local Deployment with Helm
+### Local deployment with Helm
 
 `just deploy` will build the container image using [ko](https://ko.build/) and
 deploy it with [Helm](https://helm.sh/).
 
 You'll need to have set `KO_DOCKER_REPO` to a repository you have push access
-to. For development something like the [kind local
+to. For development, something like the [kind local
 registry](https://kind.sigs.k8s.io/docs/user/local-registry/) or the [minikube
 registry](https://minikube.sigs.k8s.io/docs/handbook/registry) can be used. More
 information is available at [ko's
 website](https://ko.build/configuration/#local-publishing-options).
 
-You'll also need to provide required configuration values to Helm, which can be done by passing extra args to `just`:
+You'll also need to provide the required configuration values to Helm, which can be done by passing extra args to `just`:
 
 ```bash
 just deploy --values config.yaml
