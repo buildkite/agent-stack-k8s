@@ -198,7 +198,7 @@ kubectl get -o jsonpath='{.items[*].metadata.name}' jobs | xargs -L1 kubectl del
 
 ### CI ❤️  integration test
 
-At the time of writing, the CI pipeline run in an EKS cluster, `agent-stack-k8s-ci` in the `buildkite-agent` AWS account.
+At the time of writing, the CI pipeline run in an EKS cluster, `agent-stack-k8s-ci` in the `buildkite-dist` AWS account.
 CI deployes the controller onto `buildkite` namespace in that cluster.
 
 ## Running from source
