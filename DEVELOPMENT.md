@@ -65,7 +65,7 @@ Any Buildkite user who has an access to a Kubernetes cluster should be able to r
 
 To get the integration test running locally, you will need:
 
-1. A valid Buildkite API token.
+1. A valid Buildkite API token with GraphQL enabled.
 2. A valid Buildkite Agent Token in your target Buildkite Cluster. The agent token needs to be installed in your Kubernetes
    cluster.
 3. The name of your Buildkite organization (slug) and your target Buildkite Cluster UUID.
