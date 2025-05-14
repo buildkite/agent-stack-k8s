@@ -42,10 +42,12 @@ flowchart LR
     end
 ```
 
-During test run, the test suites:
+During a test run, each integration test generally performs these steps:
 1. Create ephemeral pipelines and queues for a given [Buildkite Agent Cluster](https://buildkite.com/docs/clusters/overview).
-2. Run executor, which will monitor jobs from the target queue in target Buildkite Cluster and start new Jobs in a Kubernetes cluster.
-3. Clean up those ephemeral objects in the end.
+2. Runs the controller, which will monitor jobs from the (just-created) queue in the Buildkite Cluster and start new Jobs in the Kubernetes cluster.
+3. Starts a build of the pipeline on Buildkite, which causes Buildkite jobs to become available.
+4. Polls Buildkite while waiting for the expected outcome, which may include build success, build failure, and the presence or absence of certain log messages.
+5. Cleans up those ephemeral objects (pipelines and queues).
 
 To run integration test locally, we recommend you to run individual tests. For example,
 
@@ -181,7 +183,7 @@ To do clean them up, run:
 just cleanup-orphans
 ```
 
-For this to work, you will need a "classic" GraphQL-enabled token as well as:
+For this to work, you will need a Buildkite API token with GraphQL enabled and these REST API scopes also enabled:
 
 - `read_artifacts`
 - `write_pipelines`
@@ -195,7 +197,7 @@ kubectl get -o jsonpath='{.items[*].metadata.name}' jobs | xargs -L1 kubectl del
 
 ### CI ❤️  integration test
 
-At the time of writing, the CI pipeline run in an EKS cluster, `agent-stack-k8s-ci` in the `buildkite-agent` AWS account.
+At the time of writing, the CI pipeline run in an EKS cluster, `agent-stack-k8s-ci` in the `buildkite-dist` AWS account.
 CI deployes the controller onto `buildkite` namespace in that cluster.
 
 ## Running from source
@@ -238,7 +240,7 @@ config:
 
 The `config` key contains configuration passed directly to the binary, and so supports all the keys documented in [the example](examples/config.yaml).
 
-## Release
+## Release procedure
 
 1. Make sure you're on the main branch!
 1. Create a tag
