@@ -90,7 +90,7 @@ func LabelsFromTags(tags []string) (map[string]string, []error) {
 // set of strings defined by the tag value in `jobTags` (eg a glob or regex)
 // See https://buildkite.com/docs/agent/v3/cli-start#agent-targeting
 
-func AgentTagsMatchJobTags(agentTags, jobTags map[string]string) bool {
+func MatchJobTags(agentTags, jobTags map[string]string) bool {
 	if len(agentTags) != len(jobTags) {
 		return false
 	}
