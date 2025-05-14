@@ -241,7 +241,7 @@ config:
 
 The `config` key contains configuration passed directly to the binary, and so supports all the keys documented in [the example](examples/config.yaml).
 
-## Release
+## Release procedure
 
 1. Make sure you're on the main branch!
 1. Create a tag
