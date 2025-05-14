@@ -42,7 +42,7 @@ flowchart LR
     end
 ```
 
-During test run, the test suites:
+During a test run, each integration test generally performs these steps:
 1. Create ephemeral pipelines and queues for a given [Buildkite Agent Cluster](https://buildkite.com/docs/clusters/overview).
 2. Runs the controller, which will monitor jobs from the (just-created) queue in the Buildkite Cluster and start new Jobs in the Kubernetes cluster.
 3. Starts a build of the pipeline on Buildkite, which causes Buildkite jobs to become available.
