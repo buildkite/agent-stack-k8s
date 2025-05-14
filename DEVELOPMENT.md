@@ -184,7 +184,7 @@ To do clean them up, run:
 just cleanup-orphans
 ```
 
-For this to work, you will need a "classic" GraphQL-enabled token as well as:
+For this to work, you will need a Buildkite API token with GraphQL enabled and these REST API scopes also enabled:
 
 - `read_artifacts`
 - `write_pipelines`
