@@ -82,7 +82,7 @@ func LabelsFromTags(tags []string) (map[string]string, []error) {
 	return labels, append(errs1, errs2...)
 }
 
-// AgentTagsMatchJobTags reports whether each tag key in `agentTags` is also
+// MatchJobTags reports whether each tag key in `agentTags` is also
 // present in `jobTags`, and the tag value in `jobTags` is either "*" or the
 // same as the tag value in `agentTags`.
 //
