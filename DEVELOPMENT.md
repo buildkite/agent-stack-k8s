@@ -47,7 +47,7 @@ During test run, the test suites:
 2. Runs the controller, which will monitor jobs from the (just-created) queue in the Buildkite Cluster and start new Jobs in the Kubernetes cluster.
 3. Starts a build of the pipeline on Buildkite, which causes Buildkite jobs to become available.
 4. Polls Buildkite while waiting for the expected outcome, which may include build success, build failure, and the presence or absence of certain log messages.
-3. Clean up those ephemeral objects in the end.
+5. Cleans up those ephemeral objects (pipelines and queues).
 
 To run integration test locally, we recommend you to run individual tests. For example,
 
