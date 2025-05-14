@@ -11,7 +11,8 @@
 ## Requirements
 
 - A Kubernetes cluster
-- A Cluster [Agent Token](https://buildkite.com/docs/agent/v3/tokens#create-a-token)
+- A [Buildkite cluster](https://buildkite.com/docs/pipelines/clusters/manage-clusters)
+- A Buildkite [Agent Token](https://buildkite.com/docs/agent/v3/tokens#create-a-token)
 - A Cluster [Queue](https://buildkite.com/docs/pipelines/clusters/manage-queues#create-a-self-hosted-queue)
   - The UUID of this Cluster is also required. See [Obtain Cluster UUID](https://buildkite.com/docs/agent/v3/agent-stack-k8s/installation#how-to-find-a-buildkite-clusters-uuid)
 

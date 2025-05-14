@@ -43,6 +43,7 @@ flowchart LR
 ```
 
 During a test run, each integration test generally performs these steps:
+
 1. Create ephemeral pipelines and queues for a given [Buildkite Agent Cluster](https://buildkite.com/docs/clusters/overview).
 2. Runs the controller, which will monitor jobs from the (just-created) queue in the Buildkite Cluster and start new Jobs in the Kubernetes cluster.
 3. Starts a build of the pipeline on Buildkite, which causes Buildkite jobs to become available.
@@ -57,7 +58,7 @@ just test -run TestWalkingSkeleton
 
 ### Integration test requirements
 
-In addition to the usual requirements, the integration tests make use of a GraphQL-enabled Buildkite API token in order to create pipelines, start builds, read logs, and clean up afterwards.
+In addition to the usual requirements, the integration tests make use of a Buildkite API token in order to create pipelines, start builds, read logs, and clean up afterwards.
 
 ### Setup
 
@@ -65,7 +66,7 @@ Any Buildkite user who has an access to a Kubernetes cluster should be able to r
 
 To get the integration test running locally, you will need:
 
-1. A valid Buildkite API token.
+1. A valid Buildkite API token with GraphQL enabled.
 2. A valid Buildkite Agent Token in your target Buildkite Cluster.
 3. The name of your Buildkite organization (slug) and your target Buildkite Cluster UUID.
 4. Depending on test cases, you may also need SSH keys, please keep reading.
@@ -83,7 +84,7 @@ export CLUSTER_UUID="UUID-UUID-UUID-UUID"
 
 ## Running locally
 
-To run the controller locally, with the environment variables, run the following example. Note that note in this example the queue is overridden to ensure jobs from the default queue, which is "", are picked up by the Buildkite agent.
+To run the controller locally, with the environment variables, run the following example. Note that in this example the queue is overridden to ensure jobs from the default queue, which is "", are picked up by the Buildkite agent.
 
 ```
 just run --org $ORG --buildkite-token $BUILDKITE_TOKEN --debug --tags 'queue=,os=linux'
@@ -175,15 +176,15 @@ previous command can be copied into the spec as the new value for the secret.
 
 ## Cleanup
 
-In general, for successful tests, pipelines will be deleted automatically. However, for unsuccessful tests, then will remain after then end of the test job to allow you to debug them.
+In general, for successful tests, pipelines will be deleted automatically. However, for unsuccessful tests, they will remain after the end of the test job to allow you to debug them.
 
-To do clean them up, run:
+To clean them up, run:
 
 ```bash
 just cleanup-orphans
 ```
 
-For this to work, you will need a Buildkite API token with GraphQL enabled and these REST API scopes also enabled:
+For this to work, you will need a Buildkite API token with GraphQL enabled and the following REST API scopes also enabled:
 
 - `read_artifacts`
 - `write_pipelines`
@@ -198,7 +199,7 @@ kubectl get -o jsonpath='{.items[*].metadata.name}' jobs | xargs -L1 kubectl del
 ### CI ❤️  integration test
 
 At the time of writing, the CI pipeline run in an EKS cluster, `agent-stack-k8s-ci` in the `buildkite-dist` AWS account.
-CI deployes the controller onto `buildkite` namespace in that cluster.
+CI deploys the controller onto `buildkite` namespace in that cluster.
 
 ## Running from source
 
