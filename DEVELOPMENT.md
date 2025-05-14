@@ -64,8 +64,7 @@ Any Buildkite user who has an access to a Kubernetes cluster should be able to r
 To get the integration test running locally, you will need:
 
 1. A valid Buildkite API token.
-2. A valid Buildkite Agent Token in your target Buildkite Cluster. The agent token needs to be installed in your Kubernetes
-   cluster.
+2. A valid Buildkite Agent Token in your target Buildkite Cluster.
 3. The name of your Buildkite organization (slug) and your target Buildkite Cluster UUID.
 4. Depending on test cases, you may also need SSH keys, please keep reading.
 5. Your shell environment will need CLI write access to a Kubernetes cluster such as the one provided by https://orbstack.dev/.
