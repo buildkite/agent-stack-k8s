@@ -137,7 +137,7 @@ func TestLabelsFromTags(t *testing.T) {
 	}
 }
 
-func TestJobTagsMatchAgentTags(t *testing.T) {
+func TestMatchJobTags(t *testing.T) {
 	t.Parallel()
 
 	for i, test := range []struct {
@@ -158,7 +158,7 @@ func TestJobTagsMatchAgentTags(t *testing.T) {
 		{
 			jobTags:        map[string]string{},
 			agentTags:      map[string]string{"a": "x"},
-			expectedResult: true,
+			expectedResult: false,
 		},
 		{
 			jobTags:        map[string]string{"a": "x"},
@@ -173,7 +173,7 @@ func TestJobTagsMatchAgentTags(t *testing.T) {
 		{
 			jobTags:        map[string]string{"a": "x"},
 			agentTags:      map[string]string{"a": "x", "b": "y"},
-			expectedResult: true,
+			expectedResult: false,
 		},
 		{
 			jobTags:        map[string]string{"a": "x", "b": "y"},
@@ -205,7 +205,7 @@ func TestJobTagsMatchAgentTags(t *testing.T) {
 
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			t.Parallel()
-			actualResult := agenttags.JobTagsMatchAgentTags(test.jobTags, test.agentTags)
+			actualResult := agenttags.MatchJobTags(test.agentTags, test.jobTags)
 			assert.Equal(
 				t,
 				test.expectedResult,
