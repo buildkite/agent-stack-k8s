@@ -192,7 +192,7 @@ func (m *Monitor) passJobsToNextHandler(
 		// The API returns jobs that match ANY agent tags (the agent query rules)
 		// (howevber we do know it is specific to the configured queue).
 		// However, we can only acquire jobs that match ALL agent tags
-		if !agenttags.JobTagsMatchAgentTags(jobTags, m.cfg.TagMap) {
+		if !agenttags.MatchJobTags(m.cfg.TagMap, jobTags) {
 			jobsFilteredOutCounter.Inc()
 			m.logger.Info("job tags do not match expected tags in configuration, skipping...",
 				zap.String("job-uuid", job.ID),
