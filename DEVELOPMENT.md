@@ -2,16 +2,16 @@
 
 This guide covers everything you need to know to contribute to and develop the Buildkite Agent Stack for Kubernetes controller codebase.
 
-Note that our development approach emphasizes testability, reliability, and maintainability. 
+Note that our development approach emphasizes testability, reliability, and maintainability.
 Contributors should focus on writing clean, well-tested code that follows established Go patterns and practices.
 
 When contributing:
 
-- Create feature branches from `main`
-- Add appropriate tests for new functionality
-- Ensure all tests pass locally before submitting PRs
-- Follow [Go code style](https://google.github.io/styleguide/go/) conventions
-- Include detailed commit messages explaining changes
+- Create feature branches from `main`.
+- Add appropriate tests for new functionality.
+- Ensure all tests pass locally before submitting pull requests.
+- Follow [Go code style](https://google.github.io/styleguide/go/) conventions.
+- Include detailed commit messages explaining changes.
 
 The integration test suite is crucial to our development workflow - it verifies that changes maintain compatibility with both Buildkite and Kubernetes APIs.
 
@@ -86,7 +86,7 @@ export CLUSTER_UUID="UUID-UUID-UUID-UUID"
 
 To run the controller locally, with the environment variables, run the following example. Note that in this example the queue is overridden to ensure jobs from the default queue, which is "", are picked up by the Buildkite agent.
 
-```
+```bash
 just run --org $ORG --buildkite-token $BUILDKITE_TOKEN --debug --tags 'queue=,os=linux'
 ```
 
@@ -94,31 +94,31 @@ just run --org $ORG --buildkite-token $BUILDKITE_TOKEN --debug --tags 'queue=,os
 
 Before you start, check which Kubernetes cluster configuration you are using by default:
 
-```
+```bash
 kubectl config current-context
 ```
 
 To see the entire configuration:
 
-```
+```bash
 kubectl config view
 ```
 
 Running all the unit tests locally is done as follows:
 
-```
+```bash
 go test -v -cover `go list ./... | grep -v internal/integration`
 ```
 
 To run the integration tests, with the overrides from your environment, you can use the following command:
 
-```
+```bash
 just test -timeout 10m -v ./internal/integration/... -args --org $ORG --buildkite-token $BUILDKITE_TOKEN
 ```
 
 To run a single test, following goes `-run` convention will provide this capability:
 
-```
+```bash
 just test -timeout 10m -v ./internal/integration/... -run TestImagePullBackOffFailed -args --org $ORG --buildkite-token $BUILDKITE_TOKEN
 ```
 
