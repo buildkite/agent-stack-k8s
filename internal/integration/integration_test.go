@@ -215,6 +215,9 @@ func TestSSHRepoClone(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
+
+	// TODO: revert
+	t.Fail()
 }
 
 func TestPluginCloneFailsTests(t *testing.T) {
@@ -358,6 +361,9 @@ func TestSidecars(t *testing.T) {
 	tc.AssertSuccess(ctx, build)
 	time.Sleep(15 * time.Second)
 	tc.AssertLogsContain(build, "Welcome to nginx!")
+
+	// TODO: revert
+	t.Fail()
 }
 
 func TestExtraVolumeMounts(t *testing.T) {

@@ -12,3 +12,5 @@ steps:
                 name: curl
                 command:
                   - curl --retry 5 --retry-all-errors localhost:80
+                  - id
+                  - printenv
