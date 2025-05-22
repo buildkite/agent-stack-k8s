@@ -321,16 +321,21 @@ func TestJobPluginConversion(t *testing.T) {
 
 	assert.Len(t, gotPodSpec.Containers, 3)
 
+	agentContainer := findContainer(t, gotPodSpec.Containers, "agent")
+
+	tokenEnv := findEnv(t, agentContainer.Env, "BUILDKITE_AGENT_TOKEN")
+	assert.Equal(t, "token-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
+
 	commandContainer := findContainer(t, gotPodSpec.Containers, "container-0")
 
 	// Command should be replaced with tini-static.
-	// Args should be set to -- buildkite-agent bootstrap.
+	// Args should be set to -- buildkite-agent kubernetes-bootstrap.
 	// The original command should be placed in BUILDKITE_COMMAND.
 	wantCommand := []string{"/workspace/tini-static"}
 	if diff := cmp.Diff(commandContainer.Command, wantCommand); diff != "" {
 		t.Errorf("kjob.Spec.Template.Spec.Containers[0].Command diff (-got +want):\n%s", diff)
 	}
-	wantArgs := []string{"--", "/workspace/buildkite-agent", "bootstrap"}
+	wantArgs := []string{"--", "/workspace/buildkite-agent", "kubernetes-bootstrap"}
 	if diff := cmp.Diff(commandContainer.Args, wantArgs); diff != "" {
 		t.Errorf("kjob.Spec.Template.Spec.Containers[0].Args diff (-got +want):\n%s", diff)
 	}
@@ -351,16 +356,8 @@ func TestJobPluginConversion(t *testing.T) {
 	}
 	require.ElementsMatch(t, envFromNames, []string{"some-configmap", "git-secret"})
 
-	tokenEnv := findEnv(t, commandContainer.Env, "BUILDKITE_AGENT_TOKEN")
-	assert.Equal(t, "token-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
-
 	tagLabel := kjob.Labels["tag.buildkite.com/queue"]
 	assert.Equal(t, tagLabel, "kubernetes")
-
-	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
-	assert.Equal(
-		t, pluginsEnv.Value, `[{"github.com/buildkite-plugins/some-other-buildkite-plugin":{"foo":"bar"}}]`,
-	)
 }
 
 func TestTagEnv(t *testing.T) {
