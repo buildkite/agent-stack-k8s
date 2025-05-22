@@ -93,7 +93,8 @@ func acquireAndFail(
 		return fmt.Errorf("writing log: %w", err)
 	}
 
-	if err := jctr.Finish(ctx, agentcore.ProcessExit{Status: 1}); err != nil {
+	var ignoreAgentInDispatches *bool
+	if err := jctr.Finish(ctx, agentcore.ProcessExit{Status: 1}, ignoreAgentInDispatches); err != nil {
 		zapLogger.Error("finishing job", zap.Error(err))
 		return fmt.Errorf("finishing job: %w", err)
 	}
