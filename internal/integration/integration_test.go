@@ -598,7 +598,7 @@ func TestInterposerVector(t *testing.T) {
 	assert.Contains(t, logs, "Goodbye World!")
 }
 
-func TestCancelCheckerEvictsPod(t *testing.T) {
+func TestCancelCheckerDeletePod(t *testing.T) {
 	tc := testcase{
 		T:       t,
 		Fixture: "cancel-checker.yaml",
@@ -619,8 +619,8 @@ func TestCancelCheckerEvictsPod(t *testing.T) {
 	}
 	tc.AssertCancelled(ctx, build)
 
-	// Give it time to evict
-	time.Sleep(30 * time.Second)
+	// Give it time to delete
+	time.Sleep(5 * time.Second)
 
 	// TriggerBuild performs this type assertion
 	job := build.Jobs.Edges[0].Node.(*api.JobJobTypeCommand)
@@ -634,7 +634,7 @@ func TestCancelCheckerEvictsPod(t *testing.T) {
 		t.Fatalf("kubernetes.CoreV1().Pods(%q).List(ctx, %v) error = %v", cfg.Namespace, opts, err)
 	}
 	if len(pods.Items) > 0 {
-		t.Fatalf("kubernetes.CoreV1().Pods(%q).List(ctx, %v): found %d pods, there should be none (they should have been evicted). Pods:\n%s",
+		t.Fatalf("kubernetes.CoreV1().Pods(%q).List(ctx, %v): found %d pods, there should be none (they should have been deleted). Pods:\n%s",
 			cfg.Namespace, opts, len(pods.Items), pretty.Sprint(pods.Items))
 	}
 }

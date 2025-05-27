@@ -21,18 +21,13 @@ rules:
       - get
       - list
       - watch
+      - delete
   - apiGroups:
       - ""
     resources:
       - secrets
     verbs:
       - get
-  - apiGroups:
-      - ""
-    resources:
-      - pods/eviction
-    verbs:
-      - create
   - apiGroups:
       - ""
     resources:

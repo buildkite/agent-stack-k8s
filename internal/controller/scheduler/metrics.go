@@ -189,18 +189,18 @@ var (
 		Help:      "Count of errors when podWatcher tried to acquire and fail a job on Buildkite",
 	})
 
-	podsEvictedCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	forcefullyDeletedPodCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: promNamespace,
 		Subsystem: "pod_watcher",
-		Name:      "pods_evicted_total",
-		Help:      "Count of evictions created for pods by podWatcher",
-	}, []string{"eviction_reason"})
-	podEvictionErrorsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name:      "pods_forcefully_deleted_total",
+		Help:      "Count of forceful pods deletion by podWatcher",
+	}, []string{"delete_reason"})
+	forcefulPodDeletionErrorsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: promNamespace,
 		Subsystem: "pod_watcher",
-		Name:      "pod_eviction_errors_total",
-		Help:      "Count of failures to create pod evictions by podWatcher",
-	}, []string{"eviction_reason", "error_reason"})
+		Name:      "pods_forceful_deletion_errors_total",
+		Help:      "Count of failures to delete pod forcefully by podWatcher",
+	}, []string{"delete_reason", "error_reason"})
 )
 
 // Completion watcher metrics
