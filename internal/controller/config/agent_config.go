@@ -29,7 +29,7 @@ type AgentConfig struct {
 	DebugSigning              *bool    `json:"debug-signing,omitempty"`                // BUILDKITE_AGENT_DEBUG_SIGNING
 
 	// Applies differently depending on the container
-	//                                                         // agent start                    / bootstrap
+	//                                                          // agent start                    / bootstrap
 	NoPTY            *bool `json:"no-pty,omitempty"`            // BUILDKITE_NO_PTY               / BUILDKITE_PTY
 	NoCommandEval    *bool `json:"no-command-eval,omitempty"`   // BUILDKITE_NO_COMMAND_EVAL      / BUILDKITE_COMMAND_EVAL
 	NoLocalHooks     *bool `json:"no-local-hooks,omitempty"`    // BUILDKITE_NO_LOCAL_HOOKS       / BUILDKITE_LOCAL_HOOKS_ENABLED
@@ -88,9 +88,11 @@ func (a *AgentConfig) ApplyVolumesTo(podSpec *corev1.PodSpec) {
 	}
 }
 
-// applyCommonTo applies env vars and volume mounts that are the same among all
-// containers that run buildkite-agent in some form.
-func (a *AgentConfig) applyCommonTo(ctr *corev1.Container) {
+// ApplyToAgentStart adds env vars assuming ctr is the agent "server" container.
+func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
+	if a == nil || ctr == nil {
+		return
+	}
 	appendToEnvOpt(ctr, "BUILDKITE_AGENT_ENDPOINT", a.Endpoint)
 	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_HTTP2", a.NoHTTP2)
 	appendCommaSepToEnv(ctr, "BUILDKITE_AGENT_EXPERIMENT", a.Experiments)
@@ -125,31 +127,33 @@ func (a *AgentConfig) applyCommonTo(ctr *corev1.Container) {
 		})
 	}
 	appendToEnvOpt(ctr, "BUILDKITE_PLUGINS_PATH", a.PluginsPath)
-}
 
-// ApplyToAgentStart adds env vars assuming ctr is the agent "server" container.
-func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
-	if a == nil || ctr == nil {
-		return
-	}
-	a.applyCommonTo(ctr)
-
+	// The agent transforms these into the corresponding negated versions when
+	// passing env vars down to the bootstrap.
 	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_PTY", a.NoPTY)
 	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_COMMAND_EVAL", a.NoCommandEval)
 	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_LOCAL_HOOKS", a.NoLocalHooks)
 	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_PLUGINS", a.NoPlugins)
 	appendNegatedToEnvOpt(ctr, "BUILDKITE_NO_PLUGIN_VALIDATION", a.PluginValidation)
 
+	// The signing key, if provided to the agent, is transformed by the agent
+	// into the corresponding env var for subprocesses.
+	// But the file itself is used by volume should be attached to the command container!
+	// If there is no SigningJWKSVolume but the user set SigningJWKSFile, it's
+	// up to the user to set it to the path of a key file supplied in their
+	// container.
+	if a.SigningJWKSFile != nil {
+		normaliseJWKSFile(a.SigningJWKSVolume, &a.SigningJWKSFile, "/buildkite/signing-jwks", "key")
+	}
+	appendToEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_JWKS_FILE", a.SigningJWKSFile)
+	appendToEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID", a.SigningJWKSKeyID)
+
+	// See notes in normaliseJWKSFile about the default directory/file handling.
+	// Similarly to SigningJWKSFile, if there is no VerificationJWKSVolume but
+	// the user set VerificationJWKSFile, it's up to the user to set it to the
+	// path of a key file supplied in their container.
 	if a.VerificationJWKSVolume != nil {
-		dir, file := "/buildkite/verification-jwks", "key"
-		if a.VerificationJWKSFile == nil {
-			a.VerificationJWKSFile = &file
-		}
-		if filepath.IsAbs(*a.VerificationJWKSFile) {
-			dir = filepath.Dir(*a.VerificationJWKSFile)
-		} else {
-			*a.VerificationJWKSFile = filepath.Join(dir, *a.VerificationJWKSFile)
-		}
+		dir := normaliseJWKSFile(a.VerificationJWKSVolume, &a.VerificationJWKSFile, "/buildkite/verification-jwks", "key")
 		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
 			Name:      a.VerificationJWKSVolume.Name,
 			MountPath: dir,
@@ -167,61 +171,45 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	appendToEnvOpt(ctr, "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR", a.VerificationFailureBehavior)
 }
 
-// applyToBootstrap adds env vars assuming ctr is a checkout or command container.
-func (a *AgentConfig) applyToBootstrap(ctr *corev1.Container) {
-	a.applyCommonTo(ctr)
-	// Note that these "buildkite-agent start"-like options are applied to
-	// containers running "buildkite-agent bootstrap". So e.g. noPTY:true must
-	// be inverted to pty:false, as the agent would normally.
-	appendNegatedToEnvOpt(ctr, "BUILDKITE_PTY", a.NoPTY)
-	appendNegatedToEnvOpt(ctr, "BUILDKITE_COMMAND_EVAL", a.NoCommandEval)
-	appendNegatedToEnvOpt(ctr, "BUILDKITE_LOCAL_HOOKS_ENABLED", a.NoLocalHooks)
-	appendNegatedToEnvOpt(ctr, "BUILDKITE_PLUGINS_ENABLED", a.NoPlugins)
-	appendBoolToEnvOpt(ctr, "BUILDKITE_PLUGIN_VALIDATION", a.PluginValidation)
-}
-
-// ApplyToCheckout adds env vars assuming ctr is a checkout container.
-func (a *AgentConfig) ApplyToCheckout(ctr *corev1.Container) {
-	if a == nil || ctr == nil {
-		return
-	}
-	a.applyToBootstrap(ctr)
-}
-
-// ApplyToCommand adds env vars assuming ctr is a command container.
 func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {
 	if a == nil || ctr == nil {
 		return
 	}
-	a.applyToBootstrap(ctr)
 	// Signing happens either with "pipeline upload" or "tool sign", so the
 	// signing side of any key needs to be attached to the command container,
 	// not the agent start container or checkout containers.
-	//
-	// If there is a volume source for a key, then allow a key file to be nil,
-	// an absolute path, or a relative path.
-	// If the key file is nil, use a default directory and file name.
-	// If the key file is relative, use a default directory and treat the file
-	// as relative to that directory.
-	// If the key file is absolute, use its directory as the mount path for the
-	// volume.
-	// If there is no volume source for a key, it's up to the user whether they
-	// use signing with an absolute path, or not use signing (nil).
-	if a.SigningJWKSVolume != nil {
-		dir, file := "/buildkite/signing-jwks", "key"
-		if a.SigningJWKSFile == nil {
-			a.SigningJWKSFile = &file
-		}
-		if filepath.IsAbs(*a.SigningJWKSFile) {
-			dir = filepath.Dir(*a.SigningJWKSFile)
-		} else {
-			*a.SigningJWKSFile = filepath.Join(dir, *a.SigningJWKSFile)
-		}
-		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
-			Name:      a.SigningJWKSVolume.Name,
-			MountPath: dir,
-		})
+	if a.SigningJWKSVolume == nil {
+		return
 	}
-	appendToEnvOpt(ctr, "BUILDKITE_AGENT_JWKS_FILE", a.SigningJWKSFile)
-	appendToEnvOpt(ctr, "BUILDKITE_AGENT_JWKS_KEY_ID", a.SigningJWKSKeyID)
+	dir := normaliseJWKSFile(a.SigningJWKSVolume, &a.SigningJWKSFile, "/buildkite/signing-jwks", "key")
+	ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
+		Name:      a.SigningJWKSVolume.Name,
+		MountPath: dir,
+	})
+}
+
+// normaliseJWKSFile normalises the *string field pointed to by jwksFileField
+// (so either AgentConfig.SigningJWKSFile or AgentConfig.VerificationJWKSFile)
+// to a default depending on what already exists and the volume being used.
+// This allows the field to be nil, or contain an absolute or relative path.
+// normaliseJWKSFile is idempotent.
+// It returns the directory (either the default or taken from the supplied
+// jwksFileField) for use in the VolumeMount.
+//
+// If the jwksFileField points to nil, normalise it point to a string with a
+// default directory and file name.
+// If the field points to a string containing a relative path, normalise it
+// to use a default directory, treating the original path as relative to that
+// default directory.
+// If the field points to a string containing an absolute path, return its
+// directory.
+func normaliseJWKSFile(volume *corev1.Volume, jwksFileField **string, defaultDir, defaultFile string) string {
+	if *jwksFileField == nil {
+		*jwksFileField = ptr.To(defaultFile)
+	}
+	if filepath.IsAbs(**jwksFileField) {
+		return filepath.Dir(**jwksFileField)
+	}
+	**jwksFileField = filepath.Join(defaultDir, **jwksFileField)
+	return defaultDir
 }

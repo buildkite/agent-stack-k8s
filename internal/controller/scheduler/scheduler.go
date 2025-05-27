@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -47,7 +48,7 @@ var errK8sPluginProhibited = errors.New("the kubernetes plugin is prohibited by 
 
 var (
 	commandContainerCommand = []string{"/workspace/tini-static"}
-	commandContainerArgs    = []string{"--", "/workspace/buildkite-agent", "bootstrap"}
+	commandContainerArgs    = []string{"--", "/workspace/buildkite-agent", "kubernetes-bootstrap"}
 )
 
 type Config struct {
@@ -307,64 +308,6 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	kjob.Spec.BackoffLimit = ptr.To[int32](0)
 	kjob.Spec.Template.Spec.TerminationGracePeriodSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
 
-	// Shared among all containers that run buildkite-agent start or bootstrap.
-	env := []corev1.EnvVar{
-		{
-			Name:  "BUILDKITE_BUILD_PATH",
-			Value: "/workspace/build",
-		},
-		{
-			Name:  "BUILDKITE_BIN_PATH",
-			Value: "/workspace",
-		},
-		{
-			Name: agentTokenKey,
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.AgentTokenSecretName},
-					Key:                  agentTokenKey,
-				},
-			},
-		},
-		{
-			Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
-			Value: inputs.uuid,
-		},
-		{
-			// Suppress the ignored env vars message for now.
-			// TODO: remove this when k8s exposes more agent config, e.g. PR#391
-			Name:  "BUILDKITE_IGNORED_ENV",
-			Value: "",
-		},
-	}
-	if len(inputs.otherPlugins) > 0 {
-		otherPluginsJSON, err := json.Marshal(inputs.otherPlugins)
-		if err != nil {
-			return nil, fmt.Errorf("failed to remarshal non-k8s plugins: %w", err)
-		}
-		env = append(env, corev1.EnvVar{
-			Name:  "BUILDKITE_PLUGINS",
-			Value: string(otherPluginsJSON),
-		})
-	}
-	// TODO: revisit the next loop, since it sets **all env vars from the job**
-	// on the checkout and command containers, bypassing the "protected env
-	// vars" agent logic (that supplies many vars from configuration instead).
-	for k, v := range inputs.envMap {
-		switch k {
-		case "BUILDKITE_COMMAND", "BUILDKITE_ARTIFACT_PATHS", "BUILDKITE_PLUGINS": // noop
-		default:
-			env = append(env, corev1.EnvVar{Name: k, Value: v})
-		}
-	}
-
-	redactedVars := slices.Clone(clicommand.RedactedVars.Value.Value())
-	redactedVars = append(redactedVars, w.cfg.AdditionalRedactedVars...)
-	env = append(env, corev1.EnvVar{
-		Name:  clicommand.RedactedVars.EnvVar,
-		Value: strings.Join(redactedVars, ","),
-	})
-
 	// workspaceVolume is shared among most containers, so set it up first.
 	workspaceVolume := w.cfg.WorkspaceVolume
 	if workspaceVolume == nil {
@@ -404,39 +347,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		kjob.Spec.ActiveDeadlineSeconds = &activeDeadlineSeconds
 	}
 
-	// Env vars used for command containers
-	containerEnv := slices.Clone(env)
-	containerEnv = append(containerEnv, []corev1.EnvVar{
-		{
-			Name:  "BUILDKITE_KUBERNETES_EXEC",
-			Value: "true",
-		},
-		{
-			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-			Value: "plugin,command",
-		},
-		{
-			Name:  "BUILDKITE_AGENT_NAME",
-			Value: "buildkite",
-		},
-		{
-			Name:  "BUILDKITE_SHELL",
-			Value: "/bin/sh -ec",
-		},
-		{
-			Name:  "BUILDKITE_ARTIFACT_PATHS",
-			Value: inputs.envMap["BUILDKITE_ARTIFACT_PATHS"],
-		},
-		{
-			Name:  "BUILDKITE_PLUGINS_PATH",
-			Value: "/workspace/plugins",
-		},
-		{
-			Name:  "BUILDKITE_SOCKETS_PATH",
-			Value: "/workspace/sockets",
-		},
-	}...)
-
+	// Env vars used for command containers (`buildkite-agent bootstrap` with
+	// `command` phase)
 	for i, c := range podSpec.Containers {
 		// Default to the command from the pipeline step
 		command := inputs.command
@@ -457,8 +369,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		c.Command = commandContainerCommand
 		c.Args = commandContainerArgs
 
-		c.Env = append(c.Env, containerEnv...)
 		c.Env = append(c.Env,
+			corev1.EnvVar{
+				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+				Value: "plugin,command",
+			},
 			corev1.EnvVar{
 				Name:  "BUILDKITE_COMMAND",
 				Value: command,
@@ -483,6 +398,12 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			c.WorkingDir = "/workspace"
 		}
 
+		// Now we can supply the sockets path.
+		c.Env = append(c.Env, corev1.EnvVar{
+			Name:  "BUILDKITE_SOCKETS_PATH",
+			Value: filepath.Join("/workspace/sockets", c.Name),
+		})
+
 		c.VolumeMounts = append(c.VolumeMounts, volumeMounts...)
 		if inputs.k8sPlugin != nil {
 			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
@@ -501,16 +422,24 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			Args:         commandContainerArgs,
 			WorkingDir:   "/workspace",
 			VolumeMounts: volumeMounts,
-			Env: append(containerEnv,
-				corev1.EnvVar{
+			Env: []corev1.EnvVar{
+				{
+					Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+					Value: "plugin,command",
+				},
+				{
 					Name:  "BUILDKITE_COMMAND",
 					Value: inputs.command,
 				},
-				corev1.EnvVar{
+				{
 					Name:  "BUILDKITE_CONTAINER_ID",
 					Value: strconv.Itoa(0 + systemContainerCount),
 				},
-			),
+				{
+					Name:  "BUILDKITE_SOCKETS_PATH",
+					Value: "/workspace/sockets/container-0",
+				},
+			},
 		}
 		w.cfg.AgentConfig.ApplyToCommand(&c)
 		w.cfg.DefaultCommandParams.ApplyTo(&c)
@@ -554,9 +483,13 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	maps.Copy(agentTags, tags)
 
 	// Agent server container
+	// The container that runs `buildkite-agent start`
 	// This runs the "upper layer" of the agent that is responsible for talking
 	// to Buildkite: acquiring the job, starting the job, uploading log chunks,
 	// finishing the job.
+	redactedVars := slices.Clone(clicommand.RedactedVars.Value.Value())
+	redactedVars = append(redactedVars, w.cfg.AdditionalRedactedVars...)
+
 	agentContainer := corev1.Container{
 		Name:         AgentContainerName,
 		Args:         []string{"start"},
@@ -600,16 +533,68 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 					},
 				},
 			},
+			{
+				Name:  "BUILDKITE_BUILD_PATH",
+				Value: "/workspace/build",
+			},
+			{
+				Name:  "BUILDKITE_HOOKS_PATH",
+				Value: "/workspace/hooks",
+			},
+			{
+				Name:  "BUILDKITE_PLUGINS_PATH",
+				Value: "/workspace/plugins",
+			},
+			// Sockets is tricky - checkout and command could run under
+			// different users. If checkout runs as root but the default uid
+			// for command is non-root, then the job-api directory could be
+			// unwritable for command.
+			// Default is the user home dir, which could also be unwritable
+			// depending on the container setup.
+			// So I have made the socket paths vary by container.
+			{
+				Name:  "BUILDKITE_SOCKETS_PATH",
+				Value: "/workspace/sockets/agent",
+			},
+			{
+				Name:  "BUILDKITE_SHELL",
+				Value: "/bin/sh -ec",
+			},
+			{
+				Name: agentTokenKey, // BUILDKITE_AGENT_TOKEN
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.AgentTokenSecretName},
+						Key:                  agentTokenKey,
+					},
+				},
+			},
+			{
+				Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
+				Value: inputs.uuid,
+			},
+			{
+				Name:  clicommand.RedactedVars.EnvVar,
+				Value: strings.Join(redactedVars, ","),
+			},
 		},
 	}
 
+	// Append agent config and checkout config to the agent container.
+	// The agent will transform them as needed and pass them along to the other
+	// containers via the socket connection between them.
 	w.cfg.AgentConfig.ApplyToAgentStart(&agentContainer)
-	agentContainer.Env = append(agentContainer.Env, env...)
+	w.cfg.DefaultCheckoutParams.ApplyToAgentStart(podSpec, &agentContainer)
+	if k8sPlugin := inputs.k8sPlugin; k8sPlugin != nil {
+		k8sPlugin.CheckoutParams.ApplyToAgentStart(podSpec, &agentContainer)
+	}
+
 	podSpec.Containers = append(podSpec.Containers, agentContainer)
 
 	if !skipCheckout {
+		// The checkout container is a `buildkite-agent bootstrap` container.
 		podSpec.Containers = append(podSpec.Containers,
-			w.createCheckoutContainer(podSpec, env, volumeMounts, inputs.k8sPlugin),
+			w.createCheckoutContainer(podSpec, volumeMounts, inputs.k8sPlugin),
 		)
 	}
 
@@ -1065,13 +1050,22 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 	default:
 		securityContext = nil
 	}
+
 	// Init containers. These run in order before the regular containers.
 	// We run some init containers before any specified in the given podSpec.
 	//
-	// We use an init container to copy buildkite-agent into /workspace.
+	// The very first init container prepares the workspace:
+	// - chown the workspace directory according to the security context
+	// - make a sockets directory usable by any user
+	// - copy buildkite-agent and tini-static into /workspace
+	//
 	// We also use init containers to check that images can be pulled before
 	// any other containers run.
-	containerArgs.WriteString("\ncp /usr/local/bin/buildkite-agent /sbin/tini-static /workspace\n")
+	containerArgs.WriteString(`
+mkdir /workspace/sockets
+chmod 777 /workspace/sockets
+cp /usr/local/bin/buildkite-agent /sbin/tini-static /workspace
+`)
 
 	return corev1.Container{
 		// This container copies buildkite-agent and tini-static into
@@ -1091,7 +1085,6 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 
 func (w *worker) createCheckoutContainer(
 	podSpec *corev1.PodSpec,
-	env []corev1.EnvVar,
 	volumeMounts []corev1.VolumeMount,
 	k8sPlugin *KubernetesPlugin,
 ) corev1.Container {
@@ -1102,36 +1095,23 @@ func (w *worker) createCheckoutContainer(
 		VolumeMounts: volumeMounts,
 		Env: []corev1.EnvVar{
 			{
-				Name:  "BUILDKITE_KUBERNETES_EXEC",
-				Value: "true",
-			},
-			{
 				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
 				Value: "plugin,checkout",
-			},
-			{
-				Name:  "BUILDKITE_AGENT_NAME",
-				Value: "buildkite",
 			},
 			{
 				Name:  "BUILDKITE_CONTAINER_ID",
 				Value: "0",
 			},
 			{
-				Name:  "BUILDKITE_PLUGINS_PATH",
-				Value: "/workspace/plugins",
+				Name:  "BUILDKITE_SOCKETS_PATH",
+				Value: "/workspace/sockets/checkout",
 			},
 		},
 	}
 
-	w.cfg.AgentConfig.ApplyToCheckout(&checkoutContainer)
-	w.cfg.DefaultCheckoutParams.ApplyTo(podSpec, &checkoutContainer)
 	if k8sPlugin != nil {
-		k8sPlugin.CheckoutParams.ApplyTo(podSpec, &checkoutContainer)
 		checkoutContainer.EnvFrom = append(checkoutContainer.EnvFrom, k8sPlugin.GitEnvFrom...)
 	}
-
-	checkoutContainer.Env = append(checkoutContainer.Env, env...)
 
 	podUser, podGroup := int64(0), int64(0)
 	if podSpec.SecurityContext != nil {
@@ -1152,6 +1132,15 @@ func (w *worker) createCheckoutContainer(
 			gitCredsSecret = k8sPlugin.CheckoutParams.GitCredsSecret()
 		}
 	}
+
+	// Note about gitEnvFrom:
+	// gitEnvFrom is typically used to incorporate an env var like
+	// "SSH_PRIVATE_RSA_KEY" from a k8s secret.
+	// ssh-env-config.sh is the script that writes vars like SSH_PRIVATE_RSA_KEY
+	// into files in ~/.ssh (SSH_PRIVATE_RSA_KEY -> ~/.ssh/id_rsa).
+	// It's included in the agent container image, run automatically by
+	// the default agent container entrypoint, and comes from
+	// https://github.com/buildkite/docker-ssh-env-config
 
 	gitConfigCmd := "true"
 	if gitCredsSecret != nil {
@@ -1210,7 +1199,7 @@ func (w *worker) createCheckoutContainer(
 		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
 addgroup -g %d buildkite-agent
 adduser -D -u %d -G buildkite-agent -h /workspace buildkite-agent
-su buildkite-agent -c "%s && buildkite-agent-entrypoint bootstrap"`,
+su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
 			podGroup,
 			podUser,
 			gitConfigCmd,
@@ -1227,7 +1216,7 @@ su buildkite-agent -c "%s && buildkite-agent-entrypoint bootstrap"`,
 		checkoutContainer.Command = []string{"ash", "-c"}
 		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
 adduser -D -u %d -G root -h /workspace buildkite-agent
-su buildkite-agent -c "%s && buildkite-agent-entrypoint bootstrap"`,
+su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
 			podUser,
 			gitConfigCmd,
 		)}
@@ -1240,7 +1229,7 @@ su buildkite-agent -c "%s && buildkite-agent-entrypoint bootstrap"`,
 		checkoutContainer.Command = []string{"ash", "-c"}
 		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
 %s
-buildkite-agent-entrypoint bootstrap`,
+buildkite-agent-entrypoint kubernetes-bootstrap`,
 			gitConfigCmd)}
 	}
 

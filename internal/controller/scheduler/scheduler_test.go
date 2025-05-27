@@ -3,15 +3,18 @@ package scheduler
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 )
 
@@ -321,16 +324,21 @@ func TestJobPluginConversion(t *testing.T) {
 
 	assert.Len(t, gotPodSpec.Containers, 3)
 
+	agentContainer := findContainer(t, gotPodSpec.Containers, "agent")
+
+	tokenEnv := findEnv(t, agentContainer.Env, "BUILDKITE_AGENT_TOKEN")
+	assert.Equal(t, "token-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
+
 	commandContainer := findContainer(t, gotPodSpec.Containers, "container-0")
 
 	// Command should be replaced with tini-static.
-	// Args should be set to -- buildkite-agent bootstrap.
+	// Args should be set to -- buildkite-agent kubernetes-bootstrap.
 	// The original command should be placed in BUILDKITE_COMMAND.
 	wantCommand := []string{"/workspace/tini-static"}
 	if diff := cmp.Diff(commandContainer.Command, wantCommand); diff != "" {
 		t.Errorf("kjob.Spec.Template.Spec.Containers[0].Command diff (-got +want):\n%s", diff)
 	}
-	wantArgs := []string{"--", "/workspace/buildkite-agent", "bootstrap"}
+	wantArgs := []string{"--", "/workspace/buildkite-agent", "kubernetes-bootstrap"}
 	if diff := cmp.Diff(commandContainer.Args, wantArgs); diff != "" {
 		t.Errorf("kjob.Spec.Template.Spec.Containers[0].Args diff (-got +want):\n%s", diff)
 	}
@@ -351,16 +359,8 @@ func TestJobPluginConversion(t *testing.T) {
 	}
 	require.ElementsMatch(t, envFromNames, []string{"some-configmap", "git-secret"})
 
-	tokenEnv := findEnv(t, commandContainer.Env, "BUILDKITE_AGENT_TOKEN")
-	assert.Equal(t, "token-secret", tokenEnv.ValueFrom.SecretKeyRef.Name)
-
 	tagLabel := kjob.Labels["tag.buildkite.com/queue"]
 	assert.Equal(t, tagLabel, "kubernetes")
-
-	pluginsEnv := findEnv(t, commandContainer.Env, "BUILDKITE_PLUGINS")
-	assert.Equal(
-		t, pluginsEnv.Value, `[{"github.com/buildkite-plugins/some-other-buildkite-plugin":{"foo":"bar"}}]`,
-	)
 }
 
 func TestTagEnv(t *testing.T) {
@@ -1140,10 +1140,211 @@ func TestImagePullPolicies(t *testing.T) {
 			if diff := cmp.Diff(gotContainers, test.wantContainers); diff != "" {
 				t.Errorf("other containers diff (-got +want):\n%s", diff)
 			}
-
 		})
 	}
+}
 
+func TestPipelineSigningOptions(t *testing.T) {
+	verificationVol := &corev1.Volume{Name: "verification-key-volume"}
+	signingVol := &corev1.Volume{Name: "signing-key-volume"}
+
+	tests := []struct {
+		name              string
+		agentConfig       *config.AgentConfig
+		wantPodVolumes    []string
+		wantNotPodVolumes []string
+		wantAgentEnv      map[string]string
+		wantNotAgentEnv   []string
+		wantAgentMounts   []string
+		wantCommandMounts []string
+	}{
+		{
+			name:              "nil config",
+			agentConfig:       nil,
+			wantNotPodVolumes: []string{verificationVol.Name, signingVol.Name},
+			wantNotAgentEnv: []string{
+				"BUILDKITE_AGENT_SIGNING_JWKS_FILE",
+				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE",
+			},
+		},
+		{
+			name:              "no keys",
+			agentConfig:       &config.AgentConfig{},
+			wantNotPodVolumes: []string{verificationVol.Name, signingVol.Name},
+			wantNotAgentEnv: []string{
+				"BUILDKITE_AGENT_SIGNING_JWKS_FILE",
+				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE",
+			},
+		},
+		{
+			name: "verification key only",
+			agentConfig: &config.AgentConfig{
+				VerificationJWKSFile:   ptr.To("/path/to/verification.jwks"),
+				VerificationJWKSVolume: verificationVol,
+			},
+			wantPodVolumes:    []string{verificationVol.Name},
+			wantNotPodVolumes: []string{signingVol.Name},
+			wantAgentEnv: map[string]string{
+				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE": "/path/to/verification.jwks",
+			},
+			wantNotAgentEnv: []string{
+				"BUILDKITE_AGENT_SIGNING_JWKS_FILE",
+			},
+			wantAgentMounts: []string{verificationVol.Name},
+		},
+		{
+			name: "signing key only",
+			agentConfig: &config.AgentConfig{
+				SigningJWKSFile:   ptr.To("/path/to/signing.jwks"),
+				SigningJWKSVolume: signingVol,
+			},
+			wantPodVolumes:    []string{signingVol.Name},
+			wantNotPodVolumes: []string{verificationVol.Name},
+			wantAgentEnv: map[string]string{
+				"BUILDKITE_AGENT_SIGNING_JWKS_FILE": "/path/to/signing.jwks",
+			},
+			wantNotAgentEnv: []string{
+				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE",
+			},
+			wantCommandMounts: []string{signingVol.Name},
+		},
+		{
+			name: "both keys",
+			agentConfig: &config.AgentConfig{
+				VerificationJWKSFile:   ptr.To("/path/to/verification.jwks"),
+				VerificationJWKSVolume: verificationVol,
+				SigningJWKSFile:        ptr.To("/path/to/signing.jwks"),
+				SigningJWKSVolume:      signingVol,
+			},
+			wantPodVolumes: []string{verificationVol.Name, signingVol.Name},
+			wantAgentEnv: map[string]string{
+				"BUILDKITE_AGENT_SIGNING_JWKS_FILE":      "/path/to/signing.jwks",
+				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE": "/path/to/verification.jwks",
+			},
+			wantAgentMounts:   []string{verificationVol.Name},
+			wantCommandMounts: []string{signingVol.Name},
+		},
+		{
+			name: "both volumes only",
+			agentConfig: &config.AgentConfig{
+				VerificationJWKSVolume: verificationVol,
+				SigningJWKSVolume:      signingVol,
+			},
+			wantPodVolumes: []string{verificationVol.Name, signingVol.Name},
+			wantAgentEnv: map[string]string{
+				"BUILDKITE_AGENT_SIGNING_JWKS_FILE":      "/buildkite/signing-jwks/key",
+				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE": "/buildkite/verification-jwks/key",
+			},
+			wantAgentMounts:   []string{verificationVol.Name},
+			wantCommandMounts: []string{signingVol.Name},
+		},
+		{
+			name: "relative paths",
+			agentConfig: &config.AgentConfig{
+				VerificationJWKSVolume: verificationVol,
+				VerificationJWKSFile:   ptr.To("my-awesome-key"),
+				SigningJWKSVolume:      signingVol,
+				SigningJWKSFile:        ptr.To("my-special-key"),
+			},
+			wantPodVolumes: []string{verificationVol.Name, signingVol.Name},
+			wantAgentEnv: map[string]string{
+				"BUILDKITE_AGENT_SIGNING_JWKS_FILE":      "/buildkite/signing-jwks/my-special-key",
+				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE": "/buildkite/verification-jwks/my-awesome-key",
+			},
+			wantAgentMounts:   []string{verificationVol.Name},
+			wantCommandMounts: []string{signingVol.Name},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			worker := New(
+				zaptest.NewLogger(t),
+				nil,
+				nil,
+				Config{
+					Namespace:            "buildkite",
+					AgentTokenSecretName: "bkcq_1234567890",
+					Image:                "buildkite/agent:latest",
+					AgentConfig:          test.agentConfig,
+				},
+			)
+			kjob, err := worker.Build(
+				&corev1.PodSpec{},
+				false,
+				buildInputs{
+					uuid:            "1234",
+					command:         "echo shell",
+					agentQueryRules: []string{"queue=bernetes"},
+				},
+			)
+			if err != nil {
+				t.Fatalf("worker.Build() error = %v", err)
+			}
+
+			// Check volumes on the pod
+			podSpec := kjob.Spec.Template.Spec
+			for _, wantName := range test.wantPodVolumes {
+				volNameEql := func(v corev1.Volume) bool {
+					return v.Name == wantName
+				}
+				if !slices.ContainsFunc(podSpec.Volumes, volNameEql) {
+					t.Errorf("podSpec.Volumes = %v, is missing volume named %q", podSpec.Volumes, wantName)
+				}
+			}
+			for _, wantNotName := range test.wantNotPodVolumes {
+				volNameEql := func(v corev1.Volume) bool {
+					return v.Name == wantNotName
+				}
+				if slices.ContainsFunc(podSpec.Volumes, volNameEql) {
+					t.Errorf("podSpec.Volumes = %v, has unwanted volume named %q", podSpec.Volumes, wantNotName)
+				}
+			}
+
+			// Check agent container env vars
+			agent := findContainer(t, kjob.Spec.Template.Spec.Containers, "agent")
+			for wantName, wantVal := range test.wantAgentEnv {
+				env := findEnv(t, agent.Env, wantName)
+				if env == nil {
+					t.Errorf("agent.Env = %v, missing env var %q", agent.Env, wantName)
+					continue
+				}
+				if env.Value != wantVal {
+					t.Errorf("agent.Env[%q] = %q, want %q", wantName, env.Value, wantVal)
+
+				}
+			}
+			for _, wantNotName := range test.wantNotAgentEnv {
+				env := findEnv(t, agent.Env, wantNotName)
+				if env != nil {
+					t.Errorf("agent.Env = %v, has unwanted env var %v", agent.Env, env)
+				}
+			}
+
+			// Check agent container mounts
+			for _, wantName := range test.wantAgentMounts {
+				mountNameEql := func(v corev1.VolumeMount) bool {
+					return v.Name == wantName
+				}
+				if !slices.ContainsFunc(agent.VolumeMounts, mountNameEql) {
+					t.Errorf("agent.VolumeMounts = %v, missing volume mount %q", agent.VolumeMounts, wantName)
+				}
+			}
+
+			// Check command container mounts
+			command := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
+			for _, wantName := range test.wantCommandMounts {
+				mountNameEql := func(v corev1.VolumeMount) bool {
+					return v.Name == wantName
+				}
+				if !slices.ContainsFunc(command.VolumeMounts, mountNameEql) {
+					t.Errorf("command.VolumeMounts = %v, missing volume mount %q", command.VolumeMounts, wantName)
+				}
+			}
+		})
+	}
 }
 
 func findContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {
@@ -1154,7 +1355,7 @@ func findContainer(t *testing.T, containers []corev1.Container, name string) cor
 			return container
 		}
 	}
-	require.FailNow(t, "container not found")
+	t.Fatal("container not found")
 
 	return corev1.Container{}
 }
