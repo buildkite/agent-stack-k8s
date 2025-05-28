@@ -580,13 +580,15 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		},
 	}
 
-	// Append agent config and checkout config to the agent container.
+	// Append some agent config and checkout config to the agent container.
 	// The agent will transform them as needed and pass them along to the other
 	// containers via the socket connection between them.
+	//
+	// NOTE: any k8s related configs are still passed to other containers directly.
 	w.cfg.AgentConfig.ApplyToAgentStart(&agentContainer)
-	w.cfg.DefaultCheckoutParams.ApplyToAgentStart(podSpec, &agentContainer)
+	w.cfg.DefaultCheckoutParams.ApplyToAgentStart(&agentContainer)
 	if k8sPlugin := inputs.k8sPlugin; k8sPlugin != nil {
-		k8sPlugin.CheckoutParams.ApplyToAgentStart(podSpec, &agentContainer)
+		k8sPlugin.CheckoutParams.ApplyToAgentStart(&agentContainer)
 	}
 
 	podSpec.Containers = append(podSpec.Containers, agentContainer)
@@ -1109,7 +1111,9 @@ func (w *worker) createCheckoutContainer(
 		},
 	}
 
+	w.cfg.DefaultCheckoutParams.ApplyToCheckout(podSpec, &checkoutContainer)
 	if k8sPlugin != nil {
+		k8sPlugin.CheckoutParams.ApplyToCheckout(podSpec, &checkoutContainer)
 		checkoutContainer.EnvFrom = append(checkoutContainer.EnvFrom, k8sPlugin.GitEnvFrom...)
 	}
 

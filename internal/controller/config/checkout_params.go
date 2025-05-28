@@ -22,8 +22,15 @@ type CheckoutParams struct {
 	ExtraVolumeMounts    []corev1.VolumeMount       `json:"extraVolumeMounts,omitempty"`
 }
 
-func (co *CheckoutParams) ApplyToAgentStart(podSpec *corev1.PodSpec, ctr *corev1.Container) {
-	if co == nil || podSpec == nil || ctr == nil {
+// ApplyToAgentStart send checkout params's env variables to Agent container
+// Agent container will propogate these env variables to command and other containers when they do
+// `kubernetes-bootstrap`.
+// NOTE:
+// It's worthnoting that only some checkout params get passed in this way, many other params are still applied directly
+// to checkout container.
+// Basically any k8s construct needs to be passed directly to checkout container
+func (co *CheckoutParams) ApplyToAgentStart(ctr *corev1.Container) {
+	if co == nil || ctr == nil {
 		return
 	}
 	appendToEnvOpt(ctr, "BUILDKITE_GIT_CHECKOUT_FLAGS", co.CheckoutFlags)
@@ -34,7 +41,20 @@ func (co *CheckoutParams) ApplyToAgentStart(podSpec *corev1.PodSpec, ctr *corev1
 	// TODO: Agent start doesn't know about submodule clone config, but
 	// agent bootstrap does...
 	appendCommaSepToEnv(ctr, "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", co.SubmoduleCloneConfig)
-	co.GitMirrors.ApplyTo(podSpec, ctr)
+
+	co.GitMirrors.ApplyToAgentStart(ctr)
+}
+
+// Any k8s related config things need to be passed to checkout container directly.
+// "kubernetes-bootstrap" won't work for those for obvious reason: they are passed k8s pod lifecycle.
+//
+// NOTE: despite this is called ApplyToCheckout, it mutate not only the container spec but also the pod spec.
+func (co *CheckoutParams) ApplyToCheckout(podSpec *corev1.PodSpec, ctr *corev1.Container) {
+	if co == nil || podSpec == nil || ctr == nil {
+		return
+	}
+	co.GitMirrors.ApplyToPod(podSpec)
+	co.GitMirrors.ApplyToCheckout(ctr)
 	ctr.EnvFrom = append(ctr.EnvFrom, co.EnvFrom...)
 	ctr.VolumeMounts = append(ctr.VolumeMounts, co.ExtraVolumeMounts...)
 }
@@ -55,8 +75,8 @@ type GitMirrorsParams struct {
 	SkipUpdate  *bool          `json:"skipUpdate,omitempty"`
 }
 
-func (gm *GitMirrorsParams) ApplyTo(podSpec *corev1.PodSpec, ctr *corev1.Container) {
-	if gm == nil || podSpec == nil || ctr == nil {
+func (gm *GitMirrorsParams) ApplyToAgentStart(ctr *corev1.Container) {
+	if gm == nil || ctr == nil {
 		return
 	}
 	if gm.Volume != nil {
@@ -64,17 +84,32 @@ func (gm *GitMirrorsParams) ApplyTo(podSpec *corev1.PodSpec, ctr *corev1.Contain
 		if gm.Path == nil {
 			gm.Path = &path
 		}
-		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
-			Name:      gm.Volume.Name,
-			MountPath: *gm.Path,
-		})
-		podSpec.Volumes = append(podSpec.Volumes, *gm.Volume)
 	}
 	appendToEnvOpt(ctr, "BUILDKITE_GIT_MIRRORS_PATH", gm.Path)
-
 	appendToEnvOpt(ctr, "BUILDKITE_GIT_CLONE_MIRROR_FLAGS", gm.CloneFlags)
 	if gm.LockTimeout > 0 {
 		appendToEnv(ctr, "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(gm.LockTimeout))
 	}
 	appendBoolToEnvOpt(ctr, "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE", gm.SkipUpdate)
+}
+
+func (gm *GitMirrorsParams) ApplyToCheckout(ctr *corev1.Container) {
+	if gm == nil || gm.Volume == nil {
+		return
+	}
+	path := "/buildkite/git-mirrors"
+	if gm.Path == nil {
+		gm.Path = &path
+	}
+	ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
+		Name:      gm.Volume.Name,
+		MountPath: *gm.Path,
+	})
+}
+
+func (gm *GitMirrorsParams) ApplyToPod(podSpec *corev1.PodSpec) {
+	if gm == nil || gm.Volume == nil {
+		return
+	}
+	podSpec.Volumes = append(podSpec.Volumes, *gm.Volume)
 }
