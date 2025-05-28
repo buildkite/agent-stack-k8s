@@ -461,8 +461,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
 
 			// Add annotations to the Job indicating which of the user-defined
-			// containers are running as "sidecars" so they can be sent
-			// SIGTERM signals after the agent container has been Terminated
+			// containers are running as "sidecars".
 			sidecarAnnotation := map[string]string{
 				fmt.Sprintf("buildkite.com/sidecar-%d", i): fmt.Sprint(c.Name),
 			}
