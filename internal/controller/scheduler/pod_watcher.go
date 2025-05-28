@@ -17,7 +17,6 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
-	policyv1 "k8s.io/api/policy/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
@@ -373,21 +372,30 @@ func (w *podWatcher) formatImagePullFailureMessage(statuses []corev1.ContainerSt
 	return "The following images could not be pulled or were unavailable:\n\n" + tw.Render()
 }
 
-func (w *podWatcher) evictPod(ctx context.Context, log *zap.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
-	eviction := &policyv1.Eviction{
-		ObjectMeta: pod.ObjectMeta,
+func (w *podWatcher) forcefullyDeletePod(ctx context.Context, log *zap.Logger, podMetadata *metav1.ObjectMeta, reason string) error {
+	// Force immediate deletion with zero grace period
+	// We generally believe when our controller decide a payload should go, there shouldn't be good reason to keep it waiting for
+	// graceful timeout.
+	//
+	// Some organizations conduct massive job cancelling, without this, it will cause unnecessary cluster resource saturation.
+	deleteOptions := metav1.DeleteOptions{
+		GracePeriodSeconds: new(int64), // zero value
 	}
-	if err := w.k8s.PolicyV1().Evictions(w.cfg.Namespace).Evict(ctx, eviction); err != nil {
-		podEvictionErrorsCounter.WithLabelValues("image_pull_failure", string(kerrors.ReasonForError(err))).Inc()
-		log.Error("Couldn't evict pod", zap.Error(err))
-		return
-	}
-	podsEvictedCounter.WithLabelValues("image_pull_failure").Inc()
 
-	// Because eviction isn't instantaneous, the pod can continue to exist
-	// for a bit. Record that we've failed the job to avoid trying to fail
-	// it again.
+	if err := w.k8s.CoreV1().Pods(podMetadata.Namespace).Delete(ctx, podMetadata.Name, deleteOptions); err != nil {
+		log.Error("Couldn't forcefully delete pod", zap.Error(err))
+		forcefulPodDeletionErrorsCounter.WithLabelValues(reason, string(kerrors.ReasonForError(err))).Inc()
+		return err
+	}
+	forcefullyDeletedPodCounter.WithLabelValues(reason).Inc()
+
+	// Mark the job as ignored to avoid further processing
+	jobUUID, err := jobUUIDForObject(podMetadata)
+	if err != nil {
+		return nil
+	}
 	w.ignoreJob(jobUUID)
+	return nil
 }
 
 // imageFailureChecker is a goroutine that periodically checks pending and
@@ -478,8 +486,16 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 			return
 		}
 		podWatcherBuildkiteJobFailsCounter.Inc()
-		// Also evict the pod, because it won't die on its own.
-		w.evictPod(ctx, log, pod, jobUUID)
+		// Also delete the pod, because it won't die on its own.
+
+		if err := w.forcefullyDeletePod(ctx, log, &pod.ObjectMeta, "image_pull_failure"); err != nil {
+			// K8s API overloaded? rate limit? -> TODO in this case we should retry
+			// Admission controller blocks this?
+			// Insufficient RBAC permission?
+			// K8s node goes down?
+			// In these case, we've done what we can.
+			return
+		}
 
 	case api.JobStateAccepted, api.JobStateAssigned, api.JobStateRunning:
 		// An agent is already doing something with the job. Let it fail.
@@ -571,14 +587,11 @@ func (w *podWatcher) jobCancelChecker(ctx context.Context, stopCh <-chan struct{
 
 		switch job.State {
 		case api.JobStateCanceled, api.JobStateCanceling:
-			log.Info("Evicting pending pod for cancelled job")
-			eviction := &policyv1.Eviction{ObjectMeta: podMeta}
-			if err := w.k8s.PolicyV1().Evictions(w.cfg.Namespace).Evict(ctx, eviction); err != nil {
-				log.Error("Couldn't evict pod", zap.Error(err))
-				podEvictionErrorsCounter.WithLabelValues("bk_job_cancelled", string(kerrors.ReasonForError(err))).Inc()
+			log.Info("Deleting pending pod for cancelled job")
+			if err := w.forcefullyDeletePod(ctx, log, &podMeta, "job_cancelled"); err != nil {
+				// Low likelihood, we will retry.
 				continue
 			}
-			podsEvictedCounter.WithLabelValues("bk_job_cancelled").Inc()
 			return
 
 		case api.JobStateScheduled:

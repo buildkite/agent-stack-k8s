@@ -28,12 +28,7 @@ rules:
       - get
       - list
       - watch
-  - apiGroups:
-      - ""
-    resources:
-      - pods/eviction
-    verbs:
-      - create
+      - delete
   - apiGroups:
       - ""
     resources:
