@@ -2,8 +2,6 @@ package scheduler
 
 import (
 	"context"
-	"os"
-	"strings"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 
@@ -11,12 +9,12 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/remotecommand"
-	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/ptr"
 )
 
 const defaultTermGracePeriodSeconds = 60
@@ -76,8 +74,10 @@ func (w *completionsWatcher) OnUpdate(old any, new any) {
 }
 
 // cleanupSidecars first checks if the container status of the agent container
-// in the pod is Terminated. If so, it sends a SIGTERM to PID 1 of each
-// sidecar container identified by the "buildkite.com/sidecar-*" annotations
+// in the pod is Terminated. If so, it ensures the job is cleaned up by updating
+// it with an ActiveDeadlineSeconds value (defaultTermGracePeriodSeconds).
+// (So this is not actually sidecar-specific, but is needed because sidecars
+// would otherwise cause the pod to continue running.)
 func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *v1.Pod) {
 	terminated := getTermination(pod)
 	if terminated == nil {
@@ -89,52 +89,18 @@ func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *v1.Pod) {
 		zap.Int32("exit code", terminated.ExitCode),
 	)
 
-	for annotation := range pod.Annotations {
-		if !strings.HasPrefix(annotation, "buildkite.com/sidecar-") {
-			continue
-		}
-
-		req := w.k8s.CoreV1().RESTClient().
-			Post().
-			Resource("pods").
-			Name(pod.Name).
-			Namespace(pod.Namespace).
-			SubResource("exec").
-			VersionedParams(&v1.PodExecOptions{
-				Container: pod.Annotations[annotation],
-				Command:   strings.Fields("kill 1"),
-				Stdin:     true,
-				Stdout:    true,
-				Stderr:    true,
-				TTY:       false,
-			}, scheme.ParameterCodec)
-
-		executor, err := remotecommand.NewSPDYExecutor(restconfig.GetConfigOrDie(), "POST", req.URL())
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		job, err := w.k8s.BatchV1().Jobs(pod.Namespace).Get(ctx, pod.Labels["job-name"], metav1.GetOptions{})
 		if err != nil {
-			completionWatcherJobCleanupErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
-			w.logger.Error("failed to create remotecommand executor", zap.Error(err))
-			return
+			return err
 		}
-
-		w.logger.Debug(
-			"Sending SIGTERM to sidecar...",
-			zap.String("pod", pod.Name),
-			zap.String("namespace", pod.Namespace),
-			zap.String("job-uuid", pod.Labels[config.UUIDLabel]),
-			zap.String("sidecar", pod.Annotations[annotation]),
-		)
-
-		err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
-			Stdin:  os.Stdin,
-			Stdout: os.Stdout,
-			Stderr: os.Stderr,
-			Tty:    false,
-		})
-		if err != nil {
-			completionWatcherJobCleanupErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
-			w.logger.Error("failed to send SIGTERM to sidecar", zap.String("sidecar", pod.Annotations[annotation]), zap.Error(err))
-			return
-		}
+		job.Spec.ActiveDeadlineSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
+		_, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(ctx, job, metav1.UpdateOptions{})
+		return err
+	}); err != nil {
+		completionWatcherJobCleanupErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
+		w.logger.Error("failed to update job with ActiveDeadlineSeconds", zap.Error(err))
+		return
 	}
 	completionWatcherJobCleanupsCounter.Inc()
 }
