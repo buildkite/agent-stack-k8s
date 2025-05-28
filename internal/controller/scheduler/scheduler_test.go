@@ -614,6 +614,186 @@ func TestBuildCheckoutEmptyConfigEnv(t *testing.T) {
 	}
 }
 
+// DefaultCheckoutParams comes from helm values
+func TestBuildDefaultCheckoutParams(t *testing.T) {
+	t.Parallel()
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+	}
+	sjob := &api.AgentScheduledJob{}
+	worker := New(zaptest.NewLogger(t), nil, nil, Config{
+		Image: "buildkite/agent:latest",
+		DefaultCheckoutParams: &config.CheckoutParams{
+			GitCredentialsSecret: &corev1.SecretVolumeSource{
+				SecretName: "bluh",
+			},
+			EnvFrom: []corev1.EnvFromSource{
+				{
+					SecretRef: &corev1.SecretEnvSource{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "some-secret-env",
+						},
+					},
+				},
+			},
+			ExtraVolumeMounts: []corev1.VolumeMount{
+				{
+					Name: "extra-volume-something",
+				},
+			},
+		},
+	})
+	inputs, err := worker.ParseJob(job, sjob)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	var checkoutContainer *corev1.Container
+	for _, container := range kjob.Spec.Template.Spec.Containers {
+		if container.Name == "checkout" {
+			checkoutContainer = &container
+		}
+	}
+
+	require.NotNil(t, checkoutContainer)
+
+	// Validate that git credential secret is mounted and available in checkout container's path
+	var hasGitCredentialsRO, hasGitCredentials bool
+	for _, mount := range checkoutContainer.VolumeMounts {
+		if mount.Name == "git-credentials-ro" && mount.MountPath == "/buildkite/git-credentials-ro" {
+			hasGitCredentialsRO = true
+		}
+		if mount.Name == "git-credentials" && mount.MountPath == "/buildkite/git-credentials" {
+			hasGitCredentials = true
+		}
+	}
+
+	if !hasGitCredentialsRO {
+		t.Error("checkout container missing git-credentials-ro volume mount at /buildkite/git-credentials-ro")
+	}
+	if !hasGitCredentials {
+		t.Error("checkout container missing git-credentials volume mount at /buildkite/git-credentials")
+	}
+
+	// Validate that the EnvFrom is passed down to checkout container pod spec
+	var hasSecretEnvFrom bool
+	for _, envFrom := range checkoutContainer.EnvFrom {
+		if envFrom.SecretRef != nil && envFrom.SecretRef.Name == "some-secret-env" {
+			hasSecretEnvFrom = true
+			break
+		}
+	}
+	if !hasSecretEnvFrom {
+		t.Error("checkout container missing EnvFrom with secret 'some-secret-env'")
+	}
+
+	// Validate that ExtraVolumeMounts is passed down to the checkout container pod spec
+	var hasExtraVolumeMount bool
+	for _, mount := range checkoutContainer.VolumeMounts {
+		if mount.Name == "extra-volume-something" {
+			hasExtraVolumeMount = true
+			break
+		}
+	}
+	if !hasExtraVolumeMount {
+		t.Error("checkout container missing ExtraVolumeMount 'extra-volume-something'")
+	}
+}
+
+// CheckoutParams come from our bk yaml
+func TestBuildCheckoutParams(t *testing.T) {
+	t.Parallel()
+
+	pluginsYAML := `- github.com/buildkite-plugins/kubernetes-buildkite-plugin:
+    checkout:
+      gitCredentialsSecret:
+        secretName: "bluh"
+      envFrom:
+        - secretRef:
+            name: "some-secret-env"
+      extraVolumeMounts:
+        - name: "extra-volume-something"
+  `
+
+	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
+	require.NoError(t, err)
+
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+		Env:     map[string]string{"BUILDKITE_PLUGINS": string(pluginsJSON)},
+	}
+	sjob := &api.AgentScheduledJob{
+		AgentQueryRules: []string{"queue=kubernetes"},
+	}
+
+	worker := New(
+		zaptest.NewLogger(t),
+		nil,
+		nil,
+		Config{
+			Namespace: "buildkite",
+			Image:     "buildkite/agent:latest",
+		},
+	)
+	inputs, err := worker.ParseJob(job, sjob)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	var checkoutContainer *corev1.Container
+	for _, container := range kjob.Spec.Template.Spec.Containers {
+		if container.Name == "checkout" {
+			checkoutContainer = &container
+		}
+	}
+
+	require.NotNil(t, checkoutContainer)
+
+	// Validate that git credential secret is mounted and available in checkout container's path
+	var hasGitCredentialsRO, hasGitCredentials bool
+	for _, mount := range checkoutContainer.VolumeMounts {
+		if mount.Name == "git-credentials-ro" && mount.MountPath == "/buildkite/git-credentials-ro" {
+			hasGitCredentialsRO = true
+		}
+		if mount.Name == "git-credentials" && mount.MountPath == "/buildkite/git-credentials" {
+			hasGitCredentials = true
+		}
+	}
+
+	if !hasGitCredentialsRO {
+		t.Error("checkout container missing git-credentials-ro volume mount at /buildkite/git-credentials-ro")
+	}
+	if !hasGitCredentials {
+		t.Error("checkout container missing git-credentials volume mount at /buildkite/git-credentials")
+	}
+
+	// Validate that the EnvFrom is passed down to checkout container pod spec
+	var hasSecretEnvFrom bool
+	for _, envFrom := range checkoutContainer.EnvFrom {
+		if envFrom.SecretRef != nil && envFrom.SecretRef.Name == "some-secret-env" {
+			hasSecretEnvFrom = true
+			break
+		}
+	}
+	if !hasSecretEnvFrom {
+		t.Error("checkout container missing EnvFrom with secret 'some-secret-env'")
+	}
+
+	// Validate that ExtraVolumeMounts is passed down to the checkout container pod spec
+	var hasExtraVolumeMount bool
+	for _, mount := range checkoutContainer.VolumeMounts {
+		if mount.Name == "extra-volume-something" {
+			hasExtraVolumeMount = true
+			break
+		}
+	}
+	if !hasExtraVolumeMount {
+		t.Error("checkout container missing ExtraVolumeMount 'extra-volume-something'")
+	}
+}
+
 func TestFailureJobs(t *testing.T) {
 	t.Parallel()
 	pluginsJSON, err := json.Marshal([]map[string]any{
