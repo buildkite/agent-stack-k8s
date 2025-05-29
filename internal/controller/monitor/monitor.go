@@ -184,14 +184,19 @@ func (m *Monitor) passJobsToNextHandler(
 	filteredJobs := make([]*api.AgentScheduledJob, 0, len(jobs))
 
 	for _, job := range jobs {
+		// Ensure the job has the queue tag. We queried a queue-specific
+		// endpoint, but it may be the default queue, which doesn't require
+		// `agents: queue: ...`, so the queue tag might not be present.
+		job.AgentQueryRules = agenttags.SetTag(job.AgentQueryRules, "queue", m.cfg.Queue)
+
+		// Convert the job tags to a map.
 		jobTags, tagErrs := agenttags.TagMapFromTags(job.AgentQueryRules)
 		if len(tagErrs) != 0 {
 			m.logger.Warn("making a map of job tags", zap.Errors("err", tagErrs))
 		}
 
-		// The API returns jobs that match ANY agent tags (the agent query rules)
-		// (howevber we do know it is specific to the configured queue).
-		// However, we can only acquire jobs that match ALL agent tags
+		// The API returns all jobs within the queue, with any combo of tags.
+		// However, we should only acquire jobs that match ALL agent tags.
 		if !agenttags.MatchJobTags(m.cfg.TagMap, jobTags) {
 			jobsFilteredOutCounter.Inc()
 			m.logger.Info("job tags do not match expected tags in configuration, skipping...",
@@ -201,9 +206,6 @@ func (m *Monitor) passJobsToNextHandler(
 			)
 			continue
 		}
-
-		// Now that we know the tags match, ensure the job has the queue tag.
-		job.AgentQueryRules = agenttags.SetTag(job.AgentQueryRules, "queue", m.cfg.Queue)
 
 		filteredJobs = append(filteredJobs, job)
 	}
