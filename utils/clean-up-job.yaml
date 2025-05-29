@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: k8s-job-cleanup
+  namespace: test-namespace
+spec:
+  schedule: "*/5 * * * *"  # Run every 5 minutes
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          containers:
+          - name: buildkite-agent-stack-k8s-job-cleanup
+            image: bitnami/kubectl:latest
+            imagePullPolicy: IfNotPresent
+            env:
+            - name: CLEANUP_K8S_NAMESPACE # The namespace to cleanup
+              value: "buildkite" # The namespace to cleanup
+            - name: JOB_AGE_SECONDS # The age of the job in seconds before it is cleaned up 
+              value: "600" # 10 minutes in seconds
+            command:
+            - /bin/bash
+            - -c
+            - |
+              #!/bin/bash
+              set -euo pipefail
+              
+              # Install required tools
+              apt-get update && apt-get install -y jq
+              
+              echo "Starting Buildkite job cleanup at $(date '+%F %H:%M:%S %Z')"
+              current_time=$(date +%s)
+              
+              # Find and clean up old Buildkite jobs using Buildkite labels
+              echo "Finding completed Buildkite jobs older than ${JOB_AGE_SECONDS} seconds..."
+              kubectl get jobs -n "$CLEANUP_K8S_NAMESPACE" \
+                -l buildkite.com/job-uuid \
+                -o json | \
+                jq -r '.items[] | select(.status.completionTime != null) | "\(.metadata.name) \(.metadata.labels["buildkite.com/job-uuid"]) \(.status.completionTime)"' | \
+                while read -r job_name job_uuid completion_time; do
+                  if [ -z "$job_name" ]; then continue; fi
+                  
+                  # Check job completion age
+                  completion_timestamp=$(date -d "$completion_time" +%s)
+                  age_seconds=$(( current_time - completion_timestamp ))
+                  
+                  if [ "$age_seconds" -ge "$JOB_AGE_SECONDS" ]; then
+                    echo "Deleting completed Buildkite job: $job_name (UUID: $job_uuid, completed ${age_seconds} seconds ago)"
+                    kubectl delete job "$job_name" -n "$CLEANUP_K8S_NAMESPACE"
+                  fi
+                done
+              
+              echo "Cleanup complete. Current Buildkite jobs:"
+              kubectl get jobs -n "$CLEANUP_K8S_NAMESPACE" \
+                -l buildkite.com/job-uuid \
+                --sort-by=.status.completionTime
+          restartPolicy: OnFailure
