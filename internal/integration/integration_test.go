@@ -2,14 +2,15 @@ package integration_test
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
+	"github.com/buildkite/roko"
 	"github.com/google/uuid"
-	"github.com/kylelemons/godebug/pretty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -610,6 +611,32 @@ func TestCancelCheckerDeletePod(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 
+	// TriggerBuild performs this type assertion
+	job := build.Jobs.Edges[0].Node.(*api.JobJobTypeCommand)
+	jobName := cfg.JobPrefix + job.Uuid
+	opts := metav1.ListOptions{
+		LabelSelector: fields.OneTermEqualSelector("batch.kubernetes.io/job-name", jobName).String(),
+	}
+
+	// wait for pods to exist
+	if err := roko.NewRetrier(
+		roko.WithMaxAttempts(5),
+		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		exist, err := hasJobPod(tc, ctx, opts)
+		if err != nil {
+			return err
+		}
+		if exist != true {
+			return fmt.Errorf("found no pod, waiting for pod start")
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("kubernetes.CoreV1().Pods(%q).List(ctx, %v): pods does not exist. Final error: %v",
+			cfg.Namespace, opts, err)
+	}
+
+	// Cancel build
 	_, err := api.BuildCancel(ctx, tc.GraphQL, api.BuildCancelInput{
 		ClientMutationId: uuid.New().String(),
 		Id:               build.Id,
@@ -619,24 +646,31 @@ func TestCancelCheckerDeletePod(t *testing.T) {
 	}
 	tc.AssertCancelled(ctx, build)
 
-	// Give it time to delete
-	time.Sleep(5 * time.Second)
-
-	// TriggerBuild performs this type assertion
-	job := build.Jobs.Edges[0].Node.(*api.JobJobTypeCommand)
-
-	jobName := cfg.JobPrefix + job.Uuid
-	opts := metav1.ListOptions{
-		LabelSelector: fields.OneTermEqualSelector("batch.kubernetes.io/job-name", jobName).String(),
+	// wait for pods to be deleted
+	if err := roko.NewRetrier(
+		roko.WithMaxAttempts(5),
+		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		exist, err := hasJobPod(tc, ctx, opts)
+		if err != nil {
+			return err
+		}
+		if exist {
+			return fmt.Errorf("found at least one pods, waiting for deletion")
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("kubernetes.CoreV1().Pods(%q).List(ctx, %v): pods were not deleted after retries. Final error: %v",
+			cfg.Namespace, opts, err)
 	}
+}
+
+func hasJobPod(tc testcase, ctx context.Context, opts metav1.ListOptions) (bool, error) {
 	pods, err := tc.Kubernetes.CoreV1().Pods(cfg.Namespace).List(ctx, opts)
 	if err != nil {
-		t.Fatalf("kubernetes.CoreV1().Pods(%q).List(ctx, %v) error = %v", cfg.Namespace, opts, err)
+		return false, err
 	}
-	if len(pods.Items) > 0 {
-		t.Fatalf("kubernetes.CoreV1().Pods(%q).List(ctx, %v): found %d pods, there should be none (they should have been deleted). Pods:\n%s",
-			cfg.Namespace, opts, len(pods.Items), pretty.Sprint(pods.Items))
-	}
+	return len(pods.Items) > 0, nil
 }
 
 func TestJobActiveDeadlineSeconds(t *testing.T) {
