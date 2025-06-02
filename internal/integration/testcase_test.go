@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
+	agentApi "github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
@@ -39,6 +41,7 @@ type testcase struct {
 	Kubernetes   kubernetes.Interface
 	Buildkite    *buildkite.Client
 	PipelineName string
+	Org          string
 }
 
 // k8s labels are limited to length 63, we use the pipeline name as a label.
@@ -89,6 +92,10 @@ func (t testcase) Init() testcase {
 	require.NoError(t, err)
 	t.Buildkite = client
 
+	agentTokenIdentity := t.getAgentTokenIdentity()
+
+	t.Org = agentTokenIdentity.OrganizationSlug
+
 	return t
 }
 
@@ -118,7 +125,7 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 	t.Helper()
 
 	queueName := t.QueueName()
-	queue, _, err := t.Buildkite.ClusterQueues.Create(cfg.Org, cfg.ClusterUUID, &buildkite.ClusterQueueCreate{
+	queue, _, err := t.Buildkite.ClusterQueues.Create(t.Org, cfg.ClusterUUID, &buildkite.ClusterQueueCreate{
 		Key: &queueName,
 	})
 	require.NoError(t, err)
@@ -133,7 +140,7 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).DoWithContext(context.Background(), func(r *roko.Retrier) error {
 			// There is a small chance that we are deleting queue too soon before queue realize agent has disconnected.
-			_, err := t.Buildkite.ClusterQueues.Delete(cfg.Org, cfg.ClusterUUID, *queue.ID)
+			_, err := t.Buildkite.ClusterQueues.Delete(t.Org, cfg.ClusterUUID, *queue.ID)
 			return err
 		}); err != nil {
 			t.Errorf("Unable to clean up cluster queue %s: %v", *queue.ID, err)
@@ -153,7 +160,7 @@ func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName strin
 
 	var steps bytes.Buffer
 	require.NoError(t, tpl.Execute(&steps, map[string]string{"queue": queueName}))
-	pipeline, _, err := t.Buildkite.Pipelines.Create(cfg.Org, &buildkite.CreatePipeline{
+	pipeline, _, err := t.Buildkite.Pipelines.Create(t.Org, &buildkite.CreatePipeline{
 		Name:       t.PipelineName,
 		Repository: t.Repo,
 		ProviderSettings: &buildkite.GitHubSettings{
@@ -251,7 +258,7 @@ func (t testcase) FetchLogs(build api.Build) string {
 		}
 
 		jobLog, _, err := client.Jobs.GetJobLog(
-			cfg.Org,
+			t.Org,
 			t.PipelineName,
 			strconv.Itoa(build.Number),
 			job.Uuid,
@@ -280,7 +287,7 @@ func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 	t.Buildkite = client
 
 	artifacts, _, err := client.Artifacts.ListByBuild(
-		cfg.Org,
+		t.Org,
 		t.PipelineName,
 		strconv.Itoa(build.Number),
 		nil,
@@ -397,4 +404,41 @@ func ignorableError(err error) bool {
 		}
 	}
 	return false
+}
+
+func (t testcase) getAgentTokenIdentity() *agentApi.AgentTokenIdentity {
+	t.Helper()
+	ctx := context.Background()
+
+	token, err := fetchAgentToken(ctx, t.Logger, t.Kubernetes, cfg.Namespace, cfg.AgentTokenSecret)
+	require.NoError(t, err)
+
+	agentEndpoint := ""
+	if cfg.AgentConfig != nil && cfg.AgentConfig.Endpoint != nil {
+		agentEndpoint = *cfg.AgentConfig.Endpoint
+	}
+	client, err := agentApi.NewAgentTokenClient(token, agentEndpoint)
+	require.NoError(t, err)
+
+	result, _, err := client.GetTokenIdentity(context.Background())
+	require.NoError(t, err)
+
+	return result
+}
+
+const agentTokenKey = "BUILDKITE_AGENT_TOKEN"
+
+func fetchAgentToken(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface, namespace, agentTokenSecretName string) (string, error) {
+	// Need to fetch the agent token ourselves.
+	tokenSecret, err := k8sClient.CoreV1().Secrets(namespace).Get(ctx, agentTokenSecretName, v1.GetOptions{})
+	if err != nil {
+		logger.Error("fetching agent token from secret", zap.Error(err))
+		return "", err
+	}
+	agentToken := string(tokenSecret.Data[agentTokenKey])
+	if agentToken == "" {
+		logger.Error("agent token is empty")
+		return "", errors.New("agent token is empty")
+	}
+	return agentToken, nil
 }

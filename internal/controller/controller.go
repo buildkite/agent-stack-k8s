@@ -95,7 +95,6 @@ func Run(
 	agentClient, err := api.NewAgentClient(
 		agentToken,
 		agentEndpoint,
-		cfg.Org,
 		cfg.ClusterUUID,
 		queue,
 		cfg.Tags,
@@ -113,7 +112,6 @@ func Run(
 	// Monitor polls Buildkite for jobs. It passes them to Limiter.
 	m, err := monitor.New(logger.Named("monitor"), k8sClient, agentClient, monitor.Config{
 		Namespace:            cfg.Namespace,
-		Org:                  cfg.Org,
 		ClusterUUID:          cfg.ClusterUUID,
 		Queue:                queue,
 		MaxInFlight:          cfg.MaxInFlight,

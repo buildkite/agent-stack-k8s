@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func NewAgentClient(token, endpoint, orgSlug, clusterID, queue string, agentQueryRules []string) (*AgentClient, error) {
+func NewAgentClient(token, endpoint, clusterID, queue string, agentQueryRules []string) (*AgentClient, error) {
 	if endpoint == "" {
 		endpoint = "https://agent.buildkite.com/v3"
 	}
@@ -29,7 +29,6 @@ func NewAgentClient(token, endpoint, orgSlug, clusterID, queue string, agentQuer
 			Timeout:   60 * time.Second,
 			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, token)),
 		},
-		orgSlug:   orgSlug,
 		clusterID: clusterID,
 		queue:     queue,
 	}, nil
@@ -39,7 +38,6 @@ func NewAgentClient(token, endpoint, orgSlug, clusterID, queue string, agentQuer
 type AgentClient struct {
 	endpoint   *url.URL
 	httpClient *http.Client
-	orgSlug    string
 	clusterID  string // or "unclustered"
 	queue      string
 }
