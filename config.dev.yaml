@@ -1,0 +1,17 @@
+# For Buildkite Employees.
+# This config is only used when running Agent K8s stack against a local buildkite instance.
+
+agent-config:
+  # Setting a custom Agent REST API endpoint is usually only useful if you have
+  # a different instance of Buildkite itself available to run.
+  endpoint: http://agent.buildkite.localhost/v3
+
+pod-spec-patch:
+  hostAliases:
+    # Minikube specific with docker driver.
+    # Determined by: minikube ssh and then "ping host.minikube.internal"
+    # It will be ideal if we can dynamically determine this depending on user's local env.
+    # Orbstack users might find `0.250.250.254` works instead.
+    - ip: "192.168.65.254"
+      hostnames:
+        - "agent.buildkite.localhost"
