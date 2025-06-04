@@ -103,6 +103,11 @@ func Run(
 		return
 	}
 
+	if agentTokenIdentity.ClusterUUID == "" {
+		logger.Error("Detected unclustered agent token, please upgrade to a cluster agent token: https://buildkite.com/organizations/~/clusters/~/tokens")
+		return
+	}
+
 	agentClient, err := api.NewAgentClient(
 		agentToken,
 		agentEndpoint,
