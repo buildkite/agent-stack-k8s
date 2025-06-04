@@ -329,6 +329,33 @@ func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[st
 	}
 }
 
+func (t testcase) AssertHostAlias(ctx context.Context, alias string, host string) {
+	t.Helper()
+
+	tagReq, err := labels.NewRequirement("tag.buildkite.com/queue", selection.Equals, []string{t.ShortPipelineName()})
+	require.NoError(t, err)
+
+	selector := labels.NewSelector().Add(*tagReq)
+
+	jobs, err := t.Kubernetes.BatchV1().
+		Jobs(cfg.Namespace).
+		List(ctx, v1.ListOptions{LabelSelector: selector.String()})
+	require.NoError(t, err)
+	require.Len(t, jobs.Items, 1)
+
+	for _, hostAlias := range jobs.Items[0].Spec.Template.Spec.HostAliases {
+		if hostAlias.IP == host {
+			for _, actualAlias := range hostAlias.Hostnames {
+				if actualAlias == alias {
+					return
+				}
+			}
+		}
+	}
+
+	assert.Fail(t, "host alias not found")
+}
+
 func strPtr(p string) *string {
 	return &p
 }
