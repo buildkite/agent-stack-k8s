@@ -68,7 +68,6 @@ To get the integration test running locally, you will need:
 
 1. A valid Buildkite API token with GraphQL enabled.
 2. A valid Buildkite Agent Token in your target Buildkite Cluster.
-3. Your target Buildkite Cluster UUID.
 4. Depending on test cases, you may also need SSH keys, please keep reading.
 5. Your shell environment will need CLI write access to a Kubernetes cluster such as the one provided by https://orbstack.dev/.
 
@@ -78,7 +77,6 @@ It's generally convenient to supply the API token, your Buildkite organization n
 
 ```bash
 export BUILDKITE_TOKEN="bkua_**************"
-export CLUSTER_UUID="UUID-UUID-UUID-UUID"
 ```
 
 ## Running locally
@@ -208,7 +206,7 @@ running a integration test.
 In this case, you can choose to supply some inputs via CLI parameters instead of environment variables:
 
 ```bash
-just run --buildkite-token my-api-token --debug --cluster-uuid my-cluster-uuid
+just run --buildkite-token my-api-token --debug
 ```
 
 ### Local deployment with Helm

@@ -24,10 +24,6 @@ work-queue-limit: 2000000
 image-check-container-cpu-limit: 201m
 image-check-container-memory-limit: 129Mi
 
-# only set cluster-uuid if the pipelines are in a cluster
-# the UUID may be found in the cluster settings
-cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
-
 tags:
   - queue=my-queue
   - priority=high
