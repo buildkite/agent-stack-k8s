@@ -184,7 +184,9 @@ func (m *Monitor) passJobsToNextHandler(
 		// Ensure the job has the queue tag. We queried a queue-specific
 		// endpoint, but it may be the default queue, which doesn't require
 		// `agents: queue: ...`, so the queue tag might not be present.
-		job.AgentQueryRules = agenttags.SetTag(job.AgentQueryRules, "queue", m.cfg.Queue)
+		if m.cfg.Queue != "" {
+			job.AgentQueryRules = agenttags.SetTag(job.AgentQueryRules, "queue", m.cfg.Queue)
+		}
 
 		// Convert the job tags to a map.
 		jobTags, tagErrs := agenttags.TagMapFromTags(job.AgentQueryRules)

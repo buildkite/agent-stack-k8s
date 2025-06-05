@@ -46,7 +46,7 @@ type Config struct {
 	JobPrefix                string        `json:"job-prefix"               validate:"required"`
 	MaxInFlight              int           `json:"max-in-flight"            validate:"min=0"`
 	Namespace                string        `json:"namespace"                validate:"required"`
-	Tags                     stringSlice   `json:"tags"                     validate:"min=1"`
+	Tags                     stringSlice   `json:"tags"`
 	PrometheusPort           uint16        `json:"prometheus-port"          validate:"omitempty"`
 	ProfilerAddress          string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
 	PaginationPageSize       int           `json:"pagination-page-size"     validate:"min=1,max=1000"`

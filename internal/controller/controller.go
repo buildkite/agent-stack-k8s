@@ -88,8 +88,7 @@ func Run(
 
 	queue := agentTags["queue"]
 	if queue == "" {
-		logger.Error("The 'queue' tag is missing, but it is required", zap.Error(err))
-		return
+		logger.Info("Listening to the default queue for the given cluster. To listen to a specific queue, please pass in 'queue' as a tag, e.g. --tags='queue=kubernetes'")
 	}
 
 	agentTokenClient, err := api.NewAgentTokenClient(agentToken, agentEndpoint)
