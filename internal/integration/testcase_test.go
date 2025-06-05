@@ -42,6 +42,7 @@ type testcase struct {
 	Buildkite    *buildkite.Client
 	PipelineName string
 	Org          string
+	ClusterUUID  string
 }
 
 // k8s labels are limited to length 63, we use the pipeline name as a label.
@@ -95,6 +96,7 @@ func (t testcase) Init() testcase {
 	agentTokenIdentity := t.getAgentTokenIdentity()
 
 	t.Org = agentTokenIdentity.OrganizationSlug
+	t.ClusterUUID = agentTokenIdentity.ClusterUUID
 
 	return t
 }
@@ -106,7 +108,7 @@ func (t testcase) PrepareQueueAndPipelineWithCleanup(ctx context.Context) string
 	t.Helper()
 
 	var queueName string
-	if cfg.ClusterUUID == "" {
+	if t.ClusterUUID == "" {
 		// TODO: This condition will be removed by subsequent PRs because we aim to eliminate non-clustered accounts.
 		t.Log("No cluster-id is specified, assuming non clustered setup, skipping cluster queue creation...")
 	} else {
@@ -125,7 +127,7 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 	t.Helper()
 
 	queueName := t.QueueName()
-	queue, _, err := t.Buildkite.ClusterQueues.Create(t.Org, cfg.ClusterUUID, &buildkite.ClusterQueueCreate{
+	queue, _, err := t.Buildkite.ClusterQueues.Create(t.Org, t.ClusterUUID, &buildkite.ClusterQueueCreate{
 		Key: &queueName,
 	})
 	require.NoError(t, err)
@@ -140,7 +142,7 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).DoWithContext(context.Background(), func(r *roko.Retrier) error {
 			// There is a small chance that we are deleting queue too soon before queue realize agent has disconnected.
-			_, err := t.Buildkite.ClusterQueues.Delete(t.Org, cfg.ClusterUUID, *queue.ID)
+			_, err := t.Buildkite.ClusterQueues.Delete(t.Org, t.ClusterUUID, *queue.ID)
 			return err
 		}); err != nil {
 			t.Errorf("Unable to clean up cluster queue %s: %v", *queue.ID, err)
@@ -167,7 +169,7 @@ func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName strin
 			TriggerMode: strPtr("none"),
 		},
 		Configuration: steps.String(),
-		ClusterID:     cfg.ClusterUUID,
+		ClusterID:     t.ClusterUUID,
 	})
 	require.NoError(t, err)
 	EnsureCleanup(t.T, func() {

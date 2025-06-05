@@ -59,9 +59,6 @@ type Config struct {
 	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps" validate:"omitempty"`
 	K8sClientRateLimiterBurst int `json:"k8s-client-rate-limiter-burst" validate:"omitempty"`
 
-	// ClusterUUID field is mandatory for most new orgs.
-	// Some old orgs allows unclustered setup.
-	ClusterUUID                  string          `json:"cluster-uuid"                     validate:"omitempty"`
 	AdditionalRedactedVars       stringSlice     `json:"additional-redacted-vars"         validate:"omitempty"`
 	PodSpecPatch                 *corev1.PodSpec `json:"pod-spec-patch"                   validate:"omitempty"`
 	ImagePullBackOffGracePeriod  time.Duration   `json:"image-pull-backoff-grace-period"  validate:"omitempty"`
@@ -101,6 +98,9 @@ type Config struct {
 	// FIXME: This is unused. Only keeping here temporarily to ease our transition.
 	// Once we promote our new version of k8s stack into our own CI, we can remove this line.
 	Org string `json:"org" validate:"omitempty"`
+	// Deprecated: ClusterUUID is unused. Only keeping here temporarily to ease our transition.
+	// Once we promote our new version of k8s stack into our own CI, we can remove this line.
+	ClusterUUID string `json:"cluster-uuid" validate:"omitempty"`
 }
 
 type stringSlice []string
@@ -128,7 +128,6 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	}
 	enc.AddString("profiler-address", c.ProfilerAddress)
 	enc.AddUint16("prometheus-port", c.PrometheusPort)
-	enc.AddString("cluster-uuid", c.ClusterUUID)
 	enc.AddBool("prohibit-kubernetes-plugin", c.ProhibitKubernetesPlugin)
 	enc.AddBool("allow-pod-spec-patch-unsafe-command-modification", c.AllowPodSpecPatchUnsafeCmdMod)
 	if err := enc.AddArray("additional-redacted-vars", c.AdditionalRedactedVars); err != nil {

@@ -36,7 +36,6 @@ func TestReadAndParseConfig(t *testing.T) {
 		K8sClientRateLimiterBurst:      30,
 		Namespace:                      "my-buildkite-ns",
 		Tags:                           []string{"queue=my-queue", "priority=high"},
-		ClusterUUID:                    "beefcafe-abbe-baba-abba-deedcedecade",
 		PrometheusPort:                 9216,
 		ProhibitKubernetesPlugin:       true,
 		PaginationPageSize:             1000,
