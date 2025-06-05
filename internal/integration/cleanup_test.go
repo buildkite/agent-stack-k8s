@@ -22,7 +22,7 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 	ctx := context.Background()
 	graphqlClient := api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint)
 
-	pipelines, err := api.SearchPipelines(ctx, graphqlClient, cfg.Org, "test-", 100)
+	pipelines, err := api.SearchPipelines(ctx, graphqlClient, getOrgSlug(t), "test-", 100)
 	require.NoError(t, err)
 
 	numPipelines := len(pipelines.Organization.Pipelines.Edges)
@@ -32,11 +32,18 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 	wg.Add(numPipelines)
 	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
 		pipeline := pipeline // prevent loop variable capture
+
+		tc := testcase{
+			T:            t,
+			GraphQL:      api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+			PipelineName: pipeline.Node.Name,
+		}.Init()
+
 		t.Run(pipeline.Node.Name, func(t *testing.T) {
 			builds, err := api.GetBuilds(
 				ctx,
 				graphqlClient,
-				fmt.Sprintf("%s/%s", cfg.Org, pipeline.Node.Name),
+				fmt.Sprintf("%s/%s", tc.Org, pipeline.Node.Name),
 				[]api.BuildStates{api.BuildStatesRunning},
 				100,
 			)
@@ -51,11 +58,6 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			tc := testcase{
-				T:            t,
-				GraphQL:      api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
-				PipelineName: pipeline.Node.Name,
-			}.Init()
 			tc.deletePipeline(ctx)
 		})
 	}
@@ -69,7 +71,7 @@ func (t testcase) deletePipeline(ctx context.Context) {
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Exponential(time.Second, 5*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			resp, err := t.Buildkite.Pipelines.Delete(cfg.Org, t.PipelineName)
+			resp, err := t.Buildkite.Pipelines.Delete(t.Org, t.PipelineName)
 			if err != nil {
 				if resp.StatusCode == http.StatusNotFound {
 					return nil
@@ -85,4 +87,11 @@ func (t testcase) deletePipeline(ctx context.Context) {
 
 		t.Logf("deleted pipeline! %s", t.PipelineName)
 	})
+}
+
+func getOrgSlug(t *testing.T) string {
+	tc := testcase{
+		T: t,
+	}.Init()
+	return tc.Org
 }

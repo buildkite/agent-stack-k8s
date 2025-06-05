@@ -279,13 +279,13 @@ func TestMaxInFlightLimited(t *testing.T) {
 
 	for {
 		build, _, err := tc.Buildkite.Builds.Get(
-			cfg.Org,
+			tc.Org,
 			tc.PipelineName,
 			strconv.Itoa(buildID),
 			nil,
 		)
 		if err != nil {
-			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", cfg.Org, tc.PipelineName, buildID, err)
+			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", tc.Org, tc.PipelineName, buildID, err)
 		}
 
 		switch *build.State {
@@ -329,13 +329,13 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 fetchBuildStateLoop:
 	for {
 		build, _, err := tc.Buildkite.Builds.Get(
-			cfg.Org,
+			tc.Org,
 			tc.PipelineName,
 			strconv.Itoa(buildID),
 			nil,
 		)
 		if err != nil {
-			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", cfg.Org, tc.PipelineName, buildID, err)
+			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", tc.Org, tc.PipelineName, buildID, err)
 		}
 
 		switch *build.State {
