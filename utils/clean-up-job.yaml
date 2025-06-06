@@ -1,8 +1,21 @@
+# In Kubernetes version 1.21, the ttlSecondsAfterFinished feature was released which allows
+# Kubernetes to automatically cleanup Finished/Complete Jobs automatically. The Buildkite
+# Agent Stack for Kubernetes relies on the ttlSecondsAfterFinished Job field for automatic
+# Job cleanup.
+#
+# This Cronjob can be applied to Kubernetes clusters running versions older than 1.21 to 
+# ensure periodic cleanup occurs for Finished/Complete Jobs.
+#
+# This Cronjob needs to be created within the same Kubernetes Namespace as the Buildkite
+# Agent Stack for Kubernetes controller to function correctly.
+#
+# Create Cronjob with:
+#   kubectl apply -f ./utils/clean-up-job.yaml -n <agent-stack-k8s-controller-namespace>
+
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: buildkite-agent-stack-k8s-job-cleanup
-  namespace: buildkite
 spec:
   schedule: "*/5 * * * *"  # Run every 5 minutes
   successfulJobsHistoryLimit: 1
@@ -15,11 +28,13 @@ spec:
           serviceAccountName: agent-stack-k8s-controller
           containers:
           - name: buildkite-agent-stack-k8s-job-cleanup
-            image: bitnami/kubectl:latest
+            image: bitnami/kubectl:1.19 # Use version that matches cluster version
             imagePullPolicy: IfNotPresent
             env:
             - name: CLEANUP_K8S_NAMESPACE
-              value: "buildkite" # Default agent-stack-k8s namespace
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: JOB_AGE_SECONDS
               value: "600" # Delete jobs that completed over 10 minutes ago
             command:
@@ -29,25 +44,25 @@ spec:
               #!/bin/bash
               set -euo pipefail
 
-              current_time=$(date +%s)
+              current_time="$(date +%s)"
               echo "Starting Buildkite job cleanup at $(date -d @$current_time '+%F %H:%M:%S %Z')"
 
               # Find and clean up old Buildkite jobs using Buildkite labels
               echo "Finding Buildkite jobs that have been completed for over ${JOB_AGE_SECONDS} seconds..."
-              kubectl get jobs -n "$CLEANUP_K8S_NAMESPACE" \
+              kubectl get jobs -n "${CLEANUP_K8S_NAMESPACE}" \
                 -l buildkite.com/job-uuid \
                 -o json | \
                 jq -r '.items[] | select(.status.completionTime != null) | "\(.metadata.name) \(.metadata.labels["buildkite.com/job-uuid"]) \(.status.completionTime)"' | \
                 while read -r job_name job_uuid completion_time; do
-                  if [ -z "$job_name" ]; then continue; fi
+                  if [[ -z "${job_name}" ]]; then continue; fi
 
                   # Check job completion age
-                  completion_timestamp=$(date -d "$completion_time" +%s)
-                  age_seconds=$(( current_time - completion_timestamp ))
+                  completion_timestamp="$(date -d "${completion_time}" +%s)"
+                  age_seconds="$(( current_time - completion_timestamp ))"
 
-                  if [ "$age_seconds" -ge "$JOB_AGE_SECONDS" ]; then
-                    echo "Deleting completed Buildkite job: $job_name (UUID: $job_uuid, completed ${age_seconds} seconds ago)"
-                    kubectl delete job "$job_name" -n "$CLEANUP_K8S_NAMESPACE"
+                  if (( age_seconds >= JOB_AGE_SECONDS )); then
+                    echo "Deleting completed Buildkite job: ${job_name} (UUID: ${job_uuid}, completed ${age_seconds} seconds ago)"
+                    kubectl delete job "${job_name}" -n "${CLEANUP_K8S_NAMESPACE}"
                   fi
                 done
               echo "Cleanup complete."
