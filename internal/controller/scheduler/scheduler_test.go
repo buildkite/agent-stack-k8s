@@ -124,6 +124,43 @@ func TestPatchPodSpec(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "patching without overriding containers should preserve default container",
+			podspec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Image: "alpine:latest",
+						Command: []string{
+							"echo hello world",
+						},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				HostAliases: []corev1.HostAlias{
+					{
+						IP:        "127.0.0.1",
+						Hostnames: []string{"agent.buildkite.localhost"},
+					},
+				},
+			},
+			want: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Image: "alpine:latest",
+						Command: []string{
+							"echo hello world",
+						},
+					},
+				},
+				HostAliases: []corev1.HostAlias{
+					{
+						IP:        "127.0.0.1",
+						Hostnames: []string{"agent.buildkite.localhost"},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range cases {

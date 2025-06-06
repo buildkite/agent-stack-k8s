@@ -29,7 +29,6 @@ type Config struct {
 	Queue                string
 	MaxInFlight          int
 	PollInterval         time.Duration
-	Org                  string
 	Tags                 []string          // same as TagMap but in k=v form
 	TagMap               map[string]string // same as Tags but in map form
 	EnableQueuePause     bool
@@ -39,8 +38,6 @@ type Config struct {
 }
 
 func New(logger *zap.Logger, k8s kubernetes.Interface, agentClient *api.AgentClient, cfg Config) (*Monitor, error) {
-	logger = logger.With(zap.String("org", cfg.Org))
-
 	// Poll no more frequently than every 1s (please don't DoS us).
 	cfg.PollInterval = max(cfg.PollInterval, time.Second)
 

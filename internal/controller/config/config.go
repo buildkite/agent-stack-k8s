@@ -46,7 +46,6 @@ type Config struct {
 	JobPrefix                string        `json:"job-prefix"               validate:"required"`
 	MaxInFlight              int           `json:"max-in-flight"            validate:"min=0"`
 	Namespace                string        `json:"namespace"                validate:"required"`
-	Org                      string        `json:"org"                      validate:"required"`
 	Tags                     stringSlice   `json:"tags"                     validate:"min=1"`
 	PrometheusPort           uint16        `json:"prometheus-port"          validate:"omitempty"`
 	ProfilerAddress          string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
@@ -60,9 +59,6 @@ type Config struct {
 	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps" validate:"omitempty"`
 	K8sClientRateLimiterBurst int `json:"k8s-client-rate-limiter-burst" validate:"omitempty"`
 
-	// ClusterUUID field is mandatory for most new orgs.
-	// Some old orgs allows unclustered setup.
-	ClusterUUID                  string          `json:"cluster-uuid"                     validate:"omitempty"`
 	AdditionalRedactedVars       stringSlice     `json:"additional-redacted-vars"         validate:"omitempty"`
 	PodSpecPatch                 *corev1.PodSpec `json:"pod-spec-patch"                   validate:"omitempty"`
 	ImagePullBackOffGracePeriod  time.Duration   `json:"image-pull-backoff-grace-period"  validate:"omitempty"`
@@ -96,10 +92,15 @@ type Config struct {
 	// then the pod will malfunction.
 	AllowPodSpecPatchUnsafeCmdMod bool `json:"allow-pod-spec-patch-unsafe-command-modification" validate:"omitempty"`
 
-	// BuildkiteToken and GraphQLEndpoint are deprecated - they are only used
-	// for integration tests.
+	// These are only used for integration tests.
 	BuildkiteToken  string `json:"buildkite-token" validate:"omitempty"`
 	GraphQLEndpoint string `json:"graphql-endpoint" validate:"omitempty"`
+	// FIXME: This is unused. Only keeping here temporarily to ease our transition.
+	// Once we promote our new version of k8s stack into our own CI, we can remove this line.
+	Org string `json:"org" validate:"omitempty"`
+	// Deprecated: ClusterUUID is unused. Only keeping here temporarily to ease our transition.
+	// Once we promote our new version of k8s stack into our own CI, we can remove this line.
+	ClusterUUID string `json:"cluster-uuid" validate:"omitempty"`
 }
 
 type stringSlice []string
@@ -122,13 +123,11 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt("job-creation-concurrency", c.JobCreationConcurrency)
 	enc.AddInt("max-in-flight", c.MaxInFlight)
 	enc.AddString("namespace", c.Namespace)
-	enc.AddString("org", c.Org)
 	if err := enc.AddArray("tags", c.Tags); err != nil {
 		return err
 	}
 	enc.AddString("profiler-address", c.ProfilerAddress)
 	enc.AddUint16("prometheus-port", c.PrometheusPort)
-	enc.AddString("cluster-uuid", c.ClusterUUID)
 	enc.AddBool("prohibit-kubernetes-plugin", c.ProhibitKubernetesPlugin)
 	enc.AddBool("allow-pod-spec-patch-unsafe-command-modification", c.AllowPodSpecPatchUnsafeCmdMod)
 	if err := enc.AddArray("additional-redacted-vars", c.AdditionalRedactedVars); err != nil {

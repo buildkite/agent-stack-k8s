@@ -13,7 +13,6 @@ max-in-flight: 100
 k8s-client-rate-limiter-qps: 20
 k8s-client-rate-limiter-burst: 30
 namespace: my-buildkite-ns
-org: my-buildkite-org
 prometheus-port: 9216
 default-image-pull-policy: Never
 default-image-check-pull-policy: IfNotPresent
@@ -24,10 +23,6 @@ query-reset-interval: 10s
 work-queue-limit: 2000000
 image-check-container-cpu-limit: 201m
 image-check-container-memory-limit: 129Mi
-
-# only set cluster-uuid if the pipelines are in a cluster
-# the UUID may be found in the cluster settings
-cluster-uuid: beefcafe-abbe-baba-abba-deedcedecade
 
 tags:
   - queue=my-queue

@@ -258,9 +258,9 @@
         "org": {
           "type": "string",
           "default": "",
-          "minLength": 1,
-          "title": "Buildkite organization slug",
-          "examples": [""]
+          "title": "Deprecated as of v0.28 - Buildkite organization slug",
+          "examples": [""],
+          "deprecated": true
         },
         "tags": {
           "type": "array",
@@ -274,8 +274,9 @@
         "cluster-uuid": {
           "type": "string",
           "default": "",
-          "title": "The UUID of the Buildkite cluster to pull Jobs from",
-          "examples": [""]
+          "title": "Deprecated as of v0.28 - The UUID of the Buildkite cluster to pull Jobs from",
+          "examples": [""],
+          "deprecated": true
         },
         "additional-redacted-vars": {
           "type": "array",

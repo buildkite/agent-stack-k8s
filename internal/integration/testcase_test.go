@@ -3,6 +3,8 @@ package integration_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -13,10 +15,12 @@ import (
 	"time"
 
 	"github.com/Khan/genqlient/graphql"
+	agentApi "github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
+	"github.com/buildkite/roko"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -37,12 +41,30 @@ type testcase struct {
 	Kubernetes   kubernetes.Interface
 	Buildkite    *buildkite.Client
 	PipelineName string
+	Org          string
+	ClusterUUID  string
 }
 
 // k8s labels are limited to length 63, we use the pipeline name as a label.
 // So we sometimes need to limit the length of the pipeline name too.
-func (t *testcase) ShortPipelineName() string {
-	return strings.Trim(t.PipelineName[:min(len(t.PipelineName), 63)], "-")
+// These pipeline name consists of {name}-{job id}
+// When {name} is too longer, the {job id} bit gets too short, simple truncate 64 will make this queue name non-unique.
+//
+// So we do truncate(name, 63 - 8) + SHA(full name)[:8]
+func (t *testcase) QueueName() string {
+	if len(t.PipelineName) <= 63 {
+		return t.PipelineName
+	}
+
+	// Use SHA256 hash of the pipeline name to ensure uniqueness while keeping length under 63
+	hash := sha256.Sum256([]byte(t.PipelineName))
+	hashPartLength := 8 // Use first 8 characters of hash
+	hashStr := fmt.Sprintf("%x", hash)[:hashPartLength]
+
+	// Keep as much of the original name as possible, then append hash
+	maxOriginalLen := 63 - 1 - hashPartLength // -1 for the dash separator
+	truncated := strings.Trim(t.PipelineName[:maxOriginalLen], "-")
+	return fmt.Sprintf("%s-%s", truncated, hashStr)
 }
 
 func (t testcase) Init() testcase {
@@ -71,6 +93,11 @@ func (t testcase) Init() testcase {
 	require.NoError(t, err)
 	t.Buildkite = client
 
+	agentTokenIdentity := t.getAgentTokenIdentity()
+
+	t.Org = agentTokenIdentity.OrganizationSlug
+	t.ClusterUUID = agentTokenIdentity.ClusterUUID
+
 	return t
 }
 
@@ -81,7 +108,7 @@ func (t testcase) PrepareQueueAndPipelineWithCleanup(ctx context.Context) string
 	t.Helper()
 
 	var queueName string
-	if cfg.ClusterUUID == "" {
+	if t.ClusterUUID == "" {
 		// TODO: This condition will be removed by subsequent PRs because we aim to eliminate non-clustered accounts.
 		t.Log("No cluster-id is specified, assuming non clustered setup, skipping cluster queue creation...")
 	} else {
@@ -90,7 +117,7 @@ func (t testcase) PrepareQueueAndPipelineWithCleanup(ctx context.Context) string
 	}
 
 	if queueName == "" {
-		queueName = t.ShortPipelineName()
+		queueName = t.QueueName()
 	}
 	p := t.createPipelineWithCleanup(ctx, queueName)
 	return *p.GraphQLID
@@ -99,8 +126,8 @@ func (t testcase) PrepareQueueAndPipelineWithCleanup(ctx context.Context) string
 func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 	t.Helper()
 
-	queueName := t.ShortPipelineName()
-	queue, _, err := t.Buildkite.ClusterQueues.Create(cfg.Org, cfg.ClusterUUID, &buildkite.ClusterQueueCreate{
+	queueName := t.QueueName()
+	queue, _, err := t.Buildkite.ClusterQueues.Create(t.Org, t.ClusterUUID, &buildkite.ClusterQueueCreate{
 		Key: &queueName,
 	})
 	require.NoError(t, err)
@@ -110,8 +137,14 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 			return
 		}
 
-		_, err := t.Buildkite.ClusterQueues.Delete(cfg.Org, cfg.ClusterUUID, *queue.ID)
-		if err != nil {
+		if err := roko.NewRetrier(
+			roko.WithMaxAttempts(5),
+			roko.WithStrategy(roko.Constant(5*time.Second)),
+		).DoWithContext(context.Background(), func(r *roko.Retrier) error {
+			// There is a small chance that we are deleting queue too soon before queue realize agent has disconnected.
+			_, err := t.Buildkite.ClusterQueues.Delete(t.Org, t.ClusterUUID, *queue.ID)
+			return err
+		}); err != nil {
 			t.Errorf("Unable to clean up cluster queue %s: %v", *queue.ID, err)
 			return
 		}
@@ -129,14 +162,14 @@ func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName strin
 
 	var steps bytes.Buffer
 	require.NoError(t, tpl.Execute(&steps, map[string]string{"queue": queueName}))
-	pipeline, _, err := t.Buildkite.Pipelines.Create(cfg.Org, &buildkite.CreatePipeline{
+	pipeline, _, err := t.Buildkite.Pipelines.Create(t.Org, &buildkite.CreatePipeline{
 		Name:       t.PipelineName,
 		Repository: t.Repo,
 		ProviderSettings: &buildkite.GitHubSettings{
 			TriggerMode: strPtr("none"),
 		},
 		Configuration: steps.String(),
-		ClusterID:     cfg.ClusterUUID,
+		ClusterID:     t.ClusterUUID,
 	})
 	require.NoError(t, err)
 	EnsureCleanup(t.T, func() {
@@ -159,7 +192,7 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config) {
 	EnsureCleanup(t.T, cancel)
 
 	// TODO: Use queue name created above
-	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.ShortPipelineName())}
+	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.QueueName())}
 	cfg.Debug = true
 
 	go controller.Run(runCtx, t.Logger, t.Kubernetes, &cfg)
@@ -227,7 +260,7 @@ func (t testcase) FetchLogs(build api.Build) string {
 		}
 
 		jobLog, _, err := client.Jobs.GetJobLog(
-			cfg.Org,
+			t.Org,
 			t.PipelineName,
 			strconv.Itoa(build.Number),
 			job.Uuid,
@@ -256,7 +289,7 @@ func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 	t.Buildkite = client
 
 	artifacts, _, err := client.Artifacts.ListByBuild(
-		cfg.Org,
+		t.Org,
 		t.PipelineName,
 		strconv.Itoa(build.Number),
 		nil,
@@ -308,7 +341,7 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[string]string) {
 	t.Helper()
 
-	tagReq, err := labels.NewRequirement("tag.buildkite.com/queue", selection.Equals, []string{t.ShortPipelineName()})
+	tagReq, err := labels.NewRequirement("tag.buildkite.com/queue", selection.Equals, []string{t.QueueName()})
 	require.NoError(t, err)
 
 	selector := labels.NewSelector().Add(*tagReq)
@@ -329,6 +362,33 @@ func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[st
 	}
 }
 
+func (t testcase) AssertHostAlias(ctx context.Context, alias string, host string) {
+	t.Helper()
+
+	tagReq, err := labels.NewRequirement("tag.buildkite.com/queue", selection.Equals, []string{t.QueueName()})
+	require.NoError(t, err)
+
+	selector := labels.NewSelector().Add(*tagReq)
+
+	jobs, err := t.Kubernetes.BatchV1().
+		Jobs(cfg.Namespace).
+		List(ctx, v1.ListOptions{LabelSelector: selector.String()})
+	require.NoError(t, err)
+	require.Len(t, jobs.Items, 1)
+
+	for _, hostAlias := range jobs.Items[0].Spec.Template.Spec.HostAliases {
+		if hostAlias.IP == host {
+			for _, actualAlias := range hostAlias.Hostnames {
+				if actualAlias == alias {
+					return
+				}
+			}
+		}
+	}
+
+	assert.Fail(t, "host alias not found")
+}
+
 func strPtr(p string) *string {
 	return &p
 }
@@ -346,4 +406,41 @@ func ignorableError(err error) bool {
 		}
 	}
 	return false
+}
+
+func (t testcase) getAgentTokenIdentity() *agentApi.AgentTokenIdentity {
+	t.Helper()
+	ctx := context.Background()
+
+	token, err := fetchAgentToken(ctx, t.Logger, t.Kubernetes, cfg.Namespace, cfg.AgentTokenSecret)
+	require.NoError(t, err)
+
+	agentEndpoint := ""
+	if cfg.AgentConfig != nil && cfg.AgentConfig.Endpoint != nil {
+		agentEndpoint = *cfg.AgentConfig.Endpoint
+	}
+	client, err := agentApi.NewAgentTokenClient(token, agentEndpoint)
+	require.NoError(t, err)
+
+	result, _, err := client.GetTokenIdentity(context.Background())
+	require.NoError(t, err)
+
+	return result
+}
+
+const agentTokenKey = "BUILDKITE_AGENT_TOKEN"
+
+func fetchAgentToken(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface, namespace, agentTokenSecretName string) (string, error) {
+	// Need to fetch the agent token ourselves.
+	tokenSecret, err := k8sClient.CoreV1().Secrets(namespace).Get(ctx, agentTokenSecretName, v1.GetOptions{})
+	if err != nil {
+		logger.Error("fetching agent token from secret", zap.Error(err))
+		return "", err
+	}
+	agentToken := string(tokenSecret.Data[agentTokenKey])
+	if agentToken == "" {
+		logger.Error("agent token is empty")
+		return "", errors.New("agent token is empty")
+	}
+	return agentToken, nil
 }

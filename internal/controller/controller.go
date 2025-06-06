@@ -92,11 +92,21 @@ func Run(
 		return
 	}
 
+	agentTokenClient, err := api.NewAgentTokenClient(agentToken, agentEndpoint)
+	if err != nil {
+		logger.Error("Couldn't create Agent token API client", zap.Error(err))
+		return
+	}
+	agentTokenIdentity, _, err := agentTokenClient.GetTokenIdentity(ctx)
+	if err != nil {
+		logger.Error("Couldn't get agent token identity", zap.Error(err))
+		return
+	}
+
 	agentClient, err := api.NewAgentClient(
 		agentToken,
 		agentEndpoint,
-		cfg.Org,
-		cfg.ClusterUUID,
+		agentTokenIdentity.ClusterUUID,
 		queue,
 		cfg.Tags,
 	)
@@ -113,8 +123,7 @@ func Run(
 	// Monitor polls Buildkite for jobs. It passes them to Limiter.
 	m, err := monitor.New(logger.Named("monitor"), k8sClient, agentClient, monitor.Config{
 		Namespace:            cfg.Namespace,
-		Org:                  cfg.Org,
-		ClusterUUID:          cfg.ClusterUUID,
+		ClusterUUID:          agentTokenIdentity.ClusterUUID,
 		Queue:                queue,
 		MaxInFlight:          cfg.MaxInFlight,
 		PollInterval:         cfg.PollInterval,

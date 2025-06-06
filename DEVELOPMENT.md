@@ -68,7 +68,6 @@ To get the integration test running locally, you will need:
 
 1. A valid Buildkite API token with GraphQL enabled.
 2. A valid Buildkite Agent Token in your target Buildkite Cluster.
-3. The name of your Buildkite organization (slug) and your target Buildkite Cluster UUID.
 4. Depending on test cases, you may also need SSH keys, please keep reading.
 5. Your shell environment will need CLI write access to a Kubernetes cluster such as the one provided by https://orbstack.dev/.
 
@@ -78,8 +77,6 @@ It's generally convenient to supply the API token, your Buildkite organization n
 
 ```bash
 export BUILDKITE_TOKEN="bkua_**************"
-export ORG="your-cool-org-slug"
-export CLUSTER_UUID="UUID-UUID-UUID-UUID"
 ```
 
 ## Running locally
@@ -87,7 +84,7 @@ export CLUSTER_UUID="UUID-UUID-UUID-UUID"
 To run the controller locally, with the environment variables, run the following example. Note that in this example the queue is overridden to ensure jobs from the default queue, which is "", are picked up by the Buildkite agent.
 
 ```bash
-just run --org $ORG --buildkite-token $BUILDKITE_TOKEN --debug --tags 'queue=,os=linux'
+just run --buildkite-token $BUILDKITE_TOKEN --debug --tags 'queue=,os=linux'
 ```
 
 ## Testing locally
@@ -113,13 +110,13 @@ go test -v -cover `go list ./... | grep -v internal/integration`
 To run the integration tests, with the overrides from your environment, you can use the following command:
 
 ```bash
-just test -timeout 10m -v ./internal/integration/... -args --org $ORG --buildkite-token $BUILDKITE_TOKEN
+just test -timeout 10m -v ./internal/integration/... -args --buildkite-token $BUILDKITE_TOKEN
 ```
 
 To run a single test, following goes `-run` convention will provide this capability:
 
 ```bash
-just test -timeout 10m -v ./internal/integration/... -run TestImagePullBackOffFailed -args --org $ORG --buildkite-token $BUILDKITE_TOKEN
+just test -timeout 10m -v ./internal/integration/... -run TestImagePullBackOffFailed -args --buildkite-token $BUILDKITE_TOKEN
 ```
 
 ## Token scopes
@@ -209,7 +206,7 @@ running a integration test.
 In this case, you can choose to supply some inputs via CLI parameters instead of environment variables:
 
 ```bash
-just run --org my-org --buildkite-token my-api-token --debug --cluster-uuid my-cluster-uuid
+just run --buildkite-token my-api-token --debug
 ```
 
 ### Local deployment with Helm
@@ -235,8 +232,6 @@ With config.yaml being a file containing [required Helm values](values.yaml), su
 ```yaml
 agentToken: "abcdef"
 graphqlToken: "12345"
-config:
-  org: "my-buildkite-org"
 ```
 
 The `config` key contains configuration passed directly to the binary, and so supports all the keys documented in [the example](examples/config.yaml).

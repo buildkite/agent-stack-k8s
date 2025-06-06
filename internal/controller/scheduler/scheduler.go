@@ -933,6 +933,16 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *co
 		}
 	}
 
+	// PodSpec.Containers is tagged for json conversion, but is not omitempty.
+	// So if the patch specifies no containers then this attribute will be nil,
+	// then when merging that will remove all containers from the original pod.
+	// So if the patch has no containers then we set it to an empty list. This
+	// means there's no way to patch a pod to remove all containers .. but
+	// that's not a sensible thing to do in the first place.
+	if patch.Containers == nil {
+		patch.Containers = []corev1.Container{}
+	}
+
 	for i := range patch.Containers {
 		c := &patch.Containers[i]
 		if len(c.Command) == 0 && len(c.Args) == 0 {

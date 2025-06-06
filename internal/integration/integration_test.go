@@ -122,6 +122,33 @@ func TestPodSpecPatchInController(t *testing.T) {
 	tc.AssertLogsContain(build, "value of MOUNTAIN is antisana")
 }
 
+func TestPodSpecPatchWithoutContainers(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "mountain.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	cfg := cfg
+	cfg.PodSpecPatch = &corev1.PodSpec{
+		HostAliases: []corev1.HostAlias{
+			{
+				IP:        "127.0.0.1",
+				Hostnames: []string{"agent.buildkite.localhost"},
+			},
+		},
+	}
+
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "value of MOUNTAIN is cotopaxi")
+	tc.AssertHostAlias(ctx, "agent.buildkite.localhost", "127.0.0.1")
+}
+
 func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
 	tc := testcase{
 		T:       t,
@@ -252,13 +279,13 @@ func TestMaxInFlightLimited(t *testing.T) {
 
 	for {
 		build, _, err := tc.Buildkite.Builds.Get(
-			cfg.Org,
+			tc.Org,
 			tc.PipelineName,
 			strconv.Itoa(buildID),
 			nil,
 		)
 		if err != nil {
-			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", cfg.Org, tc.PipelineName, buildID, err)
+			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", tc.Org, tc.PipelineName, buildID, err)
 		}
 
 		switch *build.State {
@@ -302,13 +329,13 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 fetchBuildStateLoop:
 	for {
 		build, _, err := tc.Buildkite.Builds.Get(
-			cfg.Org,
+			tc.Org,
 			tc.PipelineName,
 			strconv.Itoa(buildID),
 			nil,
 		)
 		if err != nil {
-			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", cfg.Org, tc.PipelineName, buildID, err)
+			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", tc.Org, tc.PipelineName, buildID, err)
 		}
 
 		switch *build.State {
