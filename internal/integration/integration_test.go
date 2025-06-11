@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
 	"github.com/buildkite/roko"
@@ -16,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/utils/ptr"
 )
 
 func TestWalkingSkeleton(t *testing.T) {
@@ -712,4 +715,51 @@ func TestJobActiveDeadlineSeconds(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
+}
+
+func TestHooksAndPlugins(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "hooks-and-plugins-volumes.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	cfg := cfg
+	cfg.AgentConfig = &config.AgentConfig{
+		HooksVolume: &corev1.Volume{
+			Name: "hooks",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "integration-tests-fixture-hooks",
+					},
+					DefaultMode: ptr.To[int32](0o755),
+				},
+			},
+		},
+		PluginsPath: ptr.To("/my/special/plugins"),
+		PluginsVolume: &corev1.Volume{
+			Name: "plugins",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+	}
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	logs := tc.FetchLogs(build)
+	t.Logf("tc.FetchLogs(build) = %s", logs)
+	for _, hook := range []string{"environment", "pre-checkout", "post-checkout", "pre-command", "post-command"} {
+		want := fmt.Sprintf("Hello from the %s hook", hook)
+		if !strings.Contains(logs, want) {
+			t.Errorf("Logs did not contain %q", want)
+		}
+		want = fmt.Sprintf("Hello from the metahook %s hook", hook)
+		if !strings.Contains(logs, want) {
+			t.Errorf("Logs did not contain %q", want)
+		}
+	}
 }

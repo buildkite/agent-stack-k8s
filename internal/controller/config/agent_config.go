@@ -104,28 +104,10 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	appendCommaSepToEnv(ctr, "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", a.DisableWarningsFor)
 	appendBoolToEnvOpt(ctr, "BUILDKITE_AGENT_DEBUG_SIGNING", a.DebugSigning)
 
-	if a.HooksVolume != nil {
-		hooksPath := "/buildkite/hooks"
-		if a.HooksPath == nil {
-			a.HooksPath = &hooksPath
-		}
-		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
-			Name:      a.HooksVolume.Name,
-			MountPath: *a.HooksPath,
-		})
-	}
+	a.applyHooksVolumeTo(ctr)
 	appendToEnvOpt(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)
 
-	if a.PluginsVolume != nil {
-		pluginsPath := "/buildkite/plugins"
-		if a.PluginsPath == nil {
-			a.PluginsPath = &pluginsPath
-		}
-		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
-			Name:      a.PluginsVolume.Name,
-			MountPath: *a.PluginsPath,
-		})
-	}
+	a.applyPluginsVolumeTo(ctr)
 	appendToEnvOpt(ctr, "BUILDKITE_PLUGINS_PATH", a.PluginsPath)
 
 	// The agent transforms these into the corresponding negated versions when
@@ -175,6 +157,8 @@ func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {
 	if a == nil || ctr == nil {
 		return
 	}
+	a.applyHooksVolumeTo(ctr)
+	a.applyPluginsVolumeTo(ctr)
 	// Signing happens either with "pipeline upload" or "tool sign", so the
 	// signing side of any key needs to be attached to the command container,
 	// not the agent start container or checkout containers.
@@ -185,6 +169,40 @@ func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {
 	ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
 		Name:      a.SigningJWKSVolume.Name,
 		MountPath: dir,
+	})
+}
+
+func (a *AgentConfig) ApplyToCheckout(ctr *corev1.Container) {
+	if a == nil || ctr == nil {
+		return
+	}
+	a.applyHooksVolumeTo(ctr)
+	a.applyPluginsVolumeTo(ctr)
+}
+
+func (a *AgentConfig) applyHooksVolumeTo(ctr *corev1.Container) {
+	if a == nil || ctr == nil || a.HooksVolume == nil {
+		return
+	}
+	if a.HooksPath == nil {
+		a.HooksPath = ptr.To("/workspace/hooks")
+	}
+	ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
+		Name:      a.HooksVolume.Name,
+		MountPath: *a.HooksPath,
+	})
+}
+
+func (a *AgentConfig) applyPluginsVolumeTo(ctr *corev1.Container) {
+	if a == nil || ctr == nil || a.PluginsVolume == nil {
+		return
+	}
+	if a.PluginsPath == nil {
+		a.PluginsPath = ptr.To("/workspace/plugins")
+	}
+	ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
+		Name:      a.PluginsVolume.Name,
+		MountPath: *a.PluginsPath,
 	})
 }
 
