@@ -42,6 +42,35 @@ func TestWalkingSkeleton(t *testing.T) {
 	)
 }
 
+func TestDefaultQueue(t *testing.T) {
+	// Note: this test assumes the default queue is called "default".
+	// This happens to be the case for our CI setup. 
+	// TODO: generalise the test to work with any name default queue once the 
+	// controller can function without setting the queue explicitly.
+	tc := testcase{
+		T:           t,
+		Fixture:     "default-queue.yaml",
+		Repo:        repoHTTP,
+		GraphQL:     api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+		CustomQueue: "default",
+	}.Init()
+	ctx := context.Background()
+	// Note: this shouldn't interfere with the stack running the tests, because
+	// the stack uses the "kubernetes" queue.
+	// We provide a custom tag to ensure this run of the test controller picks
+	// up this job.
+	pipeline := tc.createPipelineWithCleanup(ctx, "default", map[string]string{
+		"pseudoQueue": tc.ShortPipelineName(),
+	})
+	tc.StartController(ctx, cfg,
+		"queue=default",
+		"pseudoQueue="+tc.ShortPipelineName(),
+	)
+	build := tc.TriggerBuild(ctx, *pipeline.GraphQLID)
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "Hi there")
+}
+
 func TestPodSpecPatchInStep(t *testing.T) {
 	tc := testcase{
 		T:       t,

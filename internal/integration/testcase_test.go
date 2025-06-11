@@ -2,10 +2,12 @@ package integration_test
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strconv"
@@ -43,6 +45,12 @@ type testcase struct {
 	PipelineName string
 	Org          string
 	ClusterUUID  string
+	CustomQueue  string
+}
+
+// QueueName returns either t.CustomQueue if set, or t.ShortPipelineName.
+func (t *testcase) QueueName() string {
+	return cmp.Or(t.CustomQueue, t.ShortPipelineName())
 }
 
 // k8s labels are limited to length 63, we use the pipeline name as a label.
@@ -51,7 +59,7 @@ type testcase struct {
 // When {name} is too longer, the {job id} bit gets too short, simple truncate 64 will make this queue name non-unique.
 //
 // So we do truncate(name, 63 - 8) + SHA(full name)[:8]
-func (t *testcase) QueueName() string {
+func (t *testcase) ShortPipelineName() string {
 	if len(t.PipelineName) <= 63 {
 		return t.PipelineName
 	}
@@ -119,7 +127,7 @@ func (t testcase) PrepareQueueAndPipelineWithCleanup(ctx context.Context) string
 	if queueName == "" {
 		queueName = t.QueueName()
 	}
-	p := t.createPipelineWithCleanup(ctx, queueName)
+	p := t.createPipelineWithCleanup(ctx, queueName, nil)
 	return *p.GraphQLID
 }
 
@@ -154,14 +162,18 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 	return queue
 }
 
-func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName string) *buildkite.Pipeline {
+func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName string, custom map[string]string) *buildkite.Pipeline {
 	t.Helper()
 
 	tpl, err := template.ParseFS(fixtures, fmt.Sprintf("fixtures/%s", t.Fixture))
 	require.NoError(t, err)
 
 	var steps bytes.Buffer
-	require.NoError(t, tpl.Execute(&steps, map[string]string{"queue": queueName}))
+	tmplInput := map[string]string{
+		"queue": queueName,
+	}
+	maps.Copy(tmplInput, custom)
+	require.NoError(t, tpl.Execute(&steps, tmplInput))
 	pipeline, _, err := t.Buildkite.Pipelines.Create(t.Org, &buildkite.CreatePipeline{
 		Name:       t.PipelineName,
 		Repository: t.Repo,
@@ -185,20 +197,23 @@ func (t testcase) preserveEphemeralObjects() bool {
 	return preservePipelines || t.Failed()
 }
 
-func (t testcase) StartController(ctx context.Context, cfg config.Config) {
+func (t testcase) StartController(ctx context.Context, cfg config.Config, customTags ...string) {
 	t.Helper()
 
 	runCtx, cancel := context.WithCancel(ctx)
 	EnsureCleanup(t.T, cancel)
 
-	// TODO: Use queue name created above
-	cfg.Tags = []string{fmt.Sprintf("queue=%s", t.QueueName())}
+	if len(customTags) > 0 {
+		cfg.Tags = customTags
+	} else {
+		cfg.Tags = []string{fmt.Sprintf("queue=%s", t.QueueName())}
+	}
 	cfg.Debug = true
 
 	go controller.Run(runCtx, t.Logger, t.Kubernetes, &cfg)
 }
 
-func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build {
+func (t testcase) TriggerBuild(ctx context.Context, pipelineGraphQLID string) api.Build {
 	t.Helper()
 
 	authorEmail := os.Getenv("BUILDKITE_BUILD_CREATOR_EMAIL")
@@ -213,7 +228,7 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineID string) api.Build
 			Email: authorEmail,
 			Name:  authorName,
 		},
-		PipelineID: pipelineID,
+		PipelineID: pipelineGraphQLID,
 		Commit:     "HEAD",
 		Branch:     branch,
 		Message:    t.Name(),

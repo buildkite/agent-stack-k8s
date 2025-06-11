@@ -1,0 +1,7 @@
+agents:
+  # Target the default queue, but provide a different specific tag
+  # so that the job is picked up by the test controller.
+  pseudoQueue: "{{.pseudoQueue}}"
+steps:
+  - label: ":wave:"
+    command: "echo Hi there"
