@@ -655,7 +655,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		//  - Otherwise, use the DefaultImagePullPolicy, if configured.
 		//  - Otherwise, use Always or IfNotPresent depending on whether or not
 		//    the image ref is pinned by a digest.
-		nominalPolicy := coalesce(
+		nominalPolicy := cmp.Or(
 			c.ImagePullPolicy,
 			w.cfg.DefaultImageCheckPullPolicy,
 			w.cfg.DefaultImagePullPolicy,
@@ -677,7 +677,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		// init container with the Always policy. But then there's no need to
 		// pull it again later, so we downgrade the app container's policy from
 		// Always to IfNotPresent.
-		c.ImagePullPolicy = coalesce(
+		c.ImagePullPolicy = cmp.Or(
 			c.ImagePullPolicy,
 			w.cfg.DefaultImagePullPolicy,
 			defaultPullPolicyForImage(ref),
@@ -796,7 +796,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	for image, pnr := range preflightImageChecks {
 		name := ImageCheckContainerNamePrefix + strconv.Itoa(i)
 
-		policy := coalesce(pnr.policy, w.cfg.DefaultImageCheckPullPolicy, defaultPullPolicyForImage(pnr.ref))
+		policy := cmp.Or(pnr.policy, w.cfg.DefaultImageCheckPullPolicy, defaultPullPolicyForImage(pnr.ref))
 
 		w.logger.Debug(
 			"adding preflight image check init container",
@@ -1083,7 +1083,7 @@ cp /usr/local/bin/buildkite-agent /sbin/tini-static /workspace
 		// /workspace.
 		Name:            CopyAgentContainerName,
 		Image:           w.cfg.Image,
-		ImagePullPolicy: coalesce(w.cfg.DefaultImagePullPolicy, defaultPullPolicyForImage(w.defaultImageRef)),
+		ImagePullPolicy: cmp.Or(w.cfg.DefaultImagePullPolicy, defaultPullPolicyForImage(w.defaultImageRef)),
 		Command:         []string{"ash"},
 		Args:            []string{"-cefx", containerArgs.String()},
 		SecurityContext: securityContext,
@@ -1119,7 +1119,7 @@ func (w *worker) createCheckoutContainer(
 			},
 		},
 	}
-
+	w.cfg.AgentConfig.ApplyToCheckout(&checkoutContainer)
 	w.cfg.DefaultCheckoutParams.ApplyToCheckout(podSpec, &checkoutContainer)
 	if k8sPlugin != nil {
 		k8sPlugin.CheckoutParams.ApplyToCheckout(podSpec, &checkoutContainer)
@@ -1299,16 +1299,4 @@ func defaultPullPolicyForImage(ref reference.Reference) corev1.PullPolicy {
 		return corev1.PullIfNotPresent
 	}
 	return corev1.PullAlways
-}
-
-// coalesce returns the first non-zero arg, or the zero value for T if all args
-// are zero.
-func coalesce[T comparable](x ...T) T {
-	var zero T
-	for _, s := range x {
-		if s != zero {
-			return s
-		}
-	}
-	return zero
 }

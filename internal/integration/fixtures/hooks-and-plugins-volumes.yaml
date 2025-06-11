@@ -1,0 +1,12 @@
+agents:
+  queue: "{{.queue}}"
+steps:
+  - label: ":fishing_pole_and_fish: Hooks and Plugins"
+    command: echo 'Hello from the command!'
+    plugins:
+      - improbable-eng/metahook#v0.4.1:
+          environment: echo 'Hello from the metahook environment hook'
+          pre-checkout: echo 'Hello from the metahook pre-checkout hook'
+          post-checkout: echo 'Hello from the metahook post-checkout hook'
+          pre-command: echo 'Hello from the metahook pre-command hook'
+          post-command: echo 'Hello from the metahook post-command hook'
