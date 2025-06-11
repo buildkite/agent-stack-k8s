@@ -58,7 +58,7 @@ func TestDefaultQueue(t *testing.T) {
 	pipeline := tc.createPipelineWithCleanup(ctx, "default", map[string]string{
 		"pseudoQueue": tc.ShortPipelineName(),
 	})
-	tc.StartController(ctx, cfg, "pseudoQueue="+tc.ShortPipelineName())
+	tc.StartController(ctx, cfg, "queue=default", "pseudoQueue="+tc.ShortPipelineName())
 	build := tc.TriggerBuild(ctx, *pipeline.GraphQLID)
 	tc.AssertSuccess(ctx, build)
 	tc.AssertLogsContain(build, "Hi there")
