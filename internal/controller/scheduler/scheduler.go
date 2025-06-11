@@ -146,15 +146,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 		return w.failJob(ctx, inputs, fmt.Sprintf("agent-stack-k8s failed to parse the job: %v", err))
 	}
 
-	// Default command container using default image.
-	podSpec := &corev1.PodSpec{
-		Containers: []corev1.Container{
-			{
-				Image:   w.cfg.Image,
-				Command: []string{jobToRun.Command},
-			},
-		},
-	}
+	podSpec := &corev1.PodSpec{}
 	// Use the podSpec provided by the plugin, if allowed.
 	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpec != nil {
 		podSpec = inputs.k8sPlugin.PodSpec
@@ -411,8 +403,6 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		podSpec.Containers[i] = c
 	}
 
-	containerCount := len(podSpec.Containers) + systemContainerCount
-
 	if len(podSpec.Containers) == 0 {
 		// Create a default command container named "container-0".
 		c := corev1.Container{
@@ -450,6 +440,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		podSpec.Containers = append(podSpec.Containers, c)
 	}
 
+	sidecarCounterCount := 0
 	if inputs.k8sPlugin != nil {
 		for i, c := range inputs.k8sPlugin.Sidecars {
 			if c.Name == "" {
@@ -468,6 +459,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			maps.Copy(kjob.Spec.Template.Annotations, sidecarAnnotation)
 
 			podSpec.Containers = append(podSpec.Containers, c)
+
+			sidecarCounterCount += 1
 		}
 	}
 
@@ -489,6 +482,12 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	redactedVars := slices.Clone(clicommand.RedactedVars.Value.Value())
 	redactedVars = append(redactedVars, w.cfg.AdditionalRedactedVars...)
 
+	// Managed containers are those containers that runs agent as parent process.
+	// The coordinating agent container are expecting those managed containers to connect.
+	//
+	// Calculating this imperatively is risky given we lack control over the context, this is subject to refactor.
+	managedContainerCount := len(podSpec.Containers) + systemContainerCount - sidecarCounterCount
+
 	agentContainer := corev1.Container{
 		Name:         AgentContainerName,
 		Args:         []string{"start"},
@@ -502,7 +501,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			},
 			{
 				Name:  "BUILDKITE_CONTAINER_COUNT",
-				Value: strconv.Itoa(containerCount),
+				Value: strconv.Itoa(managedContainerCount),
 			},
 			{
 				Name:  "BUILDKITE_AGENT_TAGS",

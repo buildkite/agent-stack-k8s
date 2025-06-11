@@ -44,8 +44,8 @@ func TestWalkingSkeleton(t *testing.T) {
 
 func TestDefaultQueue(t *testing.T) {
 	// Note: this test assumes the default queue is called "default".
-	// This happens to be the case for our CI setup. 
-	// TODO: generalise the test to work with any name default queue once the 
+	// This happens to be the case for our CI setup.
+	// TODO: generalise the test to work with any name default queue once the
 	// controller can function without setting the queue explicitly.
 	tc := testcase{
 		T:           t,
@@ -791,4 +791,19 @@ func TestHooksAndPlugins(t *testing.T) {
 			t.Errorf("Logs did not contain %q", want)
 		}
 	}
+}
+
+func TestSkipCheckoutContainer(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "skip-checkout.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "hello-skip-checkout")
 }
