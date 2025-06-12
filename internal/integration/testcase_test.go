@@ -106,6 +106,10 @@ func (t testcase) Init() testcase {
 	t.Org = agentTokenIdentity.OrganizationSlug
 	t.ClusterUUID = agentTokenIdentity.ClusterUUID
 
+	if t.ClusterUUID == "" {
+		t.Fatal("Detected unclustered agent token, please upgrade to a cluster agent token: https://buildkite.com/organizations/~/clusters/~/tokens")
+	}
+
 	return t
 }
 
@@ -116,13 +120,8 @@ func (t testcase) PrepareQueueAndPipelineWithCleanup(ctx context.Context) string
 	t.Helper()
 
 	var queueName string
-	if t.ClusterUUID == "" {
-		// TODO: This condition will be removed by subsequent PRs because we aim to eliminate non-clustered accounts.
-		t.Log("No cluster-id is specified, assuming non clustered setup, skipping cluster queue creation...")
-	} else {
-		queue := t.createClusterQueueWithCleanup()
-		queueName = *queue.Key
-	}
+	queue := t.createClusterQueueWithCleanup()
+	queueName = *queue.Key
 
 	if queueName == "" {
 		queueName = t.QueueName()
@@ -138,7 +137,10 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 	queue, _, err := t.Buildkite.ClusterQueues.Create(t.Org, t.ClusterUUID, &buildkite.ClusterQueueCreate{
 		Key: &queueName,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Errorf("Unable to create cluster queue %s: %v", queueName, err)
+		require.NoError(t, err)
+	}
 
 	EnsureCleanup(t.T, func() {
 		if t.preserveEphemeralObjects() {
