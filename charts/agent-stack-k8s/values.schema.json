@@ -265,7 +265,7 @@
         "tags": {
           "type": "array",
           "default": [],
-          "title": "Buildkite agent tags used for acquiring jobs - 'queue' is required",
+          "title": "Buildkite agent tags used for acquiring jobs. If you don't specify a queue tag, it will listen to the default queue.",
           "items": {
             "type": "string"
           },

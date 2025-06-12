@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// This is a special keyword supported on backend for polling from the current default queue in the cluster.
+const defaultQueueKey = "_default"
+
 func NewAgentClient(token, endpoint, clusterID, queue string, agentQueryRules []string) (*AgentClient, error) {
 	if endpoint == "" {
 		endpoint = "https://agent.buildkite.com/v3"
@@ -22,6 +25,9 @@ func NewAgentClient(token, endpoint, clusterID, queue string, agentQueryRules []
 	endpointURL, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
+	}
+	if queue == "" {
+		queue = defaultQueueKey
 	}
 	return &AgentClient{
 		endpoint: endpointURL,

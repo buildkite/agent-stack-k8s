@@ -59,7 +59,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 	)
 	cmd.Flags().StringSlice(
 		"tags",
-		[]string{"queue=kubernetes"},
+		[]string{},
 		`A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux")`,
 	)
 	cmd.Flags().String(
