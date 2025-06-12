@@ -22,6 +22,7 @@ import (
 )
 
 func TestWalkingSkeleton(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "helloworld.yaml",
@@ -43,6 +44,7 @@ func TestWalkingSkeleton(t *testing.T) {
 }
 
 func TestDefaultQueue(t *testing.T) {
+	t.Parallel()
 	// Note: this test assumes the default queue is called "default".
 	// This happens to be the case for our CI setup.
 	// TODO: generalise the test to work with any name default queue once the
@@ -101,6 +103,7 @@ func TestExplicitDefaultQueue(t *testing.T) {
 }
 
 func TestPodSpecPatchInStep(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "podspecpatch-step.yaml",
@@ -117,6 +120,7 @@ func TestPodSpecPatchInStep(t *testing.T) {
 }
 
 func TestPodSpecPatchAllowsPatchingCommandContainerCommands(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "podspecpatch-command-step.yaml",
@@ -135,6 +139,7 @@ func TestPodSpecPatchAllowsPatchingCommandContainerCommands(t *testing.T) {
 }
 
 func TestPodSpecPatchRejectsPatchingAgentContainerCommand(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "podspecpatch-agent.yaml",
@@ -153,6 +158,7 @@ func TestPodSpecPatchRejectsPatchingAgentContainerCommand(t *testing.T) {
 }
 
 func TestPodSpecPatchInController(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "mountain.yaml",
@@ -184,6 +190,7 @@ func TestPodSpecPatchInController(t *testing.T) {
 }
 
 func TestPodSpecPatchWithoutContainers(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "mountain.yaml",
@@ -211,6 +218,7 @@ func TestPodSpecPatchWithoutContainers(t *testing.T) {
 }
 
 func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "helloworld.yaml",
@@ -230,6 +238,7 @@ func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
 }
 
 func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "redacted-vars.yaml",
@@ -253,6 +262,7 @@ func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
 }
 
 func TestPrePostCheckoutHooksRun(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "plugin-checkout-hook.yaml",
@@ -272,6 +282,7 @@ func TestPrePostCheckoutHooksRun(t *testing.T) {
 }
 
 func TestChown(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "chown.yaml",
@@ -287,6 +298,7 @@ func TestChown(t *testing.T) {
 }
 
 func TestSSHRepoClone(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "secretref.yaml",
@@ -307,6 +319,7 @@ func TestSSHRepoClone(t *testing.T) {
 }
 
 func TestPluginCloneFailsTests(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "unknown-plugin.yaml",
@@ -323,6 +336,7 @@ func TestPluginCloneFailsTests(t *testing.T) {
 }
 
 func TestMaxInFlightLimited(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "parallel.yaml",
@@ -371,6 +385,7 @@ func TestMaxInFlightLimited(t *testing.T) {
 }
 
 func TestMaxInFlightUnlimited(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "parallel.yaml",
@@ -434,6 +449,7 @@ fetchBuildStateLoop:
 }
 
 func TestSidecars(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "sidecars.yaml",
@@ -450,6 +466,7 @@ func TestSidecars(t *testing.T) {
 }
 
 func TestExtraVolumeMounts(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "extra-volume-mounts.yaml",
@@ -464,6 +481,7 @@ func TestExtraVolumeMounts(t *testing.T) {
 }
 
 func TestExtraVolumeMountsCommandContainers(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "extra-volume-mounts-command.yaml",
@@ -478,6 +496,7 @@ func TestExtraVolumeMountsCommandContainers(t *testing.T) {
 }
 
 func TestExtraVolumeMountsSidecars(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "extra-volume-mounts-sidecar.yaml",
@@ -492,6 +511,7 @@ func TestExtraVolumeMountsSidecars(t *testing.T) {
 }
 
 func TestInvalidPodSpec(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "invalid.yaml",
@@ -511,6 +531,7 @@ func TestInvalidPodSpec(t *testing.T) {
 }
 
 func TestInvalidPodJSON(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "invalid2.yaml",
@@ -530,6 +551,7 @@ func TestInvalidPodJSON(t *testing.T) {
 }
 
 func TestMissingServiceAccount(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "missing-service-account.yaml",
@@ -546,6 +568,7 @@ func TestMissingServiceAccount(t *testing.T) {
 }
 
 func TestEnvVariables(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "env.yaml",
@@ -562,6 +585,7 @@ func TestEnvVariables(t *testing.T) {
 }
 
 func TestImagePullBackOffFailed(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "image-pull-back-off-failed.yaml",
@@ -582,6 +606,7 @@ func TestImagePullBackOffFailed(t *testing.T) {
 }
 
 func TestPullPolicyNeverMissingImage(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "never-pull.yaml",
@@ -601,6 +626,7 @@ func TestPullPolicyNeverMissingImage(t *testing.T) {
 }
 
 func TestBrokenInitContainer(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "broken-init-container.yaml",
@@ -619,6 +645,7 @@ func TestBrokenInitContainer(t *testing.T) {
 }
 
 func TestInvalidImageRefFormat(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "invalid-image-name.yaml",
@@ -635,6 +662,7 @@ func TestInvalidImageRefFormat(t *testing.T) {
 }
 
 func TestArtifactsUploadFailedJobs(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "artifact-upload-failed-job.yaml",
@@ -650,6 +678,7 @@ func TestArtifactsUploadFailedJobs(t *testing.T) {
 }
 
 func TestInterposerBuildkite(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "interposer-buildkite.yaml",
@@ -670,6 +699,7 @@ func TestInterposerBuildkite(t *testing.T) {
 }
 
 func TestInterposerVector(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "interposer-vector.yaml",
@@ -688,6 +718,7 @@ func TestInterposerVector(t *testing.T) {
 }
 
 func TestCancelCheckerDeletePod(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "cancel-checker.yaml",
@@ -762,6 +793,7 @@ func hasJobPod(tc testcase, ctx context.Context, opts metav1.ListOptions) (bool,
 }
 
 func TestJobActiveDeadlineSeconds(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "jobactivedeadlineseconds.yaml",
@@ -776,6 +808,7 @@ func TestJobActiveDeadlineSeconds(t *testing.T) {
 }
 
 func TestHooksAndPlugins(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "hooks-and-plugins-volumes.yaml",
@@ -823,6 +856,7 @@ func TestHooksAndPlugins(t *testing.T) {
 }
 
 func TestSkipCheckoutContainer(t *testing.T) {
+	t.Parallel()
 	tc := testcase{
 		T:       t,
 		Fixture: "skip-checkout.yaml",
