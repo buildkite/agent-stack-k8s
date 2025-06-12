@@ -71,6 +71,35 @@ func TestDefaultQueue(t *testing.T) {
 	tc.AssertLogsContain(build, "Hi there")
 }
 
+func TestExplicitDefaultQueue(t *testing.T) {
+	// Note: this test assumes the default queue is called "default".
+	// This happens to be the case for our CI setup.
+	// TODO: generalise the test to work with any name default queue once the
+	// controller can function without setting the queue explicitly.
+	tc := testcase{
+		T:           t,
+		Fixture:     "explicit-default-queue.yaml",
+		Repo:        repoHTTP,
+		GraphQL:     api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+		CustomQueue: "default",
+	}.Init()
+	ctx := context.Background()
+	pipeline := tc.createPipelineWithCleanup(ctx, "default", map[string]string{
+		// You may wonder what this pseudoQueue is.
+		// Since in this particular test case, the queue is static, without extra tag, we will be effectively limiting
+		// test concurrency to 1.
+		// 2 builds running at the same time might conflict with each other.
+		"pseudoQueue": tc.ShortPipelineName(),
+	})
+	// Start a controller without queue tag, it will listen to default queue
+	tc.StartController(ctx, cfg,
+		"pseudoQueue="+tc.ShortPipelineName(),
+	)
+	build := tc.TriggerBuild(ctx, *pipeline.GraphQLID)
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "Hi there")
+}
+
 func TestPodSpecPatchInStep(t *testing.T) {
 	tc := testcase{
 		T:       t,

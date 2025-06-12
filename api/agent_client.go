@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 )
 
 // This is a special keyword supported on backend for polling from the current default queue in the cluster.
@@ -127,6 +129,18 @@ func (c *AgentClient) GetScheduledJobs(ctx context.Context, afterCursor string, 
 		now := time.Now()
 		for _, j := range result.Jobs {
 			j.QueriedAt = now
+			if c.queue == defaultQueueKey {
+				// When we poll from default queue, we don't know the queue key, so in rest of the system queue="".
+				// The job might contain a queue key `agents: queue: default`, in that case it will cause mismatch in local
+				// job queue key "" vs our configuration queue key "default".
+				// So this is forcing them to be equal.
+				j.AgentQueryRules = agenttags.RemoveTag(j.AgentQueryRules, "queue")
+			} else {
+				// Ensure the job has the queue tag. We queried a queue-specific
+				// endpoint, but it may be the default queue, which doesn't require
+				// `agents: queue: ...`, so the queue tag might not be present.
+				j.AgentQueryRules = agenttags.SetTag(j.AgentQueryRules, "queue", c.queue)
+			}
 		}
 	}
 	return result, retryAfter, err

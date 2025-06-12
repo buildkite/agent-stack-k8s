@@ -42,6 +42,12 @@ func SetTag(tags []string, key, val string) []string {
 	return tags
 }
 
+func RemoveTag(tags []string, key string) []string {
+	return slices.DeleteFunc(tags, func(tag string) bool {
+		return strings.HasPrefix(tag, key+"=")
+	})
+}
+
 // labelsFromTagMap converts map[key->value] to map[tag.buildkite.com/key->value],
 // with k8s compatibility checks
 func labelsFromTagMap(m map[string]string) (map[string]string, []error) {
