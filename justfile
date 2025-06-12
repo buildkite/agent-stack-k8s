@@ -72,3 +72,7 @@ cleanup-orphans *FLAGS:
     -run TestCleanupOrphanedPipelines \
     ./internal/integration \
     {{FLAGS}}
+
+# Checking to see if the current k8s user has enough permission to run integration test in the current context cluster.
+check-k8s-api-access:
+  ./utils/check-rbac.sh
