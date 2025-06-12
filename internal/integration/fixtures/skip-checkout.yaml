@@ -1,0 +1,11 @@
+
+steps:
+  - label: "No checkout"
+    agents:
+      queue: "{{.queue}}"
+    command: echo hello-skip-checkout
+    plugins:
+      - kubernetes:
+          checkout:
+            skip: true
+          podSpec: {}
