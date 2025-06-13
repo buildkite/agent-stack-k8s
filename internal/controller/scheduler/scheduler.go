@@ -169,7 +169,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 			return fmt.Errorf("%w: %w", model.ErrDuplicateJob, err)
 
 		case kerrors.IsInvalid(err):
-			var out string = ""
+			out := ""
 			outBytes, errYaml := yaml.Marshal(kjob)
 			if errYaml != nil {
 				out = fmt.Sprintf("%v", errYaml)
