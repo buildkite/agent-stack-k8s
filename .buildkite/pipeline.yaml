@@ -145,8 +145,6 @@ steps:
                   - *go-mod-cache-env
                 envFrom:
                   - secretRef:
-                      name: test-secrets
-                  - secretRef:
                       name: agent-stack-k8s-secrets
                 volumeMounts:
                   - mountPath: /etc/config.yaml
@@ -158,6 +156,10 @@ steps:
                   requests:
                     cpu: 1000m
                     memory: 512Mi
+      - cluster-secrets#v1.0.0:
+          variables:
+            BUILDKITE_TOKEN: integration_test_buildkite_api_token
+            BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
       - test-collector:
           files: junit-*.xml
           format: junit
