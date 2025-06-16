@@ -53,6 +53,7 @@ var (
 
 type Config struct {
 	Namespace                      string
+	ID                             string
 	Image                          string
 	JobPrefix                      string
 	AgentToken                     string
@@ -275,6 +276,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	}
 
 	kjob.Labels[config.UUIDLabel] = inputs.uuid
+	if w.cfg.ID != "" {
+		kjob.Labels[config.ControllerIDLabel] = w.cfg.ID
+	}
+
+	// These tag labels have no impact, consider moving them into annotation instead.
 	tagLabels, errs := agenttags.LabelsFromTags(inputs.agentQueryRules)
 	if len(errs) > 0 {
 		w.logger.Warn("converting all tags to labels", zap.Errors("errs", errs))
