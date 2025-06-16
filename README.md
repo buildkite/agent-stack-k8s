@@ -13,8 +13,6 @@ The Buildkite Agent Stack for Kubernetes (also known as `agent-stack-k8s`) is a 
 
 - A Kubernetes cluster.
 - A [Buildkite cluster](https://buildkite.com/docs/pipelines/clusters/manage-clusters) and [agent token](https://buildkite.com/docs/agent/v3/tokens) for this cluster.
-- A [self-hosted queue](https://buildkite.com/docs/pipelines/clusters/manage-queues#create-a-self-hosted-queue) for this Buildkite cluster.
-  - The UUID of this Buildkite cluster is also required. Learn how to do this in [How to find a Buildkite cluster's UUID](https://buildkite.com/docs/agent/v3/agent-stack-k8s/installation#how-to-find-a-buildkite-clusters-uuid).
 
 ## Documentation
 
