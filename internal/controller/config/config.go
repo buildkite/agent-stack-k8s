@@ -12,6 +12,7 @@ import (
 
 const (
 	UUIDLabel                             = "buildkite.com/job-uuid"
+	ControllerIDLabel                     = "buildkite.com/controller-id"
 	BuildURLAnnotation                    = "buildkite.com/build-url"
 	JobURLAnnotation                      = "buildkite.com/job-url"
 	PriorityAnnotation                    = "buildkite.com/job-priority"
@@ -55,6 +56,12 @@ type Config struct {
 	EnableQueuePause         bool          `json:"enable-queue-pause"       validate:"omitempty"`
 	WorkQueueLimit           int           `json:"work-queue-limit"         validate:"omitempty"`
 	// Agent endpoint is set in agent-config.
+
+	// ID is an optional uniquely ID string for the controller.
+	// This is useful when running multiple bk k8s controllers within the same k8s namespace.
+	// So the controller can target the correct pods.
+	// By default, if helm is used to install, this will be set as helm release full name.
+	ID string `json:"id" validate:"omitempty"`
 
 	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps" validate:"omitempty"`
 	K8sClientRateLimiterBurst int `json:"k8s-client-rate-limiter-burst" validate:"omitempty"`
@@ -123,6 +130,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt("job-creation-concurrency", c.JobCreationConcurrency)
 	enc.AddInt("max-in-flight", c.MaxInFlight)
 	enc.AddString("namespace", c.Namespace)
+	enc.AddString("id", c.ID)
 	if err := enc.AddArray("tags", c.Tags); err != nil {
 		return err
 	}
