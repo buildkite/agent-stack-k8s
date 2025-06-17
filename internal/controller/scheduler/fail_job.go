@@ -10,6 +10,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 
+	"github.com/buildkite/agent/v3/agent"
 	agentcore "github.com/buildkite/agent/v3/core"
 	"github.com/buildkite/agent/v3/logger"
 
@@ -94,7 +95,7 @@ func acquireAndFail(
 	}
 
 	var ignoreAgentInDispatches *bool
-	if err := jctr.Finish(ctx, agentcore.ProcessExit{Status: 1}, ignoreAgentInDispatches); err != nil {
+	if err := jctr.Finish(ctx, agentcore.ProcessExit{Status: 1, SignalReason: agent.SignalReasonStackError}, ignoreAgentInDispatches); err != nil {
 		zapLogger.Error("finishing job", zap.Error(err))
 		return fmt.Errorf("finishing job: %w", err)
 	}
