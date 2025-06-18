@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/roko"
 
 	"github.com/google/uuid"
@@ -297,6 +298,7 @@ func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Lo
 	log.Debug("Checking pod for failed init containers")
 
 	containerFails := make(map[string]*corev1.ContainerStateTerminated)
+	var lastFailExitCode int32
 
 	// If any init container fails, whether it's one we added specifically to
 	// check for pull failure or not, the pod won't run.
@@ -306,6 +308,7 @@ func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Lo
 			continue
 		}
 		containerFails[containerStatus.Name] = term
+		lastFailExitCode = term.ExitCode
 	}
 
 	if len(containerFails) == 0 {
@@ -322,7 +325,12 @@ func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Lo
 	// probably shouldn't interfere.
 	log.Info("One or more init containers failed. Failing.")
 	message := w.formatInitContainerFails(containerFails)
-	if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, message); err != nil {
+	failureInfo := FailureInfo{
+		Message:  message,
+		ExitCode: lastFailExitCode,
+		Reason:   agent.SignalReasonStackError,
+	}
+	if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, failureInfo); err != nil {
 		// Maybe the job was cancelled in the meantime?
 		log.Error("Could not fail Buildkite job", zap.Error(err))
 		podWatcherBuildkiteJobFailErrorsCounter.Inc()
@@ -477,7 +485,11 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		// We can acquire it and fail it ourselves.
 		log.Info("One or more job containers are waiting too long for images. Failing.")
 		message := w.formatImagePullFailureMessage(statuses)
-		if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, message); err != nil {
+		failureInfo := FailureInfo{
+			Message: message,
+			// Do we have a better status code to report here?
+		}
+		if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, failureInfo); err != nil {
 			podWatcherBuildkiteJobFailErrorsCounter.Inc()
 			// Maybe the job was acquired by an agent in the meantime?
 			// Maybe the job was cancelled in the meantime?

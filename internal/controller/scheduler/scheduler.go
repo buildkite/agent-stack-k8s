@@ -21,6 +21,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 	"github.com/buildkite/roko"
 
+	"github.com/buildkite/agent/v3/agent"
 	"github.com/buildkite/agent/v3/clicommand"
 
 	"github.com/distribution/reference"
@@ -1272,7 +1273,14 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 	}
 
 	opts := w.cfg.AgentConfig.ControllerOptions()
-	if err := acquireAndFail(ctx, w.logger, agentToken, w.cfg.JobPrefix, inputs.uuid, inputs.agentQueryRules, message, opts...); err != nil {
+	failureInfo := FailureInfo{
+		Message: message,
+		// In scheduler worker, often these failure are technically users error in YAML.
+		// Using "stack refused" seems to be the most reasonable choice but we don't have that.
+		// So using StackError is a temporary choice, subject to change
+		Reason: agent.SignalReasonStackError,
+	}
+	if err := acquireAndFail(ctx, w.logger, agentToken, w.cfg.JobPrefix, inputs.uuid, inputs.agentQueryRules, failureInfo, opts...); err != nil {
 		w.logger.Error("failed to acquire and fail the job on Buildkite", zap.Error(err))
 		schedulerBuildkiteJobFailErrorsCounter.Inc()
 		return err

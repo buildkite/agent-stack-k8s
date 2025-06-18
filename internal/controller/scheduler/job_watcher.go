@@ -8,6 +8,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
+	"github.com/buildkite/agent/v3/agent"
 
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -231,7 +232,12 @@ func (w *jobWatcher) fetchEvents(ctx context.Context, log *zap.Logger, kjob *bat
 }
 
 func (w *jobWatcher) failJob(ctx context.Context, log *zap.Logger, kjob *batchv1.Job, message string) {
-	if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, kjob, message); err != nil {
+	failureInfo := FailureInfo{
+		Message: message,
+		// We can know almost all failures triggered by job watcher are stack related error.
+		Reason: agent.SignalReasonStackError,
+	}
+	if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, kjob, failureInfo); err != nil {
 		// Maybe the job was cancelled in the meantime?
 		log.Error("Could not fail Buildkite job", zap.Error(err))
 		jobWatcherBuildkiteJobFailErrorsCounter.Inc()
