@@ -23,6 +23,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/buildkite/roko"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -211,6 +212,9 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config, custom
 		cfg.Tags = []string{fmt.Sprintf("queue=%s", t.QueueName())}
 	}
 	cfg.Debug = true
+	// During, we often have many test controller running in the same namespaces
+	// Setting a static identifer here so their informer aren't steping on each other.
+	cfg.ID = uuid.New().String()
 
 	go controller.Run(runCtx, t.Logger, t.Kubernetes, &cfg)
 }

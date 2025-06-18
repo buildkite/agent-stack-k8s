@@ -511,6 +511,7 @@ func TestBuild(t *testing.T) {
 		nil,
 		nil,
 		Config{
+			ID:                   "controller-1",
 			Namespace:            "buildkite",
 			Image:                "buildkite/agent:latest",
 			AgentTokenSecretName: "bkcq_1234567890",
@@ -538,6 +539,9 @@ func TestBuild(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Len(t, kjob.Spec.Template.Spec.Containers, 3)
+
+	controllerIDLabel := kjob.Labels["buildkite.com/controller-id"]
+	assert.Equal(t, controllerIDLabel, "controller-1")
 
 	container0 := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
 	if diff := cmp.Diff(container0.Image, "alpine:latest"); diff != "" {
