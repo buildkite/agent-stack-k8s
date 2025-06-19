@@ -140,6 +140,7 @@ func Run(
 	// a pod to run that job. It talks to the k8s API to create pods.
 	sched := scheduler.New(logger.Named("scheduler"), k8sClient, agentClient, scheduler.Config{
 		Namespace:                      cfg.Namespace,
+		ID:                             cfg.ID,
 		Image:                          cfg.Image,
 		AgentTokenSecretName:           cfg.AgentTokenSecret,
 		JobTTL:                         cfg.JobTTL,
@@ -161,7 +162,7 @@ func Run(
 		ImageCheckContainerMemoryLimit: cfg.ImageCheckContainerMemoryLimit,
 	})
 
-	informerFactory, err := NewInformerFactory(k8sClient, cfg.Namespace, cfg.Tags)
+	informerFactory, err := NewInformerFactory(k8sClient, cfg.Namespace, cfg.ID)
 	if err != nil {
 		logger.Fatal("failed to create informer", zap.Error(err))
 	}
@@ -234,26 +235,29 @@ func Run(
 func NewInformerFactory(
 	k8s kubernetes.Interface,
 	namespace string,
-	tags []string,
+	id string,
 ) (informers.SharedInformerFactory, error) {
-	labelsFromTags, errs := agenttags.LabelsFromTags(tags)
-	if len(errs) != 0 {
-		return nil, errors.Join(errs...)
-	}
-
-	requirements := make(labels.Requirements, 0, len(labelsFromTags)+1)
+	requirements := make(labels.Requirements, 0)
 	hasUUID, err := labels.NewRequirement(config.UUIDLabel, selection.Exists, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build uuid label selector for job manager: %w", err)
 	}
 	requirements = append(requirements, *hasUUID)
 
-	for l, v := range labelsFromTags {
-		hasLabel, err := labels.NewRequirement(l, selection.Equals, []string{v})
+	if id != "" {
+		hasRightID, err := labels.NewRequirement(config.ControllerIDLabel, selection.Equals, []string{id})
 		if err != nil {
-			return nil, fmt.Errorf("failed create label selector agent tag: %w", err)
+			return nil, fmt.Errorf("failed to build controller id label selector for job manager: %w", err)
 		}
-		requirements = append(requirements, *hasLabel)
+		requirements = append(requirements, *hasRightID)
+	} else {
+		// In the case when ID isn't specified, we shouldn't try to monitor those jobs that has ID label.
+		// Note that ID is set by the Helm chart, so this should not happen in usual installations.
+		noID, err := labels.NewRequirement(config.ControllerIDLabel, selection.DoesNotExist, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to build controller id label selector for job manager: %w", err)
+		}
+		requirements = append(requirements, *noID)
 	}
 
 	return informers.NewSharedInformerFactoryWithOptions(

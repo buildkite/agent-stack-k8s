@@ -158,7 +158,7 @@ func TestMatchJobTags(t *testing.T) {
 		{
 			jobTags:        map[string]string{},
 			agentTags:      map[string]string{"a": "x"},
-			expectedResult: false,
+			expectedResult: true,
 		},
 		{
 			jobTags:        map[string]string{"a": "x"},
@@ -173,7 +173,7 @@ func TestMatchJobTags(t *testing.T) {
 		{
 			jobTags:        map[string]string{"a": "x"},
 			agentTags:      map[string]string{"a": "x", "b": "y"},
-			expectedResult: false,
+			expectedResult: true,
 		},
 		{
 			jobTags:        map[string]string{"a": "x", "b": "y"},
@@ -198,6 +198,11 @@ func TestMatchJobTags(t *testing.T) {
 		{
 			jobTags:        map[string]string{"a": "x", "b": "*"},
 			agentTags:      map[string]string{"a": "x", "b": "y"},
+			expectedResult: true,
+		},
+		{
+			jobTags:        map[string]string{"tag1": "x", "tag2": "*"},
+			agentTags:      map[string]string{"tag1": "x", "tag2": "y", "tags3": "z"},
 			expectedResult: true,
 		},
 	} {

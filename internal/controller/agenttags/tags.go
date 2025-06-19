@@ -82,8 +82,8 @@ func LabelsFromTags(tags []string) (map[string]string, []error) {
 	return labels, append(errs1, errs2...)
 }
 
-// MatchJobTags reports whether each tag key in `agentTags` is also
-// present in `jobTags`, and the tag value in `jobTags` is either "*" or the
+// MatchJobTags reports whether each tag key in `jobTags` is also
+// present in `agentTags`, and the tag value in `jobTags` is either "*" or the
 // same as the tag value in `agentTags`.
 //
 // In the future, this may be expanded to: if the tag value `agentTags` is in some
@@ -91,15 +91,12 @@ func LabelsFromTags(tags []string) (map[string]string, []error) {
 // See https://buildkite.com/docs/agent/v3/cli-start#agent-targeting
 
 func MatchJobTags(agentTags, jobTags map[string]string) bool {
-	if len(agentTags) != len(jobTags) {
-		return false
-	}
-	for k, v := range agentTags {
-		jobTagValue, exists := jobTags[k]
+	for k, jobTagValue := range jobTags {
+		agentTagValue, exists := agentTags[k]
 		if !exists {
 			return false
 		}
-		if jobTagValue != "*" && jobTagValue != v {
+		if jobTagValue != "*" && jobTagValue != agentTagValue {
 			return false
 		}
 	}
