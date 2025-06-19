@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -19,6 +20,13 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+// FailureInfo contains data about a job failure for reporting to Buildkite.
+type FailureInfo struct {
+	Message  string
+	ExitCode int32
+	Reason   string
+}
+
 // acquireAndFailForObject figures out how to fail the BK job corresponding to
 // the k8s object (a pod or job) by inspecting the object's labels.
 func acquireAndFailForObject(
@@ -27,7 +35,7 @@ func acquireAndFailForObject(
 	k8sClient kubernetes.Interface,
 	cfg *config.Config,
 	obj metav1.Object,
-	message string,
+	failureInfo FailureInfo,
 ) error {
 	agentToken, err := fetchAgentToken(ctx, logger, k8sClient, obj.GetNamespace(), cfg.AgentTokenSecret)
 	if err != nil {
@@ -45,7 +53,7 @@ func acquireAndFailForObject(
 	tags := agenttags.TagsFromLabels(labels)
 	opts := cfg.AgentConfig.ControllerOptions()
 
-	if err := acquireAndFail(ctx, logger, agentToken, cfg.JobPrefix, jobUUID, tags, message, opts...); err != nil {
+	if err := acquireAndFail(ctx, logger, agentToken, cfg.JobPrefix, jobUUID, tags, failureInfo, opts...); err != nil {
 		logger.Error("failed to acquire and fail the job on Buildkite", zap.Error(err))
 		return err
 	}
@@ -61,7 +69,7 @@ func acquireAndFail(
 	jobPrefix string,
 	jobUUID string,
 	tags []string,
-	message string,
+	failureInfo FailureInfo,
 	options ...agentcore.ControllerOption,
 ) error {
 	opts := append([]agentcore.ControllerOption{
@@ -89,13 +97,19 @@ func acquireAndFail(
 		return fmt.Errorf("starting job: %w", err)
 	}
 
-	if err := jctr.WriteLog(ctx, message); err != nil {
+	if err := jctr.WriteLog(ctx, failureInfo.Message); err != nil {
 		zapLogger.Error("writing log", zap.Error(err))
 		return fmt.Errorf("writing log: %w", err)
 	}
 
 	var ignoreAgentInDispatches *bool
-	if err := jctr.Finish(ctx, agentcore.ProcessExit{Status: 1, SignalReason: agent.SignalReasonStackError}, ignoreAgentInDispatches); err != nil {
+
+	failureInfo.ExitCode = cmp.Or(failureInfo.ExitCode, 1)
+	// By default, we consider all failure triggered by the stack controller are stack errors
+	failureInfo.Reason = cmp.Or(failureInfo.Reason, string(agent.SignalReasonStackError))
+
+	processExit := agentcore.ProcessExit{Status: int(failureInfo.ExitCode), SignalReason: failureInfo.Reason}
+	if err := jctr.Finish(ctx, processExit, ignoreAgentInDispatches); err != nil {
 		zapLogger.Error("finishing job", zap.Error(err))
 		return fmt.Errorf("finishing job: %w", err)
 	}
