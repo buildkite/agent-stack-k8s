@@ -8,7 +8,7 @@ replace github.com/mitchellh/mapstructure => github.com/triarius/mapstructure v1
 
 require (
 	github.com/Khan/genqlient v0.8.1
-	github.com/buildkite/agent/v3 v3.98.2
+	github.com/buildkite/agent/v3 v3.100.0
 	github.com/buildkite/go-buildkite/v3 v3.13.0
 	github.com/buildkite/roko v1.3.1
 	github.com/distribution/reference v0.6.0
@@ -83,7 +83,7 @@ require (
 	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.8.1 // indirect
 	github.com/brunoscheufler/aws-ecs-metadata-go v0.0.0-20221221133751-67e37ae746cd // indirect
-	github.com/buildkite/go-pipeline v0.13.3 // indirect
+	github.com/buildkite/go-pipeline v0.14.0 // indirect
 	github.com/buildkite/interpolate v0.1.5 // indirect
 	github.com/buildkite/shellwords v0.0.0-20180315110454-59467a9b8e10 // indirect
 	github.com/cenkalti/backoff v1.1.1-0.20171020064038-309aa717adbf // indirect
