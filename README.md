@@ -12,7 +12,7 @@ The Buildkite Agent Stack for Kubernetes (also known as `agent-stack-k8s`) is a 
 ## Requirements
 
 - A Kubernetes cluster.
-- A [Buildkite cluster](https://buildkite.com/docs/pipelines/clusters/manage-clusters) and [agent token](https://buildkite.com/docs/agent/v3/tokens) for this cluster.
+- A [Buildkite Agent Token](https://buildkite.com/organizations/~/clusters/~/tokens).
 
 ## Documentation
 
