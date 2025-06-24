@@ -4,8 +4,6 @@ go 1.24.0
 
 toolchain go1.24.1
 
-replace github.com/mitchellh/mapstructure => github.com/triarius/mapstructure v1.5.0-squash-inline
-
 require (
 	github.com/Khan/genqlient v0.8.1
 	github.com/buildkite/agent/v3 v3.100.0
