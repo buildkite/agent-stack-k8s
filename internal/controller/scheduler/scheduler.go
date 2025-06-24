@@ -1081,14 +1081,14 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 	//
 	// The very first init container prepares the workspace:
 	// - chown the workspace directory according to the security context
-	// - make a sockets directory usable by any user
+	// - make /workspace/{build,plugins,sockets} directories usable by any user
 	// - copy buildkite-agent and tini-static into /workspace
 	//
 	// We also use init containers to check that images can be pulled before
 	// any other containers run.
 	containerArgs.WriteString(`
-mkdir /workspace/sockets
-chmod 777 /workspace/sockets
+mkdir /workspace/build /workspace/plugins /workspace/sockets
+chmod 777 /workspace/build /workspace/plugins /workspace/sockets
 cp /usr/local/bin/buildkite-agent /sbin/tini-static /workspace
 `)
 
