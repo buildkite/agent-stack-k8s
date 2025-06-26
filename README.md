@@ -14,13 +14,28 @@ The Buildkite Agent Stack for Kubernetes (also known as `agent-stack-k8s`) is a 
 - A Kubernetes cluster.
 - A [Buildkite Agent Token](https://buildkite.com/organizations/~/clusters/~/tokens).
 
+## Usage
+
+The simplest way to launch a stack on the default queue:
+
+```sh
+helm install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
+    --set agentToken=<buildkite-agent-token>
+```
+
+Specify a different queue using tags:
+
+```sh
+helm install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
+    --set agentToken=<buildkite-agent-token> \
+    --set-json 'config.tags=["queue=arm64"]'
+```
+
+Full instructions can be found [in the documentation](https://buildkite.com/docs/agent/v3/agent-stack-k8s/installation).
+
 ## Documentation
 
 Comprehensive documentation for the Buildkite Agent Stack for Kubernetes controller can be found in the [Agent Stack for Kubernetes section of the Buildkite Docs](https://buildkite.com/docs/agent/v3/agent-stack-k8s).
-
-### Installation
-
-Installation instructions can be found on the [Installation](https://buildkite.com/docs/agent/v3/agent-stack-k8s/installation) page of the Agent Stack for Kubernetes documentation.
 
 ## Development
 
