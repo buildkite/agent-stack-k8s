@@ -45,6 +45,8 @@ func (t *authedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		reqCopy.Header.Set("Authorization", "Token "+t.token)
 	}
 
+	reqCopy.Header.Set("User-Agent", userAgent())
+
 	reqBodyClosed = true
 	return t.wrapped.RoundTrip(reqCopy)
 }
@@ -104,4 +106,11 @@ func (t *logTransport) RoundTrip(in *http.Request) (out *http.Response, err erro
 		log.Println(b)
 	}
 	return
+}
+
+func userAgent() string {
+	// Ideally, we want to put a version number here too.
+	// But that requires a bit of work, making version as an embed, and slightly change how we release this controller.
+	// So I will kick the can down the road a bit.
+	return "buildkite-agent-k8s-stack"
 }
