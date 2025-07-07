@@ -30,7 +30,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes"
@@ -615,158 +614,12 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	initContainers := []corev1.Container{w.createWorkspaceSetupContainer(podSpec, workspaceVolume)}
 
-	// Use init containers to check that images can be used or pulled before
-	// any other containers run. These are added _after_ podSpecPatch is applied
-	// since podSpecPatch may freely modify each container's image ref or add
-	// more containers.
-	// This process also checks that image refs are well-formed so we can fail
-	// the job early.
-	// Init containers run before the agent, so we can acquire and fail the job
-	// if an init container stays in ImagePullBackOff for too long.
-	//
-	// Rank pull policy by preference. If two containers specify different pull
-	// policies for the same image, the most preferred policy is used for the
-	// image check.
-	// Always is most preferred, Never is less preferred.
-	var pullPolicyPreference = map[corev1.PullPolicy]int{
-		corev1.PullNever:        1, // least preferred
-		corev1.PullIfNotPresent: 2,
-		corev1.PullAlways:       3, // most preferred
-	}
-
 	// First decide which images to pre-check and what pull policy to use.
-	type policyAndRef struct {
-		policy corev1.PullPolicy
-		ref    reference.Reference
-	}
-	type imageParseErr struct {
-		container string
-		image     string
-		err       error
-	}
-	var invalidRefs []imageParseErr
-
-	preflightImageChecks := make(map[string]policyAndRef)
-	for i := range podSpec.Containers {
-		c := &podSpec.Containers[i]
-
-		// Parse the image ref for error reporting and policy purposes.
-		ref, err := reference.Parse(c.Image)
-		if err != nil {
-			invalidRefs = append(invalidRefs, imageParseErr{container: c.Name, image: c.Image, err: err})
-			continue
-		}
-
-		// "nominal policy" = "the image pull policy we would use if there
-		// was only one container".
-		// Actually we have two containers: an image check init container
-		// and an app container. The nominal policy is what mainly applies
-		// to image check containers.
-		//
-		// The nominal policy is computed as follows:
-		//  - If the container already has a pull policy, use that.
-		//  - Otherwise, use the DefaultImageCheckPullPolicy, if configured.
-		//  - Otherwise, use the DefaultImagePullPolicy, if configured.
-		//  - Otherwise, use Always or IfNotPresent depending on whether or not
-		//    the image ref is pinned by a digest.
-		nominalPolicy := cmp.Or(
-			c.ImagePullPolicy,
-			w.cfg.DefaultImageCheckPullPolicy,
-			w.cfg.DefaultImagePullPolicy,
-			defaultPullPolicyForImage(ref),
-		)
-
-		// The actual policy for this app container, accounting for defaults
-		// and pre-pulling by the image check container.
-		//
-		// 	- If the container already has a pull policy, use that.
-		//  - Otherwise, use the DefaultImagePullPolicy, if configured.
-		//  - Otherwise, use Always or IfNotPresent depending on whether or not
-		//    the image ref is pinned by a digest.
-		//
-		// DefaultImageCheckPullPolicy doesn't apply here, because this isn't
-		// an image check container - it's an app container!
-		//
-		// If the nominal policy is Always, then we'll create an imagecheck
-		// init container with the Always policy. But then there's no need to
-		// pull it again later, so we downgrade the app container's policy from
-		// Always to IfNotPresent.
-		c.ImagePullPolicy = cmp.Or(
-			c.ImagePullPolicy,
-			w.cfg.DefaultImagePullPolicy,
-			defaultPullPolicyForImage(ref),
-		)
-		if nominalPolicy == corev1.PullAlways && c.ImagePullPolicy == corev1.PullAlways {
-			c.ImagePullPolicy = corev1.PullIfNotPresent
-		}
-
-		pnr, has := preflightImageChecks[c.Image]
-		if !has {
-			w.logger.Debug("setting initial pull policy for preflight image check",
-				zap.String("container", c.Name),
-				zap.String("image", c.Image),
-				zap.String("new-policy", string(nominalPolicy)),
-			)
-			preflightImageChecks[c.Image] = policyAndRef{
-				policy: nominalPolicy,
-				ref:    ref,
-			}
-			continue
-		}
-
-		// Pick the more preferred pull policy of either what is present in
-		// preflightImagePulls or what the user set for c.ImagePullPolicy.
-		// Most to least preferred: Always, default, IfNotPresent, Never.
-		// (If two containers specify different policies, then to check that
-		// both will run, using the policy more likely to pull means the other
-		// is more likely to have an image if it succeeds, and more likely to
-		// fail quickly if the pull fails.
-		r := pullPolicyPreference[nominalPolicy]
-		s := pullPolicyPreference[pnr.policy]
-		if r > s {
-			w.logger.Debug("updating pull policy for preflight image check",
-				zap.String("container", c.Name),
-				zap.String("image", c.Image),
-				zap.String("old-policy", string(pnr.policy)),
-				zap.String("new-policy", string(nominalPolicy)),
-			)
-			preflightImageChecks[c.Image] = policyAndRef{
-				policy: nominalPolicy,
-				ref:    ref,
-			}
-		}
-	}
-
-	// We don't need to add more init containers to check images when existing
-	// init containers will do this for us implicitly.
-	cullCheckForExisting := func(c corev1.Container) {
-		if _, err := reference.Parse(c.Image); err != nil {
-			invalidRefs = append(invalidRefs, imageParseErr{container: c.Name, image: c.Image, err: err})
-			return
-		}
-
-		pnr, has := preflightImageChecks[c.Image]
-		if !has {
-			return // not an image we'd add a check for
-		}
-
-		r := pullPolicyPreference[c.ImagePullPolicy]
-		s := pullPolicyPreference[pnr.policy]
-		// If the existing init container has the same or higher preference than
-		// the image check container we would add, then no need to add it.
-		if r >= s {
-			w.logger.Debug("removing preflight image check because of lower policy preference",
-				zap.String("container", c.Name),
-				zap.String("image", c.Image),
-				zap.String("old-policy", string(pnr.policy)),
-			)
-			delete(preflightImageChecks, c.Image)
-		}
-	}
-
-	cullCheckForExisting(initContainers[0])    // the workspace setup container
+	preflightImageChecks, invalidRefs := selectImagesToCheck(w, podSpec)
+	// the workspace setup container may not need image check container.
+	preflightImageChecks, invalidRefs = cullCheckForExisting(w, preflightImageChecks, invalidRefs, initContainers[0])
 	for _, c := range podSpec.InitContainers { // user-defined init containers
-		cullCheckForExisting(c)
+		preflightImageChecks, invalidRefs = cullCheckForExisting(w, preflightImageChecks, invalidRefs, c)
 	}
 
 	// If any of the image refs were bad, return a single error with all of them
@@ -794,58 +647,16 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		return nil, errors.New("invalid image references\n\n" + tw.Render())
 	}
 
-	// Use default resource limits for pre-flight image check containers, if not provided
-	var imageCheckContainerCPULimit resource.Quantity
-	var imageCheckContainerMemoryLimit resource.Quantity
-
-	if imageCheckContainerCPULimit, err = resource.ParseQuantity(w.cfg.ImageCheckContainerCPULimit); err != nil {
-		imageCheckContainerCPULimit, _ = resource.ParseQuantity(config.DefaultImageCheckContainerCPULimit)
-	}
-	if imageCheckContainerMemoryLimit, err = resource.ParseQuantity(w.cfg.ImageCheckContainerMemoryLimit); err != nil {
-		imageCheckContainerMemoryLimit, _ = resource.ParseQuantity(config.DefaultImageCheckContainerMemoryLimit)
-	}
-
-	// Create the pre-flight image check containers.
-	i := 0
-	for image, pnr := range preflightImageChecks {
-		name := ImageCheckContainerNamePrefix + strconv.Itoa(i)
-
-		policy := cmp.Or(pnr.policy, w.cfg.DefaultImageCheckPullPolicy, defaultPullPolicyForImage(pnr.ref))
-
-		w.logger.Debug(
-			"adding preflight image check init container",
-			zap.String("name", name),
-			zap.String("image", image),
-			zap.String("policy", string(policy)),
-		)
-		initContainers = append(initContainers, corev1.Container{
-			Name:            name,
-			Image:           image,
-			ImagePullPolicy: policy,
-			// `tini-static --version` is sorta like `true`, but:
-			// (a) always exists (we *just* copied it into /workspace), and
-			// (b) is statically compiled, so should be compatible with whatever
-			//     container image we're in - no assumption of glibc or musl.
-			Command: []string{"/workspace/tini-static"},
-			Args:    []string{"--version"},
-			VolumeMounts: []corev1.VolumeMount{{
-				Name:      workspaceVolume.Name,
-				MountPath: "/workspace",
-			}},
-			// Apply container resource requests to imagecheck containers
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-					corev1.ResourceMemory: resource.MustParse("64Mi"),
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    imageCheckContainerCPULimit,
-					corev1.ResourceMemory: imageCheckContainerMemoryLimit,
-				},
-			},
-		})
-		i++
-	}
+	// Use init containers to check that images can be used or pulled before
+	// any other containers run. These are added _after_ podSpecPatch is applied
+	// since podSpecPatch may freely modify each container's image ref or add
+	// more containers.
+	// This process also checks that image refs are well-formed so we can fail
+	// the job early.
+	// Init containers run before the agent, so we can acquire and fail the job
+	// if an init container stays in ImagePullBackOff for too long.
+	imageCheckInitContainers := makeImageCheckContainers(w, preflightImageChecks, workspaceVolume.Name)
+	initContainers = append(initContainers, imageCheckInitContainers...)
 
 	// Prepend all the init containers defined above to the podspec.
 	podSpec.InitContainers = append(initContainers, podSpec.InitContainers...)
