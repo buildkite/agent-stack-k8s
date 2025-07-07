@@ -589,6 +589,12 @@
             }
           }
         },
+        "skip-image-check-containers": {
+          "type": "boolean",
+          "description": "Disable and skip all imagecheck-* init containers",
+          "default": false,
+          "examples": [true]
+        },
         "image-check-container-cpu-limit": {
           "type": "string",
           "description": "Configures the CPU resource limits for all imagecheck-* containers",

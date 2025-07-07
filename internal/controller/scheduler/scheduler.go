@@ -73,6 +73,7 @@ type Config struct {
 	PodSpecPatch                   *corev1.PodSpec
 	ProhibitK8sPlugin              bool
 	AllowPodSpecPatchUnsafeCmdMod  bool
+	SkipImageCheckContainers       bool
 	ImageCheckContainerCPULimit    string
 	ImageCheckContainerMemoryLimit string
 }
@@ -655,8 +656,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// the job early.
 	// Init containers run before the agent, so we can acquire and fail the job
 	// if an init container stays in ImagePullBackOff for too long.
-	imageCheckInitContainers := makeImageCheckContainers(w, preflightImageChecks, workspaceVolume.Name)
-	initContainers = append(initContainers, imageCheckInitContainers...)
+	if !w.cfg.SkipImageCheckContainers {
+		imageCheckInitContainers := makeImageCheckContainers(w, preflightImageChecks, workspaceVolume.Name)
+		initContainers = append(initContainers, imageCheckInitContainers...)
+	}
 
 	// Prepend all the init containers defined above to the podspec.
 	podSpec.InitContainers = append(initContainers, podSpec.InitContainers...)
