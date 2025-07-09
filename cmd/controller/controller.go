@@ -156,6 +156,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		false,
 		"Permits PodSpecPatch to modify the command or args fields of stack-provided containers. See the warning in the README before enabling this option",
 	)
+	cmd.Flags().Bool(
+		"experimental-job-reservation-support",
+		false,
+		"Please contact us before enabling this flag. This feature enables job reservation support: Better job observability, scalable job fetching!",
+	)
 	cmd.Flags().Int(
 		"pagination-page-size",
 		config.DefaultPaginationPageSize,

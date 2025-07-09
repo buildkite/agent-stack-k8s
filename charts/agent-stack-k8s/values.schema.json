@@ -336,6 +336,12 @@
           "title": "Permits PodSpecPatch to modify the command or args fields of containers. See the warning in the README before enabling this option",
           "examples": [false]
         },
+        "experimental-job-reservation-support": {
+          "type": "boolean",
+          "default": false,
+          "title": "Experimental - does not fully function yet. This experiment enables job reservation support for better job observability and scalable job fetching. If you try it, please let us know about your experiences by filing an issue on https://github.com/buildkite/agent-stack-k8s",
+          "examples": [false]
+        },
         "workspaceVolume": {
           "$ref": "https://kubernetesjsonschema.dev/master/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
         },
