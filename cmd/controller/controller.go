@@ -159,7 +159,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(
 		"experimental-job-reservation-support",
 		false,
-		"Please contact us before enabling this flag. This feature enables job reservation support: Better job observability, scalable job fetching!",
+		"Experimental - does not fully function yet. This experiment enables job reservation support for better job observability and scalable job fetching. If you try it, please let us know about your experiences by filing an issue on https://github.com/buildkite/agent-stack-k8s",
 	)
 	cmd.Flags().Int(
 		"pagination-page-size",
