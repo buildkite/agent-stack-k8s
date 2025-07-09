@@ -85,6 +85,7 @@ type Config struct {
 	DefaultImagePullPolicy      corev1.PullPolicy `json:"default-image-pull-policy"       validate:"omitempty"`
 	DefaultImageCheckPullPolicy corev1.PullPolicy `json:"default-image-check-pull-policy" validate:"omitempty"`
 
+	SkipImageCheckContainers       bool   `json:"skip-image-check-containers"           validate:"omitempty"`
 	ImageCheckContainerCPULimit    string `json:"image-check-container-cpu-limit"       validate:"omitempty"`
 	ImageCheckContainerMemoryLimit string `json:"image-check-container-memory-limit"    validate:"omitempty"`
 

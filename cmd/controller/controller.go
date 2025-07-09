@@ -181,6 +181,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultWorkQueueLimit,
 		"Sets the maximum number of Jobs the controller will hold in the work queue.",
 	)
+	cmd.Flags().Bool(
+		"skip-image-check-containers",
+		false,
+		"Disable and skip all imagecheck-* init containers",
+	)
 	cmd.Flags().String(
 		"image-check-container-cpu-limit",
 		config.DefaultImageCheckContainerCPULimit,
