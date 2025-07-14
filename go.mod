@@ -4,7 +4,7 @@ go 1.24.3
 
 require (
 	github.com/Khan/genqlient v0.8.1
-	github.com/buildkite/agent/v3 v3.101.0
+	github.com/buildkite/agent/v3 v3.102.1
 	github.com/buildkite/go-buildkite/v3 v3.13.0
 	github.com/buildkite/roko v1.3.1
 	github.com/distribution/reference v0.6.0
@@ -221,7 +221,7 @@ require (
 	golang.org/x/time v0.12.0 // indirect
 	golang.org/x/tools v0.34.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
-	google.golang.org/api v0.239.0 // indirect
+	google.golang.org/api v0.240.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250603155806-513f23925822 // indirect
 	google.golang.org/grpc v1.73.0 // indirect
