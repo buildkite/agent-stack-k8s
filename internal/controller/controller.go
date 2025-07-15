@@ -15,6 +15,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/deduper"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/limiter"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/reserver"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -119,10 +120,10 @@ func Run(
 		return
 	}
 
-	// **************************************************************
-	// ***                        JOB FLOW                        ***
-	// ***       Monitor -> Limiter -> Deduper -> Scheduler       ***
-	// **************************************************************
+	// **************************************************************************
+	// ***                        JOB FLOW                                    ***
+	// ***       Monitor -> Reserver -> Limiter -> Deduper -> Scheduler       ***
+	// **************************************************************************
 	//
 	// Monitor polls Buildkite for jobs. It passes them to Limiter.
 	m, err := monitor.New(logger.Named("monitor"), k8sClient, agentClient, monitor.Config{
@@ -173,7 +174,7 @@ func Run(
 	}
 
 	// Deduper prevents multiple pods being scheduled for the same job.
-	// It passes jobs to the scheduler.
+	// It passes jobs to the final scheduler.
 	deduper := deduper.New(logger.Named("deduper"), sched)
 	if err := deduper.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Fatal("failed to register deduper informer", zap.Error(err))
@@ -190,6 +191,16 @@ func Run(
 	if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Fatal("failed to register limiter informer", zap.Error(err))
 	}
+
+	// Reserver marks the job as reserved in backend if possible.
+	// Then pases jobs to the limiter.
+	//
+	// This happens right after monitor so we can maximize our collected signals.
+	// But it does bring a trade-off of more likely reservation expiration.
+	reserver := reserver.New(logger.Named("reserver"), agentClient,
+		limiter,
+		cfg.ExperimentalJobReservationSupport,
+	)
 
 	// PodCompletionWatcher watches k8s for pods where the agent has terminated,
 	// in order to clean up the pod. This is necessary because "sidecars" are
@@ -229,7 +240,7 @@ func Run(
 	select {
 	case <-ctx.Done():
 		logger.Info("controller exiting", zap.Error(ctx.Err()))
-	case err := <-m.Start(ctx, limiter):
+	case err := <-m.Start(ctx, reserver):
 		logger.Info("monitor failed", zap.Error(err))
 	}
 }
