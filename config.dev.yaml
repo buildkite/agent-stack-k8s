@@ -6,6 +6,8 @@ agent-config:
   # a different instance of Buildkite itself available to run.
   endpoint: http://agent.buildkite.localhost/v3
 
+experimental-job-reservation-support: true
+
 pod-spec-patch:
   hostAliases:
     # Minikube specific with docker driver.

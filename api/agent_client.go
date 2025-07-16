@@ -17,7 +17,7 @@ import (
 // This is a special keyword supported on backend for polling from the current default queue in the cluster.
 const defaultQueueKey = "_default"
 
-func NewAgentClient(token, endpoint, clusterID, queue string, agentQueryRules []string) (*AgentClient, error) {
+func NewAgentClient(token, endpoint, clusterID, queue string, agentQueryRules []string, reseverationSupport bool) (*AgentClient, error) {
 	if endpoint == "" {
 		endpoint = "https://agent.buildkite.com/v3"
 	}
@@ -37,8 +37,9 @@ func NewAgentClient(token, endpoint, clusterID, queue string, agentQueryRules []
 			Timeout:   60 * time.Second,
 			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, token)),
 		},
-		clusterID: clusterID,
-		queue:     queue,
+		clusterID:          clusterID,
+		queue:              queue,
+		reservationSupport: reseverationSupport,
 	}, nil
 }
 
@@ -48,6 +49,8 @@ type AgentClient struct {
 	httpClient *http.Client
 	clusterID  string // or "unclustered"
 	queue      string
+	// This impacts a number of endpoints' query parameters
+	reservationSupport bool
 }
 
 // AgentError is the JSON object of the response body returned when the HTTP
@@ -161,6 +164,11 @@ func (c *AgentClient) GetJobToRun(ctx context.Context, id string) (result *Agent
 		"scheduled_jobs", railsPathEscape(id),
 	)
 
+	if c.reservationSupport {
+		v := make(url.Values)
+		v.Add("include_reserved", "true")
+		u.RawQuery = v.Encode()
+	}
 	resp, err := c.httpClient.Get(u.String())
 	if err != nil {
 		return nil, 0, err
@@ -206,11 +214,38 @@ type BatchReserveJobsResult struct {
 }
 
 // ReserveJobs reserves a batch of jobs.
-func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string) (result *BatchReserveJobsResult, err error) {
-	// TODO: implement me as subsequent PRs in PB-140
-	return &BatchReserveJobsResult{
-		ReservedJobUUIDs: ids,
-	}, nil
+func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string) (result *BatchReserveJobsResult, retryAfter time.Duration, err error) {
+	u := c.endpoint.JoinPath(
+		"clusters", railsPathEscape(c.clusterID),
+		"queues", railsPathEscape(c.queue),
+		"jobs", "mass_reserve",
+	)
+
+	requestBody := map[string][]string{
+		"job_uuids": ids,
+	}
+
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// TODO: there is a size limit in this reserve api. we need to batch these by 1000
+	// TODO: as more support coming to support reservation updates, we will override the default timeout to a much smaller
+	// value.
+	req, err := http.NewRequestWithContext(ctx, "PUT", u.String(), strings.NewReader(string(jsonBody)))
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	return decodeResponse[BatchReserveJobsResult](resp)
 }
 
 func decodeResponse[T any](resp *http.Response) (result *T, retryAfter time.Duration, err error) {
