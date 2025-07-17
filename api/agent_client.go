@@ -199,6 +199,20 @@ func (c *AgentClient) GetJobState(ctx context.Context, id string) (result *Agent
 	return decodeResponse[AgentJobState](resp)
 }
 
+// ReserveJobBatchResult describes the result of a batch job reservation.
+type BatchReserveJobsResult struct {
+	ReservedJobUUIDs    []string `json:"reserved"`
+	NotReservedJobUUIDs []string `json:"not_reserved"`
+}
+
+// ReserveJobs reserves a batch of jobs.
+func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string) (result *BatchReserveJobsResult, err error) {
+	// TODO: implement me as subsequent PRs in PB-140
+	return &BatchReserveJobsResult{
+		ReservedJobUUIDs: ids,
+	}, nil
+}
+
 func decodeResponse[T any](resp *http.Response) (result *T, retryAfter time.Duration, err error) {
 	retryAfter = readRetryAfter(resp)
 
