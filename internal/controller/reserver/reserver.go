@@ -58,7 +58,9 @@ func (r *Reserver) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob
 		job_ids = append(job_ids, job.ID)
 	}
 
-	result, err := r.agentClient.ReserveJobs(ctx, job_ids)
+	r.logger.Info("reserving jobs via Agent API...", zap.Int("count", len(job_ids)))
+
+	result, _, err := r.agentClient.ReserveJobs(ctx, job_ids)
 	if err != nil {
 		return fmt.Errorf("error when reserving jobs: %w", err)
 	}
