@@ -8,7 +8,7 @@ set -eu
 echo "~~~ :buildkite::key::aws: Requesting an OIDC token for AWS from Buildkite"
 
 role_arn='arn:aws:iam::172840064832:role/pipeline-buildkite-kubernetes-stack-kubernetes-agent-stack'
-BUILDKITE_OIDC_TOKEN="$(buildkite-agent oidc request-token --audience sts.amazonaws.com)"
+BUILDKITE_OIDC_TOKEN="$(buildkite-agent oidc request-token --audience sts.amazonaws.com  --aws-session-tag organization_id,organization_slug,pipeline_slug)"
 
 echo "~~~ :aws: Assuming role using OIDC token"
 ASSUME_ROLE_RESPONSE="$(aws sts assume-role-with-web-identity \
