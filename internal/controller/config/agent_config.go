@@ -53,6 +53,9 @@ type AgentConfig struct {
 	VerificationJWKSFile        *string        `json:"verification-jwks-file,omitempty"`        // BUILDKITE_AGENT_VERIFICATION_JWKS_FILE
 	VerificationFailureBehavior *string        `json:"verification-failure-behavior,omitempty"` // BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR
 	VerificationJWKSVolume      *corev1.Volume `json:"verificationJWKSVolume,omitempty"`
+
+	// How many seconds will children agent wait for connecting to server agent.
+	BootstrapTimeout *string `json:"bootstrap-timeout,omitempty"` // BUILDKITE_KUBERNETES_BOOTSTRAP_CONNECTION_TIMEOUT
 }
 
 func (a *AgentConfig) ControllerOptions() []agentcore.ControllerOption {
@@ -175,6 +178,9 @@ func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {
 func (a *AgentConfig) ApplyToCheckout(ctr *corev1.Container) {
 	if a == nil || ctr == nil {
 		return
+	}
+	if a.BootstrapTimeout != nil {
+		appendToEnv(ctr, "BUILDKITE_KUBERNETES_BOOTSTRAP_CONNECTION_TIMEOUT", *a.BootstrapTimeout)
 	}
 	a.applyHooksVolumeTo(ctr)
 	a.applyPluginsVolumeTo(ctr)
