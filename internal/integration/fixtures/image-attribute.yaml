@@ -1,0 +1,14 @@
+image: ruby:alpine
+
+steps:
+  - label: "Node alpine"
+    image: node:22-alpine
+    agents:
+      queue: "{{.queue}}"
+    command: yarn --version
+
+  # This job should take the global image attribute
+  - label: "Ruby alpine"
+    agents:
+      queue: "{{.queue}}"
+    command: ruby --version

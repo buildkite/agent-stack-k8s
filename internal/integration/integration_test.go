@@ -836,3 +836,17 @@ func TestSkipCheckoutContainer(t *testing.T) {
 	tc.AssertSuccess(ctx, build)
 	tc.AssertLogsContain(build, "hello-skip-checkout")
 }
+
+func TestImageAttribute(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "image-attribute.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+}
