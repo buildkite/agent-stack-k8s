@@ -419,10 +419,14 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	}
 
 	if len(podSpec.Containers) == 0 {
+		image := w.cfg.Image
+		if customImage := inputs.envMap["BUILDKITE_IMAGE"]; customImage != "" {
+			image = inputs.envMap["BUILDKITE_IMAGE"]
+		}
 		// Create a default command container named "container-0".
 		c := corev1.Container{
 			Name:         "container-0",
-			Image:        w.cfg.Image,
+			Image:        image,
 			Command:      commandContainerCommand,
 			Args:         commandContainerArgs,
 			WorkingDir:   "/workspace",
