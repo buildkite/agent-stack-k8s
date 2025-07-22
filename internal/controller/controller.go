@@ -114,6 +114,7 @@ func Run(
 		agentTokenIdentity.ClusterUUID,
 		queue,
 		cfg.Tags,
+		api.WithReservation(cfg.ExperimentalJobReservationSupport),
 	)
 	if err != nil {
 		logger.Error("Couldn't create Agent API client", zap.Error(err))
