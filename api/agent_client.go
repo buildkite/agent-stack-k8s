@@ -218,6 +218,11 @@ func (c *AgentClient) GetJobState(ctx context.Context, id string) (result *Agent
 	return decodeResponse[AgentJobState](resp)
 }
 
+type ReserveJobsRequest struct {
+	JobUUIDs                 []string `json:"job_uuids"`
+	ReservationExpirySeconds int      `json:"reservation_expiry_seconds,omitzero"`
+}
+
 // ReserveJobBatchResult describes the result of a batch job reservation.
 type BatchReserveJobsResult struct {
 	ReservedJobUUIDs    []string `json:"reserved"`
@@ -225,7 +230,7 @@ type BatchReserveJobsResult struct {
 }
 
 // ReserveJobs reserves a batch of jobs.
-func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string) (result *BatchReserveJobsResult, retryAfter time.Duration, err error) {
+func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string, expiry time.Duration) (result *BatchReserveJobsResult, retryAfter time.Duration, err error) {
 	if !c.reservation {
 		// We don't expect this to happen in prod. It's mainly a defensive mechanism.
 		return nil, 0, errors.New("reservation not enabled")
@@ -236,8 +241,9 @@ func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string) (result *Ba
 		"jobs", "mass_reserve",
 	)
 
-	requestBody := map[string][]string{
-		"job_uuids": ids,
+	requestBody := ReserveJobsRequest{
+		JobUUIDs:                 ids,
+		ReservationExpirySeconds: int(expiry.Seconds()),
 	}
 
 	jsonBody, err := json.Marshal(requestBody)

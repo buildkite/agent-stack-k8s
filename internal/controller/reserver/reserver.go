@@ -3,6 +3,7 @@ package reserver
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
@@ -53,14 +54,14 @@ func (r *Reserver) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob
 		return r.handler.HandleMany(ctx, jobs)
 	}
 
-	var job_ids []string
+	var jobIDs []string
 	for _, job := range jobs {
-		job_ids = append(job_ids, job.ID)
+		jobIDs = append(jobIDs, job.ID)
 	}
 
-	r.logger.Info("reserving jobs via Agent API...", zap.Int("count", len(job_ids)))
+	r.logger.Info("reserving jobs via Agent API...", zap.Int("count", len(jobIDs)))
 
-	result, _, err := r.agentClient.ReserveJobs(ctx, job_ids)
+	result, _, err := r.agentClient.ReserveJobs(ctx, jobIDs, 15*time.Minute)
 	if err != nil {
 		return fmt.Errorf("error when reserving jobs: %w", err)
 	}
