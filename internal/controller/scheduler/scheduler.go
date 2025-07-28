@@ -43,6 +43,7 @@ const (
 	CopyAgentContainerName        = "copy-agent"
 	ImageCheckContainerNamePrefix = "imagecheck-"
 	CheckoutContainerName         = "checkout"
+	CommandCommanderName          = "container-0"
 )
 
 var errK8sPluginProhibited = errors.New("the kubernetes plugin is prohibited by this controller, but was configured on this job")
@@ -419,14 +420,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	}
 
 	if len(podSpec.Containers) == 0 {
-		image := w.cfg.Image
-		if customImage := inputs.envMap["BUILDKITE_IMAGE"]; customImage != "" {
-			image = inputs.envMap["BUILDKITE_IMAGE"]
-		}
-		// Create a default command container named "container-0".
+		// Create a default command container
 		c := corev1.Container{
-			Name:         "container-0",
-			Image:        image,
+			Name:         CommandCommanderName,
+			Image:        w.cfg.Image,
 			Command:      commandContainerCommand,
 			Args:         commandContainerArgs,
 			WorkingDir:   "/workspace",
@@ -446,7 +443,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				},
 				{
 					Name:  "BUILDKITE_SOCKETS_PATH",
-					Value: "/workspace/sockets/container-0",
+					Value: "/workspace/sockets/" + CommandCommanderName,
 				},
 			},
 		}
@@ -681,6 +678,9 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		podSpec = patched
 		w.logger.Debug("Applied podSpec patch from controller", zap.Any("patched", patched))
 	}
+
+	// Support `image: ` syntax, this HAS TO happen between controller podSpec patch and plugin podSpec patch.
+	podSpec = applyCustomImageIfPresent(podSpec, &inputs)
 
 	// If present, patch from the k8s plugin is applied second.
 	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpecPatch != nil {
