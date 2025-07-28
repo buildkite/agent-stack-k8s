@@ -387,7 +387,7 @@ func TestJobPluginConversion(t *testing.T) {
 	)
 	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
-	kjob, err := worker.Build(pluginConfig.PodSpec, false, inputs)
+	kjob, err := worker.Build(false, inputs)
 	require.NoError(t, err)
 
 	gotPodSpec := kjob.Spec.Template.Spec
@@ -472,7 +472,7 @@ func TestTagEnv(t *testing.T) {
 	)
 	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
-	kjob, err := worker.Build(pluginConfig.PodSpec, false, inputs)
+	kjob, err := worker.Build(false, inputs)
 	require.NoError(t, err)
 
 	container := findContainer(t, kjob.Spec.Template.Spec.Containers, "agent")
@@ -506,7 +506,7 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 	})
 	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
-	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	kjob, err := worker.Build(false, inputs)
 	require.NoError(t, err)
 
 	require.Len(t, kjob.Spec.Template.Spec.Containers, 3)
@@ -568,7 +568,7 @@ func TestBuild(t *testing.T) {
 	)
 	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
-	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	kjob, err := worker.Build(false, inputs)
 	require.NoError(t, err)
 
 	require.Len(t, kjob.Spec.Template.Spec.Containers, 3)
@@ -626,7 +626,7 @@ func TestBuildSkipCheckout(t *testing.T) {
 	)
 	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
-	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	kjob, err := worker.Build(false, inputs)
 	require.NoError(t, err)
 
 	require.Len(t, kjob.Spec.Template.Spec.Containers, 2)
@@ -674,7 +674,7 @@ func TestBuildCheckoutEmptyConfigEnv(t *testing.T) {
 	)
 	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
-	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	kjob, err := worker.Build(false, inputs)
 	require.NoError(t, err)
 
 	for _, container := range kjob.Spec.Template.Spec.Containers {
@@ -720,7 +720,7 @@ func TestBuildDefaultCheckoutParams(t *testing.T) {
 	})
 	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
-	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	kjob, err := worker.Build(false, inputs)
 	require.NoError(t, err)
 
 	var checkoutContainer *corev1.Container
@@ -813,7 +813,7 @@ func TestBuildCheckoutParams(t *testing.T) {
 	)
 	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
-	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	kjob, err := worker.Build(false, inputs)
 	require.NoError(t, err)
 
 	var checkoutContainer *corev1.Container
@@ -942,7 +942,7 @@ func TestCustomImageSyntax_pluginTakesTopPriority(t *testing.T) {
 	})
 	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
-	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	kjob, err := worker.Build(false, inputs)
 	require.NoError(t, err)
 
 	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, CommandCommanderName)
@@ -975,7 +975,7 @@ func TestCustomImageSyntax_jobLevelImagePriority(t *testing.T) {
 	})
 	inputs, err := worker.ParseJob(job, sjob)
 	require.NoError(t, err)
-	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	kjob, err := worker.Build(false, inputs)
 	require.NoError(t, err)
 
 	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, CommandCommanderName)
@@ -1419,12 +1419,16 @@ func TestImagePullPolicies(t *testing.T) {
 				},
 			)
 			kjob, err := worker.Build(
-				&corev1.PodSpec{Containers: test.podSpecContainers},
 				false,
 				buildInputs{
 					uuid:            "1234",
 					command:         "echo shell",
 					agentQueryRules: []string{"queue=bernetes"},
+					k8sPlugin: &KubernetesPlugin{
+						PodSpecPatch: &corev1.PodSpec{
+							Containers: test.podSpecContainers,
+						},
+					},
 				},
 			)
 			if err != nil {
@@ -1593,7 +1597,6 @@ func TestPipelineSigningOptions(t *testing.T) {
 				},
 			)
 			kjob, err := worker.Build(
-				&corev1.PodSpec{},
 				false,
 				buildInputs{
 					uuid:            "1234",

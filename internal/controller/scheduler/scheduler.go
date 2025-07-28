@@ -150,13 +150,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 		return w.failJob(ctx, inputs, fmt.Sprintf("agent-stack-k8s failed to parse the job: %v", err))
 	}
 
-	podSpec := &corev1.PodSpec{}
-	// Use the podSpec provided by the plugin, if allowed.
-	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpec != nil {
-		podSpec = inputs.k8sPlugin.PodSpec
-	}
-
-	kjob, err := w.Build(podSpec, false, inputs)
+	kjob, err := w.Build(false, inputs)
 	if err != nil {
 		logger.Warn("Job definition error detected, failing job", zap.Error(err))
 		return w.failJob(ctx, inputs, fmt.Sprintf("agent-stack-k8s failed to build a podSpec for the job: %v", err))
@@ -254,7 +248,9 @@ func (w *worker) ParseJob(job *api.AgentJob, sjob *api.AgentScheduledJob) (build
 
 // Build builds a job. The checkout container will be skipped either by passing
 // `true` or if the configuration is configured to skip it.
-func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildInputs) (*batchv1.Job, error) {
+func (w *worker) Build(skipCheckout bool, inputs buildInputs) (*batchv1.Job, error) {
+	podSpec := &corev1.PodSpec{}
+
 	// If Build was called with skipCheckout == false, then look at the config
 	// and plugin.
 	if !skipCheckout {
