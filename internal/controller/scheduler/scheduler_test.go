@@ -161,6 +161,39 @@ func TestPatchPodSpec(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "can patch image",
+			podspec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "container-0",
+						Image: "alpine:a",
+						Command: []string{
+							"echo hello world",
+						},
+					},
+				},
+			},
+			patch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "container-0",
+						Image: "alpine:b",
+					},
+				},
+			},
+			want: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "container-0",
+						Image: "alpine:b",
+						Command: []string{
+							"echo hello world",
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, test := range cases {
@@ -880,6 +913,73 @@ func TestProhibitKubernetesPlugin(t *testing.T) {
 	})
 	_, err = worker.ParseJob(job, sjob)
 	require.Error(t, err)
+}
+
+func TestCustomImageSyntax_pluginTakesTopPriority(t *testing.T) {
+	t.Parallel()
+
+	pluginsYAML := `- github.com/buildkite-plugins/kubernetes-buildkite-plugin:
+    podSpecPatch:
+      containers:
+      - name: container-0
+        image: "x-image:plugin"`
+
+	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
+	require.NoError(t, err)
+
+	job := &api.AgentJob{
+		ID: "abc",
+		Env: map[string]string{
+			"BUILDKITE_PLUGINS": string(pluginsJSON),
+			"BUILDKITE_IMAGE":   "x-image:job",
+		},
+	}
+	sjob := &api.AgentScheduledJob{
+		AgentQueryRules: []string{"queue=kubernetes"},
+	}
+	worker := New(zaptest.NewLogger(t), nil, nil, Config{
+		Image: "buildkite/agent:latest",
+	})
+	inputs, err := worker.ParseJob(job, sjob)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, CommandContainerName)
+	require.Equal(t, "x-image:plugin", commandContainer.Image)
+}
+
+// Job level image syntax takes priority over controller setting
+func TestCustomImageSyntax_jobLevelImagePriority(t *testing.T) {
+	t.Parallel()
+
+	job := &api.AgentJob{
+		ID: "abc",
+		Env: map[string]string{
+			"BUILDKITE_IMAGE": "x-image:job",
+		},
+	}
+	sjob := &api.AgentScheduledJob{
+		AgentQueryRules: []string{"queue=kubernetes"},
+	}
+	worker := New(zaptest.NewLogger(t), nil, nil, Config{
+		Image: "buildkite/agent:latest",
+		PodSpecPatch: &corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "container-0",
+					Image: "alpine:controller",
+				},
+			},
+		},
+	})
+	inputs, err := worker.ParseJob(job, sjob)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, CommandContainerName)
+	require.Equal(t, "x-image:job", commandContainer.Image)
 }
 
 func TestImagePullPolicies(t *testing.T) {
