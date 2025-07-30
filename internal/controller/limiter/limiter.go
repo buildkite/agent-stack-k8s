@@ -131,6 +131,16 @@ func (l *MaxInFlight) Handle(ctx context.Context, job model.Job) error {
 		zap.Int("available-tokens", len(l.tokenBucket)),
 	)
 
+	// Check if context was cancelled after acquiring token but before proceeding
+	select {
+	case <-ctx.Done():
+		// Return the token before exiting
+		l.tryReturnToken("Handle")
+		return context.Cause(ctx)
+	default:
+		// Continue with job handling
+	}
+
 	// We got a token from the bucket above! Proceed to schedule the pod.
 	// The next handler should be Scheduler (except in some tests).
 	l.logger.Debug("passing job to next handler",
