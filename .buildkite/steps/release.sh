@@ -24,7 +24,7 @@ wget -qO- "${GHCH_URL}" > /usr/bin/ghch
 chmod +x /usr/bin/ghch
 
 echo --- :git: Determining release version from tags
-# ensure we remove leading `v`
+# ensure we remove the leading `v`
 version="${BUILDKITE_TAG#v}"
 # put it back
 tag="v${version}"
