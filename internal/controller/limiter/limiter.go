@@ -252,6 +252,7 @@ func (l *Limiter) worker(ctx context.Context) {
 		waitingForWorkGauge.Inc()
 		select {
 		case <-ctx.Done():
+			l.tryReturnToken("Handle")
 			return
 
 		case <-l.newWork:
