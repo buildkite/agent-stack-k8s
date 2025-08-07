@@ -82,6 +82,8 @@ type Config struct {
 	DefaultSidecarParams  *SidecarParams  `json:"default-sidecar-params"  validate:"omitempty"`
 	DefaultMetadata       Metadata        `json:"default-metadata"        validate:"omitempty"`
 
+	ResourceClasses map[string]*ResourceClass `json:"resource-classes" validate:"omitempty"`
+
 	DefaultImagePullPolicy      corev1.PullPolicy `json:"default-image-pull-policy"       validate:"omitempty"`
 	DefaultImageCheckPullPolicy corev1.PullPolicy `json:"default-image-check-pull-policy" validate:"omitempty"`
 
@@ -173,6 +175,9 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt("pagination-depth-limit", c.PaginationDepthLimit)
 	enc.AddDuration("query-reset-interval", c.QueryResetInterval)
 	enc.AddInt("work-queue-limit", c.WorkQueueLimit)
+	if err := enc.AddReflected("resource-classes", c.ResourceClasses); err != nil {
+		return err
+	}
 	return nil
 }
 

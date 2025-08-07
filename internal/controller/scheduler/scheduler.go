@@ -77,6 +77,7 @@ type Config struct {
 	SkipImageCheckContainers       bool
 	ImageCheckContainerCPULimit    string
 	ImageCheckContainerMemoryLimit string
+	ResourceClasses                map[string]*config.ResourceClass
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, agentClient *api.AgentClient, cfg Config) *worker {
@@ -489,6 +490,11 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		w.logger.Warn("errors parsing job tags", zap.String("job", inputs.uuid), zap.Errors("errors", errs))
 	}
 	maps.Copy(agentTags, tags)
+
+	// Handle resource_class tag
+	if err := w.applyResourceClass(podSpec, tags); err != nil {
+		return nil, err
+	}
 
 	// Agent server container
 	// The container that runs `buildkite-agent start`
