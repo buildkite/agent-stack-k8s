@@ -98,6 +98,10 @@ func LabelsFromTags(tags []string) (map[string]string, []error) {
 
 func MatchJobTags(agentTags, jobTags map[string]string) bool {
 	for k, jobTagValue := range jobTags {
+		// resource_class is a reserved keyword in k8s stack. It does not participate matching
+		if k == "resource_class" {
+			continue
+		}
 		agentTagValue, exists := agentTags[k]
 		if !exists {
 			return false
