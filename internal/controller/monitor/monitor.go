@@ -208,6 +208,7 @@ func (m *Monitor) passJobsToNextHandler(
 		zap.Int("job-count", len(filteredJobs)),
 	)
 	jobHandlerCallsCounter.Inc()
+	jobsHandledCounter.Add(float64(len(filteredJobs)))
 
 	if err := handler.HandleMany(ctx, filteredJobs); err != nil {
 		if ctx.Err() != nil {
@@ -215,5 +216,6 @@ func (m *Monitor) passJobsToNextHandler(
 		}
 		m.logger.Error("failed to create jobs", zap.Error(err))
 		jobHandlerErrorCounter.Inc()
+		jobsHandledErrorsCounter.Add(float64(len(filteredJobs)))
 	}
 }

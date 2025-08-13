@@ -50,16 +50,28 @@ var (
 		Name:      "jobs_filtered_out_total",
 		Help:      "Count of jobs that didn't match the configured agent tags",
 	})
-	jobHandlerCallsCounter = promauto.NewCounter(prometheus.CounterOpts{
+	jobsHandledCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,
 		Subsystem: promSubsystem,
 		Name:      "jobs_handled_total",
 		Help:      "Count of jobs that were passed to the next handler in the chain",
 	})
+	jobsHandledErrorsCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: promSubsystem,
+		Name:      "jobs_handled_errors_total",
+		Help:      "Count of jobs that were passed to the next handler in the chain but the handler returned an error",
+	})
+	jobHandlerCallsCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: promSubsystem,
+		Name:      "job_handler_calls_total",
+		Help:      "Count of calls to the next handler",
+	})
 	jobHandlerErrorCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,
 		Subsystem: promSubsystem,
 		Name:      "job_handler_errors_total",
-		Help:      "Count of jobs that weren't scheduled because the next handler in the chain returned an error",
+		Help:      "Count of calls to the next handler where the call returned an error",
 	})
 )
