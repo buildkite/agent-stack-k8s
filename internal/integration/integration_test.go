@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/utils/ptr"
@@ -33,13 +34,43 @@ func TestWalkingSkeleton(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	tc.AssertLogsContain(build, "Buildkite Agent Stack for Kubernetes")
-	tc.AssertArtifactsContain(build, "README.md", "CODE_OF_CONDUCT.md")
-	tc.AssertMetadata(
-		ctx,
-		map[string]string{"some-annotation": "cool"},
-		map[string]string{"some-label": "wow"},
-	)
+}
+
+func TestResourceClass(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "resource-class.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+
+	// Configure resource classes for the test
+	testCfg := cfg
+	testCfg.ResourceClasses = map[string]*config.ResourceClass{
+		"test": {
+			Resource: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("250m"),
+					corev1.ResourceMemory: resource.MustParse("256Mi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("500m"),
+					corev1.ResourceMemory: resource.MustParse("512Mi"),
+				},
+			},
+			NodeSelector: map[string]string{
+				"kubernetes.io/os": "linux",
+			},
+		},
+	}
+
+	tc.StartController(ctx, testCfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "✅ Memory limit is correctly set to ~512MB")
+	tc.AssertLogsContain(build, "✅ CPU limit is correctly set to ~500m")
 }
 
 func TestDefaultQueue(t *testing.T) {

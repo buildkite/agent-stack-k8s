@@ -167,6 +167,7 @@ func Run(
 		SkipImageCheckContainers:       cfg.SkipImageCheckContainers,
 		ImageCheckContainerCPULimit:    cfg.ImageCheckContainerCPULimit,
 		ImageCheckContainerMemoryLimit: cfg.ImageCheckContainerMemoryLimit,
+		ResourceClasses:                cfg.ResourceClasses,
 	})
 
 	informerFactory, err := NewInformerFactory(k8sClient, cfg.Namespace, cfg.ID)
