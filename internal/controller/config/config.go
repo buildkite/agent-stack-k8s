@@ -14,6 +14,7 @@ const (
 	UUIDLabel                             = "buildkite.com/job-uuid"
 	ControllerIDLabel                     = "buildkite.com/controller-id"
 	BuildURLAnnotation                    = "buildkite.com/build-url"
+	BuildBranchAnnotation                 = "buildkite.com/build-branch"
 	JobURLAnnotation                      = "buildkite.com/job-url"
 	PriorityAnnotation                    = "buildkite.com/job-priority"
 	DefaultNamespace                      = "default"

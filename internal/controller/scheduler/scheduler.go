@@ -300,6 +300,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	buildURL := inputs.envMap["BUILDKITE_BUILD_URL"]
 	kjob.Annotations[config.BuildURLAnnotation] = buildURL
+	buildBranch := inputs.envMap["BUILDKITE_BRANCH"]
+	kjob.Annotations[config.BuildBranchAnnotation] = buildBranch
 	jobURL, err := w.jobURL(inputs.uuid, buildURL)
 	if err != nil {
 		w.logger.Warn("could not parse BuildURL when annotating with JobURL", zap.String("buildURL", buildURL))
