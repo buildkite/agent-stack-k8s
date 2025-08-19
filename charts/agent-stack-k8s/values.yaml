@@ -18,3 +18,5 @@ annotations: {}
 secretsMetadata: {}
 
 serviceAccountMetadata: {}
+
+deployGrafanaDashboard: true

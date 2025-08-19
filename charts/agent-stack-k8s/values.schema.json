@@ -32,6 +32,11 @@
       "title": "The image for the agent-stack-k8s controller",
       "examples": ["ghcr.io/buildkite/agent-stack-k8s/controller:latest"]
     },
+    "deployGrafanaDashboard": {
+      "type": "boolean",
+      "default": true,
+      "title": "When enabled, installs a Grafana dashboard definition using a ConfigMap"
+    },
     "nameOverride": {
       "type": "string",
       "default": "",
