@@ -1,6 +1,7 @@
 {{ if .Values.deployGrafanaDashboard }}
 apiVersion: v1
 kind: ConfigMap
+metadata:
   name: {{ include "agent-stack-k8s.fullname" . }}-grafana-dashboard
   namespace: {{ .Release.Namespace }}
   labels:
@@ -653,7 +654,7 @@ data:
               "expr": "sum by(reason) (rate(buildkite_limiter_job_handler_errors_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
               "hide": false,
               "instant": false,
-              "legendFormat": "Error from deduper - {{reason}}",
+              "legendFormat": "Error from deduper - {{"{{"}}reason{{"}}"}}",
               "range": true,
               "refId": "B"
             }
@@ -1434,7 +1435,7 @@ data:
               "expr": "sum by (reason) (rate(buildkite_scheduler_job_create_errors_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
               "hide": false,
               "instant": false,
-              "legendFormat": "Create error - {{reason}}",
+              "legendFormat": "Create error - {{"{{"}}reason{{"}}"}}",
               "range": true,
               "refId": "C"
             },
