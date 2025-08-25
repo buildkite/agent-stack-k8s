@@ -6,7 +6,7 @@ require (
 	github.com/Khan/genqlient v0.8.1
 	github.com/buildkite/agent/v3 v3.103.1
 	github.com/buildkite/go-buildkite/v3 v3.13.0
-	github.com/buildkite/roko v1.3.1
+	github.com/buildkite/roko v1.4.0
 	github.com/distribution/reference v0.6.0
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
@@ -121,7 +121,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/gnostic-models v0.6.9 // indirect
 	github.com/google/go-cmp v0.7.0
-	github.com/google/go-querystring v1.1.0 // indirect
+	github.com/google/go-querystring v1.1.0
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.6 // indirect
