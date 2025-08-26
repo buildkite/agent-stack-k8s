@@ -6,7 +6,7 @@ require (
 	github.com/Khan/genqlient v0.8.1
 	github.com/buildkite/agent/v3 v3.103.1
 	github.com/buildkite/go-buildkite/v3 v3.13.0
-	github.com/buildkite/roko v1.3.1
+	github.com/buildkite/roko v1.4.0
 	github.com/distribution/reference v0.6.0
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
