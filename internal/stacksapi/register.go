@@ -38,9 +38,25 @@ func (c *Client) RegisterStack(ctx context.Context, body RegisterStackRequest, o
 	var stack RegisterStackResponse
 	resp, err := c.do(ctx, req, &stack)
 	if err != nil {
-		return RegisterStackResponse{}, fmt.Errorf("request failed: %w", err)
+		return RegisterStackResponse{}, fmt.Errorf("register stack: %w", err)
 	}
 	defer resp.Body.Close()
 
 	return stack, nil
+}
+
+func (c *Client) DeregisterStack(ctx context.Context, stackID string, opts ...RequestOption) error {
+	path := fmt.Sprintf("stacks/%s/deregister", stackID)
+	req, err := c.newRequest(ctx, http.MethodPost, path, nil, opts...)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.do(ctx, req, nil)
+	if err != nil {
+		return fmt.Errorf("deregister stack: %w", err)
+	}
+	defer resp.Body.Close()
+
+	return nil
 }
