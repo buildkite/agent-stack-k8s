@@ -2,6 +2,7 @@ package stacksapi
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -165,6 +166,53 @@ func TestErrorResponse(t *testing.T) {
 		expected := "GET https://api.example.com/test: 404 Not found"
 		if errResp.Error() != expected {
 			t.Errorf("errResp.Error() = %q, expected %q", errResp.Error(), expected)
+		}
+	})
+
+	t.Run("parses errors and messages from server responses", func(t *testing.T) {
+		t.Parallel()
+		testCases := []struct {
+			statusCode int
+			message    string
+		}{
+			{404, "There is no stack by that name here"},
+			{500, "Something went wrong processing your request"},
+			{403, "Eeep! You forgot your token"},
+			{429, "Too many requests"},
+		}
+
+		for _, tc := range testCases {
+			t.Run(http.StatusText(tc.statusCode), func(t *testing.T) {
+				server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+					respondWithError(w, tc.statusCode, tc.message)
+				})
+				t.Cleanup(func() { server.Close() })
+
+				req, err := client.newRequest(t.Context(), "GET", "test", nil)
+				if err != nil {
+					t.Fatalf(`client.NewRequest(t.Context(), "GET", "test", nil): %v, expected nil`, err)
+				}
+
+				_, err = client.do(t.Context(), req, nil)
+				if err == nil {
+					t.Fatalf(`client.do(t.Context(), req, nil): %v, expected error`, err)
+				}
+
+				// Check the error response
+				var errResp *ErrorResponse
+				ok := errors.As(err, &errResp)
+				if !ok {
+					t.Fatalf(`err from client.do(t.Context(), req, nil) was: %v, expected ErrorResponse`, err)
+				}
+
+				if errResp.Message != tc.message {
+					t.Errorf("errResp.Message = %q, expected %q", errResp.Message, tc.message)
+				}
+
+				if errResp.Response.StatusCode != tc.statusCode {
+					t.Errorf("errResp.Response.StatusCode = %d, expected %d", errResp.Response.StatusCode, tc.statusCode)
+				}
+			})
 		}
 	})
 
