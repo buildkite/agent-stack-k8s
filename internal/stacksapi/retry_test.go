@@ -62,7 +62,7 @@ func TestRetryLogic(t *testing.T) {
 						_ = json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 					}
 				})
-				defer server.Close()
+				t.Cleanup(func() { server.Close() })
 
 				ctx := context.Background()
 				req, err := client.newRequest(ctx, "POST", "test", map[string]string{"key": "value"})
@@ -97,7 +97,7 @@ func TestRetryLogic(t *testing.T) {
 			// Always return 500 to exhaust retries
 			respondWithError(w, http.StatusInternalServerError, "Persistent error")
 		})
-		defer server.Close()
+		t.Cleanup(func() { server.Close() })
 
 		ctx := context.Background()
 		req, err := client.newRequest(ctx, "POST", "test", map[string]string{"key": "value"})
@@ -128,7 +128,7 @@ func TestRetryLogic(t *testing.T) {
 			// Always fail to test max attempts
 			respondWithError(w, http.StatusInternalServerError, "Server error")
 		})
-		defer server.Close()
+		t.Cleanup(func() { server.Close() })
 
 		// Custom retrier with only 2 attempts
 		customRetrier := roko.NewRetrier(

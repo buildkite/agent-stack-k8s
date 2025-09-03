@@ -33,7 +33,6 @@ func TestRegisterStack(t *testing.T) {
 				t.Errorf("request params mismatch (-want +got):\n%s", diff)
 			}
 
-			// Return mock response
 			response := RegisterStackResponse{
 				ID:               "stack-123",
 				OrganizationUUID: "org-456",
@@ -48,7 +47,7 @@ func TestRegisterStack(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(response)
 		})
-		defer server.Close()
+		t.Cleanup(func() { server.Close() })
 
 		ctx := context.Background()
 		params := RegisterStackRequest{
@@ -83,9 +82,8 @@ func TestRegisterStack(t *testing.T) {
 		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 			respondWithError(w, http.StatusInternalServerError, "Internal server error")
 		})
-		defer server.Close()
+		t.Cleanup(func() { server.Close() })
 
-		ctx := context.Background()
 		params := RegisterStackRequest{
 			Key:      "test-stack",
 			Type:     StackTypeCustom,
