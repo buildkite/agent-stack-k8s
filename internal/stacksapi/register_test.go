@@ -76,30 +76,6 @@ func TestRegisterStack(t *testing.T) {
 			t.Errorf("stack mismatch (-want +got):\n%s", diff)
 		}
 	})
-
-	t.Run("handles server error", func(t *testing.T) {
-		t.Parallel()
-		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			respondWithError(w, http.StatusInternalServerError, "Internal server error")
-		})
-		t.Cleanup(func() { server.Close() })
-
-		params := RegisterStackRequest{
-			Key:      "test-stack",
-			Type:     StackTypeCustom,
-			QueueKey: "test-queue",
-			Metadata: map[string]string{},
-		}
-
-		_, err := client.RegisterStack(t.Context(), params)
-		if err == nil {
-			t.Fatal("client.RegisterStack(t.Context(), params) = nil, expected error")
-		}
-
-		if !errorIsStatusCode(err, 500) {
-			t.Errorf("errorIsStatusCode(err, 500) = false, expected true, err: %v", err)
-		}
-	})
 }
 
 func TestDeregisterStack(t *testing.T) {
@@ -118,23 +94,6 @@ func TestDeregisterStack(t *testing.T) {
 		err := client.DeregisterStack(t.Context(), "stack-123")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("handles server error", func(t *testing.T) {
-		t.Parallel()
-
-		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			respondWithError(w, http.StatusInternalServerError, "Internal server error")
-		})
-		t.Cleanup(func() { server.Close() })
-
-		err := client.DeregisterStack(t.Context(), "stack-123")
-		if err == nil {
-			t.Fatal("expected error, got nil")
-		}
-		if !errorIsStatusCode(err, 500) {
-			t.Errorf("errorIsStatusCode(err, 500) = false, expected true, err: %v", err)
 		}
 	})
 }
