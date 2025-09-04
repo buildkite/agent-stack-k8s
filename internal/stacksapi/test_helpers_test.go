@@ -2,7 +2,6 @@ package stacksapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -48,12 +47,4 @@ func respondWithError(w http.ResponseWriter, statusCode int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": message})
-}
-
-func errorIsStatusCode(err error, statusCode int) bool {
-	var httpErr *ErrorResponse
-	if errors.As(err, &httpErr) {
-		return httpErr.Response.StatusCode == statusCode
-	}
-	return false
 }
