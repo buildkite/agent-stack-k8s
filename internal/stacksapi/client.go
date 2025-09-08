@@ -150,7 +150,7 @@ func WithRetrier(retrier *roko.Retrier) RequestOption {
 
 // newRequest creates a new API request suitable for dispatch to the Buildkite Stacks API with the given context, method, path, and body.
 func (c *Client) newRequest(ctx context.Context, method, path string, body any, opts ...RequestOption) (*StackAPIRequest, error) {
-	fullURL := c.baseURL.ResolveReference(&url.URL{Path: path})
+	fullURL := c.baseURL.JoinPath(path)
 
 	var bodyBytes []byte
 	if body != nil {

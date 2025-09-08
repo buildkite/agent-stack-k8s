@@ -12,10 +12,7 @@ func main() {
 	clusterToken := os.Getenv("BUILDKITE_CLUSTER_TOKEN")
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
-	client, err := stacksapi.NewClient(clusterToken,
-		stacksapi.WithLogger(logger),
-		stacksapi.LogHTTPPayloads(),
-	)
+	client, err := stacksapi.NewClient(clusterToken, stacksapi.WithLogger(logger))
 	if err != nil {
 		logger.Error("Failed to create Stacks API client", "error", err)
 		os.Exit(1)
@@ -35,4 +32,13 @@ func main() {
 	}
 
 	logger.Info("registered stack", "stack", stack)
+
+	logger.Info("deregistering stack...")
+	err = client.DeregisterStack(context.Background(), stack.Key)
+	if err != nil {
+		logger.Error("Failed to deregister stack", "error", err)
+		os.Exit(1)
+	}
+
+	logger.Info("deregistered stack", "stack", stack)
 }
