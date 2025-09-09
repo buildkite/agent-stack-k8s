@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"strconv"
@@ -17,6 +18,8 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/reserver"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/stacksapi"
+	slogzap "github.com/samber/slog-zap/v2"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -108,13 +111,30 @@ func Run(
 		return
 	}
 
+	var stacksAPIClient *stacksapi.Client
+	if cfg.ExperimentalStacksAPISupport {
+		zapSlogHandler := slogzap.Option{Logger: logger}.NewZapHandler()
+
+		var err error
+		stacksAPIClient, err = stacksapi.NewClient(agentToken, stacksapi.WithLogger(slog.New(zapSlogHandler)))
+		if err != nil {
+			logger.Error("Couldn't create Buildkite Stacks API client", zap.Error(err))
+			return
+		}
+	}
+
+	fmt.Println("Agent queue is:", queue)
+
 	agentClient, err := api.NewAgentClient(
+		ctx,
 		agentToken,
 		agentEndpoint,
 		agentTokenIdentity.ClusterUUID,
 		queue,
+		cfg.ID,
 		cfg.Tags,
 		api.WithReservation(cfg.ExperimentalJobReservationSupport),
+		api.WithStacksAPIClient(stacksAPIClient), // If stacksAPIClient is nil, this is a no-op
 	)
 	if err != nil {
 		logger.Error("Couldn't create Agent API client", zap.Error(err))
@@ -127,7 +147,7 @@ func Run(
 	// **************************************************************************
 	//
 	// Monitor polls Buildkite for jobs. It passes them to Limiter.
-	m, err := monitor.New(logger.Named("monitor"), k8sClient, agentClient, monitor.Config{
+	m, err := monitor.New(logger.Named("monitor"), agentClient, monitor.Config{
 		Namespace:            cfg.Namespace,
 		ClusterUUID:          agentTokenIdentity.ClusterUUID,
 		Queue:                queue,
@@ -241,7 +261,26 @@ func Run(
 
 	select {
 	case <-ctx.Done():
+		logger.Info("gracefully shutting down controller...")
+
+		// The DeregisterStack call is a no-op if stacks API support is disabled, but we don't want to log "deregistered stack"
+		// unless we actually did it.
+		if cfg.ExperimentalStacksAPISupport {
+			ctx = context.WithoutCancel(ctx) // we want stack deregistration to happen, even though the context has been cancelled
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+
+			// Try best-effort to deregister the stack, but if it fails or times out, the backend will still clean it up.
+			if err := agentClient.DeregisterStack(ctx); err != nil {
+				logger.Error("failed to deregister stack", zap.Error(err))
+				return
+			}
+
+			logger.Info("deregistered stack")
+		}
+
 		logger.Info("controller exiting", zap.Error(ctx.Err()))
+
 	case err := <-m.Start(ctx, reserver):
 		logger.Info("monitor failed", zap.Error(err))
 	}

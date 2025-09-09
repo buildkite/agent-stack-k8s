@@ -161,6 +161,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		false,
 		"Experimental - does not fully function yet. This experiment enables job reservation support for better job observability and scalable job fetching. If you try it, please let us know about your experiences by filing an issue on https://github.com/buildkite/agent-stack-k8s",
 	)
+	cmd.Flags().Bool(
+		"experimental-stacks-api-support",
+		false,
+		"Experimental - enables integration with the Buildkite Stacks API for interactions with the Buildkite control plane.",
+	)
 	cmd.Flags().Int(
 		"pagination-page-size",
 		config.DefaultPaginationPageSize,

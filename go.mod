@@ -15,6 +15,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty/v6 v6.6.8
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
+	github.com/samber/slog-zap/v2 v2.6.2
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -30,6 +31,8 @@ require (
 
 require (
 	github.com/DataDog/go-libddwaf/v4 v4.3.0 // indirect
+	github.com/samber/lo v1.47.0 // indirect
+	github.com/samber/slog-common v0.18.1 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.37.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 )

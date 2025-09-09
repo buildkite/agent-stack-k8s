@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/stacksapi"
 )
 
 // This is a special keyword supported on backend for polling from the current default queue in the cluster.
@@ -25,20 +26,44 @@ func WithReservation(enable bool) AgentClientOption {
 	}
 }
 
-func NewAgentClient(token, endpoint, clusterID, queue string, agentQueryRules []string, opts ...AgentClientOption) (*AgentClient, error) {
+func WithStacksAPIClient(client *stacksapi.Client) AgentClientOption {
+	return func(c *AgentClient) {
+		c.stacksAPIClient = client
+	}
+}
+
+// AgentClient is a client for Agent API methods for retrieving jobs.
+type AgentClient struct {
+	endpoint        *url.URL
+	httpClient      *http.Client
+	stacksAPIClient *stacksapi.Client
+
+	clusterID string // or "unclustered"
+	queue     string
+	stack     stacksapi.RegisterStackResponse
+
+	// This impacts a number of endpoints' query parameters
+	reservation bool
+}
+
+func NewAgentClient(ctx context.Context, token, endpoint, clusterID, queue, stackID string, agentQueryRules []string, opts ...AgentClientOption) (*AgentClient, error) {
 	if endpoint == "" {
 		endpoint = "https://agent.buildkite.com/v3"
 	}
+
 	if clusterID == "" {
 		clusterID = "unclustered"
 	}
+
 	endpointURL, err := url.Parse(endpoint)
 	if err != nil {
 		return nil, err
 	}
+
 	if queue == "" {
 		queue = defaultQueueKey
 	}
+
 	client := &AgentClient{
 		endpoint: endpointURL,
 		httpClient: &http.Client{
@@ -48,20 +73,31 @@ func NewAgentClient(token, endpoint, clusterID, queue string, agentQueryRules []
 		clusterID: clusterID,
 		queue:     queue,
 	}
+
 	for _, opt := range opts {
 		opt(client)
 	}
-	return client, nil
-}
 
-// AgentClient is a client for Agent API methods for retrieving jobs.
-type AgentClient struct {
-	endpoint   *url.URL
-	httpClient *http.Client
-	clusterID  string // or "unclustered"
-	queue      string
-	// This impacts a number of endpoints' query parameters
-	reservation bool
+	if client.stacksAPIClient != nil {
+		stackKey := stackID
+		if stackKey == "" {
+			stackKey = "agent-stack-k8s"
+		}
+
+		stack, err := client.stacksAPIClient.RegisterStack(ctx, stacksapi.RegisterStackRequest{
+			Type:     stacksapi.StackTypeKubernetes,
+			QueueKey: queue,
+			Key:      stackKey,
+			Metadata: map[string]string{},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("registering stack with Buildkite Stacks API: %w", err)
+		}
+
+		client.stack = stack
+	}
+
+	return client, nil
 }
 
 // AgentError is the JSON object of the response body returned when the HTTP
@@ -261,6 +297,14 @@ func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string) (result *Ba
 	defer resp.Body.Close()
 
 	return decodeResponse[BatchReserveJobsResult](resp)
+}
+
+func (c *AgentClient) DeregisterStack(ctx context.Context) error {
+	if c.stacksAPIClient == nil {
+		return nil
+	}
+
+	return c.stacksAPIClient.DeregisterStack(ctx, c.stack.Key, stacksapi.WithNoRetry())
 }
 
 func decodeResponse[T any](resp *http.Response) (result *T, retryAfter time.Duration, err error) {
