@@ -1,4 +1,4 @@
-{{ if .Values.deployGrafanaDashboard }}
+{{ if .Values.monitoring.deployGrafanaDashboard }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
