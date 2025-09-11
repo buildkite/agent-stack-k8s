@@ -20,3 +20,5 @@ secretsMetadata: {}
 serviceAccountMetadata: {}
 
 deployGrafanaDashboard: true
+podMonitor:
+  deploy: true
