@@ -1,5 +1,7 @@
 Brewfile.lock.json
 
+config.local.yaml
+
 .DS_Store
 .vscode
 

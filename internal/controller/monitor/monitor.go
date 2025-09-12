@@ -11,7 +11,6 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
 	"go.uber.org/zap"
-	"k8s.io/client-go/kubernetes"
 )
 
 // Monitor is responsible for polling Buildkite for jobs.
@@ -37,7 +36,7 @@ type Config struct {
 	QueryResetInterval   time.Duration
 }
 
-func New(logger *zap.Logger, k8s kubernetes.Interface, agentClient *api.AgentClient, cfg Config) (*Monitor, error) {
+func New(logger *zap.Logger, agentClient *api.AgentClient, cfg Config) (*Monitor, error) {
 	// Poll no more frequently than every 1s (please don't DoS us).
 	cfg.PollInterval = max(cfg.PollInterval, time.Second)
 
