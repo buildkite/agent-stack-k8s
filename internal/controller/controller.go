@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"strconv"
@@ -18,8 +17,6 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/reserver"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/stacksapi"
-	slogzap "github.com/samber/slog-zap/v2"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/zap"
@@ -111,31 +108,17 @@ func Run(
 		return
 	}
 
-	var stacksAPIClient *stacksapi.Client
-	if cfg.ExperimentalStacksAPISupport {
-		zapSlogHandler := slogzap.Option{Logger: logger}.NewZapHandler()
-
-		var err error
-		stacksAPIClient, err = stacksapi.NewClient(agentToken, stacksapi.WithLogger(slog.New(zapSlogHandler)))
-		if err != nil {
-			logger.Error("Couldn't create Buildkite Stacks API client", zap.Error(err))
-			return
-		}
-	}
-
-	fmt.Println("Agent queue is:", queue)
-
-	agentClient, err := api.NewAgentClient(
-		ctx,
-		agentToken,
-		agentEndpoint,
-		agentTokenIdentity.ClusterUUID,
-		queue,
-		cfg.ID,
-		cfg.Tags,
-		api.WithReservation(cfg.ExperimentalJobReservationSupport),
-		api.WithStacksAPIClient(stacksAPIClient), // If stacksAPIClient is nil, this is a no-op
-	)
+	agentClient, err := api.NewAgentClient(ctx, api.AgentClientOpts{
+		Token:           agentToken,
+		Endpoint:        agentEndpoint,
+		ClusterID:       agentTokenIdentity.ClusterUUID,
+		Queue:           queue,
+		StackID:         cfg.ID,
+		AgentQueryRules: cfg.Tags,
+		Logger:          logger,
+		UseReservation:  cfg.ExperimentalJobReservationSupport,
+		UseStacksAPI:    cfg.ExperimentalStacksAPISupport,
+	})
 	if err != nil {
 		logger.Error("Couldn't create Agent API client", zap.Error(err))
 		return

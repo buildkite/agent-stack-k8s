@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -13,24 +14,12 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/stacksapi"
+	slogzap "github.com/samber/slog-zap/v2"
+	"go.uber.org/zap"
 )
 
 // This is a special keyword supported on backend for polling from the current default queue in the cluster.
 const defaultQueueKey = "_default"
-
-type AgentClientOption func(*AgentClient)
-
-func WithReservation(enable bool) AgentClientOption {
-	return func(c *AgentClient) {
-		c.reservation = enable
-	}
-}
-
-func WithStacksAPIClient(client *stacksapi.Client) AgentClientOption {
-	return func(c *AgentClient) {
-		c.stacksAPIClient = client
-	}
-}
 
 // AgentClient is a client for Agent API methods for retrieving jobs.
 type AgentClient struct {
@@ -38,7 +27,7 @@ type AgentClient struct {
 	httpClient      *http.Client
 	stacksAPIClient *stacksapi.Client
 
-	clusterID string // or "unclustered"
+	clusterID string
 	queue     string
 	stack     stacksapi.RegisterStackResponse
 
@@ -46,47 +35,62 @@ type AgentClient struct {
 	reservation bool
 }
 
-func NewAgentClient(ctx context.Context, token, endpoint, clusterID, queue, stackID string, agentQueryRules []string, opts ...AgentClientOption) (*AgentClient, error) {
-	if endpoint == "" {
-		endpoint = "https://agent.buildkite.com/v3"
+type AgentClientOpts struct {
+	Token           string
+	Endpoint        string
+	ClusterID       string
+	Queue           string
+	StackID         string
+	AgentQueryRules []string
+	UseReservation  bool
+	Logger          *zap.Logger
+	UseStacksAPI    bool
+}
+
+func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, error) {
+	if opts.Endpoint == "" {
+		opts.Endpoint = "https://agent.buildkite.com/v3"
 	}
 
-	if clusterID == "" {
-		clusterID = "unclustered"
+	if opts.ClusterID == "" {
+		opts.ClusterID = "unclustered"
 	}
 
-	endpointURL, err := url.Parse(endpoint)
+	endpointURL, err := url.Parse(opts.Endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	if queue == "" {
-		queue = defaultQueueKey
+	if opts.Queue == "" {
+		opts.Queue = defaultQueueKey
 	}
 
 	client := &AgentClient{
 		endpoint: endpointURL,
 		httpClient: &http.Client{
 			Timeout:   60 * time.Second,
-			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, token)),
+			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, opts.Token)),
 		},
-		clusterID: clusterID,
-		queue:     queue,
+		clusterID: opts.ClusterID,
+		queue:     opts.Queue,
 	}
 
-	for _, opt := range opts {
-		opt(client)
-	}
+	if opts.UseStacksAPI {
+		zapSlogHandler := slogzap.Option{Logger: opts.Logger}.NewZapHandler()
 
-	if client.stacksAPIClient != nil {
-		stackKey := stackID
+		client.stacksAPIClient, err = stacksapi.NewClient(opts.Token, stacksapi.WithLogger(slog.New(zapSlogHandler)))
+		if err != nil {
+			return nil, fmt.Errorf("couldn't create Buildkite Stacks API client: %w", err)
+		}
+
+		stackKey := opts.StackID
 		if stackKey == "" {
 			stackKey = "agent-stack-k8s"
 		}
 
 		stack, err := client.stacksAPIClient.RegisterStack(ctx, stacksapi.RegisterStackRequest{
 			Type:     stacksapi.StackTypeKubernetes,
-			QueueKey: queue,
+			QueueKey: opts.Queue,
 			Key:      stackKey,
 			Metadata: map[string]string{},
 		})
