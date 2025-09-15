@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -12,56 +13,95 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/stacksapi"
+	slogzap "github.com/samber/slog-zap/v2"
+	"go.uber.org/zap"
 )
 
 // This is a special keyword supported on backend for polling from the current default queue in the cluster.
 const defaultQueueKey = "_default"
 
-type AgentClientOption func(*AgentClient)
+// AgentClient is a client for Agent API methods for retrieving jobs.
+type AgentClient struct {
+	endpoint        *url.URL
+	httpClient      *http.Client
+	stacksAPIClient *stacksapi.Client
 
-func WithReservation(enable bool) AgentClientOption {
-	return func(c *AgentClient) {
-		c.reservation = enable
-	}
+	clusterID string
+	queue     string
+	stack     stacksapi.RegisterStackResponse
+
+	// This impacts a number of endpoints' query parameters
+	reservation bool
 }
 
-func NewAgentClient(token, endpoint, clusterID, queue string, agentQueryRules []string, opts ...AgentClientOption) (*AgentClient, error) {
-	if endpoint == "" {
-		endpoint = "https://agent.buildkite.com/v3"
+type AgentClientOpts struct {
+	Token           string
+	Endpoint        string
+	ClusterID       string
+	Queue           string
+	StackID         string
+	AgentQueryRules []string
+	UseReservation  bool
+	Logger          *zap.Logger
+	UseStacksAPI    bool
+}
+
+func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, error) {
+	if opts.Endpoint == "" {
+		opts.Endpoint = "https://agent.buildkite.com/v3"
 	}
-	if clusterID == "" {
-		clusterID = "unclustered"
+
+	if opts.ClusterID == "" {
+		opts.ClusterID = "unclustered"
 	}
-	endpointURL, err := url.Parse(endpoint)
+
+	endpointURL, err := url.Parse(opts.Endpoint)
 	if err != nil {
 		return nil, err
 	}
-	if queue == "" {
-		queue = defaultQueueKey
+
+	if opts.Queue == "" {
+		opts.Queue = defaultQueueKey
 	}
+
 	client := &AgentClient{
 		endpoint: endpointURL,
 		httpClient: &http.Client{
 			Timeout:   60 * time.Second,
-			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, token)),
+			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, opts.Token)),
 		},
-		clusterID: clusterID,
-		queue:     queue,
+		clusterID: opts.ClusterID,
+		queue:     opts.Queue,
 	}
-	for _, opt := range opts {
-		opt(client)
-	}
-	return client, nil
-}
 
-// AgentClient is a client for Agent API methods for retrieving jobs.
-type AgentClient struct {
-	endpoint   *url.URL
-	httpClient *http.Client
-	clusterID  string // or "unclustered"
-	queue      string
-	// This impacts a number of endpoints' query parameters
-	reservation bool
+	if opts.UseStacksAPI {
+		zapSlogHandler := slogzap.Option{Logger: opts.Logger}.NewZapHandler()
+
+		client.stacksAPIClient, err = stacksapi.NewClient(opts.Token, stacksapi.WithLogger(slog.New(zapSlogHandler)))
+		if err != nil {
+			return nil, fmt.Errorf("couldn't create Buildkite Stacks API client: %w", err)
+		}
+
+		stackKey := opts.StackID
+		if stackKey == "" {
+			stackKey = "agent-stack-k8s"
+		}
+
+		stack, err := client.stacksAPIClient.RegisterStack(ctx, stacksapi.RegisterStackRequest{
+			Type:     stacksapi.StackTypeKubernetes,
+			QueueKey: opts.Queue,
+			Key:      stackKey,
+			Metadata: map[string]string{},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("registering stack with Buildkite Stacks API: %w", err)
+		}
+
+		client.stack = stack
+	}
+
+	return client, nil
 }
 
 // AgentError is the JSON object of the response body returned when the HTTP
@@ -261,6 +301,14 @@ func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string) (result *Ba
 	defer resp.Body.Close()
 
 	return decodeResponse[BatchReserveJobsResult](resp)
+}
+
+func (c *AgentClient) DeregisterStack(ctx context.Context) error {
+	if c.stacksAPIClient == nil {
+		return nil
+	}
+
+	return c.stacksAPIClient.DeregisterStack(ctx, c.stack.Key, stacksapi.WithNoRetry())
 }
 
 func decodeResponse[T any](resp *http.Response) (result *T, retryAfter time.Duration, err error) {

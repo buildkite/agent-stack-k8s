@@ -106,6 +106,9 @@ type Config struct {
 	// Enable job reservation support - this feature is in-progress.
 	ExperimentalJobReservationSupport bool `json:"experimental-job-reservation-support" validate:"omitempty"`
 
+	// Enable using the stacks API - this feature is in progress.
+	ExperimentalStacksAPISupport bool `json:"experimental-stacks-api-support" validate:"omitempty"`
+
 	// These are only used for integration tests.
 	BuildkiteToken  string `json:"buildkite-token" validate:"omitempty"`
 	GraphQLEndpoint string `json:"graphql-endpoint" validate:"omitempty"`
@@ -146,6 +149,7 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddBool("prohibit-kubernetes-plugin", c.ProhibitKubernetesPlugin)
 	enc.AddBool("allow-pod-spec-patch-unsafe-command-modification", c.AllowPodSpecPatchUnsafeCmdMod)
 	enc.AddBool("experimental-job-reservation-support", c.ExperimentalJobReservationSupport)
+	enc.AddBool("experimental-stacks-api-support", c.ExperimentalStacksAPISupport)
 	if err := enc.AddArray("additional-redacted-vars", c.AdditionalRedactedVars); err != nil {
 		return err
 	}

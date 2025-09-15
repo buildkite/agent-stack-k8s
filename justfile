@@ -4,7 +4,7 @@ default:
 # Running the controller locally using production buildkite as backend.
 # This is sufficient for vast majority of issues.
 run *FLAGS:
-  go run ./... {{FLAGS}}
+  go run ./main.go {{FLAGS}}
 
 # Running the controller locally but with local bk/bk as the backend.
 # This is probably only useful for Buildkite employees.
@@ -19,7 +19,7 @@ run-with-local-bk:
   kubectl -n local-bk create secret generic buildkite-agent-token \
     --from-literal=BUILDKITE_AGENT_TOKEN='bkct_buildkite'
 
-  go run ./... --namespace local-bk --config=config.dev.yaml
+  go run ./main.go --namespace local-bk --config=config.dev.yaml
 
 test *FLAGS:
   #!/usr/bin/env bash
