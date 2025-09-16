@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"github.com/buildkite/agent/v3/agent"
@@ -37,6 +38,8 @@ type jobWatcher struct {
 	k8s kubernetes.Interface
 	cfg *config.Config
 
+	agentClient *api.AgentClient
+
 	// Tracks stalling jobs (jobs that have yet to create pods).
 	stallingJobsMu sync.Mutex
 	stallingJobs   map[uuid.UUID]*batchv1.Job
@@ -54,10 +57,11 @@ type jobWatcher struct {
 }
 
 // NewJobWatcher creates a JobWatcher.
-func NewJobWatcher(logger *zap.Logger, k8sClient kubernetes.Interface, cfg *config.Config) *jobWatcher {
+func NewJobWatcher(logger *zap.Logger, k8sClient kubernetes.Interface, agentClient *api.AgentClient, cfg *config.Config) *jobWatcher {
 	w := &jobWatcher{
 		logger:       logger,
 		k8s:          k8sClient,
+		agentClient:  agentClient,
 		cfg:          cfg,
 		stallingJobs: make(map[uuid.UUID]*batchv1.Job),
 		ignoredJobs:  make(map[uuid.UUID]struct{}),
@@ -237,7 +241,7 @@ func (w *jobWatcher) failJob(ctx context.Context, log *zap.Logger, kjob *batchv1
 		// We can know almost all failures triggered by job watcher are stack related error.
 		Reason: agent.SignalReasonStackError,
 	}
-	if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, kjob, failureInfo); err != nil {
+	if err := failForK8sObject(ctx, log, kjob, failureInfo, w.agentClient, w.k8s, w.cfg); err != nil {
 		// Maybe the job was cancelled in the meantime?
 		log.Error("Could not fail Buildkite job", zap.Error(err))
 		jobWatcherBuildkiteJobFailErrorsCounter.Inc()
