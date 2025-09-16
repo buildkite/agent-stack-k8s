@@ -330,7 +330,7 @@ func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Lo
 		ExitCode: lastFailExitCode,
 		Reason:   agent.SignalReasonStackError,
 	}
-	if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, failureInfo); err != nil {
+	if err := failForK8sObject(ctx, log, pod, failureInfo, w.agentClient, w.k8s, w.cfg); err != nil {
 		// Maybe the job was cancelled in the meantime?
 		log.Error("Could not fail Buildkite job", zap.Error(err))
 		podWatcherBuildkiteJobFailErrorsCounter.Inc()
@@ -428,6 +428,11 @@ func (w *podWatcher) imageFailureChecker(ctx context.Context, log *zap.Logger) {
 		w.watchingForImageFailureMu.Lock()
 		for jobUUID, pod := range w.watchingForImageFailure {
 			statuses := w.podHasFailingImages(log, pod)
+			log.Debug(
+				"checking pod for image failure",
+				zap.String("pod_name", pod.Name),
+				zap.Int("len(statuses)", len(statuses)),
+			)
 			if len(statuses) == 0 {
 				continue
 			}
@@ -490,7 +495,7 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 			Message: message,
 			// Do we have a better status code to report here?
 		}
-		if err := acquireAndFailForObject(ctx, log, w.k8s, w.cfg, pod, failureInfo); err != nil {
+		if err := failForK8sObject(ctx, log, pod, failureInfo, w.agentClient, w.k8s, w.cfg); err != nil {
 			podWatcherBuildkiteJobFailErrorsCounter.Inc()
 			// Maybe the job was acquired by an agent in the meantime?
 			// Maybe the job was cancelled in the meantime?

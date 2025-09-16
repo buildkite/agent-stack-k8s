@@ -33,6 +33,7 @@ type AgentClient struct {
 
 	// This impacts a number of endpoints' query parameters
 	reservation bool
+	UseStackAPI bool
 }
 
 type AgentClientOpts struct {
@@ -74,12 +75,17 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		clusterID:   opts.ClusterID,
 		queue:       opts.Queue,
 		reservation: opts.UseReservation,
+		UseStackAPI: opts.UseStacksAPI,
 	}
 
 	if opts.UseStacksAPI {
 		zapSlogHandler := slogzap.Option{Logger: opts.Logger}.NewZapHandler()
 
-		client.stacksAPIClient, err = stacksapi.NewClient(opts.Token, stacksapi.WithLogger(slog.New(zapSlogHandler)))
+		client.stacksAPIClient, err = stacksapi.NewClient(
+			opts.Token,
+			stacksapi.WithLogger(slog.New(zapSlogHandler)),
+			stacksapi.WithBaseURL(endpointURL),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("couldn't create Buildkite Stacks API client: %w", err)
 		}
@@ -310,6 +316,20 @@ func (c *AgentClient) DeregisterStack(ctx context.Context) error {
 	}
 
 	return c.stacksAPIClient.DeregisterStack(ctx, c.stack.Key, stacksapi.WithNoRetry())
+}
+
+func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail string) error {
+	if !c.UseStackAPI {
+		return fmt.Errorf("cannot call FailJob when useStackAPI is off")
+	}
+
+	req := stacksapi.FailJobRequest{
+		StackKey:    c.stack.Key,
+		JobUUID:     jobUUID,
+		ErrorDetail: errorDetail,
+	}
+
+	return c.stacksAPIClient.FailJob(ctx, req)
 }
 
 func decodeResponse[T any](resp *http.Response) (result *T, retryAfter time.Duration, err error) {
