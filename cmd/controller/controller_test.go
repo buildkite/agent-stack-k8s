@@ -48,6 +48,9 @@ func TestReadAndParseConfig(t *testing.T) {
 		ImageCheckContainerCPULimit:    "201m",
 		ImageCheckContainerMemoryLimit: "129Mi",
 
+		ExperimentalJobReservationSupport: true,
+		ExperimentalStacksAPISupport:      true,
+
 		WorkspaceVolume: &corev1.Volume{
 			Name: "workspace-2-the-reckoning",
 			VolumeSource: corev1.VolumeSource{

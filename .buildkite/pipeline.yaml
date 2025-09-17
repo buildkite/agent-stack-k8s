@@ -164,6 +164,52 @@ steps:
           files: junit-*.xml
           format: junit
 
+  - label: ":buildkite::test_tube::rocket: tests (experimental features)"
+    key: tests-experimental
+    depends_on: agent
+    artifact_paths: junit-*.xml
+    command: .buildkite/steps/tests.sh
+    env:
+      CONFIG: /etc/config.yaml
+      EXPERIMENTAL_JOB_RESERVATION_SUPPORT: true
+      EXPERIMENTAL_STACKS_API_SUPPORT: true
+    plugins:
+      - kubernetes:
+          podSpecPatch:
+            serviceAccountName: integration-tests
+            volumes:
+              - name: agent-stack-k8s-config
+                configMap:
+                  name: agent-stack-k8s-config
+              - *go-cache-volume
+              - *go-mod-cache-volume
+            containers:
+              - name: container-0
+                image: golang:latest
+                env:
+                  - *go-cache-env
+                  - *go-mod-cache-env
+                envFrom:
+                  - secretRef:
+                      name: agent-stack-k8s-secrets
+                volumeMounts:
+                  - mountPath: /etc/config.yaml
+                    name: agent-stack-k8s-config
+                    subPath: config.yaml
+                  - *go-cache-mount
+                  - *go-mod-cache-mount
+                resources:
+                  requests:
+                    cpu: 1000m
+                    memory: 512Mi
+      - cluster-secrets#v1.0.0:
+          variables:
+            BUILDKITE_TOKEN: integration_test_buildkite_api_token
+            BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
+      - test-collector:
+          files: junit-*.xml
+          format: junit
+
   - label: ":docker: build and push controller image"
     key: controller
     plugins:
@@ -204,6 +250,7 @@ steps:
       - agent
       - controller
       - tests
+      - tests-experimental
 
   - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
     label: ":shipit: deploy"
