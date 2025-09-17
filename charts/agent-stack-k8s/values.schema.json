@@ -32,10 +32,39 @@
       "title": "The image for the agent-stack-k8s controller",
       "examples": ["ghcr.io/buildkite/agent-stack-k8s/controller:latest"]
     },
-    "deployGrafanaDashboard": {
-      "type": "boolean",
-      "default": true,
-      "title": "When enabled, installs a Grafana dashboard definition using a ConfigMap"
+    "monitoring": {
+      "type": "object",
+      "title": "Monitoring-related properties",
+      "properties": {
+        "deployGrafanaDashboard": {
+          "type": "boolean",
+          "default": true,
+          "title": "When enabled, installs a Grafana dashboard definition using a ConfigMap"
+        },
+        "podMonitor": {
+          "type": "object",
+          "title": "PodMonitor resource properties",
+          "properties": {
+            "deploy": {
+              "type": "boolean",
+              "default": true,
+              "title": "When enabled, installs a PodMonitor resource (https://prometheus-operator.dev/docs/api-reference/api/#monitoring.coreos.com/v1.PodMonitor) configured to scrape the controller pod metrics"
+            },
+            "namespace": {
+              "type": "string",
+              "default": "",
+              "title": "Alternative namespace to install the PodMonitor resource into. By default the same namespace as the Helm deployment is used.",
+              "examples": ["prometheus"]
+            },
+            "scrapeInterval": {
+              "type": "string",
+              "default": "",
+              "title": "A duration string that overrides the Prometheus scrape interval for this PodMonitor specifically",
+              "examples": ["1s", "5s", "10s", "15s"]
+            }
+          }
+        }
+      }
     },
     "nameOverride": {
       "type": "string",
