@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
@@ -27,21 +28,26 @@ type FailureInfo struct {
 	Reason   string
 }
 
-// acquireAndFailForObject figures out how to fail the BK job corresponding to
+// failForK8sObject figures out how to fail the BK job corresponding to
 // the k8s object (a pod or job) by inspecting the object's labels.
-func acquireAndFailForObject(
+func failForK8sObject(
 	ctx context.Context,
 	logger *zap.Logger,
-	k8sClient kubernetes.Interface,
-	cfg *config.Config,
 	obj metav1.Object,
 	failureInfo FailureInfo,
+
+	// This is used for API driven fail job.
+	agentClient *api.AgentClient,
+
+	// These two are used by fail job via acquire and fail.
+	k8sClient kubernetes.Interface,
+	cfg *config.Config,
 ) error {
-	agentToken, err := fetchAgentToken(ctx, logger, k8sClient, obj.GetNamespace(), cfg.AgentTokenSecret)
-	if err != nil {
-		logger.Error("fetching agent token from secret", zap.Error(err))
-		return err
-	}
+
+	logger.Info(
+		"failing a job for k8s object",
+		zap.String("name", obj.GetName()),
+	)
 
 	// Matching tags are required order to connect the temporary agent.
 	labels := obj.GetLabels()
@@ -50,14 +56,18 @@ func acquireAndFailForObject(
 		logger.Error("object missing UUID label", zap.String("label", config.UUIDLabel))
 		return errors.New("missing UUID label")
 	}
-	tags := agenttags.TagsFromLabels(labels)
-	opts := cfg.AgentConfig.ControllerOptions()
-
-	if err := acquireAndFail(ctx, logger, agentToken, cfg.JobPrefix, jobUUID, tags, failureInfo, opts...); err != nil {
-		logger.Error("failed to acquire and fail the job on Buildkite", zap.Error(err))
-		return err
+	if agentClient.UseStackAPI {
+		return agentClient.FailJob(ctx, jobUUID, failureInfo.Message)
+	} else {
+		tags := agenttags.TagsFromLabels(labels)
+		opts := cfg.AgentConfig.ControllerOptions()
+		agentToken, err := fetchAgentToken(ctx, logger, k8sClient, obj.GetNamespace(), cfg.AgentTokenSecret)
+		if err != nil {
+			logger.Error("fetching agent token from secret", zap.Error(err))
+			return err
+		}
+		return acquireAndFail(ctx, logger, agentToken, cfg.JobPrefix, jobUUID, tags, failureInfo, opts...)
 	}
-	return nil
 }
 
 // acquireAndFail fails the job in Buildkite. agentToken needs to be the token value.

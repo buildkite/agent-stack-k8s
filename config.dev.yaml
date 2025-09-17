@@ -7,6 +7,7 @@ agent-config:
   endpoint: http://agent.buildkite.localhost/v3
 
 experimental-job-reservation-support: true
+experimental-stacks-api-support: true
 
 pod-spec-patch:
   hostAliases:
