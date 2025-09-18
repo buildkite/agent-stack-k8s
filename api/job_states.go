@@ -32,6 +32,8 @@ const (
 	JobStateRunning JobState = "running"
 	// The job is scheduled and waiting for an agent
 	JobStateScheduled JobState = "scheduled"
+	// The job is reserved.
+	JobStateReserved JobState = "reserved"
 	// The job was skipped
 	JobStateSkipped JobState = "skipped"
 	// The job timed out

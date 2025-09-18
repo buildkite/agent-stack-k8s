@@ -71,8 +71,9 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 			Timeout:   60 * time.Second,
 			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, opts.Token)),
 		},
-		clusterID: opts.ClusterID,
-		queue:     opts.Queue,
+		clusterID:   opts.ClusterID,
+		queue:       opts.Queue,
+		reservation: opts.UseReservation,
 	}
 
 	if opts.UseStacksAPI {
