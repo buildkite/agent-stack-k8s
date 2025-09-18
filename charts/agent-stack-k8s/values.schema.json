@@ -36,6 +36,12 @@
       "type": "object",
       "title": "Monitoring-related properties",
       "properties": {
+        "namespace": {
+          "type": "string",
+          "default": "",
+          "title": "Namespace to install monitoring resources into; some Prometheus Operator deployments only scan a particular namespace for monitoring resources such as PodMonitor and ServiceMonitor. By default the same namespace as the agent-stack-k8s controller is used.",
+          "examples": ["monitoring", "prometheus"]
+        },
         "deployGrafanaDashboard": {
           "type": "boolean",
           "default": true,
@@ -48,13 +54,7 @@
             "deploy": {
               "type": "boolean",
               "default": true,
-              "title": "When enabled, installs a PodMonitor resource (https://prometheus-operator.dev/docs/api-reference/api/#monitoring.coreos.com/v1.PodMonitor) configured to scrape the controller pod metrics"
-            },
-            "namespace": {
-              "type": "string",
-              "default": "",
-              "title": "Alternative namespace to install the PodMonitor resource into. By default the same namespace as the Helm deployment is used.",
-              "examples": ["prometheus"]
+              "title": "When enabled, installs a PodMonitor resource (https://prometheus-operator.dev/docs/api-reference/api/#monitoring.coreos.com/v1.PodMonitor) configured to scrape the controller pod metrics. Note this requires the Prometheus port on the controller to be enabled (see config.prometheus-port)."
             },
             "scrapeInterval": {
               "type": "string",
@@ -359,7 +359,7 @@
         },
         "prometheus-port": {
           "type": "integer",
-          "default": 0,
+          "default": 9216,
           "minimum": 0,
           "maximum": 65535,
           "title": "Bind port to expose Prometheus /metrics; 0 disables it"
