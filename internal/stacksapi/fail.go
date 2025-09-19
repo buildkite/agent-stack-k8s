@@ -14,6 +14,13 @@ type FailJobRequest struct {
 }
 
 func (c *Client) FailJob(ctx context.Context, failJobReq FailJobRequest, opts ...RequestOption) error {
+	const maxErrorDetailSize = 4 * 1024 // 4KB
+
+	if len(failJobReq.ErrorDetail) > maxErrorDetailSize {
+		c.logger.Warn("ErrorDetail exceeds 4KB limit, cropping", "original_size", len(failJobReq.ErrorDetail), "cropped_size", maxErrorDetailSize)
+		failJobReq.ErrorDetail = failJobReq.ErrorDetail[:maxErrorDetailSize]
+	}
+
 	path := fmt.Sprintf("/stacks/%s/jobs/%s/fail", failJobReq.StackKey, failJobReq.JobUUID)
 	req, err := c.newRequest(ctx, http.MethodPost, path, failJobReq, opts...)
 	if err != nil {
