@@ -481,8 +481,9 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 	log = log.With(zap.String("job_state", string(job.State)))
 
 	switch job.State {
-	case api.JobStateScheduled:
+	case api.JobStateScheduled, api.JobStateReserved:
 		// We can acquire it and fail it ourselves.
+		// Note with the reserved state, we are assuming that the current stack runtime would be the reservation owner.
 		log.Info("One or more job containers are waiting too long for images. Failing.")
 		message := w.formatImagePullFailureMessage(statuses)
 		failureInfo := FailureInfo{
@@ -606,8 +607,11 @@ func (w *podWatcher) jobCancelChecker(ctx context.Context, stopCh <-chan struct{
 			}
 			return
 
-		case api.JobStateScheduled:
+		case api.JobStateScheduled, api.JobStateReserved:
 			// The pod can continue waiting for resources / initializing.
+			// Technically, when it's on reserved state we should check if the current stack is the owner.
+			// But since we "reserver" in the beginning of our pipeline. We trust the current stack runtime be the owner
+			// of the job in this context.
 
 		default:
 			// Assigned, Accepted, Running: Too late. Let the agent within
