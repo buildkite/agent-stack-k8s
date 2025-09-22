@@ -257,6 +257,7 @@ func handleResponseError(ctx context.Context, logger *slog.Logger, resp *http.Re
 		var errResp *ErrorResponse
 		if errors.As(err, &errResp) {
 			if errResp.IsRetryableStatus() {
+				setRetryAfter(r, resp, logger)
 				logger = logger.With("retry_state", r.String())
 			} else {
 				r.Break()
@@ -270,6 +271,20 @@ func handleResponseError(ctx context.Context, logger *slog.Logger, resp *http.Re
 		return err
 	}
 	return nil
+}
+
+func setRetryAfter(r *roko.Retrier, resp *http.Response, logger *slog.Logger) {
+	if resp.Header.Get("Retry-After") == "" {
+		return
+	}
+
+	retryAfter, err := time.ParseDuration(resp.Header.Get("Retry-After") + "s")
+	if err != nil {
+		logger.Warn("failed to parse Retry-After header", "error", err, "header_value", resp.Header.Get("Retry-After"))
+		return
+	}
+
+	r.SetNextInterval(retryAfter)
 }
 
 // prepareRequestLogger sets up logging with optional request dump
