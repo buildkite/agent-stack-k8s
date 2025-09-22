@@ -77,7 +77,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "This heatmap shows the duration between receiving a job from Buildkite and creating the corresponding job in Kubernetes. Note this chart only functions with native histograms enabled in Prometheus.",
           "fieldConfig": {
@@ -142,7 +142,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_job_end_to_end_seconds{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -172,7 +172,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "The monitor is the first component in the stack. It periodically queries Buildkite for new jobs to run.",
           "fieldConfig": {
@@ -252,7 +252,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_monitor_jobs_returned_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -264,7 +264,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_monitor_jobs_handled_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -277,7 +277,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_monitor_jobs_filtered_out_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -290,7 +290,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_monitor_job_handler_errors_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -307,7 +307,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "This heatmap shows the duration of time spent querying Buildkite for jobs. Note this chart only functions with native histograms enabled in Prometheus.",
           "fieldConfig": {
@@ -372,7 +372,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_monitor_job_query_seconds{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -401,7 +401,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "The limiter is the second component in the stack. It has an internal queue of jobs, and also applies the max-in-flight limit (if configured).",
           "fieldConfig": {
@@ -480,7 +480,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(buildkite_limiter_work_queue_length{namespace=~\"$NAMESPACE\", pod=~\"$POD\"})",
@@ -492,7 +492,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(buildkite_limiter_max_in_flight{namespace=~\"$NAMESPACE\", pod=~\"$POD\"})",
@@ -505,7 +505,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(buildkite_limiter_tokens_available{namespace=~\"$NAMESPACE\", pod=~\"$POD\"})",
@@ -518,7 +518,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(buildkite_limiter_waiting_for_token{namespace=~\"$NAMESPACE\", pod=~\"$POD\"})",
@@ -531,7 +531,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(buildkite_limiter_waiting_for_work{namespace=~\"$NAMESPACE\", pod=~\"$POD\"})",
@@ -548,7 +548,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "The limiter is the second component in the stack. It has an internal queue of jobs, and also applies the max-in-flight limit (if configured).",
           "fieldConfig": {
@@ -628,7 +628,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_limiter_job_handler_calls_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -640,7 +640,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum by(reason) (rate(buildkite_limiter_job_handler_errors_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -657,7 +657,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "This heatmap shows the duration of time each limiter worker spent waiting for new work. Note this chart only functions with native histograms enabled in Prometheus.",
           "fieldConfig": {
@@ -722,7 +722,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_limiter_work_wait_duration_seconds{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -738,7 +738,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "This heatmap shows the duration of time each limiter worker spent waiting for a limiter token. Note this chart only functions with native histograms enabled in Prometheus.",
           "fieldConfig": {
@@ -803,7 +803,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_limiter_token_wait_duration_seconds{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -819,7 +819,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "",
           "fieldConfig": {
@@ -899,7 +899,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_limiter_onadd_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -911,7 +911,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_limiter_ondelete_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -923,7 +923,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_limiter_onupdate_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -952,7 +952,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "The deduper is the third component in the stack. It prevents duplicate jobs from being scheduled and has the most accurate estimate of jobs present on Kubernetes, which includes both running jobs and completed jobs not yet cleaned up.",
           "fieldConfig": {
@@ -1032,7 +1032,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(buildkite_deduper_jobs_running{namespace=~\"$NAMESPACE\", pod=~\"$POD\"})",
@@ -1048,7 +1048,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "The deduper is the third component in the stack. It prevents duplicate jobs from being scheduled. ",
           "fieldConfig": {
@@ -1128,7 +1128,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_deduper_job_handler_calls_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1140,7 +1140,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_deduper_job_handler_errors_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1153,7 +1153,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_deduper_jobs_unmarked_running_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1166,7 +1166,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_deduper_jobs_marked_running_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1183,7 +1183,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "",
           "fieldConfig": {
@@ -1263,7 +1263,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_deduper_onadd_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1275,7 +1275,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_deduper_ondelete_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1287,7 +1287,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_deduper_onupdate_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1316,7 +1316,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "The scheduler is the last component in the stack prior to jobs running. It is responsible for passing the job onto Kubernetes.",
           "fieldConfig": {
@@ -1396,7 +1396,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_scheduler_job_create_calls_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1408,7 +1408,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_scheduler_job_create_success_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1421,7 +1421,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum by (reason) (rate(buildkite_scheduler_job_create_errors_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1434,7 +1434,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_scheduler_jobs_failed_on_buildkite_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1447,7 +1447,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "builder",
               "expr": "sum(rate(buildkite_pod_watcher_job_fail_on_buildkite_errors_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1474,7 +1474,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "description": "The job watcher is an auxiliary component that watches for certain Kubernetes job conditions, such as stalling or finishing without ever starting a pod.",
               "fieldConfig": {
@@ -1554,7 +1554,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_job_watcher_cleanups_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1566,7 +1566,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_job_watcher_jobs_stalled_without_pod_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1578,7 +1578,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_job_watcher_jobs_finished_without_pod_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1590,7 +1590,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_job_watcher_jobs_failed_on_buildkite_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1602,7 +1602,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_job_watcher_job_fail_on_buildkite_errors_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1618,7 +1618,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "description": "",
               "fieldConfig": {
@@ -1697,7 +1697,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(buildkite_job_watcher_num_ignored_jobs{namespace=~\"$NAMESPACE\", pod=~\"$POD\"})",
@@ -1709,7 +1709,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(buildkite_job_watcher_num_stalling_jobs{namespace=~\"$NAMESPACE\", pod=~\"$POD\"})",
@@ -1725,7 +1725,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "description": "The job watcher is an auxiliary component that watches for certain Kubernetes job conditions, such as stalling or finishing without ever starting a pod.",
               "fieldConfig": {
@@ -1805,7 +1805,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_job_watcher_onadd_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1817,7 +1817,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_job_watcher_ondelete_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1829,7 +1829,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_job_watcher_onupdate_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1859,7 +1859,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "description": "The pod watcher is an auxiliary component that watches for certain Kubernetes pod conditions, such as failing to pull an image.",
               "fieldConfig": {
@@ -1939,7 +1939,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_pod_watcher_jobs_failed_on_buildkite_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1951,7 +1951,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_pod_watcher_job_fail_on_buildkite_errors_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -1967,7 +1967,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "description": "",
               "fieldConfig": {
@@ -2046,7 +2046,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(buildkite_pod_watcher_num_ignored_jobs{namespace=~\"$NAMESPACE\", pod=~\"$POD\"})",
@@ -2058,7 +2058,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(buildkite_pod_watcher_num_job_cancel_checkers{namespace=~\"$NAMESPACE\", pod=~\"$POD\"})",
@@ -2070,7 +2070,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(buildkite_pod_watcher_num_watching_for_image_failure{namespace=~\"$NAMESPACE\", pod=~\"$POD\"})",
@@ -2086,7 +2086,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "description": "",
               "fieldConfig": {
@@ -2166,7 +2166,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_pod_watcher_onadd_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -2178,7 +2178,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_pod_watcher_ondelete_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -2190,7 +2190,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_pod_watcher_onupdate_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -2220,7 +2220,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "description": "The completion watcher is an auxiliary stack component that watches pods for certain completion conditions in order to effectively clean up, e.g. to prevent a sidecar container from causing a pod to live forever.",
               "fieldConfig": {
@@ -2300,7 +2300,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_completion_watcher_cleanups_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -2312,7 +2312,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_completion_watcher_onadd_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -2324,7 +2324,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "builder",
                   "expr": "sum(rate(buildkite_completion_watcher_onupdate_events_total{namespace=~\"$NAMESPACE\", pod=~\"$POD\"}[$__rate_interval]))",
@@ -2342,6 +2342,8 @@ data:
           "type": "row"
         }
       ],
+      "preload": false,
+      "refresh": "auto",
       "schemaVersion": 41,
       "tags": [
         "buildkite",
@@ -2350,10 +2352,29 @@ data:
       "templating": {
         "list": [
           {
-            "current": {},
+            "allowCustomValue": false,
+            "current": {
+              "text": "Prometheus",
+              "value": "prometheus"
+            },
+            "label": "Data source",
+            "name": "datasource",
+            "options": [],
+            "query": "prometheus",
+            "refresh": 1,
+            "regex": "",
+            "type": "datasource"
+          },
+          {
+            "current": {
+              "text": "All",
+              "value": [
+                "$__all"
+              ]
+            },
             "datasource": {
               "type": "prometheus",
-              "uid": "prometheus"
+              "uid": "${datasource}"
             },
             "definition": "label_values(buildkite_monitor_job_queries_total,namespace)",
             "description": "",
@@ -2372,10 +2393,15 @@ data:
             "type": "query"
           },
           {
-            "current": {},
+            "current": {
+              "text": "All",
+              "value": [
+                "$__all"
+              ]
+            },
             "datasource": {
               "type": "prometheus",
-              "uid": "prometheus"
+              "uid": "${datasource}"
             },
             "definition": "label_values(buildkite_monitor_job_queries_total{namespace=~\"$NAMESPACE\"},pod)",
             "description": "",
