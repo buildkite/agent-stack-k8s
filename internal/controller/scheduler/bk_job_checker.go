@@ -112,7 +112,7 @@ func (c *BkJobChecker) jobCancelChecker(ctx context.Context, stopCh <-chan struc
 			// continue below
 		}
 
-		job, retryAfter, err := c.agentClient.GetJobState(ctx, jobUUID.String())
+		jobStates, retryAfter, err := c.agentClient.GetJobStates(ctx, []string{jobUUID.String()})
 		if api.IsPermanentError(err) {
 			log.Error("Couldn't fetch state of job", zap.Error(err))
 			return
@@ -122,9 +122,10 @@ func (c *BkJobChecker) jobCancelChecker(ctx context.Context, stopCh <-chan struc
 			// *shrug* Check again soon.
 			continue
 		}
-		log := log.With(zap.String("job_state", string(job.State)))
+		state := jobStates[jobUUID.String()]
+		log := log.With(zap.String("job_state", string(state)))
 
-		switch job.State {
+		switch state {
 		case api.JobStateCanceled, api.JobStateCanceling:
 			log.Info("Deleting pending pod for cancelled job")
 			// Please read pod_watcher to understand that this logic only applies to Pending pods.

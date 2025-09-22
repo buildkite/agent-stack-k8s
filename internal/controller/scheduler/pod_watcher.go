@@ -459,21 +459,22 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		roko.WithJitterRange(-1*time.Second, 1*time.Second),
 		roko.WithMaxAttempts(5),
 	)
-	job, err := roko.DoFunc(ctx, retrier, func(*roko.Retrier) (*api.AgentJobState, error) {
-		job, retryAfter, err := w.agentClient.GetJobState(ctx, jobUUID.String())
+	jobState, err := roko.DoFunc(ctx, retrier, func(*roko.Retrier) (api.JobState, error) {
+		jobs, retryAfter, err := w.agentClient.GetJobStates(ctx, []string{jobUUID.String()})
 		if api.IsPermanentError(err) {
 			retrier.Break()
 		}
 		retrier.SetNextInterval(max(retryAfter, retrier.NextInterval()))
-		return job, err
+		uuidString := jobUUID.String()
+		return jobs[uuidString], err
 	})
 	if err != nil {
 		log.Warn("Failed to fetch state of job", zap.Error(err))
 		return
 	}
-	log = log.With(zap.String("job_state", string(job.State)))
+	log = log.With(zap.String("job_state", string(jobState)))
 
-	switch job.State {
+	switch jobState {
 	case api.JobStateScheduled, api.JobStateReserved:
 		// We can acquire it and fail it ourselves.
 		// Note with the reserved state, we are assuming that the current stack runtime would be the reservation owner.

@@ -242,7 +242,7 @@ type AgentJobState struct {
 }
 
 // GetJobState gets the state of a specific job.
-func (c *AgentClient) GetJobState(ctx context.Context, id string) (result *AgentJobState, retryAfter time.Duration, err error) {
+func (c *AgentClient) getJobState(ctx context.Context, id string) (result *AgentJobState, retryAfter time.Duration, err error) {
 	u := c.endpoint.JoinPath(
 		"clusters", railsPathEscape(c.clusterID),
 		"queues", railsPathEscape(c.queue),
@@ -257,6 +257,88 @@ func (c *AgentClient) GetJobState(ctx context.Context, id string) (result *Agent
 	defer resp.Body.Close()
 
 	return decodeResponse[AgentJobState](resp)
+}
+
+// GetJobStats get the states of a batch of jobs.
+func (c *AgentClient) GetJobStates(ctx context.Context, ids []string) (result map[string]JobState, retryAfter time.Duration, err error) {
+	if len(ids) == 0 {
+		return make(map[string]JobState), 0, nil
+	}
+
+	const batchSize = 20
+	stateMap := make(map[string]JobState)
+	var maxRetryAfter time.Duration
+	var firstError error
+
+	for i := 0; i < len(ids); i += batchSize {
+		end := i + batchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		batch := ids[i:end]
+
+		batchStates, batchRetryAfter, batchErr := c.legacyGetJobStatesBatch(ctx, batch)
+
+		if batchErr != nil && firstError == nil {
+			firstError = batchErr
+		}
+		if batchRetryAfter > maxRetryAfter {
+			maxRetryAfter = batchRetryAfter
+		}
+
+		for id, state := range batchStates {
+			stateMap[id] = state
+		}
+	}
+
+	return stateMap, maxRetryAfter, firstError
+}
+
+// Concurrently call the old get job state endpoint for job states.
+// The old job state endpoint is pretty forgiving in terms of rate limit.
+func (c *AgentClient) legacyGetJobStatesBatch(ctx context.Context, ids []string) (result map[string]JobState, retryAfter time.Duration, err error) {
+	type jobStateResult struct {
+		id         string
+		state      JobState
+		retryAfter time.Duration
+		err        error
+	}
+
+	results := make(chan jobStateResult, len(ids))
+
+	for _, id := range ids {
+		go func(jobID string) {
+			jobState, retry, err := c.getJobState(ctx, jobID)
+			if err != nil {
+				results <- jobStateResult{id: jobID, retryAfter: retry, err: err}
+				return
+			}
+			if jobState == nil {
+				results <- jobStateResult{id: jobID, retryAfter: retry, err: fmt.Errorf("job %s not found", jobID)}
+				return
+			}
+			results <- jobStateResult{id: jobID, state: jobState.State, retryAfter: retry}
+		}(id)
+	}
+
+	stateMap := make(map[string]JobState)
+	var maxRetryAfter time.Duration
+	var firstError error
+
+	for i := 0; i < len(ids); i++ {
+		res := <-results
+		if res.err != nil && firstError == nil {
+			firstError = res.err
+		}
+		if res.retryAfter > maxRetryAfter {
+			maxRetryAfter = res.retryAfter
+		}
+		if res.err == nil {
+			stateMap[res.id] = res.state
+		}
+	}
+
+	return stateMap, maxRetryAfter, firstError
 }
 
 // ReserveJobBatchResult describes the result of a batch job reservation.
