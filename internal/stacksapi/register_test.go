@@ -14,7 +14,7 @@ func TestRegisterStack(t *testing.T) {
 	t.Run("successful registration", func(t *testing.T) {
 		t.Parallel()
 		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			verifyAuthAndMethod(t, r, "POST", "/stacks/register")
+			verifyAuthMethodPath(t, r, "POST", "/stacks/register")
 
 			// Verify request body
 			var params RegisterStackRequest
@@ -91,7 +91,7 @@ func TestDeregisterStack(t *testing.T) {
 		t.Parallel()
 
 		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			verifyAuthAndMethod(t, r, "POST", "/stacks/stack-123/deregister")
+			verifyAuthMethodPath(t, r, "POST", "/stacks/stack-123/deregister")
 
 			w.WriteHeader(http.StatusNoContent)
 		})

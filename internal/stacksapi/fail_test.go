@@ -17,7 +17,7 @@ func TestFailJob(t *testing.T) {
 		t.Parallel()
 
 		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			verifyAuthAndMethod(t, r, "POST", "/stacks/stack-123/jobs/456/fail")
+			verifyAuthMethodPath(t, r, "POST", "/stacks/stack-123/jobs/456/fail")
 
 			var params FailJobRequest
 			assert.NoError(t, json.NewDecoder(r.Body).Decode(&params))
@@ -58,7 +58,7 @@ func TestFailJob(t *testing.T) {
 		t.Parallel()
 
 		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			verifyAuthAndMethod(t, r, "POST", "/stacks/stack-123/jobs/456/fail")
+			verifyAuthMethodPath(t, r, "POST", "/stacks/stack-123/jobs/456/fail")
 
 			var params FailJobRequest
 			assert.NoError(t, json.NewDecoder(r.Body).Decode(&params))
