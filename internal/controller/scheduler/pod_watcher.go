@@ -45,12 +45,8 @@ type podWatcher struct {
 	watchingForImageFailureMu sync.Mutex
 	watchingForImageFailure   map[uuid.UUID]*corev1.Pod
 
-	// The job cancel checkers query the job state every so often.
-	jobCancelCheckerInterval time.Duration
-
-	// Channels that are closed when a cancel checker should stop.
-	cancelCheckerChsMu sync.Mutex
-	cancelCheckerChs   map[uuid.UUID]*onceChan
+	// Buildkite job checker for handling job cancellation
+	bkJobChecker *BkJobChecker
 
 	// This is the context passed to RegisterInformer.
 	// It's being stored here (grrrr!) because the k8s ResourceEventHandler
@@ -90,10 +86,9 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, agentClient *ap
 		agentClient:                 agentClient,
 		cfg:                         cfg,
 		imagePullBackOffGracePeriod: imagePullBackOffGracePeriod,
-		jobCancelCheckerInterval:    jobCancelCheckerInterval,
 		ignoredJobs:                 make(map[uuid.UUID]struct{}),
 		watchingForImageFailure:     make(map[uuid.UUID]*corev1.Pod),
-		cancelCheckerChs:            make(map[uuid.UUID]*onceChan),
+		bkJobChecker:                NewBkJobChecker(logger, agentClient, k8s, jobCancelCheckerInterval),
 	}
 	podWatcherIgnoredJobsGaugeFunc = func() int {
 		pw.ignoredJobsMu.RLock()
@@ -101,9 +96,7 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, agentClient *ap
 		return len(pw.ignoredJobs)
 	}
 	jobCancelCheckerGaugeFunc = func() int {
-		pw.cancelCheckerChsMu.Lock()
-		defer pw.cancelCheckerChsMu.Unlock()
-		return len(pw.cancelCheckerChs)
+		return pw.bkJobChecker.GetActiveCheckCount()
 	}
 	watchingForImageFailureGaugeFunc = func() int {
 		pw.watchingForImageFailureMu.Lock()
@@ -142,7 +135,7 @@ func (w *podWatcher) OnDelete(previousState any) {
 
 	// No need to continue watching for image-related failures or cancellation.
 	w.stopWatchingForImageFailure(jobUUID)
-	w.stopJobCancelChecker(jobUUID)
+	w.bkJobChecker.StopChecking(jobUUID)
 
 	// The pod is gone, so we can stop ignoring it (if it comes back).
 	w.unignoreJob(jobUUID)
@@ -188,13 +181,13 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 	case corev1.PodRunning:
 		// Running: the agent container has started or is about to start, and it
 		//          can handle the cancellation and exit.
-		w.stopJobCancelChecker(jobUUID)
+		w.bkJobChecker.StopChecking(jobUUID)
 
 	default:
 		// Succeeded, Failed: it's already over.
 		// Unknown: probably shouldn't interfere.
 		w.stopWatchingForImageFailure(jobUUID)
-		w.stopJobCancelChecker(jobUUID)
+		w.bkJobChecker.StopChecking(jobUUID)
 	}
 
 	if w.isIgnored(jobUUID) {
@@ -212,7 +205,7 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 	switch pod.Status.Phase {
 	case corev1.PodPending:
 		w.watchForImageFailure(jobUUID, pod)
-		w.startJobCancelChecker(ctx, log, pod.ObjectMeta, jobUUID)
+		w.bkJobChecker.StartChecking(ctx, log, pod.ObjectMeta, jobUUID)
 
 	case corev1.PodRunning:
 		w.watchForImageFailure(jobUUID, pod)
@@ -380,7 +373,13 @@ func (w *podWatcher) formatImagePullFailureMessage(statuses []corev1.ContainerSt
 	return "The following images could not be pulled or were unavailable:\n\n" + tw.Render()
 }
 
-func (w *podWatcher) forcefullyDeletePod(ctx context.Context, log *zap.Logger, podMetadata *metav1.ObjectMeta, reason string) error {
+func forcefullyDeletePod(
+	ctx context.Context,
+	log *zap.Logger,
+	k8s kubernetes.Interface,
+	podMetadata *metav1.ObjectMeta,
+	reason string,
+) error {
 	// Force immediate deletion with zero grace period
 	// We generally believe when our controller decide a payload should go, there shouldn't be good reason to keep it waiting for
 	// graceful timeout.
@@ -390,19 +389,13 @@ func (w *podWatcher) forcefullyDeletePod(ctx context.Context, log *zap.Logger, p
 		GracePeriodSeconds: new(int64), // zero value
 	}
 
-	if err := w.k8s.CoreV1().Pods(podMetadata.Namespace).Delete(ctx, podMetadata.Name, deleteOptions); err != nil {
+	if err := k8s.CoreV1().Pods(podMetadata.Namespace).Delete(ctx, podMetadata.Name, deleteOptions); err != nil {
 		log.Error("Couldn't forcefully delete pod", zap.Error(err))
 		forcefulPodDeletionErrorsCounter.WithLabelValues(reason, string(kerrors.ReasonForError(err))).Inc()
 		return err
 	}
 	forcefullyDeletedPodCounter.WithLabelValues(reason).Inc()
 
-	// Mark the job as ignored to avoid further processing
-	jobUUID, err := jobUUIDForObject(podMetadata)
-	if err != nil {
-		return nil
-	}
-	w.ignoreJob(jobUUID)
 	return nil
 }
 
@@ -501,7 +494,7 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		podWatcherBuildkiteJobFailsCounter.Inc()
 		// Also delete the pod, because it won't die on its own.
 
-		if err := w.forcefullyDeletePod(ctx, log, &pod.ObjectMeta, "image_pull_failure"); err != nil {
+		if err := forcefullyDeletePod(ctx, log, w.k8s, &pod.ObjectMeta, "image_pull_failure"); err != nil {
 			// K8s API overloaded? rate limit? -> TODO in this case we should retry
 			// Admission controller blocks this?
 			// Insufficient RBAC permission?
@@ -509,6 +502,14 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 			// In these case, we've done what we can.
 			return
 		}
+
+		// Mark the job as ignored to avoid further processing
+		jobUUID, err := jobUUIDForObject(&pod.ObjectMeta)
+		if err != nil {
+			log.Error("Could find Job UUID from pod metadata", zap.Error(err))
+			return
+		}
+		w.ignoreJob(jobUUID)
 
 	case api.JobStateAccepted, api.JobStateAssigned, api.JobStateRunning:
 		// An agent is already doing something with the job. Let it fail.
@@ -526,101 +527,6 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		// Maybe the meanings of states has changed since this build?
 		// Log a message but don't do anything.
 		log.Warn("Job not in actionable state")
-	}
-}
-
-func (w *podWatcher) startJobCancelChecker(ctx context.Context, log *zap.Logger, podMeta metav1.ObjectMeta, jobUUID uuid.UUID) {
-	w.cancelCheckerChsMu.Lock()
-	defer w.cancelCheckerChsMu.Unlock()
-
-	if w.cancelCheckerChs[jobUUID] != nil {
-		// The checker is already running or has run.
-		return
-	}
-	stopCh := make(chan struct{})
-	w.cancelCheckerChs[jobUUID] = &onceChan{ch: stopCh}
-	go w.jobCancelChecker(ctx, stopCh, log, podMeta, jobUUID)
-}
-
-func (w *podWatcher) stopJobCancelChecker(jobUUID uuid.UUID) {
-	w.cancelCheckerChsMu.Lock()
-	defer w.cancelCheckerChsMu.Unlock()
-	w.cancelCheckerChs[jobUUID].closeOnce()
-	delete(w.cancelCheckerChs, jobUUID)
-}
-
-// jobCancelChecker runs a loop that queries Buildkite for the job state, and
-// evicts the pod if the job becomes cancelled. This should only be used for
-// pods that are still pending: stopCh should be closed as soon as the agent
-// container starts running.
-func (w *podWatcher) jobCancelChecker(ctx context.Context, stopCh <-chan struct{}, log *zap.Logger, podMeta metav1.ObjectMeta, jobUUID uuid.UUID) {
-	log.Debug("Checking job state for cancellation")
-	defer log.Debug("Stopped checking job state for cancellation")
-
-	ticker := time.NewTicker(w.jobCancelCheckerInterval)
-	defer ticker.Stop()
-
-	retryAfterCh := time.After(0)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-
-		case <-stopCh:
-			return
-
-		case <-ticker.C:
-			// continue below
-		}
-
-		// Also wait for retryAfter, if set
-		select {
-		case <-ctx.Done():
-			return
-
-		case <-stopCh:
-			return
-
-		case <-retryAfterCh:
-			// continue below
-		}
-
-		job, retryAfter, err := w.agentClient.GetJobState(ctx, jobUUID.String())
-		if api.IsPermanentError(err) {
-			log.Error("Couldn't fetch state of job", zap.Error(err))
-			return
-		}
-		retryAfterCh = time.After(retryAfter)
-		if err != nil {
-			// *shrug* Check again soon.
-			continue
-		}
-		log := log.With(zap.String("job_state", string(job.State)))
-
-		switch job.State {
-		case api.JobStateCanceled, api.JobStateCanceling:
-			log.Info("Deleting pending pod for cancelled job")
-			if err := w.forcefullyDeletePod(ctx, log, &podMeta, "job_cancelled"); err != nil {
-				// Low likelihood, we will retry.
-				continue
-			}
-			return
-
-		case api.JobStateScheduled, api.JobStateReserved:
-			// The pod can continue waiting for resources / initializing.
-			// Technically, when it's on reserved state we should check if the current stack is the owner.
-			// But since we "reserver" in the beginning of our pipeline. We trust the current stack runtime be the owner
-			// of the job in this context.
-
-		default:
-			// Assigned, Accepted, Running: Too late. Let the agent within
-			// the pod handle cancellation. Finished, etc: it's already over.
-			// If it's any other state, we probably shouldn't interfere.
-			log.Debug("Ending job cancel checker due to job state")
-			return
-		}
-
 	}
 }
 
@@ -653,20 +559,6 @@ func (w *podWatcher) stopWatchingForImageFailure(jobUUID uuid.UUID) {
 	w.watchingForImageFailureMu.Lock()
 	defer w.watchingForImageFailureMu.Unlock()
 	delete(w.watchingForImageFailure, jobUUID)
-}
-
-// onceChan stores a channel and a [sync.Once] to be used for closing the
-// channel at most once.
-type onceChan struct {
-	once sync.Once
-	ch   chan struct{}
-}
-
-func (oc *onceChan) closeOnce() {
-	if oc == nil {
-		return
-	}
-	oc.once.Do(func() { close(oc.ch) })
 }
 
 // All container-\d containers will have the agent installed as their PID 1.
