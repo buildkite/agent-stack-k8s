@@ -95,7 +95,7 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 			stackKey = "agent-stack-k8s"
 		}
 
-		stack, err := client.stacksAPIClient.RegisterStack(ctx, stacksapi.RegisterStackRequest{
+		stack, _, err := client.stacksAPIClient.RegisterStack(ctx, stacksapi.RegisterStackRequest{
 			Type:     stacksapi.StackTypeKubernetes,
 			QueueKey: opts.Queue,
 			Key:      stackKey,
@@ -315,7 +315,8 @@ func (c *AgentClient) DeregisterStack(ctx context.Context) error {
 		return nil
 	}
 
-	return c.stacksAPIClient.DeregisterStack(ctx, c.stack.Key, stacksapi.WithNoRetry())
+	_, err := c.stacksAPIClient.DeregisterStack(ctx, c.stack.Key, stacksapi.WithNoRetry())
+	return err
 }
 
 func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail string) error {
@@ -329,7 +330,8 @@ func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail s
 		ErrorDetail: errorDetail,
 	}
 
-	return c.stacksAPIClient.FailJob(ctx, req)
+	_, err := c.stacksAPIClient.FailJob(ctx, req)
+	return err
 }
 
 func decodeResponse[T any](resp *http.Response) (result *T, retryAfter time.Duration, err error) {

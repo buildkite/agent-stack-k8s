@@ -31,6 +31,7 @@ func TestFailJob(t *testing.T) {
 				t.Errorf("request params mismatch (-want +got):\n%s", diff)
 			}
 
+			w.Header().Set("X-Custom-Header", "custom-value")
 			w.WriteHeader(http.StatusNoContent)
 		})
 		t.Cleanup(func() { server.Close() })
@@ -42,8 +43,15 @@ func TestFailJob(t *testing.T) {
 			ErrorDetail: "show me the money",
 		}
 
-		err := client.FailJob(t.Context(), req)
-		assert.NoError(t, err)
+		header, err := client.FailJob(t.Context(), req)
+		if err != nil {
+			t.Fatalf("client.FailJob returned an error: %v", err)
+		}
+
+		want, got := "custom-value", header.Get("X-Custom-Header")
+		if want != got {
+			t.Errorf("header X-Custom-Header: want %q, got %q", want, got)
+		}
 	})
 
 	t.Run("crops error detail when exceeds 4KB", func(t *testing.T) {
@@ -72,7 +80,7 @@ func TestFailJob(t *testing.T) {
 			ErrorDetail: largeErrorDetail,
 		}
 
-		err := client.FailJob(t.Context(), req)
+		_, err := client.FailJob(t.Context(), req)
 		assert.NoError(t, err)
 	})
 }

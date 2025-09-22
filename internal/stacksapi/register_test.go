@@ -45,6 +45,7 @@ func TestRegisterStack(t *testing.T) {
 			}
 
 			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("X-Custom-Header", "custom-value")
 			_ = json.NewEncoder(w).Encode(response)
 		})
 		t.Cleanup(func() { server.Close() })
@@ -57,7 +58,7 @@ func TestRegisterStack(t *testing.T) {
 			Metadata: map[string]string{"env": "test"},
 		}
 
-		stack, err := client.RegisterStack(ctx, params)
+		stack, header, err := client.RegisterStack(ctx, params)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -75,6 +76,11 @@ func TestRegisterStack(t *testing.T) {
 		if diff := cmp.Diff(expected, stack); diff != "" {
 			t.Errorf("stack mismatch (-want +got):\n%s", diff)
 		}
+
+		want, got := "custom-value", header.Get("X-Custom-Header")
+		if want != got {
+			t.Errorf("header X-Custom-Header: want %q, got %q", want, got)
+		}
 	})
 }
 
@@ -91,7 +97,7 @@ func TestDeregisterStack(t *testing.T) {
 		})
 		t.Cleanup(func() { server.Close() })
 
-		err := client.DeregisterStack(t.Context(), "stack-123")
+		_, err := client.DeregisterStack(t.Context(), "stack-123")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
