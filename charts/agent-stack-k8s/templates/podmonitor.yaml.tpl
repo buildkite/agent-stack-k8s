@@ -3,7 +3,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
   name: {{ include "agent-stack-k8s.fullname" . }}-podmonitor
-  namespace: {{ with .Values.monitoring.podMonitor.namespace }}{{ . }}{{ else }}{{ .Release.Namespace }}{{ end }}
+  namespace: {{ with .Values.monitoring.namespace }}{{ . }}{{ else }}{{ .Release.Namespace }}{{ end }}
   labels:
     app: {{ include "agent-stack-k8s.fullname" . }}
 spec:
