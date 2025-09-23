@@ -108,6 +108,15 @@ func Run(
 		return
 	}
 
+	logger.Info("Starting controller",
+		zap.String("cluster-name", agentTokenIdentity.ClusterName),
+		zap.String("organization-slug", agentTokenIdentity.OrganizationSlug),
+		zap.String("agent-endpoint", agentEndpoint),
+		zap.String("namespace", cfg.Namespace),
+		zap.String("queue", queue),
+		zap.String("stack-id", cfg.ID),
+	)
+
 	agentClient, err := api.NewAgentClient(ctx, api.AgentClientOpts{
 		Token:           agentToken,
 		Endpoint:        agentEndpoint,

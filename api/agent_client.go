@@ -246,7 +246,6 @@ func (c *AgentClient) getStackScheduledJobs(ctx context.Context, afterCursor str
 		jobs = append(jobs, asj)
 	}
 
-	retryAfter := readRetryAfter(header)
 	return &AgentScheduledJobs{
 		Jobs: jobs,
 		ClusterQueue: ClusterQueue{
@@ -257,7 +256,7 @@ func (c *AgentClient) getStackScheduledJobs(ctx context.Context, afterCursor str
 			HasNextPage: resp.PageInfo.HasNextPage,
 			EndCursor:   resp.PageInfo.EndCursor,
 		},
-	}, retryAfter, nil
+	}, readRetryAfter(header), nil
 }
 
 type AgentJob struct {
