@@ -94,36 +94,3 @@ func (c *Client) ListScheduledJobs(ctx context.Context, listReq ListScheduledJob
 
 	return listJobsResp, header, nil
 }
-
-// PaginateAllScheduledJobs retrieves all jobs in the scheduled state from a specific cluster queue, handling pagination
-// automatically. The StackKey and ClusterQueueKey fields of the request are required. This function will make multiple
-// calls to [ListScheduledJobs] as needed to retrieve all jobs, and will return a single response containing all jobs.
-// The http.Header from the last request made is also returned.
-func (c *Client) PaginateAllScheduledJobs(ctx context.Context, listReq ListScheduledJobsRequest, opts ...RequestOption) (ListScheduledJobsResponse, http.Header, error) {
-	var (
-		allJobs    []ScheduledJob
-		lastHeader http.Header
-		lastResp   ListScheduledJobsResponse
-	)
-	listReq.StartCursor = "" // Start from the beginning, ignore any existing cursor in the request
-
-	for {
-		resp, header, err := c.ListScheduledJobs(ctx, listReq, opts...)
-		if err != nil {
-			return ListScheduledJobsResponse{}, nil, err
-		}
-
-		allJobs = append(allJobs, resp.Jobs...)
-		lastHeader = header
-		lastResp = resp
-
-		if !resp.PageInfo.HasNextPage {
-			break
-		}
-
-		listReq.StartCursor = resp.PageInfo.EndCursor
-	}
-
-	lastResp.Jobs = allJobs
-	return lastResp, lastHeader, nil
-}
