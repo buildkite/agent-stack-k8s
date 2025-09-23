@@ -62,7 +62,7 @@ func TestRegisterStack(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		expected := RegisterStackResponse{
+		expected := &RegisterStackResponse{
 			ID:               "stack-123",
 			OrganizationUUID: "org-456",
 			ClusterQueueKey:  "test-queue",

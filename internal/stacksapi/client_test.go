@@ -193,9 +193,9 @@ func TestErrorResponse(t *testing.T) {
 					t.Fatalf(`client.NewRequest(t.Context(), "GET", "test", nil): %v, expected nil`, err)
 				}
 
-				_, err = client.do(t.Context(), req, nil)
+				_, _, err = do[struct{}](t.Context(), client, req)
 				if err == nil {
-					t.Fatalf(`client.do(t.Context(), req, nil): %v, expected error`, err)
+					t.Fatalf("do[struct{}](t.Context(), client, req) error = %v, expected error", err)
 				}
 
 				// Check the error response

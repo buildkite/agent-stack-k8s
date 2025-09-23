@@ -29,18 +29,16 @@ type RegisterStackResponse struct {
 
 // RegisterStack registers a new stack with the Buildkite Stacks API. A stack with the same key can safely be
 // re-registered as many times as necessary.
-func (c *Client) RegisterStack(ctx context.Context, body RegisterStackRequest, opts ...RequestOption) (RegisterStackResponse, error) {
+func (c *Client) RegisterStack(ctx context.Context, body RegisterStackRequest, opts ...RequestOption) (*RegisterStackResponse, error) {
 	req, err := c.newRequest(ctx, http.MethodPost, "stacks/register", body, opts...)
 	if err != nil {
-		return RegisterStackResponse{}, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	var stack RegisterStackResponse
-	resp, err := c.do(ctx, req, &stack)
+	stack, _, err := do[RegisterStackResponse](ctx, c, req)
 	if err != nil {
-		return RegisterStackResponse{}, fmt.Errorf("register stack: %w", err)
+		return nil, fmt.Errorf("register stack: %w", err)
 	}
-	defer resp.Body.Close()
 
 	return stack, nil
 }
@@ -53,11 +51,9 @@ func (c *Client) DeregisterStack(ctx context.Context, stackKey string, opts ...R
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := c.do(ctx, req, nil)
+	_, _, err = do[struct{}](ctx, c, req)
 	if err != nil {
 		return fmt.Errorf("deregister stack: %w", err)
 	}
-	defer resp.Body.Close()
-
 	return nil
 }

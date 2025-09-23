@@ -70,8 +70,7 @@ func TestRetryLogic(t *testing.T) {
 					t.Fatalf("failed to create request: %v", err)
 				}
 
-				var response map[string]string
-				_, err = client.do(ctx, req, &response)
+				_, _, err = do[map[string]string](ctx, client, req)
 				if tc.shouldSucceed {
 					if err != nil {
 						t.Fatalf("expected success after retries, got error: %v", err)
@@ -105,7 +104,7 @@ func TestRetryLogic(t *testing.T) {
 			t.Fatalf("failed to create request: %v", err)
 		}
 
-		_, err = client.do(ctx, req, nil)
+		_, _, err = do[struct{}](ctx, client, req)
 		if err == nil {
 			t.Fatal("expected error after exhausting retries, got nil")
 		}
@@ -145,7 +144,7 @@ func TestRetryLogic(t *testing.T) {
 			t.Fatalf("failed to create request: %v", err)
 		}
 
-		_, err = client.do(ctx, req, nil)
+		_, _, err = do[struct{}](ctx, client, req)
 		if err == nil {
 			t.Fatal("expected error after exhausting retries, got nil")
 		}
