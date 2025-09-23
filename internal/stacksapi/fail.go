@@ -20,11 +20,10 @@ func (c *Client) FailJob(ctx context.Context, failJobReq FailJobRequest, opts ..
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	resp, err := c.do(ctx, req, nil)
+	_, _, err = do[struct{}](ctx, c, req)
 	if err != nil {
 		return fmt.Errorf("fail job: %w", err)
 	}
-	defer resp.Body.Close()
 
 	return nil
 }

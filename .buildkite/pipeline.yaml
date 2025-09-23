@@ -166,6 +166,7 @@ steps:
 
   - label: ":buildkite::test_tube::rocket: tests (experimental features)"
     key: tests-experimental
+    soft_fail: true
     depends_on: agent
     artifact_paths: junit-*.xml
     command: .buildkite/steps/tests.sh

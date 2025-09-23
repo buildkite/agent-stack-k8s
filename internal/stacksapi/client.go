@@ -201,54 +201,58 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body any, 
 	return stackReq, nil
 }
 
-// do performs the given *StackAPIRequest and returns the HTTP response, unmarshalling the body into val.
-func (c *Client) do(ctx context.Context, req *StackAPIRequest, val any) (*http.Response, error) {
-	resp, err := c.doWithRetry(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := c.processResponse(ctx, resp, val); err != nil {
-		return nil, err
-	}
-
-	return resp, nil
-}
-
-// doWithRetry handles the retry logic for HTTP requests
-func (c *Client) doWithRetry(ctx context.Context, req *StackAPIRequest) (*http.Response, error) {
+// do executes a request, handling unmarshaling into the target response type
+// (Resp). It handles retries, and reading and closing the response body.
+// If no response body is expected, use struct{} for Resp.
+// It is not suitable for large (streaming) response bodies, as it fully
+// consumes the response body into memory.
+func do[Resp any](ctx context.Context, c *Client, req *StackAPIRequest) (*Resp, http.Header, error) {
 	logger := c.logger.With(
 		"method", req.Method,
 		"url", req.URL.String(),
 	)
 
-	return roko.DoFunc(ctx, req.retrier, func(r *roko.Retrier) (*http.Response, error) {
+	return roko.DoFunc2(ctx, req.retrier, func(r *roko.Retrier) (*Resp, http.Header, error) {
 		req.resetBody()
 
-		sendRequestLogger := c.prepareRequestLogger(req, logger)
+		sendRequestLogger := c.prepareRequestLogger(logger, req)
 		sendRequestLogger.DebugContext(ctx, "sending request")
 
 		resp, err := c.httpClient.Do(req.Request)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, resp.Header, fmt.Errorf("reading response body: %w", err)
 		}
 
 		logger := c.logger.With("response_status", resp.StatusCode)
 
-		responseLogger := c.prepareResponseLogger(resp, logger)
+		responseLogger := c.prepareResponseLogger(logger, resp)
 		responseLogger.DebugContext(ctx, "received response")
 
-		if err := c.handleResponseError(ctx, resp, r, logger); err != nil {
-			return nil, err
+		if err := handleResponseError(ctx, logger, resp, body, r); err != nil {
+			return nil, resp.Header, err
 		}
 
-		return resp, nil
+		var val Resp
+		if _, isEmpty := any(val).(struct{}); isEmpty {
+			return &val, resp.Header, nil
+		}
+		if err := json.Unmarshal(body, &val); err != nil {
+			return nil, resp.Header, fmt.Errorf("failed to decode response body: %w", err)
+		}
+
+		return &val, resp.Header, nil
 	})
 }
 
-// handleResponseError processes error responses and determines retry behavior
-func (c *Client) handleResponseError(ctx context.Context, resp *http.Response, r *roko.Retrier, logger *slog.Logger) error {
-	err := checkResponse(resp)
+// handleResponseError processes error responses and determines retry behavior.
+func handleResponseError(ctx context.Context, logger *slog.Logger, resp *http.Response, body []byte, r *roko.Retrier) error {
+	err := checkResponse(resp, body)
 	if err != nil {
 		var errResp *ErrorResponse
 		if errors.As(err, &errResp) {
@@ -269,7 +273,7 @@ func (c *Client) handleResponseError(ctx context.Context, resp *http.Response, r
 }
 
 // prepareRequestLogger sets up logging with optional request dump
-func (c *Client) prepareRequestLogger(req *StackAPIRequest, logger *slog.Logger) *slog.Logger {
+func (c *Client) prepareRequestLogger(logger *slog.Logger, req *StackAPIRequest) *slog.Logger {
 	if !c.logHTTPPayloads {
 		return logger
 	}
@@ -283,26 +287,7 @@ func (c *Client) prepareRequestLogger(req *StackAPIRequest, logger *slog.Logger)
 	return logger.With("request", string(reqDump))
 }
 
-// processResponse handles response body reading and JSON unmarshaling
-func (c *Client) processResponse(ctx context.Context, resp *http.Response, val any) error {
-	if val == nil {
-		return nil
-	}
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if err := json.Unmarshal(bodyBytes, val); err != nil {
-		return fmt.Errorf("failed to decode response body: %w", err)
-	}
-
-	return nil
-}
-
-func (c *Client) prepareResponseLogger(resp *http.Response, logger *slog.Logger) *slog.Logger {
+func (c *Client) prepareResponseLogger(logger *slog.Logger, resp *http.Response) *slog.Logger {
 	if !c.logHTTPPayloads {
 		return logger
 	}
@@ -318,7 +303,7 @@ func (c *Client) prepareResponseLogger(resp *http.Response, logger *slog.Logger)
 
 // ErrorResponse provides a message.
 type ErrorResponse struct {
-	Response *http.Response `json:"-"`       // HTTP response that caused this error
+	Response *http.Response `json:"-"`       // HTTP response that caused this error. The Body will be closed.
 	RawBody  []byte         `json:"-"`       // Raw Response Body
 	Message  string         `json:"message"` // Error message from Buildkite API
 }
@@ -340,22 +325,19 @@ func (r *ErrorResponse) IsRetryableStatus() bool {
 	}
 }
 
-func checkResponse(r *http.Response) error {
+func checkResponse(r *http.Response, rawBody []byte) error {
 	if c := r.StatusCode; 200 <= c && c <= 299 {
 		return nil
 	}
 
-	errorResponse := &ErrorResponse{Response: r}
-
-	data, err := io.ReadAll(r.Body)
-	if err != nil {
-		return fmt.Errorf("response failed with error %w, but reading response body failed with error %w", errorResponse, err)
+	errorResponse := &ErrorResponse{
+		Response: r,
+		RawBody:  rawBody,
 	}
-	errorResponse.RawBody = data
 
-	err = json.Unmarshal(data, errorResponse)
+	err := json.Unmarshal(rawBody, errorResponse)
 	if err != nil {
-		return fmt.Errorf("response failed with error %w, but parsing response body JSON failed with error: %w. Raw body of error was: %q", errorResponse, err, string(data))
+		return fmt.Errorf("response failed with error %w, but parsing response body JSON failed with error: %w. Raw body of error was: %q", errorResponse, err, string(rawBody))
 	}
 	return errorResponse
 }

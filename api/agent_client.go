@@ -29,7 +29,7 @@ type AgentClient struct {
 
 	clusterID string
 	queue     string
-	stack     stacksapi.RegisterStackResponse
+	stack     *stacksapi.RegisterStackResponse
 
 	// This impacts a number of endpoints' query parameters
 	reservation bool
