@@ -21,6 +21,6 @@ secretsMetadata: {}
 serviceAccountMetadata: {}
 
 monitoring:
-  deployGrafanaDashboard: true
+  deployGrafanaDashboard: false
   podMonitor:
-    deploy: true
+    deploy: false
