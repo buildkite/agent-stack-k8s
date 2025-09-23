@@ -44,8 +44,8 @@
         },
         "deployGrafanaDashboard": {
           "type": "boolean",
-          "default": true,
-          "title": "When enabled, installs a Grafana dashboard definition using a ConfigMap"
+          "default": false,
+          "title": "When enabled, installs a Grafana dashboard definition (as a ConfigMap)"
         },
         "podMonitor": {
           "type": "object",
@@ -53,8 +53,8 @@
           "properties": {
             "deploy": {
               "type": "boolean",
-              "default": true,
-              "title": "When enabled, installs a PodMonitor resource (https://prometheus-operator.dev/docs/api-reference/api/#monitoring.coreos.com/v1.PodMonitor) configured to scrape the controller pod metrics. Note this requires the Prometheus port on the controller to be enabled (see config.prometheus-port)."
+              "default": false,
+              "title": "When enabled, installs a PodMonitor resource (https://prometheus-operator.dev/docs/api-reference/api/#monitoring.coreos.com/v1.PodMonitor) configured to scrape the controller pod metrics. Note this requires the Prometheus port on the controller to be enabled (see config.prometheus-port). Ensure that the Prometheus Operator CRDs are installed before enabling this option."
             },
             "scrapeInterval": {
               "type": "string",
