@@ -222,6 +222,7 @@ func Run(
 	jobWatcher := scheduler.NewJobWatcher(
 		logger.Named("jobWatcher"),
 		k8sClient,
+		agentClient,
 		cfg,
 	)
 	if err := jobWatcher.RegisterInformer(ctx, informerFactory); err != nil {
