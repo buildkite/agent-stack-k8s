@@ -13,6 +13,8 @@ import (
 )
 
 // BuildkiteJobChecker monitors Buildkite jobs for cancellation state changes.
+// It operate on individual jobs basis, relying on legacy Agent API.
+// In the future version, we will get rid of it.
 type BuildkiteJobChecker struct {
 	logger      *zap.Logger
 	agentClient *api.AgentClient

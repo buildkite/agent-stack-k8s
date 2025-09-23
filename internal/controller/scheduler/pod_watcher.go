@@ -46,7 +46,11 @@ type podWatcher struct {
 	watchingForImageFailure   map[uuid.UUID]*corev1.Pod
 
 	// Buildkite job checker for handling job cancellation
-	bkJobChecker *BuildkiteJobChecker
+	// There is an argument to be made that these should live outside the podWatcher.
+	// But, since these are designed to work for Pending pods only, podWatcher largely impact how these work.
+	// So we put them in podWatcher.
+	bkJobChecker      *BuildkiteJobChecker
+	batchBkJobChecker *BatchBuildkiteJobChecker
 
 	// This is the context passed to RegisterInformer.
 	// It's being stored here (grrrr!) because the k8s ResourceEventHandler
@@ -88,7 +92,11 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, agentClient *ap
 		imagePullBackOffGracePeriod: imagePullBackOffGracePeriod,
 		ignoredJobs:                 make(map[uuid.UUID]struct{}),
 		watchingForImageFailure:     make(map[uuid.UUID]*corev1.Pod),
-		bkJobChecker:                NewBuildkiteJobChecker(logger, agentClient, k8s, jobCancelCheckerInterval),
+	}
+	if cfg.ExperimentalStacksAPISupport {
+		pw.batchBkJobChecker = NewBatchBuildkiteJobChecker(logger, agentClient, k8s, jobCancelCheckerInterval)
+	} else {
+		pw.bkJobChecker = NewBuildkiteJobChecker(logger, agentClient, k8s, jobCancelCheckerInterval)
 	}
 	podWatcherIgnoredJobsGaugeFunc = func() int {
 		pw.ignoredJobsMu.RLock()
@@ -96,7 +104,11 @@ func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, agentClient *ap
 		return len(pw.ignoredJobs)
 	}
 	jobCancelCheckerGaugeFunc = func() int {
-		return pw.bkJobChecker.GetActiveCheckCount()
+		if cfg.ExperimentalStacksAPISupport {
+			return pw.batchBkJobChecker.GetActiveCheckCount()
+		} else {
+			return pw.bkJobChecker.GetActiveCheckCount()
+		}
 	}
 	watchingForImageFailureGaugeFunc = func() int {
 		pw.watchingForImageFailureMu.Lock()
@@ -135,10 +147,18 @@ func (w *podWatcher) OnDelete(previousState any) {
 
 	// No need to continue watching for image-related failures or cancellation.
 	w.stopWatchingForImageFailure(jobUUID)
-	w.bkJobChecker.StopChecking(jobUUID)
+	w.stopCheckingBuildkiteJob(jobUUID)
 
 	// The pod is gone, so we can stop ignoring it (if it comes back).
 	w.unignoreJob(jobUUID)
+}
+
+// Start batch buildkite job checker, no-op when stack api is off.
+func (w *podWatcher) StartBuildkiteJobChecker(ctx context.Context) {
+	if !w.cfg.ExperimentalStacksAPISupport {
+		return
+	}
+	w.batchBkJobChecker.StartChecking(ctx)
 }
 
 func (w *podWatcher) OnAdd(currentState any, _ bool) {
@@ -181,13 +201,13 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 	case corev1.PodRunning:
 		// Running: the agent container has started or is about to start, and it
 		//          can handle the cancellation and exit.
-		w.bkJobChecker.StopChecking(jobUUID)
+		w.stopCheckingBuildkiteJob(jobUUID)
 
 	default:
 		// Succeeded, Failed: it's already over.
 		// Unknown: probably shouldn't interfere.
 		w.stopWatchingForImageFailure(jobUUID)
-		w.bkJobChecker.StopChecking(jobUUID)
+		w.stopCheckingBuildkiteJob(jobUUID)
 	}
 
 	if w.isIgnored(jobUUID) {
@@ -205,7 +225,11 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 	switch pod.Status.Phase {
 	case corev1.PodPending:
 		w.watchForImageFailure(jobUUID, pod)
-		w.bkJobChecker.StartChecking(ctx, log, pod.ObjectMeta, jobUUID)
+		if w.cfg.ExperimentalStacksAPISupport {
+			w.batchBkJobChecker.AddJob(jobUUID, pod.ObjectMeta)
+		} else {
+			w.bkJobChecker.StartChecking(ctx, log, pod.ObjectMeta, jobUUID)
+		}
 
 	case corev1.PodRunning:
 		w.watchForImageFailure(jobUUID, pod)
@@ -371,6 +395,14 @@ func (w *podWatcher) formatImagePullFailureMessage(statuses []corev1.ContainerSt
 		})
 	}
 	return "The following images could not be pulled or were unavailable:\n\n" + tw.Render()
+}
+
+func (w *podWatcher) stopCheckingBuildkiteJob(jobUUID uuid.UUID) {
+	if w.cfg.ExperimentalStacksAPISupport {
+		w.batchBkJobChecker.StopCheckingJob(jobUUID)
+	} else {
+		w.bkJobChecker.StopChecking(jobUUID)
+	}
 }
 
 func forcefullyDeletePod(

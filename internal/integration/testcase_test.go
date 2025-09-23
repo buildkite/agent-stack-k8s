@@ -216,6 +216,11 @@ func (t testcase) StartController(ctx context.Context, cfg config.Config, custom
 	// Setting a static identifer here so their informer aren't steping on each other.
 	cfg.ID = uuid.New().String()
 
+	// Since we run multiple test controllers in parallel, allowing these would cause port conflict.
+	// We use the profiler nor prometheus metrics for integration test anyway.
+	cfg.PrometheusPort = 0
+	cfg.ProfilerAddress = ""
+
 	go controller.Run(runCtx, t.Logger, t.Kubernetes, &cfg)
 }
 
