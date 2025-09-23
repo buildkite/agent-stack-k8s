@@ -166,13 +166,14 @@ steps:
 
   - label: ":buildkite::test_tube::rocket: tests (experimental features)"
     key: tests-experimental
-    soft_fail: true
     depends_on: agent
     artifact_paths: junit-*.xml
     command: .buildkite/steps/tests.sh
     env:
       CONFIG: /etc/config.yaml
-      EXPERIMENTAL_JOB_RESERVATION_SUPPORT: true
+      # Turn me on when PB-629 is done.
+      # Even better -> merge these two flags into one when PB-629 is happening.
+      EXPERIMENTAL_JOB_RESERVATION_SUPPORT: false
       EXPERIMENTAL_STACKS_API_SUPPORT: true
     plugins:
       - kubernetes:
