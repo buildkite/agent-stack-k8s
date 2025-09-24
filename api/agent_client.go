@@ -129,6 +129,10 @@ func IsPermanentError(err error) bool {
 	if err == nil {
 		return false
 	}
+	var stackResponseError *stacksapi.ErrorResponse
+	if errors.As(err, &stackResponseError) {
+		return !stackResponseError.IsRetryableStatus()
+	}
 	var agentErr AgentError
 	if !errors.As(err, &agentErr) {
 		return false
@@ -262,6 +266,26 @@ type AgentJob struct {
 
 // GetJobToRun gets info about a specific job needed to run it.
 func (c *AgentClient) GetJobToRun(ctx context.Context, id string) (result *AgentJob, retryAfter time.Duration, err error) {
+	if c.UseStackAPI() {
+		job, header, err := c.stacksAPIClient.GetJob(
+			ctx,
+			stacksapi.GetJobRequest{
+				StackKey: c.stack.Key,
+				JobUUID:  id,
+			},
+			// The caller handles the retry, we may not want that in the future
+			stacksapi.WithNoRetry(),
+		)
+		if err != nil {
+			return nil, readRetryAfter(header), err
+		}
+		return &AgentJob{
+			ID:      job.ID,
+			Env:     job.Env,
+			Command: job.Command,
+		}, readRetryAfter(header), err
+	}
+
 	u := c.endpoint.JoinPath(
 		"clusters", railsPathEscape(c.clusterID),
 		"queues", railsPathEscape(c.queue),
