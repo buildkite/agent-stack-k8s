@@ -29,6 +29,7 @@ test *FLAGS:
   GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
   export EXPERIMENTAL_JOB_RESERVATION_SUPPORT=true
+  export EXPERIMENTAL_STACKS_API_SUPPORT=true
 
   go test \
     -ldflags="-X github.com/buildkite/agent-stack-k8s/v2/internal/integration_test.branch=${GIT_BRANCH}" \
