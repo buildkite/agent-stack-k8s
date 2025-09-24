@@ -210,7 +210,6 @@ func (c *AgentClient) normaliseAgentQueryRules(rules []string) []string {
 		// When we poll from default queue, we don't know the queue key, so in rest of the system queue="".
 		// The job might contain a queue key `agents: queue: default`, in that case it will cause mismatch in local
 		// job queue key "" vs our configuration queue key "default".
-		// So this is forcing them to be equal.
 		return agenttags.RemoveTag(rules, "queue")
 	} else {
 		// Ensure the job has the queue tag. We queried a queue-specific

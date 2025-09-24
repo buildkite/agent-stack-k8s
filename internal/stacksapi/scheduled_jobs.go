@@ -28,8 +28,8 @@ type Step struct {
 // ScheduledJob represents the metadata for a job that's in the scheduled state.
 type ScheduledJob struct {
 	ID              string    `json:"id"`                // The UUID of the job
-	Priority        int       `json:"priority"`          // The priority of the job; higher priority jobs are scheduled first
-	AgentQueryRules []string  `json:"agent_query_rules"` // The agent query rules that must be matched to run the job
+	Priority        int       `json:"priority"`          // The priority of the job; higher priority jobs should be scheduled first
+	AgentQueryRules []string  `json:"agent_query_rules"` // The agent tags that must be matched to run the job
 	ScheduledAt     time.Time `json:"scheduled_at"`      // When the job was scheduled
 	Pipeline        Pipeline  `json:"pipeline"`          // The pipeline the job belongs to
 	Build           Build     `json:"build"`             // The build the job belongs to
@@ -65,8 +65,7 @@ type ListScheduledJobsRequest struct {
 
 // ListScheduledJobs lists jobs in the scheduled state from a specific cluster queue. The StackKey and ClusterQueueKey
 // fields of the request are required. This method will only return a single page of results. To retrieve additional
-// pages, call this method again with the EndCursor field set to the EndCursor value from the previous response's PageInfo,
-// or use the [PaginateAllScheduledJobs] function to automatically handle pagination.
+// pages, call this method again with the EndCursor field set to the EndCursor value from the previous response's PageInfo.
 func (c *Client) ListScheduledJobs(ctx context.Context, listReq ListScheduledJobsRequest, opts ...RequestOption) (*ListScheduledJobsResponse, http.Header, error) {
 	path := fmt.Sprintf("/stacks/%s/scheduled_jobs", listReq.StackKey)
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil, opts...)
