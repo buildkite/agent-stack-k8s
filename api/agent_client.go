@@ -337,7 +337,7 @@ func (c *AgentClient) GetJobStates(ctx context.Context, ids []string) (result ma
 		StackKey: c.stack.Key,
 		JobUUIDs: ids,
 	}
-	statesResp, err := c.stacksAPIClient.GetJobStates(ctx, req)
+	statesResp, header, err := c.stacksAPIClient.GetJobStates(ctx, req)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -345,8 +345,7 @@ func (c *AgentClient) GetJobStates(ctx context.Context, ids []string) (result ma
 	for k, v := range statesResp.States {
 		result[k] = JobState(v)
 	}
-	// FIXME: fix the retryAfter later
-	return result, 0, err
+	return result, readRetryAfter(header), err
 }
 
 // ReserveJobBatchResult describes the result of a batch job reservation.
