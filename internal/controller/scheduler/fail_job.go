@@ -56,7 +56,7 @@ func failForK8sObject(
 		logger.Error("object missing UUID label", zap.String("label", config.UUIDLabel))
 		return errors.New("missing UUID label")
 	}
-	if agentClient.UseStackAPI {
+	if agentClient.UseStackAPI() {
 		return agentClient.FailJob(ctx, jobUUID, failureInfo.Message)
 	} else {
 		tags := agenttags.TagsFromLabels(labels)

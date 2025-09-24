@@ -242,6 +242,7 @@ func Run(
 	if err := podWatcher.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Fatal("failed to register podWatcher informer", zap.Error(err))
 	}
+	podWatcher.StartBuildkiteJobChecker(ctx)
 
 	select {
 	case <-ctx.Done():

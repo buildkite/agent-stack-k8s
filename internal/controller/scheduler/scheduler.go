@@ -1099,7 +1099,7 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 		Reason: agent.SignalReasonStackError,
 	}
 
-	if w.agentClient.UseStackAPI {
+	if w.agentClient.UseStackAPI() {
 		if err := w.agentClient.FailJob(ctx, inputs.uuid, failureInfo.Message); err != nil {
 			w.logger.Error("failed to fail the job via Buildkite Stack API", zap.Error(err))
 			schedulerBuildkiteJobFailErrorsCounter.Inc()

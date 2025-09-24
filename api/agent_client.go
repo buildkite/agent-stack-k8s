@@ -33,7 +33,7 @@ type AgentClient struct {
 
 	// This impacts a number of endpoints' query parameters
 	reservation bool
-	UseStackAPI bool
+	useStackAPI bool
 }
 
 type AgentClientOpts struct {
@@ -75,7 +75,7 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		clusterID:   opts.ClusterID,
 		queue:       opts.Queue,
 		reservation: opts.UseReservation,
-		UseStackAPI: opts.UseStacksAPI,
+		useStackAPI: opts.UseStacksAPI,
 	}
 
 	if opts.UseStacksAPI {
@@ -249,6 +249,18 @@ type AgentJobState struct {
 
 // GetJobState gets the state of a specific job.
 func (c *AgentClient) GetJobState(ctx context.Context, id string) (result *AgentJobState, retryAfter time.Duration, err error) {
+	// Use the batch API as a shim when useStackAPI is on.
+	if c.UseStackAPI() {
+		state, retryAfter, err := c.GetJobStates(ctx, []string{id})
+		if err != nil {
+			return nil, retryAfter, err
+		}
+		return &AgentJobState{
+			ID:    id,
+			State: state[id],
+		}, retryAfter, nil
+	}
+
 	u := c.endpoint.JoinPath(
 		"clusters", railsPathEscape(c.clusterID),
 		"queues", railsPathEscape(c.queue),
@@ -263,6 +275,28 @@ func (c *AgentClient) GetJobState(ctx context.Context, id string) (result *Agent
 	defer resp.Body.Close()
 
 	return decodeResponse[AgentJobState](resp)
+}
+
+// GetJobStates gets state for a batch of jobs.
+func (c *AgentClient) GetJobStates(ctx context.Context, ids []string) (result map[string]JobState, retryAfter time.Duration, err error) {
+	if !c.UseStackAPI() {
+		// We don't expect this to happen in prod. It's mainly a defensive mechanism.
+		return nil, 0, errors.New("cannot use batch job state loading without Stack API")
+	}
+	req := stacksapi.GetJobStatesRequest{
+		StackKey: c.stack.Key,
+		JobUUIDs: ids,
+	}
+	statesResp, err := c.stacksAPIClient.GetJobStates(ctx, req)
+	if err != nil {
+		return nil, 0, err
+	}
+	result = make(map[string]JobState, len(statesResp.States))
+	for k, v := range statesResp.States {
+		result[k] = JobState(v)
+	}
+	// FIXME: fix the retryAfter later
+	return result, 0, err
 }
 
 // ReserveJobBatchResult describes the result of a batch job reservation.
@@ -318,8 +352,13 @@ func (c *AgentClient) DeregisterStack(ctx context.Context) error {
 	return c.stacksAPIClient.DeregisterStack(ctx, c.stack.Key, stacksapi.WithNoRetry())
 }
 
+// UseStackAPI returns whether the client is configured to use the Stack API.
+func (c *AgentClient) UseStackAPI() bool {
+	return c.useStackAPI
+}
+
 func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail string) error {
-	if !c.UseStackAPI {
+	if !c.UseStackAPI() {
 		return fmt.Errorf("cannot call FailJob when useStackAPI is off")
 	}
 
