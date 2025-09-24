@@ -29,7 +29,7 @@ func TestGetJobStates(t *testing.T) {
 				t.Errorf("request params mismatch (-want +got):\n%s", diff)
 			}
 
-			response := GetJobStatesResponse{
+			response := &GetJobStatesResponse{
 				States: map[string]string{
 					"job-1": "running",
 					"job-2": "finished",
@@ -51,7 +51,7 @@ func TestGetJobStates(t *testing.T) {
 		response, err := client.GetJobStates(t.Context(), req)
 		assert.NoError(t, err)
 
-		expectedResponse := GetJobStatesResponse{
+		expectedResponse := &GetJobStatesResponse{
 			States: map[string]string{
 				"job-1": "running",
 				"job-2": "finished",
