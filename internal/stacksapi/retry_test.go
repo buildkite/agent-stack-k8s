@@ -14,6 +14,43 @@ import (
 func TestRetryLogic(t *testing.T) {
 	t.Parallel()
 
+	t.Run("respects the Retry-After header", func(t *testing.T) {
+		t.Parallel()
+
+		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Retry-After", "8")
+			respondWithError(w, http.StatusTooManyRequests, "Rate limit exceeded")
+		})
+		t.Cleanup(server.Close)
+
+		sleepDurations := []time.Duration{}
+		client.retrierOpts = []roko.RetrierOpt{
+			roko.WithMaxAttempts(5),
+			roko.WithStrategy(roko.Constant(5 * time.Minute)),
+			roko.WithSleepFunc(func(d time.Duration) { sleepDurations = append(sleepDurations, d) }),
+		}
+
+		req, err := client.newRequest(t.Context(), "POST", "test", nil)
+		if err != nil {
+			t.Fatalf("client.newRequest returned error: %v, wanted nil", err)
+		}
+
+		_, _, err = do[struct{}](t.Context(), client, req)
+		if err == nil {
+			t.Fatal("client.do returned nil error, wanted non-nil")
+		}
+
+		if len(sleepDurations) != 4 { // 4 retries after the initial request
+			t.Fatalf("expected 4 retries, got %d", len(sleepDurations))
+		}
+
+		for i, d := range sleepDurations {
+			if d != 8*time.Second {
+				t.Errorf("sleepDurations[%d] = %v, want 8s", i, d)
+			}
+		}
+	})
+
 	t.Run("retries on transient errors", func(t *testing.T) {
 		cases := []struct {
 			name          string

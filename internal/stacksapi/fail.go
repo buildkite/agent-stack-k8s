@@ -13,7 +13,7 @@ type FailJobRequest struct {
 	ErrorDetail string `json:"error_detail"` // An error detail string less than 4KB.
 }
 
-func (c *Client) FailJob(ctx context.Context, failJobReq FailJobRequest, opts ...RequestOption) error {
+func (c *Client) FailJob(ctx context.Context, failJobReq FailJobRequest, opts ...RequestOption) (http.Header, error) {
 	const croppedMessage = "… (Error message was cropped because it exceeded the max size)"
 	const maxErrorDetailSize = (4 * 1024) - len(croppedMessage) // 4KB
 
@@ -25,13 +25,13 @@ func (c *Client) FailJob(ctx context.Context, failJobReq FailJobRequest, opts ..
 	path := fmt.Sprintf("/stacks/%s/jobs/%s/fail", failJobReq.StackKey, failJobReq.JobUUID)
 	req, err := c.newRequest(ctx, http.MethodPost, path, failJobReq, opts...)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	_, _, err = do[struct{}](ctx, c, req)
+	_, header, err := do[struct{}](ctx, c, req)
 	if err != nil {
-		return fmt.Errorf("fail job: %w", err)
+		return nil, fmt.Errorf("fail job: %w", err)
 	}
 
-	return nil
+	return header, nil
 }

@@ -29,31 +29,32 @@ type RegisterStackResponse struct {
 
 // RegisterStack registers a new stack with the Buildkite Stacks API. A stack with the same key can safely be
 // re-registered as many times as necessary.
-func (c *Client) RegisterStack(ctx context.Context, body RegisterStackRequest, opts ...RequestOption) (*RegisterStackResponse, error) {
+func (c *Client) RegisterStack(ctx context.Context, body RegisterStackRequest, opts ...RequestOption) (*RegisterStackResponse, http.Header, error) {
 	req, err := c.newRequest(ctx, http.MethodPost, "stacks/register", body, opts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	stack, header, err := do[RegisterStackResponse](ctx, c, req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("register stack: %w", err)
+	}
+
+	return stack, header, nil
+}
+
+// DeregisterStack informs the Buildkite Stacks API that a stack is exiting cleanly.
+func (c *Client) DeregisterStack(ctx context.Context, stackKey string, opts ...RequestOption) (http.Header, error) {
+	path := fmt.Sprintf("/stacks/%s/deregister", stackKey)
+	req, err := c.newRequest(ctx, http.MethodPost, path, nil, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	stack, _, err := do[RegisterStackResponse](ctx, c, req)
+	_, header, err := do[struct{}](ctx, c, req)
 	if err != nil {
-		return nil, fmt.Errorf("register stack: %w", err)
+		return nil, fmt.Errorf("deregister stack: %w", err)
 	}
 
-	return stack, nil
-}
-
-// DeregisterStack informs the Buildkite Stacks API that a stack is exiting cleanly.
-func (c *Client) DeregisterStack(ctx context.Context, stackKey string, opts ...RequestOption) error {
-	path := fmt.Sprintf("/stacks/%s/deregister", stackKey)
-	req, err := c.newRequest(ctx, http.MethodPost, path, nil, opts...)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	_, _, err = do[struct{}](ctx, c, req)
-	if err != nil {
-		return fmt.Errorf("deregister stack: %w", err)
-	}
-	return nil
+	return header, nil
 }

@@ -95,7 +95,7 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 			stackKey = "agent-stack-k8s"
 		}
 
-		stack, err := client.stacksAPIClient.RegisterStack(ctx, stacksapi.RegisterStackRequest{
+		stack, _, err := client.stacksAPIClient.RegisterStack(ctx, stacksapi.RegisterStackRequest{
 			Type:     stacksapi.StackTypeKubernetes,
 			QueueKey: opts.Queue,
 			Key:      stackKey,
@@ -140,17 +140,21 @@ func IsPermanentError(err error) bool {
 	return agentErr.Permanent()
 }
 
+type ClusterQueue struct {
+	ID     string `json:"id"`
+	Paused bool   `json:"paused"`
+}
+
+type PageInfo struct {
+	HasNextPage bool   `json:"has_next_page"`
+	EndCursor   string `json:"end_cursor"`
+}
+
 // AgentScheduledJobs is the response object from the scheduled_jobs path.
 type AgentScheduledJobs struct {
 	Jobs         []*AgentScheduledJob `json:"jobs"`
-	ClusterQueue struct {
-		ID             string `json:"id"`
-		DispatchPaused bool   `json:"dispatch_paused"`
-	} `json:"cluster_queue"`
-	PageInfo struct {
-		EndCursor   string `json:"end_cursor"`
-		HasNextPage bool   `json:"has_next_page"`
-	} `json:"page_info"`
+	ClusterQueue ClusterQueue         `json:"cluster_queue"`
+	PageInfo     PageInfo             `json:"page_info"`
 }
 
 // AgentScheduledJob is enough job information to prioritise and decide on
@@ -166,7 +170,11 @@ type AgentScheduledJob struct {
 }
 
 // GetScheduledJobs gets a page of jobs that could be run.
-func (c *AgentClient) GetScheduledJobs(ctx context.Context, afterCursor string, limit int) (result *AgentScheduledJobs, retryAfter time.Duration, err error) {
+func (c *AgentClient) GetScheduledJobs(ctx context.Context, afterCursor string, limit int) (*AgentScheduledJobs, time.Duration, error) {
+	if c.UseStackAPI {
+		return c.getStackScheduledJobs(ctx, afterCursor, limit)
+	}
+
 	u := c.endpoint.JoinPath(
 		"clusters", railsPathEscape(c.clusterID),
 		"queues", railsPathEscape(c.queue),
@@ -185,29 +193,71 @@ func (c *AgentClient) GetScheduledJobs(ctx context.Context, afterCursor string, 
 	}
 	defer resp.Body.Close()
 
-	result, retryAfter, err = decodeResponse[AgentScheduledJobs](resp)
+	result, retryAfter, err := decodeResponse[AgentScheduledJobs](resp)
 	if result != nil {
 		now := time.Now()
 		for _, j := range result.Jobs {
 			j.QueriedAt = now
-			if c.queue == defaultQueueKey {
-				// When we poll from default queue, we don't know the queue key, so in rest of the system queue="".
-				// The job might contain a queue key `agents: queue: default`, in that case it will cause mismatch in local
-				// job queue key "" vs our configuration queue key "default".
-				// So this is forcing them to be equal.
-				j.AgentQueryRules = agenttags.RemoveTag(j.AgentQueryRules, "queue")
-			} else {
-				// Ensure the job has the queue tag. We queried a queue-specific
-				// endpoint, but it may be the default queue, which doesn't require
-				// `agents: queue: ...`, so the queue tag might not be present.
-				j.AgentQueryRules = agenttags.SetTag(j.AgentQueryRules, "queue", c.queue)
-			}
+			j.AgentQueryRules = c.normaliseAgentQueryRules(j.AgentQueryRules)
 		}
 	}
+
 	return result, retryAfter, err
 }
 
-// AgentJob is enough info to run a job (includes command and env).
+func (c *AgentClient) normaliseAgentQueryRules(rules []string) []string {
+	if c.queue == defaultQueueKey {
+		// When we poll from default queue, we don't know the queue key, so in rest of the system queue="".
+		// The job might contain a queue key `agents: queue: default`, in that case it will cause mismatch in local
+		// job queue key "" vs our configuration queue key "default".
+		return agenttags.RemoveTag(rules, "queue")
+	} else {
+		// Ensure the job has the queue tag. We queried a queue-specific
+		// endpoint, but it may be the default queue, which doesn't require
+		// `agents: queue: ...`, so the queue tag might not be present.
+		return agenttags.SetTag(rules, "queue", c.queue)
+	}
+}
+
+func (c *AgentClient) getStackScheduledJobs(ctx context.Context, afterCursor string, limit int) (*AgentScheduledJobs, time.Duration, error) {
+	req := stacksapi.ListScheduledJobsRequest{
+		StackKey:        c.stack.Key,
+		ClusterQueueKey: c.stack.ClusterQueueKey,
+		PageSize:        limit,
+		StartCursor:     afterCursor,
+	}
+
+	// No retry, the monitor loop handles retries
+	resp, header, err := c.stacksAPIClient.ListScheduledJobs(ctx, req, stacksapi.WithNoRetry())
+	if err != nil {
+		return nil, 0, err
+	}
+
+	jobs := make([]*AgentScheduledJob, 0, len(resp.Jobs))
+	now := time.Now()
+	for _, j := range resp.Jobs {
+		asj := &AgentScheduledJob{
+			ID:              j.ID,
+			Priority:        j.Priority,
+			AgentQueryRules: c.normaliseAgentQueryRules(j.AgentQueryRules),
+			QueriedAt:       now,
+		}
+		jobs = append(jobs, asj)
+	}
+
+	return &AgentScheduledJobs{
+		Jobs: jobs,
+		ClusterQueue: ClusterQueue{
+			ID:     resp.ClusterQueue.ID,
+			Paused: resp.ClusterQueue.Paused,
+		},
+		PageInfo: PageInfo{
+			HasNextPage: resp.PageInfo.HasNextPage,
+			EndCursor:   resp.PageInfo.EndCursor,
+		},
+	}, readRetryAfter(header), nil
+}
+
 type AgentJob struct {
 	ID      string            `json:"id"`
 	Command string            `json:"command"`
@@ -349,7 +399,8 @@ func (c *AgentClient) DeregisterStack(ctx context.Context) error {
 		return nil
 	}
 
-	return c.stacksAPIClient.DeregisterStack(ctx, c.stack.Key, stacksapi.WithNoRetry())
+	_, err := c.stacksAPIClient.DeregisterStack(ctx, c.stack.Key, stacksapi.WithNoRetry())
+	return err
 }
 
 // UseStackAPI returns whether the client is configured to use the Stack API.
@@ -368,11 +419,12 @@ func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail s
 		ErrorDetail: errorDetail,
 	}
 
-	return c.stacksAPIClient.FailJob(ctx, req)
+	_, err := c.stacksAPIClient.FailJob(ctx, req)
+	return err
 }
 
 func decodeResponse[T any](resp *http.Response) (result *T, retryAfter time.Duration, err error) {
-	retryAfter = readRetryAfter(resp)
+	retryAfter = readRetryAfter(resp.Header)
 
 	if resp.StatusCode >= 400 {
 		return nil, retryAfter, decodeError(resp)
@@ -396,8 +448,8 @@ func decodeError(resp *http.Response) error {
 	return ae
 }
 
-func readRetryAfter(resp *http.Response) time.Duration {
-	h := resp.Header.Get("Retry-After")
+func readRetryAfter(headers http.Header) time.Duration {
+	h := headers.Get("Retry-After")
 	if h == "" {
 		return 0
 	}

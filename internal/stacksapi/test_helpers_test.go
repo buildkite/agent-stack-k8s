@@ -31,7 +31,7 @@ func setupTestServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, 
 	return server, client
 }
 
-func verifyAuthAndMethod(t *testing.T, r *http.Request, expectedMethod, expectedPath string) {
+func verifyAuthMethodPath(t *testing.T, r *http.Request, expectedMethod, expectedPath string) {
 	if r.Method != expectedMethod {
 		t.Errorf("r.Method = %s, expected %s", r.Method, expectedMethod)
 	}

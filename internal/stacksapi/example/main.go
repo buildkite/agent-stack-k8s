@@ -18,7 +18,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	stack, err := client.RegisterStack(context.Background(), stacksapi.RegisterStackRequest{
+	stack, _, err := client.RegisterStack(context.Background(), stacksapi.RegisterStackRequest{
 		Key:      "example-stack",
 		Type:     stacksapi.StackTypeCustom,
 		QueueKey: stacksapi.DefaultQueue,
@@ -34,7 +34,7 @@ func main() {
 	logger.Info("registered stack", "stack", stack)
 
 	logger.Info("deregistering stack...")
-	err = client.DeregisterStack(context.Background(), stack.Key)
+	_, err = client.DeregisterStack(context.Background(), stack.Key)
 	if err != nil {
 		logger.Error("Failed to deregister stack", "error", err)
 		os.Exit(1)
