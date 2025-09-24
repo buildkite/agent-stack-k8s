@@ -171,7 +171,7 @@ type AgentScheduledJob struct {
 
 // GetScheduledJobs gets a page of jobs that could be run.
 func (c *AgentClient) GetScheduledJobs(ctx context.Context, afterCursor string, limit int) (*AgentScheduledJobs, time.Duration, error) {
-	if c.UseStackAPI {
+	if c.UseStackAPI() {
 		return c.getStackScheduledJobs(ctx, afterCursor, limit)
 	}
 
