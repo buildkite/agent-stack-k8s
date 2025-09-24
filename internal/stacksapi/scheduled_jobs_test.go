@@ -105,3 +105,57 @@ func TestListScheduledJobs(t *testing.T) {
 		}
 	})
 }
+
+func TestBatchReserveJobs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("successful batch reserve jobs", func(t *testing.T) {
+		t.Parallel()
+
+		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+			verifyAuthMethodPath(t, r, "PUT", "/stacks/stack-123/scheduled_jobs/batch_reserve")
+
+			var params BatchReserveJobsRequest
+			err := json.NewDecoder(r.Body).Decode(&params)
+			if err != nil {
+				t.Fatalf("failed to decode batch reserve request body: %v", err)
+			}
+
+			expectedParams := BatchReserveJobsRequest{
+				JobUUIDs:                 []string{"job-1", "job-2", "job-3"},
+				ReservationExpirySeconds: 600,
+			}
+
+			if diff := cmp.Diff(expectedParams, params); diff != "" {
+				t.Errorf("request params mismatch (-want +got):\n%s", diff)
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(BatchReserveJobsResponse{
+				Reserved:    []string{"job-1", "job-3"},
+				NotReserved: []string{"job-2"},
+			})
+			w.WriteHeader(http.StatusOK)
+		})
+		t.Cleanup(server.Close)
+
+		req := BatchReserveJobsRequest{
+			StackKey:                 "stack-123",
+			JobUUIDs:                 []string{"job-1", "job-2", "job-3"},
+			ReservationExpirySeconds: 600,
+		}
+
+		resp, _, err := client.BatchReserveJobs(t.Context(), req)
+		if err != nil {
+			t.Fatalf("client.BatchReserveJobs error = %v, want nil", err)
+		}
+		expectedResp := &BatchReserveJobsResponse{
+			Reserved:    []string{"job-1", "job-3"},
+			NotReserved: []string{"job-2"},
+		}
+
+		if diff := cmp.Diff(expectedResp, resp); diff != "" {
+			t.Errorf("batch reserve jobs response mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
