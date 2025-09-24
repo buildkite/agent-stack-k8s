@@ -171,9 +171,6 @@ steps:
     command: .buildkite/steps/tests.sh
     env:
       CONFIG: /etc/config.yaml
-      # Turn me on when PB-629 is done.
-      # Even better -> merge these two flags into one when PB-629 is happening.
-      EXPERIMENTAL_JOB_RESERVATION_SUPPORT: false
       EXPERIMENTAL_STACKS_API_SUPPORT: true
     plugins:
       - kubernetes:

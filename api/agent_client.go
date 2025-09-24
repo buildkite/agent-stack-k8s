@@ -31,8 +31,6 @@ type AgentClient struct {
 	queue     string
 	stack     *stacksapi.RegisterStackResponse
 
-	// This impacts a number of endpoints' query parameters
-	reservation bool
 	useStackAPI bool
 }
 
@@ -43,7 +41,6 @@ type AgentClientOpts struct {
 	Queue           string
 	StackID         string
 	AgentQueryRules []string
-	UseReservation  bool
 	Logger          *zap.Logger
 	UseStacksAPI    bool
 }
@@ -74,7 +71,6 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		},
 		clusterID:   opts.ClusterID,
 		queue:       opts.Queue,
-		reservation: opts.UseReservation,
 		useStackAPI: opts.UseStacksAPI,
 	}
 
@@ -272,11 +268,14 @@ func (c *AgentClient) GetJobToRun(ctx context.Context, id string) (result *Agent
 		"scheduled_jobs", railsPathEscape(id),
 	)
 
-	if c.reservation {
-		v := make(url.Values)
+	// Usage of the stack API implies that we're reserving jobs, so we want to
+	// include_reserved=true to be able to fetch jobs that we've reserved.
+	if c.UseStackAPI() {
+		v := u.Query()
 		v.Add("include_reserved", "true")
 		u.RawQuery = v.Encode()
 	}
+
 	resp, err := c.httpClient.Get(u.String())
 	if err != nil {
 		return nil, 0, err

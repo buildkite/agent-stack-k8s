@@ -23,7 +23,6 @@ query-reset-interval: 10s
 work-queue-limit: 2000000
 image-check-container-cpu-limit: 201m
 image-check-container-memory-limit: 129Mi
-experimental-job-reservation-support: true
 experimental-stacks-api-support: true
 
 tags:

@@ -125,7 +125,6 @@ func Run(
 		StackID:         cfg.ID,
 		AgentQueryRules: cfg.Tags,
 		Logger:          logger,
-		UseReservation:  cfg.ExperimentalJobReservationSupport,
 		UseStacksAPI:    cfg.ExperimentalStacksAPISupport,
 	})
 	if err != nil {
@@ -213,7 +212,7 @@ func Run(
 	// But it does bring a trade-off of more likely reservation expiration.
 	reserver := reserver.New(logger.Named("reserver"), agentClient,
 		limiter,
-		cfg.ExperimentalJobReservationSupport,
+		cfg.ExperimentalStacksAPISupport,
 	)
 
 	// PodCompletionWatcher watches k8s for pods where the agent has terminated,

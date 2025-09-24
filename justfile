@@ -28,7 +28,6 @@ test *FLAGS:
 
   GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 
-  export EXPERIMENTAL_JOB_RESERVATION_SUPPORT=true
   export EXPERIMENTAL_STACKS_API_SUPPORT=true
 
   go test \
