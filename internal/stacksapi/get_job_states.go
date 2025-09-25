@@ -16,17 +16,17 @@ type GetJobStatesResponse struct {
 }
 
 // GetJobStates query job states for a list of jobs
-func (c *Client) GetJobStates(ctx context.Context, getJobStatesReq GetJobStatesRequest, opts ...RequestOption) (*GetJobStatesResponse, error) {
+func (c *Client) GetJobStates(ctx context.Context, getJobStatesReq GetJobStatesRequest, opts ...RequestOption) (*GetJobStatesResponse, http.Header, error) {
 	path := fmt.Sprintf("/stacks/%s/jobs/get-states", getJobStatesReq.StackKey)
 	req, err := c.newRequest(ctx, http.MethodPost, path, getJobStatesReq, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	jobStates, _, err := do[GetJobStatesResponse](ctx, c, req)
+	jobStates, header, err := do[GetJobStatesResponse](ctx, c, req)
 	if err != nil {
-		return nil, fmt.Errorf("get job states: %w", err)
+		return nil, nil, fmt.Errorf("get job states: %w", err)
 	}
 
-	return jobStates, nil
+	return jobStates, header, nil
 }

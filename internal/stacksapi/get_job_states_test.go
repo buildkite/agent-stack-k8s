@@ -48,7 +48,7 @@ func TestGetJobStates(t *testing.T) {
 			JobUUIDs: []string{"job-1", "job-2", "job-3"},
 		}
 
-		response, err := client.GetJobStates(t.Context(), req)
+		response, _, err := client.GetJobStates(t.Context(), req)
 		assert.NoError(t, err)
 
 		expectedResponse := &GetJobStatesResponse{
