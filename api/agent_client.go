@@ -31,6 +31,8 @@ type AgentClient struct {
 	queue     string
 	stack     *stacksapi.RegisterStackResponse
 
+	logger *zap.Logger
+
 	// This impacts a number of endpoints' query parameters
 	reservation bool
 	useStackAPI bool
@@ -74,6 +76,7 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		},
 		clusterID:   opts.ClusterID,
 		queue:       opts.Queue,
+		logger:      opts.Logger,
 		reservation: opts.UseReservation,
 		useStackAPI: opts.UseStacksAPI,
 	}
@@ -420,6 +423,28 @@ func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail s
 
 	_, err := c.stacksAPIClient.FailJob(ctx, req)
 	return err
+}
+
+// CreateStackNotification creates a stack notification for a job.
+// This is designed to be call and forget, error will be logged but we don't anticipate error handling
+func (c *AgentClient) CreateStackNotification(ctx context.Context, jobUUID string, detail string) {
+	if !c.UseStackAPI() {
+		// No-op for the case for legacy API
+		return
+	}
+
+	go func() {
+		req := stacksapi.CreateStackNotificationRequest{
+			StackKey: c.stack.Key,
+			JobUUID:  jobUUID,
+			Detail:   detail,
+		}
+
+		_, err := c.stacksAPIClient.CreateStackNotification(ctx, req)
+		if err != nil {
+			c.logger.Warn("Failed creating stack notification", zap.Error(err))
+		}
+	}()
 }
 
 func decodeResponse[T any](resp *http.Response) (result *T, retryAfter time.Duration, err error) {
