@@ -22,7 +22,7 @@ func (c *Client) FailJob(ctx context.Context, failJobReq FailJobRequest, opts ..
 		failJobReq.ErrorDetail = failJobReq.ErrorDetail[:maxErrorDetailSize] + croppedMessage
 	}
 
-	path := fmt.Sprintf("/stacks/%s/jobs/%s/fail", failJobReq.StackKey, failJobReq.JobUUID)
+	path := constructPath("/stacks/%s/jobs/%s/fail", failJobReq.StackKey, failJobReq.JobUUID)
 	req, err := c.newRequest(ctx, http.MethodPost, path, failJobReq, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)

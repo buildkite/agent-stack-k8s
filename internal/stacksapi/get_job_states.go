@@ -17,7 +17,7 @@ type GetJobStatesResponse struct {
 
 // GetJobStates query job states for a list of jobs
 func (c *Client) GetJobStates(ctx context.Context, getJobStatesReq GetJobStatesRequest, opts ...RequestOption) (*GetJobStatesResponse, http.Header, error) {
-	path := fmt.Sprintf("/stacks/%s/jobs/get-states", getJobStatesReq.StackKey)
+	path := constructPath("/stacks/%s/jobs/get-states", getJobStatesReq.StackKey)
 	req, err := c.newRequest(ctx, http.MethodPost, path, getJobStatesReq, opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create request: %w", err)

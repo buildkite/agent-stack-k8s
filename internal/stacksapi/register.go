@@ -45,7 +45,7 @@ func (c *Client) RegisterStack(ctx context.Context, body RegisterStackRequest, o
 
 // DeregisterStack informs the Buildkite Stacks API that a stack is exiting cleanly.
 func (c *Client) DeregisterStack(ctx context.Context, stackKey string, opts ...RequestOption) (http.Header, error) {
-	path := fmt.Sprintf("/stacks/%s/deregister", stackKey)
+	path := constructPath("/stacks/%s/deregister", stackKey)
 	req, err := c.newRequest(ctx, http.MethodPost, path, nil, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
