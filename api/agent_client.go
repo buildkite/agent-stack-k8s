@@ -31,8 +31,6 @@ type AgentClient struct {
 	queue     string
 	stack     *stacksapi.RegisterStackResponse
 
-	// This impacts a number of endpoints' query parameters
-	reservation bool
 	useStackAPI bool
 }
 
@@ -43,7 +41,6 @@ type AgentClientOpts struct {
 	Queue           string
 	StackID         string
 	AgentQueryRules []string
-	UseReservation  bool
 	Logger          *zap.Logger
 	UseStacksAPI    bool
 }
@@ -74,7 +71,6 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		},
 		clusterID:   opts.ClusterID,
 		queue:       opts.Queue,
-		reservation: opts.UseReservation,
 		useStackAPI: opts.UseStacksAPI,
 	}
 
@@ -272,11 +268,14 @@ func (c *AgentClient) GetJobToRun(ctx context.Context, id string) (result *Agent
 		"scheduled_jobs", railsPathEscape(id),
 	)
 
-	if c.reservation {
-		v := make(url.Values)
+	// Usage of the stack API implies that we're reserving jobs, so we want to
+	// include_reserved=true to be able to fetch jobs that we've reserved.
+	if c.UseStackAPI() {
+		v := u.Query()
 		v.Add("include_reserved", "true")
 		u.RawQuery = v.Encode()
 	}
+
 	resp, err := c.httpClient.Get(u.String())
 	if err != nil {
 		return nil, 0, err
@@ -348,49 +347,22 @@ func (c *AgentClient) GetJobStates(ctx context.Context, ids []string) (result ma
 	return result, readRetryAfter(header), err
 }
 
-// ReserveJobBatchResult describes the result of a batch job reservation.
-type BatchReserveJobsResult struct {
-	ReservedJobUUIDs    []string `json:"reserved"`
-	NotReservedJobUUIDs []string `json:"not_reserved"`
-}
-
 // ReserveJobs reserves a batch of jobs.
-func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string) (result *BatchReserveJobsResult, retryAfter time.Duration, err error) {
-	if !c.reservation {
+func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string) (*stacksapi.BatchReserveJobsResponse, time.Duration, error) {
+	if !c.UseStackAPI() {
 		// We don't expect this to happen in prod. It's mainly a defensive mechanism.
 		return nil, 0, errors.New("reservation not enabled")
 	}
-	u := c.endpoint.JoinPath(
-		"clusters", railsPathEscape(c.clusterID),
-		"queues", railsPathEscape(c.queue),
-		"jobs", "mass_reserve",
-	)
 
-	requestBody := map[string][]string{
-		"job_uuids": ids,
-	}
-
-	jsonBody, err := json.Marshal(requestBody)
+	reservations, header, err := c.stacksAPIClient.BatchReserveJobs(ctx, stacksapi.BatchReserveJobsRequest{
+		StackKey: c.stack.Key,
+		JobUUIDs: ids,
+	}, stacksapi.WithNoRetry())
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// TODO: there is a size limit in this reserve api. we need to batch these by 1000
-	// TODO: as more support coming to support reservation updates, we will override the default timeout to a much smaller
-	// value.
-	req, err := http.NewRequestWithContext(ctx, "PUT", u.String(), strings.NewReader(string(jsonBody)))
-	if err != nil {
-		return nil, 0, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer resp.Body.Close()
-
-	return decodeResponse[BatchReserveJobsResult](resp)
+	return reservations, readRetryAfter(header), nil
 }
 
 func (c *AgentClient) DeregisterStack(ctx context.Context) error {

@@ -3,6 +3,7 @@ package reserver
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
@@ -53,14 +54,14 @@ func (r *Reserver) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob
 		return r.handler.HandleMany(ctx, jobs)
 	}
 
-	var job_ids []string
+	jobIDs := make([]string, 0, len(jobs))
 	for _, job := range jobs {
-		job_ids = append(job_ids, job.ID)
+		jobIDs = append(jobIDs, job.ID)
 	}
 
-	r.logger.Info("reserving jobs via Agent API...", zap.Int("count", len(job_ids)))
+	r.logger.Info("reserving jobs via Agent API...", zap.Int("count", len(jobIDs)))
 
-	result, _, err := r.agentClient.ReserveJobs(ctx, job_ids)
+	result, _, err := r.agentClient.ReserveJobs(ctx, jobIDs)
 	if err != nil {
 		return fmt.Errorf("error when reserving jobs: %w", err)
 	}
@@ -69,7 +70,7 @@ func (r *Reserver) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob
 	// In general, we ignore the job and the job should execute correctly.
 	// The worst case is that when controller crashes after job reservation and before k8s job were created.
 	// In that case, a reservatation expiration is bound to happen.
-	reservedJobs := findJobsIn(jobs, result.ReservedJobUUIDs)
+	reservedJobs := findJobsIn(jobs, result.Reserved)
 
 	if len(reservedJobs) > 0 {
 		return r.handler.HandleMany(ctx, reservedJobs)
@@ -82,11 +83,8 @@ func findJobsIn(jobs []*api.AgentScheduledJob, jobUUIDs []string) []*api.AgentSc
 
 	// We expecting a max 1000 jobs input here, a O(N^2) solution here is likely fine.
 	for _, job := range jobs {
-		for _, reservedID := range jobUUIDs {
-			if reservedID == job.ID {
-				result = append(result, job)
-				break
-			}
+		if slices.Contains(jobUUIDs, job.ID) {
+			result = append(result, job)
 		}
 	}
 

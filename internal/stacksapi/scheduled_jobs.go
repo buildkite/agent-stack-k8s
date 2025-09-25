@@ -67,7 +67,7 @@ type ListScheduledJobsRequest struct {
 // fields of the request are required. This method will only return a single page of results. To retrieve additional
 // pages, call this method again with the EndCursor field set to the EndCursor value from the previous response's PageInfo.
 func (c *Client) ListScheduledJobs(ctx context.Context, listReq ListScheduledJobsRequest, opts ...RequestOption) (*ListScheduledJobsResponse, http.Header, error) {
-	path := fmt.Sprintf("/stacks/%s/scheduled_jobs", listReq.StackKey)
+	path := constructPath("/stacks/%s/scheduled_jobs", listReq.StackKey)
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil, opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create request: %w", err)
@@ -92,4 +92,38 @@ func (c *Client) ListScheduledJobs(ctx context.Context, listReq ListScheduledJob
 	}
 
 	return listJobsResp, header, nil
+}
+
+// BatchReserveJobsRequest is the input type for [BatchReserveJobs]. The StackKey and JobUUIDs fields are required.
+type BatchReserveJobsRequest struct {
+	StackKey                 string   `json:"-"`                                   // The key of the stack calling this endpoint. Required.
+	JobUUIDs                 []string `json:"job_uuids"`                           // The UUIDs of the jobs to reserve. Required.
+	ReservationExpirySeconds int      `json:"reservation_expiry_seconds,omitzero"` // The number of seconds until the reservation expires. Optional, defaults to 300 (5 minutes) if not set.
+}
+
+// BatchReserveJobsResponse is the output type for [BatchReserveJobs]. It contains lists of successfully reserved and not reserved job UUIDs.
+type BatchReserveJobsResponse struct {
+	Reserved    []string `json:"reserved"`     // The UUIDs of the jobs that were successfully reserved
+	NotReserved []string `json:"not_reserved"` // The UUIDs of the jobs that could not be reserved (e.g. because they were already reserved by another stack, or because they're no longer in a reservable state)
+}
+
+// BatchReserveJobs attempts to reserve a list of jobs for processing by the calling stack. The StackKey and JobUUIDs
+// fields of the request are required. If a job cannot be reserved (for example, because it has already been reserved
+// by another stack, or because it is no longer in a reservable state), it will be included in the NotReserved list
+// in the response. Note that even if none of the jobs could be reserved, this method will still return a nil error,
+// as long as the request itself was valid.
+func (c *Client) BatchReserveJobs(ctx context.Context, reserveReq BatchReserveJobsRequest, opts ...RequestOption) (*BatchReserveJobsResponse, http.Header, error) {
+	path := constructPath("/stacks/%s/scheduled_jobs/batch_reserve", reserveReq.StackKey)
+
+	req, err := c.newRequest(ctx, http.MethodPut, path, reserveReq, opts...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	reserveJobsResp, header, err := do[BatchReserveJobsResponse](ctx, c, req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("batch reserve jobs: %w", err)
+	}
+
+	return reserveJobsResp, header, nil
 }

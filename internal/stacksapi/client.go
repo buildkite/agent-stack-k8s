@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
@@ -314,6 +315,20 @@ func (c *Client) prepareResponseLogger(logger *slog.Logger, resp *http.Response)
 	}
 
 	return logger.With("response", string(respDump))
+}
+
+func constructPath(format string, a ...string) string {
+	escapedPathParams := make([]any, 0, len(a))
+	for _, param := range a {
+		escapedPathParams = append(escapedPathParams, any(railsPathEscape(param)))
+	}
+
+	return fmt.Sprintf(format, escapedPathParams...)
+}
+
+// Rails doesn't accept dots in some path segments.
+func railsPathEscape(s string) string {
+	return strings.ReplaceAll(url.PathEscape(s), ".", "%2E")
 }
 
 // ErrorResponse provides a message.
