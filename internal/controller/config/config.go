@@ -15,8 +15,10 @@ const (
 	ControllerIDLabel                     = "buildkite.com/controller-id"
 	BuildURLAnnotation                    = "buildkite.com/build-url"
 	BuildBranchAnnotation                 = "buildkite.com/build-branch"
+	BuildRepoAnnotation                   = "buildkite.com/build-repo"
 	JobURLAnnotation                      = "buildkite.com/job-url"
 	PriorityAnnotation                    = "buildkite.com/job-priority"
+	PipelineSlugAnnotation                = "buildkite.com/pipeline-slug"
 	DefaultNamespace                      = "default"
 	DefaultImagePullBackOffGracePeriod    = 30 * time.Second
 	DefaultJobCancelCheckerPollInterval   = 5 * time.Second
