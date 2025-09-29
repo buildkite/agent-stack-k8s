@@ -704,6 +704,27 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
 	}
 
+	// After all patching is complete, pass the actual termination grace period to the agent
+	// so it can coordinate log collection timing appropriately.
+	if podSpec.TerminationGracePeriodSeconds != nil {
+		// Find the agent container and add the environment variable
+		for i := range podSpec.Containers {
+			if podSpec.Containers[i].Name == AgentContainerName {
+				// Calculate log collection grace period: termination grace period minus buffer for cleanup
+				logCollectionGracePeriod := *podSpec.TerminationGracePeriodSeconds - 10
+				if logCollectionGracePeriod < 1 {
+					logCollectionGracePeriod = 1 // Minimum 1 second
+				}
+
+				podSpec.Containers[i].Env = append(podSpec.Containers[i].Env, corev1.EnvVar{
+					Name:  "BUILDKITE_K8S_LOG_COLLECTION_GRACE_PERIOD_SECONDS",
+					Value: strconv.FormatInt(logCollectionGracePeriod, 10),
+				})
+				break
+			}
+		}
+	}
+
 	// Removes all containers named "checkout" when checkout disabled via controller config or plugin
 	// This will also remove containers named "checkout" added via PodSpecPatch
 	if skipCheckout {
