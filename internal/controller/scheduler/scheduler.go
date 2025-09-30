@@ -187,6 +187,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 			return err
 		}
 	}
+	w.agentClient.CreateStackNotification(ctx, inputs.uuid, "K8s Job created successfully, waiting for Agent to start...")
 	jobCreateSuccessCounter.Inc()
 	jobEndToEndDurationHistogram.Observe(time.Since(job.QueriedAt).Seconds())
 	return nil

@@ -31,6 +31,7 @@ type AgentClient struct {
 	queue     string
 	stack     *stacksapi.RegisterStackResponse
 
+	logger      *zap.Logger
 	useStackAPI bool
 }
 
@@ -71,6 +72,7 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		},
 		clusterID:   opts.ClusterID,
 		queue:       opts.Queue,
+		logger:      opts.Logger,
 		useStackAPI: opts.UseStacksAPI,
 	}
 
@@ -392,6 +394,28 @@ func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail s
 
 	_, err := c.stacksAPIClient.FailJob(ctx, req)
 	return err
+}
+
+// CreateStackNotification creates a stack notification for a job.
+// This is designed to be call and forget, error will be logged because we don't anticipate error handling
+func (c *AgentClient) CreateStackNotification(ctx context.Context, jobUUID string, detail string) {
+	if !c.UseStackAPI() {
+		// No-op for the case for legacy API
+		return
+	}
+
+	req := stacksapi.CreateStackNotificationRequest{
+		StackKey: c.stack.Key,
+		JobUUID:  jobUUID,
+		Detail:   detail,
+	}
+
+	// No retry as we want to avoid any possible source of latency bump for job creation flow.
+	// In the future this will be moved into a batched stack notification worker, we can turn back auto retry then
+	_, err := c.stacksAPIClient.CreateStackNotification(ctx, req, stacksapi.WithNoRetry())
+	if err != nil {
+		c.logger.Warn("Failed creating stack notification", zap.Error(err))
+	}
 }
 
 func decodeResponse[T any](resp *http.Response) (result *T, retryAfter time.Duration, err error) {
