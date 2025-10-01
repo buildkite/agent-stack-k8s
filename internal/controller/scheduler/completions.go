@@ -17,8 +17,6 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-const defaultTermGracePeriodSeconds = 60
-
 type completionsWatcher struct {
 	logger *zap.Logger
 	k8s    kubernetes.Interface
@@ -94,7 +92,7 @@ func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *v1.Pod) {
 		if err != nil {
 			return err
 		}
-		job.Spec.ActiveDeadlineSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
+		job.Spec.ActiveDeadlineSeconds = ptr.To[int64](config.DefaultTerminationGracePeriodSeconds)
 		_, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(ctx, job, metav1.UpdateOptions{})
 		return err
 	}); err != nil {
