@@ -79,6 +79,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		21600,
 		"maximum number of seconds a kubernetes job is allowed to run before terminating all pods and failing job",
 	)
+	cmd.Flags().Int(
+		"default-termination-grace-period-seconds",
+		config.DefaultTerminationGracePeriodSeconds,
+		"maximum number of seconds a pod will run after being told to terminate, if not otherwise set by podSpec",
+	)
 	cmd.Flags().Duration(
 		"poll-interval",
 		time.Second,

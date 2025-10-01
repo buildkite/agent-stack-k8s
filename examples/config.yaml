@@ -4,6 +4,7 @@ image: my.registry.dev/buildkite-agent:latest
 job-ttl: 5m
 job-prefix: testkite-
 job-active-deadline-seconds: 21600
+default-termination-grace-period-seconds: 80
 image-pull-backoff-grace-period: 60s
 job-cancel-checker-poll-interval: 10s
 empty-job-grace-period: 50s
