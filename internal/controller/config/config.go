@@ -41,25 +41,30 @@ var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
 // mapstructure (the module) supports switching the struct tag to "json", viper does not. So we have
 // to have the `mapstructure` tag for viper and the `json` tag is used by the mapstructure!
 type Config struct {
-	Debug                                bool          `json:"debug"`
-	JobTTL                               time.Duration `json:"job-ttl"`
-	JobActiveDeadlineSeconds             int           `json:"job-active-deadline-seconds" validate:"required"`
-	DefaultTerminationGracePeriodSeconds int           `json:"default-termination-grace-period-seconds" validate:"required"`
-	PollInterval                         time.Duration `json:"poll-interval"`
-	JobCreationConcurrency               int           `json:"job-creation-concurrency" validate:"omitempty"`
-	AgentTokenSecret                     string        `json:"agent-token-secret"       validate:"required"`
-	Image                                string        `json:"image"                    validate:"required"`
-	JobPrefix                            string        `json:"job-prefix"               validate:"required"`
-	MaxInFlight                          int           `json:"max-in-flight"            validate:"min=0"`
-	Namespace                            string        `json:"namespace"                validate:"required"`
-	Tags                                 stringSlice   `json:"tags"`
-	PrometheusPort                       uint16        `json:"prometheus-port"          validate:"omitempty"`
-	ProfilerAddress                      string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
-	PaginationPageSize                   int           `json:"pagination-page-size"     validate:"min=1,max=1000"`
-	PaginationDepthLimit                 int           `json:"pagination-depth-limit"   validate:"min=1,max=20"`
-	QueryResetInterval                   time.Duration `json:"query-reset-interval"     validate:"omitempty"`
-	EnableQueuePause                     bool          `json:"enable-queue-pause"       validate:"omitempty"`
-	WorkQueueLimit                       int           `json:"work-queue-limit"         validate:"omitempty"`
+	Debug bool `json:"debug"`
+
+	// Job / Pod settings
+	JobTTL                               time.Duration   `json:"job-ttl"`
+	JobActiveDeadlineSeconds             int             `json:"job-active-deadline-seconds"              validate:"required"`
+	JobPrefix                            string          `json:"job-prefix"                               validate:"required"`
+	DefaultTerminationGracePeriodSeconds int             `json:"default-termination-grace-period-seconds" validate:"required"`
+	Namespace                            string          `json:"namespace"                                validate:"required"`
+	PodSpecPatch                         *corev1.PodSpec `json:"pod-spec-patch"                           validate:"omitempty"`
+
+	// Controller settings
+	JobCreationConcurrency int           `json:"job-creation-concurrency" validate:"omitempty"`
+	AgentTokenSecret       string        `json:"agent-token-secret"       validate:"required"`
+	Image                  string        `json:"image"                    validate:"required"`
+	MaxInFlight            int           `json:"max-in-flight"            validate:"min=0"`
+	Tags                   stringSlice   `json:"tags"`
+	PrometheusPort         uint16        `json:"prometheus-port"          validate:"omitempty"`
+	ProfilerAddress        string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
+	PollInterval           time.Duration `json:"poll-interval"`
+	PaginationPageSize     int           `json:"pagination-page-size"     validate:"min=1,max=1000"`
+	PaginationDepthLimit   int           `json:"pagination-depth-limit"   validate:"min=1,max=20"`
+	QueryResetInterval     time.Duration `json:"query-reset-interval"     validate:"omitempty"`
+	EnableQueuePause       bool          `json:"enable-queue-pause"       validate:"omitempty"`
+	WorkQueueLimit         int           `json:"work-queue-limit"         validate:"omitempty"`
 	// Agent endpoint is set in agent-config.
 
 	// ID is an optional uniquely ID string for the controller.
@@ -68,33 +73,32 @@ type Config struct {
 	// By default, if helm is used to install, this will be set as helm release full name.
 	ID string `json:"id" validate:"omitempty"`
 
-	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps" validate:"omitempty"`
+	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps"   validate:"omitempty"`
 	K8sClientRateLimiterBurst int `json:"k8s-client-rate-limiter-burst" validate:"omitempty"`
 
-	AdditionalRedactedVars       stringSlice     `json:"additional-redacted-vars"         validate:"omitempty"`
-	PodSpecPatch                 *corev1.PodSpec `json:"pod-spec-patch"                   validate:"omitempty"`
-	ImagePullBackOffGracePeriod  time.Duration   `json:"image-pull-backoff-grace-period"  validate:"omitempty"`
-	JobCancelCheckerPollInterval time.Duration   `json:"job-cancel-checker-poll-interval" validate:"omitempty"`
-	EmptyJobGracePeriod          time.Duration   `json:"empty-job-grace-period"           validate:"omitempty"`
+	ImagePullBackOffGracePeriod  time.Duration `json:"image-pull-backoff-grace-period"  validate:"omitempty"`
+	JobCancelCheckerPollInterval time.Duration `json:"job-cancel-checker-poll-interval" validate:"omitempty"`
+	EmptyJobGracePeriod          time.Duration `json:"empty-job-grace-period"           validate:"omitempty"`
 
 	// WorkspaceVolume allows supplying a volume for /workspace. By default
 	// an EmptyDir volume is created for it.
 	WorkspaceVolume *corev1.Volume `json:"workspace-volume" validate:"omitempty"`
 
-	AgentConfig           *AgentConfig    `json:"agent-config"            validate:"omitempty"`
-	DefaultCheckoutParams *CheckoutParams `json:"default-checkout-params" validate:"omitempty"`
-	DefaultCommandParams  *CommandParams  `json:"default-command-params"  validate:"omitempty"`
-	DefaultSidecarParams  *SidecarParams  `json:"default-sidecar-params"  validate:"omitempty"`
-	DefaultMetadata       Metadata        `json:"default-metadata"        validate:"omitempty"`
+	AgentConfig            *AgentConfig    `json:"agent-config"             validate:"omitempty"`
+	DefaultCheckoutParams  *CheckoutParams `json:"default-checkout-params"  validate:"omitempty"`
+	DefaultCommandParams   *CommandParams  `json:"default-command-params"   validate:"omitempty"`
+	DefaultSidecarParams   *SidecarParams  `json:"default-sidecar-params"   validate:"omitempty"`
+	DefaultMetadata        Metadata        `json:"default-metadata"         validate:"omitempty"`
+	AdditionalRedactedVars stringSlice     `json:"additional-redacted-vars" validate:"omitempty"`
 
 	ResourceClasses map[string]*ResourceClass `json:"resource-classes" validate:"omitempty"`
 
 	DefaultImagePullPolicy      corev1.PullPolicy `json:"default-image-pull-policy"       validate:"omitempty"`
 	DefaultImageCheckPullPolicy corev1.PullPolicy `json:"default-image-check-pull-policy" validate:"omitempty"`
 
-	SkipImageCheckContainers       bool   `json:"skip-image-check-containers"           validate:"omitempty"`
-	ImageCheckContainerCPULimit    string `json:"image-check-container-cpu-limit"       validate:"omitempty"`
-	ImageCheckContainerMemoryLimit string `json:"image-check-container-memory-limit"    validate:"omitempty"`
+	SkipImageCheckContainers       bool   `json:"skip-image-check-containers"        validate:"omitempty"`
+	ImageCheckContainerCPULimit    string `json:"image-check-container-cpu-limit"    validate:"omitempty"`
+	ImageCheckContainerMemoryLimit string `json:"image-check-container-memory-limit" validate:"omitempty"`
 
 	// ProhibitKubernetesPlugin can be used to prevent alterations to the pod
 	// from the job (the kubernetes "plugin" in pipeline.yml). If enabled,
@@ -111,7 +115,7 @@ type Config struct {
 	ExperimentalStacksAPISupport bool `json:"experimental-stacks-api-support" validate:"omitempty"`
 
 	// These are only used for integration tests.
-	BuildkiteToken  string `json:"buildkite-token" validate:"omitempty"`
+	BuildkiteToken  string `json:"buildkite-token"  validate:"omitempty"`
 	GraphQLEndpoint string `json:"graphql-endpoint" validate:"omitempty"`
 }
 
