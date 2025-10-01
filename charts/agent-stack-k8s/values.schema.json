@@ -233,7 +233,7 @@
       "type": "object",
       "default": {},
       "title": "The config Schema",
-      "required": ["org"],
+      "required": [],
       "properties": {
         "graphql-endpoint": {
           "type": "string",
@@ -295,13 +295,6 @@
           "title": "Sets a limit on the number of Kubernetes jobs that will be attempted to be created simultaneously in parallel",
           "examples": [1, 2, 5, 10]
         },
-        "org": {
-          "type": "string",
-          "default": "",
-          "title": "Deprecated as of v0.28 - Buildkite organization slug",
-          "examples": [""],
-          "deprecated": true
-        },
         "tags": {
           "type": "array",
           "default": [],
@@ -310,13 +303,6 @@
             "type": "string"
           },
           "examples": [["queue=kubernetes"]]
-        },
-        "cluster-uuid": {
-          "type": "string",
-          "default": "",
-          "title": "Deprecated as of v0.28 - The UUID of the Buildkite cluster to pull Jobs from",
-          "examples": [""],
-          "deprecated": true
         },
         "additional-redacted-vars": {
           "type": "array",
@@ -700,7 +686,6 @@
           "job-ttl": "5m",
           "poll-interval": "5s",
           "max-in-flight": 100,
-          "org": "",
           "tags": []
         }
       ]
@@ -713,12 +698,11 @@
       "image": "ghcr.io/buildkite/agent-stack-k8s/controller:latest",
       "nodeSelector": {},
       "config": {
-        "agentImage": "",
+        "image": "",
         "debug": false,
         "jobTTL": "",
         "maxInFlight": 100,
         "pollInterval": "5s",
-        "org": "",
         "tags": []
       }
     }

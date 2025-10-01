@@ -113,12 +113,6 @@ type Config struct {
 	// These are only used for integration tests.
 	BuildkiteToken  string `json:"buildkite-token" validate:"omitempty"`
 	GraphQLEndpoint string `json:"graphql-endpoint" validate:"omitempty"`
-	// FIXME: This is unused. Only keeping here temporarily to ease our transition.
-	// Once we promote our new version of k8s stack into our own CI, we can remove this line.
-	Org string `json:"org" validate:"omitempty"`
-	// Deprecated: ClusterUUID is unused. Only keeping here temporarily to ease our transition.
-	// Once we promote our new version of k8s stack into our own CI, we can remove this line.
-	ClusterUUID string `json:"cluster-uuid" validate:"omitempty"`
 }
 
 type stringSlice []string

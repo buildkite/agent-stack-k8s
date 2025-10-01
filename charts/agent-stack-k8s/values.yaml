@@ -4,7 +4,6 @@ nodeSelector: {}
 tolerations: []
 
 config:
-  org: ""
   prometheus-port: 9216
 
 resources:

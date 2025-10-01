@@ -90,11 +90,6 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start",
 	)
 	cmd.Flags().String(
-		"cluster-uuid",
-		"",
-		"UUID of the Buildkite Cluster. The agent token must be for the Buildkite Cluster.",
-	)
-	cmd.Flags().String(
 		"profiler-address",
 		"",
 		"Bind address to expose the pprof profiler (e.g. localhost:6060)",
