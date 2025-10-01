@@ -607,6 +607,20 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		},
 	}
 
+	// Set log collection grace period based on termination grace period.
+	// This allows the agent to coordinate log collection timing with pod termination.
+	if podSpec.TerminationGracePeriodSeconds != nil {
+		// Calculate log collection grace period: termination grace period minus buffer for cleanup
+		logCollectionGracePeriod := *podSpec.TerminationGracePeriodSeconds - 10
+		if logCollectionGracePeriod < 1 {
+			logCollectionGracePeriod = 1 // Minimum 1 second
+		}
+		agentContainer.Env = append(agentContainer.Env, corev1.EnvVar{
+			Name:  "BUILDKITE_KUBERNETES_LOG_COLLECTION_GRACE_PERIOD",
+			Value: fmt.Sprintf("%ds", logCollectionGracePeriod),
+		})
+	}
+
 	// Append some agent config and checkout config to the agent container.
 	// The agent will transform them as needed and pass them along to the other
 	// containers via the socket connection between them.
