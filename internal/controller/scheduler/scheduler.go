@@ -317,7 +317,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	kjob.Spec.Template.Labels = kjob.Labels
 	kjob.Spec.Template.Annotations = kjob.Annotations
 	kjob.Spec.BackoffLimit = ptr.To[int32](0)
-	kjob.Spec.Template.Spec.TerminationGracePeriodSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
+
+	if podSpec.TerminationGracePeriodSeconds == nil {
+		podSpec.TerminationGracePeriodSeconds = ptr.To(int64(defaultTermGracePeriodSeconds))
+	}
 
 	// workspaceVolume is shared among most containers, so set it up first.
 	workspaceVolume := w.cfg.WorkspaceVolume
