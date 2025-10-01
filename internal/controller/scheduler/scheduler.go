@@ -54,30 +54,31 @@ var (
 )
 
 type Config struct {
-	Namespace                      string
-	ID                             string
-	Image                          string
-	JobPrefix                      string
-	AgentToken                     string
-	AgentTokenSecretName           string
-	JobTTL                         time.Duration
-	JobActiveDeadlineSeconds       int
-	AdditionalRedactedVars         []string
-	WorkspaceVolume                *corev1.Volume
-	AgentConfig                    *config.AgentConfig
-	DefaultCheckoutParams          *config.CheckoutParams
-	DefaultCommandParams           *config.CommandParams
-	DefaultSidecarParams           *config.SidecarParams
-	DefaultMetadata                config.Metadata
-	DefaultImagePullPolicy         corev1.PullPolicy
-	DefaultImageCheckPullPolicy    corev1.PullPolicy
-	PodSpecPatch                   *corev1.PodSpec
-	ProhibitK8sPlugin              bool
-	AllowPodSpecPatchUnsafeCmdMod  bool
-	SkipImageCheckContainers       bool
-	ImageCheckContainerCPULimit    string
-	ImageCheckContainerMemoryLimit string
-	ResourceClasses                map[string]*config.ResourceClass
+	Namespace                            string
+	ID                                   string
+	Image                                string
+	JobPrefix                            string
+	AgentToken                           string
+	AgentTokenSecretName                 string
+	JobTTL                               time.Duration
+	JobActiveDeadlineSeconds             int
+	AdditionalRedactedVars               []string
+	WorkspaceVolume                      *corev1.Volume
+	AgentConfig                          *config.AgentConfig
+	DefaultCheckoutParams                *config.CheckoutParams
+	DefaultCommandParams                 *config.CommandParams
+	DefaultSidecarParams                 *config.SidecarParams
+	DefaultMetadata                      config.Metadata
+	DefaultImagePullPolicy               corev1.PullPolicy
+	DefaultImageCheckPullPolicy          corev1.PullPolicy
+	DefaultTerminationGracePeriodSeconds int
+	PodSpecPatch                         *corev1.PodSpec
+	ProhibitK8sPlugin                    bool
+	AllowPodSpecPatchUnsafeCmdMod        bool
+	SkipImageCheckContainers             bool
+	ImageCheckContainerCPULimit          string
+	ImageCheckContainerMemoryLimit       string
+	ResourceClasses                      map[string]*config.ResourceClass
 }
 
 func New(logger *zap.Logger, client kubernetes.Interface, agentClient *api.AgentClient, cfg Config) *worker {
@@ -324,7 +325,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	kjob.Spec.BackoffLimit = ptr.To[int32](0)
 
 	if podSpec.TerminationGracePeriodSeconds == nil {
-		podSpec.TerminationGracePeriodSeconds = ptr.To(int64(defaultTermGracePeriodSeconds))
+		podSpec.TerminationGracePeriodSeconds = ptr.To(int64(w.cfg.DefaultTerminationGracePeriodSeconds))
 	}
 
 	// workspaceVolume is shared among most containers, so set it up first.
