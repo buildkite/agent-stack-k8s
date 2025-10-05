@@ -97,6 +97,7 @@ func New(logger *zap.Logger, client kubernetes.Interface, agentClient *api.Agent
 type KubernetesPlugin struct {
 	PodSpec                  *corev1.PodSpec        `json:"podSpec,omitempty"`
 	PodSpecPatch             *corev1.PodSpec        `json:"podSpecPatch,omitempty"`
+	PodTemplate              string                 `json:"podTemplate,omitempty"`
 	GitEnvFrom               []corev1.EnvFromSource `json:"gitEnvFrom,omitempty"`
 	Sidecars                 []corev1.Container     `json:"sidecars,omitempty"`
 	Metadata                 config.Metadata        `json:"metadata,omitempty"`
@@ -152,9 +153,24 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 	}
 
 	podSpec := &corev1.PodSpec{}
-	// Use the podSpec provided by the plugin, if allowed.
-	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpec != nil {
-		podSpec = inputs.k8sPlugin.PodSpec
+
+	if inputs.k8sPlugin != nil {
+		// Use the podSpec provided by the plugin.
+		// If that's not set, use the pod template.
+		// If that's also not set, use the empty podSpec.
+		switch {
+		case inputs.k8sPlugin.PodSpec != nil:
+			podSpec = inputs.k8sPlugin.PodSpec
+
+		case inputs.k8sPlugin.PodTemplate != "":
+			ptName := inputs.k8sPlugin.PodTemplate
+			pt, err := w.client.CoreV1().PodTemplates(w.cfg.Namespace).Get(ctx, ptName, metav1.GetOptions{})
+			if err != nil {
+				logger.Warn("Error fetching podTemplate", zap.String("podTemplate", ptName), zap.Error(err))
+				return w.failJob(ctx, inputs, fmt.Sprintf("Error fetching podTemplate %q: %v", ptName, err))
+			}
+			podSpec = &pt.Template.Spec
+		}
 	}
 
 	kjob, err := w.Build(podSpec, false, inputs)

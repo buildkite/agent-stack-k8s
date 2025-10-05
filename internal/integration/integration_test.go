@@ -73,6 +73,21 @@ func TestResourceClass(t *testing.T) {
 	tc.AssertLogsContain(build, "✅ CPU limit is correctly set to ~500m")
 }
 
+func TestPodTemplate(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "podtemplate.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "kunanyi is a mountain")
+}
+
 func TestDefaultQueue(t *testing.T) {
 	// Note: this test assumes the default queue is called "default".
 	// This happens to be the case for our CI setup.
