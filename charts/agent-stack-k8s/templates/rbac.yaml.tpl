@@ -25,6 +25,7 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - podtemplates
       - secrets
     verbs:
       - get
