@@ -1,0 +1,14 @@
+# This PodTemplate is used by TestPodTemplate.
+apiVersion: v1
+kind: PodTemplate
+metadata:
+  name: integration-tests-pod-template
+  namespace: buildkite-k8s-integration-test
+template:
+  spec:
+    containers:
+      - name: templated
+        image: alpine:latest
+        env:
+          - name: TEST_POD_TEMPLATE
+            value: kunanyi

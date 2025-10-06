@@ -1,0 +1,9 @@
+steps:
+  - label: ":wave:"
+    command: echo "$${TEST_POD_TEMPLATE} is a mountain"
+    agents:
+      queue: "{{.queue}}"
+    plugins:
+      - kubernetes:
+          # This template is defined in /.buildkite/fixtures (applied manually).
+          podTemplate: integration-tests-pod-template
