@@ -79,15 +79,15 @@ func AddConfigFlags(cmd *cobra.Command) {
 		21600,
 		"maximum number of seconds a kubernetes job is allowed to run before terminating all pods and failing job",
 	)
+	cmd.Flags().Int(
+		"default-termination-grace-period-seconds",
+		config.DefaultTerminationGracePeriodSeconds,
+		"maximum number of seconds a pod will run after being told to terminate, if not otherwise set by podSpec",
+	)
 	cmd.Flags().Duration(
 		"poll-interval",
 		time.Second,
 		"time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start",
-	)
-	cmd.Flags().String(
-		"cluster-uuid",
-		"",
-		"UUID of the Buildkite Cluster. The agent token must be for the Buildkite Cluster.",
 	)
 	cmd.Flags().String(
 		"profiler-address",
