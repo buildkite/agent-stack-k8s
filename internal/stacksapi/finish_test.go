@@ -10,21 +10,21 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFailJob(t *testing.T) {
+func TestFinishJob(t *testing.T) {
 	t.Parallel()
 
-	t.Run("successful fail job", func(t *testing.T) {
+	t.Run("successful finish job", func(t *testing.T) {
 		t.Parallel()
 
 		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			verifyAuthMethodPath(t, r, "POST", "/stacks/stack-123/jobs/456/fail")
+			verifyAuthMethodPath(t, r, "POST", "/stacks/stack-123/jobs/456/finish")
 
-			var params FailJobRequest
+			var params FinishJobRequest
 			assert.NoError(t, json.NewDecoder(r.Body).Decode(&params))
 
-			expectedParams := FailJobRequest{
-				ExitStatus:  -10,
-				ErrorDetail: "show me the money",
+			expectedParams := FinishJobRequest{
+				ExitStatus: -10,
+				Detail:     "show me the money",
 			}
 
 			if diff := cmp.Diff(expectedParams, params); diff != "" {
@@ -36,16 +36,16 @@ func TestFailJob(t *testing.T) {
 		})
 		t.Cleanup(func() { server.Close() })
 
-		req := FailJobRequest{
-			StackKey:    "stack-123",
-			JobUUID:     "456",
-			ExitStatus:  -10,
-			ErrorDetail: "show me the money",
+		req := FinishJobRequest{
+			StackKey:   "stack-123",
+			JobUUID:    "456",
+			ExitStatus: -10,
+			Detail:     "show me the money",
 		}
 
-		header, err := client.FailJob(t.Context(), req)
+		header, err := client.FinishJob(t.Context(), req)
 		if err != nil {
-			t.Fatalf("client.FailJob returned an error: %v", err)
+			t.Fatalf("client.FinishJob returned an error: %v", err)
 		}
 
 		want, got := "custom-value", header.Get("X-Custom-Header")
@@ -54,33 +54,31 @@ func TestFailJob(t *testing.T) {
 		}
 	})
 
-	t.Run("crops error detail when exceeds 4KB", func(t *testing.T) {
+	t.Run("crops detail when exceeds 4KB", func(t *testing.T) {
 		t.Parallel()
 
 		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			verifyAuthMethodPath(t, r, "POST", "/stacks/stack-123/jobs/456/fail")
+			verifyAuthMethodPath(t, r, "POST", "/stacks/stack-123/jobs/456/finish")
 
-			var params FailJobRequest
+			var params FinishJobRequest
 			assert.NoError(t, json.NewDecoder(r.Body).Decode(&params))
 
-			// Verify the error detail was cropped to 4KB
-			assert.Equal(t, 4*1024, len(params.ErrorDetail))
+			assert.Equal(t, 4*1024, len(params.Detail))
 
 			w.WriteHeader(http.StatusNoContent)
 		})
 		t.Cleanup(func() { server.Close() })
 
-		// Create an error detail larger than 4KB
-		largeErrorDetail := strings.Repeat("x", 5*1024) // 5KB
+		largeDetail := strings.Repeat("x", 5*1024)
 
-		req := FailJobRequest{
-			StackKey:    "stack-123",
-			JobUUID:     "456",
-			ExitStatus:  -10,
-			ErrorDetail: largeErrorDetail,
+		req := FinishJobRequest{
+			StackKey:   "stack-123",
+			JobUUID:    "456",
+			ExitStatus: -10,
+			Detail:     largeDetail,
 		}
 
-		_, err := client.FailJob(t.Context(), req)
+		_, err := client.FinishJob(t.Context(), req)
 		assert.NoError(t, err)
 	})
 }

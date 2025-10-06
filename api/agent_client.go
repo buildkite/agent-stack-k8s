@@ -410,13 +410,14 @@ func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail s
 		return fmt.Errorf("cannot call FailJob when useStackAPI is off")
 	}
 
-	req := stacksapi.FailJobRequest{
-		StackKey:    c.stack.Key,
-		JobUUID:     jobUUID,
-		ErrorDetail: errorDetail,
+	req := stacksapi.FinishJobRequest{
+		StackKey:   c.stack.Key,
+		JobUUID:    jobUUID,
+		ExitStatus: -1,
+		Detail:     errorDetail,
 	}
 
-	_, err := c.stacksAPIClient.FailJob(ctx, req)
+	_, err := c.stacksAPIClient.FinishJob(ctx, req)
 	return err
 }
 
