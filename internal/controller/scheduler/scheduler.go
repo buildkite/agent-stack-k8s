@@ -317,7 +317,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	kjob.Spec.Template.Labels = kjob.Labels
 	kjob.Spec.Template.Annotations = kjob.Annotations
 	kjob.Spec.BackoffLimit = ptr.To[int32](0)
-	kjob.Spec.Template.Spec.TerminationGracePeriodSeconds = ptr.To[int64](defaultTermGracePeriodSeconds)
+
+	if podSpec.TerminationGracePeriodSeconds == nil {
+		podSpec.TerminationGracePeriodSeconds = ptr.To(int64(defaultTermGracePeriodSeconds))
+	}
 
 	// workspaceVolume is shared among most containers, so set it up first.
 	workspaceVolume := w.cfg.WorkspaceVolume
@@ -698,6 +701,27 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		}
 		podSpec = patched
 		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
+	}
+
+	// After all patching is complete, pass the actual termination grace period to the agent
+	// so it can coordinate log collection timing appropriately.
+	if podSpec.TerminationGracePeriodSeconds != nil {
+		// Find the agent container and add the environment variable
+		for i := range podSpec.Containers {
+			if podSpec.Containers[i].Name == AgentContainerName {
+				// Calculate log collection grace period: termination grace period minus buffer for cleanup
+				logCollectionGracePeriod := *podSpec.TerminationGracePeriodSeconds - 10
+				if logCollectionGracePeriod < 1 {
+					logCollectionGracePeriod = 1 // Minimum 1 second
+				}
+
+				podSpec.Containers[i].Env = append(podSpec.Containers[i].Env, corev1.EnvVar{
+					Name:  "BUILDKITE_K8S_LOG_COLLECTION_GRACE_PERIOD_SECONDS",
+					Value: strconv.FormatInt(logCollectionGracePeriod, 10),
+				})
+				break
+			}
+		}
 	}
 
 	// Removes all containers named "checkout" when checkout disabled via controller config or plugin
