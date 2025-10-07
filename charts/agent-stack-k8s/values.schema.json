@@ -271,6 +271,12 @@
           "title": "The maximum number of seconds a kubernetes job is allowed to run before terminating all pods and failing the job",
           "examples": [43200, 86400]
         },
+        "default-termination-grace-period-seconds": {
+          "type": "integer",
+          "default": 60,
+          "title": "The maximum number of seconds a pod will run after being told to terminate, if not otherwise set by podSpec",
+          "examples": [30, 60, 90]
+        },
         "max-in-flight": {
           "type": "integer",
           "default": 25,

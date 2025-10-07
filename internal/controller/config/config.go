@@ -29,6 +29,7 @@ const (
 	DefaultPaginationPageSize             = 1000
 	DefaultPaginationDepthLimit           = 2
 	DefaultQueryResetInterval             = 10 * time.Second
+	DefaultTerminationGracePeriodSeconds  = 60
 	DefaultWorkQueueLimit                 = 1_000_000
 	DefaultImageCheckContainerCPULimit    = "200m"
 	DefaultImageCheckContainerMemoryLimit = "128Mi"
@@ -40,24 +41,25 @@ var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
 // mapstructure (the module) supports switching the struct tag to "json", viper does not. So we have
 // to have the `mapstructure` tag for viper and the `json` tag is used by the mapstructure!
 type Config struct {
-	Debug                    bool          `json:"debug"`
-	JobTTL                   time.Duration `json:"job-ttl"`
-	JobActiveDeadlineSeconds int           `json:"job-active-deadline-seconds" validate:"required"`
-	PollInterval             time.Duration `json:"poll-interval"`
-	JobCreationConcurrency   int           `json:"job-creation-concurrency" validate:"omitempty"`
-	AgentTokenSecret         string        `json:"agent-token-secret"       validate:"required"`
-	Image                    string        `json:"image"                    validate:"required"`
-	JobPrefix                string        `json:"job-prefix"               validate:"required"`
-	MaxInFlight              int           `json:"max-in-flight"            validate:"min=0"`
-	Namespace                string        `json:"namespace"                validate:"required"`
-	Tags                     stringSlice   `json:"tags"`
-	PrometheusPort           uint16        `json:"prometheus-port"          validate:"omitempty"`
-	ProfilerAddress          string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
-	PaginationPageSize       int           `json:"pagination-page-size"     validate:"min=1,max=1000"`
-	PaginationDepthLimit     int           `json:"pagination-depth-limit"   validate:"min=1,max=20"`
-	QueryResetInterval       time.Duration `json:"query-reset-interval"     validate:"omitempty"`
-	EnableQueuePause         bool          `json:"enable-queue-pause"       validate:"omitempty"`
-	WorkQueueLimit           int           `json:"work-queue-limit"         validate:"omitempty"`
+	Debug                                bool          `json:"debug"`
+	JobTTL                               time.Duration `json:"job-ttl"`
+	JobActiveDeadlineSeconds             int           `json:"job-active-deadline-seconds" validate:"required"`
+	DefaultTerminationGracePeriodSeconds int           `json:"default-termination-grace-period-seconds" validate:"required"`
+	PollInterval                         time.Duration `json:"poll-interval"`
+	JobCreationConcurrency               int           `json:"job-creation-concurrency" validate:"omitempty"`
+	AgentTokenSecret                     string        `json:"agent-token-secret"       validate:"required"`
+	Image                                string        `json:"image"                    validate:"required"`
+	JobPrefix                            string        `json:"job-prefix"               validate:"required"`
+	MaxInFlight                          int           `json:"max-in-flight"            validate:"min=0"`
+	Namespace                            string        `json:"namespace"                validate:"required"`
+	Tags                                 stringSlice   `json:"tags"`
+	PrometheusPort                       uint16        `json:"prometheus-port"          validate:"omitempty"`
+	ProfilerAddress                      string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
+	PaginationPageSize                   int           `json:"pagination-page-size"     validate:"min=1,max=1000"`
+	PaginationDepthLimit                 int           `json:"pagination-depth-limit"   validate:"min=1,max=20"`
+	QueryResetInterval                   time.Duration `json:"query-reset-interval"     validate:"omitempty"`
+	EnableQueuePause                     bool          `json:"enable-queue-pause"       validate:"omitempty"`
+	WorkQueueLimit                       int           `json:"work-queue-limit"         validate:"omitempty"`
 	// Agent endpoint is set in agent-config.
 
 	// ID is an optional uniquely ID string for the controller.
