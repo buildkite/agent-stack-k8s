@@ -4,33 +4,40 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 )
 
-type CreateStackNotificationRequest struct {
-	StackKey string `json:"-"`      // The key to call the stack. Required.
-	JobUUID  string `json:"-"`      // The uuid of a job
-	Detail   string `json:"detail"` // Short notification message (max length 255)
+type StackNotification struct {
+	JobUUID   string    `json:"job_uuid"`
+	Detail    string    `json:"detail"`
+	Timestamp time.Time `json:"timestamp,omitzero"`
 }
 
-func (c *Client) CreateStackNotification(ctx context.Context, req CreateStackNotificationRequest, opts ...RequestOption) (http.Header, error) {
-	const croppedMessage = "… (cropped)"
-	const maxDetailSize = 255 - len(croppedMessage)
+type CreateStackNotificationsRequest struct {
+	StackKey      string              `json:"-"`
+	Notifications []StackNotification `json:"notifications"`
+}
 
-	if len(req.Detail) > maxDetailSize {
-		c.logger.Warn("Stack notification detail exceeds character limit, cropping", "original_size", len(req.Detail))
-		req.Detail = req.Detail[:maxDetailSize] + croppedMessage
-	}
+type StackNotificationError struct {
+	Error   string `json:"error"`
+	Indexes []int  `json:"indexes"`
+}
 
-	path := constructPath("/stacks/%s/jobs/%s/stack_notifications", req.StackKey, req.JobUUID)
+type CreateStackNotificationsResponse struct {
+	Errors []StackNotificationError `json:"errors"`
+}
+
+func (c *Client) CreateStackNotifications(ctx context.Context, req CreateStackNotificationsRequest, opts ...RequestOption) (*CreateStackNotificationsResponse, http.Header, error) {
+	path := constructPath("/stacks/%s/notifications", req.StackKey)
 	httpReq, err := c.newRequest(ctx, http.MethodPost, path, req, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	_, header, err := do[struct{}](ctx, c, httpReq)
+	resp, header, err := do[CreateStackNotificationsResponse](ctx, c, httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("create stack notification: %w", err)
+		return nil, header, fmt.Errorf("create stack notifications: %w", err)
 	}
 
-	return header, nil
+	return resp, header, nil
 }

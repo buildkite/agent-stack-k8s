@@ -429,17 +429,33 @@ func (c *AgentClient) CreateStackNotification(ctx context.Context, jobUUID strin
 		return
 	}
 
-	req := stacksapi.CreateStackNotificationRequest{
+	const croppedMessage = "… (cropped)"
+	const maxDetailSize = 255 - len(croppedMessage)
+
+	if len(detail) > maxDetailSize {
+		c.logger.Warn("Stack notification detail exceeds character limit, cropping", zap.Int("original_size", len(detail)))
+		detail = detail[:maxDetailSize] + croppedMessage
+	}
+
+	req := stacksapi.CreateStackNotificationsRequest{
 		StackKey: c.stack.Key,
-		JobUUID:  jobUUID,
-		Detail:   detail,
+		Notifications: []stacksapi.StackNotification{
+			{
+				JobUUID: jobUUID,
+				Detail:  detail,
+			},
+		},
 	}
 
 	// No retry as we want to avoid any possible source of latency bump for job creation flow.
 	// In the future this will be moved into a batched stack notification worker, we can turn back auto retry then
-	_, err := c.stacksAPIClient.CreateStackNotification(ctx, req, stacksapi.WithNoRetry())
+	resp, _, err := c.stacksAPIClient.CreateStackNotifications(ctx, req, stacksapi.WithNoRetry())
 	if err != nil {
 		c.logger.Warn("Failed creating stack notification", zap.Error(err))
+	}
+
+	if len(resp.Errors) > 0 {
+		c.logger.Warn("Failed creating stack notification", zap.String("error", resp.Errors[0].Error))
 	}
 }
 
