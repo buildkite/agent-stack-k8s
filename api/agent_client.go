@@ -33,6 +33,9 @@ type AgentClient struct {
 
 	logger      *zap.Logger
 	useStackAPI bool
+
+	notificationBatcher         *notificationBatcher
+	notificationBatcherCancelFn context.CancelFunc
 }
 
 type AgentClientOpts struct {
@@ -104,9 +107,30 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		}
 
 		client.stack = stack
+		client.notificationBatcher = newNotificationBatcher(stackKey, client.stacksAPIClient, opts.Logger)
 	}
 
 	return client, nil
+}
+
+// Starting internal goroutines for AgentClient.
+func (e *AgentClient) Start(ctx context.Context) error {
+	if e.UseStackAPI() {
+		ctxWithCancel, cancel := context.WithCancel(ctx)
+		e.notificationBatcherCancelFn = cancel
+		if err := e.notificationBatcher.start(ctxWithCancel); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Ends all internal goroutines and wait for them to finish pending works.
+func (e *AgentClient) Stop() {
+	if e.UseStackAPI() {
+		e.notificationBatcherCancelFn()
+		e.notificationBatcher.waitDone()
+	}
 }
 
 // AgentError is the JSON object of the response body returned when the HTTP
@@ -421,11 +445,9 @@ func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail s
 	return err
 }
 
-// CreateStackNotification creates a stack notification for a job.
-// This is designed to be call and forget, error will be logged because we don't anticipate error handling
+// CreateStackNotification queues a stack notification for a job to be sent in a batch.
 func (c *AgentClient) CreateStackNotification(ctx context.Context, jobUUID string, detail string) {
-	if !c.UseStackAPI() {
-		// No-op for the case for legacy API
+	if !c.UseStackAPI() || c.notificationBatcher == nil {
 		return
 	}
 
@@ -437,25 +459,14 @@ func (c *AgentClient) CreateStackNotification(ctx context.Context, jobUUID strin
 		detail = detail[:maxDetailSize] + croppedMessage
 	}
 
-	req := stacksapi.CreateStackNotificationsRequest{
-		StackKey: c.stack.Key,
-		Notifications: []stacksapi.StackNotification{
-			{
-				JobUUID: jobUUID,
-				Detail:  detail,
-			},
-		},
-	}
-
-	// No retry as we want to avoid any possible source of latency bump for job creation flow.
-	// In the future this will be moved into a batched stack notification worker, we can turn back auto retry then
-	resp, _, err := c.stacksAPIClient.CreateStackNotifications(ctx, req, stacksapi.WithNoRetry())
+	err := c.notificationBatcher.add(ctx, stacksapi.StackNotification{
+		JobUUID: jobUUID,
+		Detail:  detail,
+		// These notifications may be ingested out of order
+		Timestamp: time.Now(),
+	})
 	if err != nil {
-		c.logger.Warn("Failed creating stack notification", zap.Error(err))
-	}
-
-	if len(resp.Errors) > 0 {
-		c.logger.Warn("Failed creating stack notification", zap.String("error", resp.Errors[0].Error))
+		c.logger.Error("Abort sending Stack notification", zap.Error(err))
 	}
 }
 
