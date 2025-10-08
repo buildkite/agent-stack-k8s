@@ -67,7 +67,7 @@ type ListScheduledJobsRequest struct {
 // fields of the request are required. This method will only return a single page of results. To retrieve additional
 // pages, call this method again with the EndCursor field set to the EndCursor value from the previous response's PageInfo.
 func (c *Client) ListScheduledJobs(ctx context.Context, listReq ListScheduledJobsRequest, opts ...RequestOption) (*ListScheduledJobsResponse, http.Header, error) {
-	path := constructPath("/stacks/%s/scheduled_jobs", listReq.StackKey)
+	path := constructPath("/stacks/%s/scheduled-jobs", listReq.StackKey)
 	req, err := c.newRequest(ctx, http.MethodGet, path, nil, opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create request: %w", err)
@@ -113,7 +113,7 @@ type BatchReserveJobsResponse struct {
 // in the response. Note that even if none of the jobs could be reserved, this method will still return a nil error,
 // as long as the request itself was valid.
 func (c *Client) BatchReserveJobs(ctx context.Context, reserveReq BatchReserveJobsRequest, opts ...RequestOption) (*BatchReserveJobsResponse, http.Header, error) {
-	path := constructPath("/stacks/%s/scheduled_jobs/batch_reserve", reserveReq.StackKey)
+	path := constructPath("/stacks/%s/scheduled-jobs/batch-reserve", reserveReq.StackKey)
 
 	req, err := c.newRequest(ctx, http.MethodPut, path, reserveReq, opts...)
 	if err != nil {

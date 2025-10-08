@@ -24,7 +24,7 @@ func TestListScheduledJobs(t *testing.T) {
 		t.Parallel()
 
 		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			verifyAuthMethodPath(t, r, "GET", "/stacks/stack-123/scheduled_jobs")
+			verifyAuthMethodPath(t, r, "GET", "/stacks/stack-123/scheduled-jobs")
 
 			q := r.URL.Query()
 			gotKey, wantKey := q.Get("queue_key"), "queue-456"
@@ -69,7 +69,7 @@ func TestListScheduledJobs(t *testing.T) {
 		t.Parallel()
 
 		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			verifyAuthMethodPath(t, r, "GET", "/stacks/stack-123/scheduled_jobs")
+			verifyAuthMethodPath(t, r, "GET", "/stacks/stack-123/scheduled-jobs")
 			q := r.URL.Query()
 
 			gotKey, wantKey := q.Get("queue_key"), "queue-456"
@@ -113,7 +113,7 @@ func TestBatchReserveJobs(t *testing.T) {
 		t.Parallel()
 
 		server, client := setupTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-			verifyAuthMethodPath(t, r, "PUT", "/stacks/stack-123/scheduled_jobs/batch_reserve")
+			verifyAuthMethodPath(t, r, "PUT", "/stacks/stack-123/scheduled-jobs/batch-reserve")
 
 			var params BatchReserveJobsRequest
 			err := json.NewDecoder(r.Body).Decode(&params)
