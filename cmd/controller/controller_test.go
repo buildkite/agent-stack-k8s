@@ -20,6 +20,7 @@ func ptr[T any](v T) *T {
 func TestReadAndParseConfig(t *testing.T) {
 	t.Setenv("EXPERIMENTAL_JOB_RESERVATION_SUPPORT", "true")
 	t.Setenv("EXPERIMENTAL_STACKS_API_SUPPORT", "true")
+
 	expected := config.Config{
 		Debug:                                true,
 		AgentTokenSecret:                     "my-kubernetes-secret",
@@ -52,6 +53,18 @@ func TestReadAndParseConfig(t *testing.T) {
 		ImageCheckContainerMemoryLimit:       "129Mi",
 
 		ExperimentalStacksAPISupport: true,
+
+		ResourceClasses: map[string]*config.ResourceClass{
+			"small": {
+				Resource: &corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						"cpu":           resource.MustParse("500m"),
+						"memory":        resource.MustParse("512Mi"),
+						"hugepages-2Mi": resource.MustParse("1Mi"),
+					},
+				},
+			},
+		},
 
 		WorkspaceVolume: &corev1.Volume{
 			Name: "workspace-2-the-reckoning",
