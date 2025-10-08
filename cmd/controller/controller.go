@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
@@ -161,6 +163,13 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 		}
 	}
 
+	for name, rc := range cfg.ResourceClasses {
+		err := recapitalizeHugePagesResourceClasses(rc)
+		if err != nil {
+			return nil, fmt.Errorf("invalid resource class %q: %w", name, err)
+		}
+	}
+
 	if _, err := resource.ParseQuantity(cfg.ImageCheckContainerCPULimit); err != nil {
 		return nil, fmt.Errorf("invalid CPU resource limit defined: %s", cfg.ImageCheckContainerCPULimit)
 	}
@@ -170,6 +179,58 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// Viper downcases keys in maps used in inputs, but in the case of resource classes where hugepages are used, it
+// gets downcased to "hugepages-2mi". This function fixes that by recapitlizing the "Mi" part for any hugepages resource
+// claims. This is important because the hugepages resource name must be capitalized as "hugepages-2Mi" (or similar),
+// otherwise k8s won't recognize the resource claim.
+func recapitalizeHugePagesResourceClasses(rc *config.ResourceClass) error {
+	var err error
+	if rc.Resource.Limits, err = recapitalizeHugePagesResourceMap(rc.Resource.Limits); err != nil {
+		return fmt.Errorf("invalid resource class limits: %w", err)
+	}
+
+	rc.Resource.Requests, err = recapitalizeHugePagesResourceMap(rc.Resource.Requests)
+	if err != nil {
+		return fmt.Errorf("invalid resource class requests: %w", err)
+	}
+
+	return nil
+}
+
+var hugepagesSizeRE = regexp.MustCompile(`^(\d+)([KMGPEkmgpe])i$`)
+
+func recapitalizeHugePagesResourceMap(m corev1.ResourceList) (corev1.ResourceList, error) {
+	if m == nil {
+		return nil, nil
+	}
+
+	newResourceList := corev1.ResourceList{}
+	for res, qty := range m {
+		stringRes := string(res)
+		if !strings.HasPrefix(stringRes, corev1.ResourceHugePagesPrefix) {
+			newResourceList[res] = qty
+			continue
+		}
+
+		hugepagesSize := strings.TrimPrefix(stringRes, corev1.ResourceHugePagesPrefix)
+
+		matched := hugepagesSizeRE.FindStringSubmatch(hugepagesSize)
+		if len(matched) != 3 {
+			return nil, fmt.Errorf("couldn't match hugepages size %q to regex %s. This is a bug, please contact support@buildkite.com", hugepagesSize, hugepagesSizeRE)
+		}
+
+		magnitude := matched[1]
+		unitFirstLetter := matched[2]
+
+		correctedSize := magnitude + strings.ToUpper(unitFirstLetter) + "i"
+		correctedResourceName := corev1.ResourceName(corev1.ResourceHugePagesPrefix + correctedSize)
+
+		newResourceList[correctedResourceName] = qty
+	}
+
+	return newResourceList, nil
 }
 
 var (

@@ -25,6 +25,14 @@ work-queue-limit: 2000000
 image-check-container-cpu-limit: 201m
 image-check-container-memory-limit: 129Mi
 
+resource-classes:
+  small:
+    resource:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+        hugepages-2Mi: "1Mi"
+
 tags:
   - queue=my-queue
   - priority=high

@@ -49,6 +49,18 @@ func TestReadAndParseConfig(t *testing.T) {
 		ImageCheckContainerCPULimit:          "201m",
 		ImageCheckContainerMemoryLimit:       "129Mi",
 
+		ResourceClasses: map[string]*config.ResourceClass{
+			"small": {
+				Resource: &corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						"cpu":           resource.MustParse("500m"),
+						"memory":        resource.MustParse("512Mi"),
+						"hugepages-2Mi": resource.MustParse("1Mi"),
+					},
+				},
+			},
+		},
+
 		WorkspaceVolume: &corev1.Volume{
 			Name: "workspace-2-the-reckoning",
 			VolumeSource: corev1.VolumeSource{
