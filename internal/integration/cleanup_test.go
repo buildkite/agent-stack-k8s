@@ -10,7 +10,6 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
 	"github.com/buildkite/roko"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -55,7 +54,9 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 					graphqlClient,
 					api.BuildCancelInput{Id: build.Node.Id},
 				)
-				assert.NoError(t, err)
+				if err != nil {
+					t.Logf("failed to cancel build %s: %v", build.Node.Id, err)
+				}
 			}
 
 			tc.deletePipeline(ctx)

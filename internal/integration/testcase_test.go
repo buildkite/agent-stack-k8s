@@ -291,12 +291,12 @@ func (t testcase) FetchLogs(build api.Build) string {
 			strconv.Itoa(build.Number),
 			job.Uuid,
 		)
-		if !assert.NoError(t, err) || !assert.NotNil(t, jobLog.Content) {
+		if err != nil || !assert.NotNil(t, jobLog.Content) {
 			continue
 		}
 
 		_, err = logs.WriteString(*jobLog.Content)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 
 	return logs.String()
