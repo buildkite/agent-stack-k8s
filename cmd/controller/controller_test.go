@@ -154,8 +154,9 @@ func TestReadAndParseConfig(t *testing.T) {
 					},
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							"cpu": resource.MustParse("1000m"),
-							"mem": resource.MustParse("4Gi"),
+							"cpu":           resource.MustParse("1000m"),
+							"mem":           resource.MustParse("4Gi"),
+							"hugepages-2Mi": resource.MustParse("2Mi"),
 						},
 					},
 				},
