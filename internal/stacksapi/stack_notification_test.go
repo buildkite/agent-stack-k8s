@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCreateStackNotifications(t *testing.T) {
@@ -22,7 +23,7 @@ func TestCreateStackNotifications(t *testing.T) {
 			verifyAuthMethodPath(t, r, "POST", "/stacks/stack-123/notifications")
 
 			var params CreateStackNotificationsRequest
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&params))
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&params))
 
 			expectedParams := CreateStackNotificationsRequest{
 				Notifications: []StackNotification{
@@ -44,7 +45,7 @@ func TestCreateStackNotifications(t *testing.T) {
 
 			w.Header().Set("X-Custom-Header", "custom-value")
 			w.WriteHeader(http.StatusOK)
-			assert.NoError(t, json.NewEncoder(w).Encode(CreateStackNotificationsResponse{
+			require.NoError(t, json.NewEncoder(w).Encode(CreateStackNotificationsResponse{
 				Errors: []StackNotificationError{},
 			}))
 		})
@@ -85,7 +86,7 @@ func TestCreateStackNotifications(t *testing.T) {
 			verifyAuthMethodPath(t, r, "POST", "/stacks/stack-123/notifications")
 
 			w.WriteHeader(http.StatusOK)
-			assert.NoError(t, json.NewEncoder(w).Encode(CreateStackNotificationsResponse{
+			require.NoError(t, json.NewEncoder(w).Encode(CreateStackNotificationsResponse{
 				Errors: []StackNotificationError{
 					{
 						Error:   "detail is required",
@@ -111,7 +112,7 @@ func TestCreateStackNotifications(t *testing.T) {
 		}
 
 		resp, _, err := client.CreateStackNotifications(t.Context(), req)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		wantErrors := []StackNotificationError{
 			{
 				Error:   "detail is required",

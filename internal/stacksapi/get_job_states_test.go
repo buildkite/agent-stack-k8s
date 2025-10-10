@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetJobStates(t *testing.T) {
@@ -19,7 +19,7 @@ func TestGetJobStates(t *testing.T) {
 			verifyAuthMethodPath(t, r, "POST", "/stacks/stack-123/jobs/get-states")
 
 			var params GetJobStatesRequest
-			assert.NoError(t, json.NewDecoder(r.Body).Decode(&params))
+			require.NoError(t, json.NewDecoder(r.Body).Decode(&params))
 
 			expectedParams := GetJobStatesRequest{
 				JobUUIDs: []string{"job-1", "job-2", "job-3"},
@@ -39,7 +39,7 @@ func TestGetJobStates(t *testing.T) {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			assert.NoError(t, json.NewEncoder(w).Encode(response))
+			require.NoError(t, json.NewEncoder(w).Encode(response))
 		})
 		t.Cleanup(func() { server.Close() })
 
@@ -49,7 +49,7 @@ func TestGetJobStates(t *testing.T) {
 		}
 
 		response, _, err := client.GetJobStates(t.Context(), req)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		expectedResponse := &GetJobStatesResponse{
 			States: map[string]string{
