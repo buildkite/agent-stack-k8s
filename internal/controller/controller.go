@@ -132,6 +132,11 @@ func Run(
 		return
 	}
 
+	if err := agentClient.Start(ctx); err != nil {
+		logger.Error("Couldn't start Agent API client", zap.Error(err))
+		return
+	}
+
 	// **************************************************************************
 	// ***                        JOB FLOW                                    ***
 	// ***       Monitor -> Reserver -> Limiter -> Deduper -> Scheduler       ***
@@ -264,6 +269,7 @@ func Run(
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 
+			agentClient.Stop()
 			// Try best-effort to deregister the stack, but if it fails or times out, the backend will still clean it up.
 			if err := agentClient.DeregisterStack(ctx); err != nil {
 				logger.Error("failed to deregister stack", zap.Error(err))
