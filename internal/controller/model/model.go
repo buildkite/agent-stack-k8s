@@ -8,6 +8,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // ErrDuplicateJob is a sentinel error returned when a job has already been
@@ -38,5 +39,17 @@ func JobFinished(job *batchv1.Job) bool {
 			return true
 		}
 	}
+	return false
+}
+
+// Detect if a container is a buildkite command container.
+// The detection logic is a heuristic, but there is a very low likelihood of false positives.
+func IsCommandContainer(container *corev1.Container) bool {
+	for _, env := range container.Env {
+		if env.Name == "BUILDKITE_COMMAND" && env.Value != "" {
+			return true
+		}
+	}
+
 	return false
 }
