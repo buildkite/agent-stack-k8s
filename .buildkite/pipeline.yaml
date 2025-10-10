@@ -251,7 +251,7 @@ steps:
       - tests
       - tests-experimental
 
-  - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
+  - if: build.branch == pipeline.default_branch
     label: ":shipit: deploy"
     key: deploy
     depends_on:
