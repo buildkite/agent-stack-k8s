@@ -945,7 +945,7 @@ func TestCustomImageSyntax_pluginTakesTopPriority(t *testing.T) {
 	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
 	require.NoError(t, err)
 
-	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, CommandContainerName)
+	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, DefaultCommandContainerName)
 	require.Equal(t, "x-image:plugin", commandContainer.Image)
 }
 
@@ -954,7 +954,8 @@ func TestCustomImageSyntax_jobLevelImagePriority(t *testing.T) {
 	t.Parallel()
 
 	job := &api.AgentJob{
-		ID: "abc",
+		ID:      "abc",
+		Command: "echo hello",
 		Env: map[string]string{
 			"BUILDKITE_IMAGE": "x-image:job",
 		},
@@ -978,7 +979,8 @@ func TestCustomImageSyntax_jobLevelImagePriority(t *testing.T) {
 	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
 	require.NoError(t, err)
 
-	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, CommandContainerName)
+	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, DefaultCommandContainerName)
+
 	require.Equal(t, "x-image:job", commandContainer.Image)
 }
 

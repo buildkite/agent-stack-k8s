@@ -9,6 +9,16 @@ import (
 )
 
 func TestResourceClass_Apply(t *testing.T) {
+	commandContainerEnv := []corev1.EnvVar{
+		{
+			Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+			Value: "plugin,command",
+		},
+		{
+			Name:  "BUILDKITE_COMMAND",
+			Value: "buildkite-agent foo",
+		},
+	}
 	tests := []struct {
 		name          string
 		resourceClass *ResourceClass
@@ -32,15 +42,15 @@ func TestResourceClass_Apply(t *testing.T) {
 			podSpec: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
-						Name:      commandContainerName,
 						Resources: corev1.ResourceRequirements{},
+						Env:       commandContainerEnv,
 					},
 				},
 			},
 			want: &corev1.PodSpec{
 				Containers: []corev1.Container{
 					{
-						Name: commandContainerName,
+						Env: commandContainerEnv,
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceCPU:    resource.MustParse("100m"),
@@ -65,7 +75,9 @@ func TestResourceClass_Apply(t *testing.T) {
 			},
 			podSpec: &corev1.PodSpec{
 				Containers: []corev1.Container{
-					{Name: commandContainerName},
+					{
+						Env: commandContainerEnv,
+					},
 				},
 			},
 			want: &corev1.PodSpec{
@@ -74,7 +86,9 @@ func TestResourceClass_Apply(t *testing.T) {
 					"zone":          "us-west-2a",
 				},
 				Containers: []corev1.Container{
-					{Name: commandContainerName},
+					{
+						Env: commandContainerEnv,
+					},
 				},
 			},
 		},
@@ -92,7 +106,9 @@ func TestResourceClass_Apply(t *testing.T) {
 			},
 			podSpec: &corev1.PodSpec{
 				Containers: []corev1.Container{
-					{Name: commandContainerName},
+					{
+						Env: commandContainerEnv,
+					},
 				},
 			},
 			want: &corev1.PodSpec{
@@ -101,7 +117,7 @@ func TestResourceClass_Apply(t *testing.T) {
 				},
 				Containers: []corev1.Container{
 					{
-						Name: commandContainerName,
+						Env: commandContainerEnv,
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
 								corev1.ResourceCPU: resource.MustParse("500m"),
@@ -117,12 +133,16 @@ func TestResourceClass_Apply(t *testing.T) {
 			resourceClass: nil,
 			podSpec: &corev1.PodSpec{
 				Containers: []corev1.Container{
-					{Name: commandContainerName},
+					{
+						Env: commandContainerEnv,
+					},
 				},
 			},
 			want: &corev1.PodSpec{
 				Containers: []corev1.Container{
-					{Name: commandContainerName},
+					{
+						Env: commandContainerEnv,
+					},
 				},
 			},
 		},

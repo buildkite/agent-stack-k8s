@@ -43,7 +43,7 @@ const (
 	CopyAgentContainerName        = "copy-agent"
 	ImageCheckContainerNamePrefix = "imagecheck-"
 	CheckoutContainerName         = "checkout"
-	CommandContainerName          = "container-0"
+	DefaultCommandContainerName   = "container-0"
 )
 
 var errK8sPluginProhibited = errors.New("the kubernetes plugin is prohibited by this controller, but was configured on this job")
@@ -450,7 +450,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	if len(podSpec.Containers) == 0 {
 		// Create a default command container
 		c := corev1.Container{
-			Name:         CommandContainerName,
+			Name:         DefaultCommandContainerName,
 			Image:        w.cfg.Image,
 			Command:      commandContainerCommand,
 			Args:         commandContainerArgs,
@@ -471,7 +471,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				},
 				{
 					Name:  "BUILDKITE_SOCKETS_PATH",
-					Value: "/workspace/sockets/" + CommandContainerName,
+					Value: "/workspace/sockets/" + DefaultCommandContainerName,
 				},
 			},
 		}

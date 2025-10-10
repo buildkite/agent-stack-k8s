@@ -1,6 +1,9 @@
 package scheduler
 
-import v1 "k8s.io/api/core/v1"
+import (
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
+	v1 "k8s.io/api/core/v1"
+)
 
 func applyCustomImageIfPresent(podSpec *v1.PodSpec, inputs *buildInputs) *v1.PodSpec {
 
@@ -11,7 +14,7 @@ func applyCustomImageIfPresent(podSpec *v1.PodSpec, inputs *buildInputs) *v1.Pod
 
 	for i := range podSpec.Containers {
 		c := &podSpec.Containers[i]
-		if c.Name != CommandContainerName {
+		if !model.IsCommandContainer(c) {
 			continue
 		}
 
