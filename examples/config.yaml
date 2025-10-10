@@ -116,3 +116,4 @@ pod-spec-patch:
         requests:
           cpu: 1
           mem: 4Gi
+          hugepages-2Mi: 2Mi

@@ -153,13 +153,8 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 	}
 
 	if cfg.PodSpecPatch != nil {
-		for _, c := range cfg.PodSpecPatch.Containers {
-			if c.Image != strings.ToLower(c.Image) {
-				return nil, fmt.Errorf("container image contains uppercase letters: %s", c.Image)
-			}
-			if len(c.Command) != 0 || len(c.Args) != 0 {
-				return nil, scheduler.ErrNoCommandModification
-			}
+		if err := processPodSpecPatch(cfg.PodSpecPatch); err != nil {
+			return nil, fmt.Errorf("invalid pod spec patch: %w", err)
 		}
 	}
 
@@ -179,6 +174,29 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func processPodSpecPatch(podSpec *corev1.PodSpec) error {
+	for idx, c := range podSpec.Containers {
+		if c.Image != strings.ToLower(c.Image) {
+			return fmt.Errorf("container image for container at index %d contains uppercase letters: %s", idx, c.Image)
+		}
+
+		if len(c.Command) != 0 || len(c.Args) != 0 {
+			return fmt.Errorf("container at index %d (image: %s): %w", idx, c.Image, scheduler.ErrNoCommandModification)
+		}
+
+		var err error
+		if podSpec.Containers[idx].Resources.Requests, err = recapitalizeHugePagesResourceMap(c.Resources.Requests); err != nil {
+			return fmt.Errorf("processing resource requests for container at index %d (image: %s): %w", idx, c.Image, err)
+		}
+
+		if podSpec.Containers[idx].Resources.Limits, err = recapitalizeHugePagesResourceMap(c.Resources.Limits); err != nil {
+			return fmt.Errorf("processing resource limits for container at index %d (image: %s): %w", idx, c.Image, err)
+		}
+	}
+
+	return nil
 }
 
 // Viper downcases keys in maps used in inputs, but in the case of resource classes where hugepages are used, it
