@@ -6,12 +6,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-const (
-	// This is duplicated from scheduler to avoid cyclic dependencies, it might be a good time to introduce a constant
-	// module now
-	commandContainerName = "container-0"
-)
-
 // ResourceClass represents a reusable resource configuration.
 // Affinity or Toleration/taint based configuration may come later.
 type ResourceClass struct {
@@ -20,8 +14,7 @@ type ResourceClass struct {
 }
 
 // Apply adds the resource class NodeSelector to the podSpec, and resource
-// requests and limits to the command container. It assumes there is only one
-// command container named "container-0".
+// requests and limits to the command container.
 func (rc *ResourceClass) Apply(podSpec *corev1.PodSpec) {
 	if rc == nil || podSpec == nil {
 		return
@@ -40,7 +33,7 @@ func (rc *ResourceClass) Apply(podSpec *corev1.PodSpec) {
 
 			// We only care about command container.
 			// checkout and other containers resources can be configured via controller setting.
-			if container.Name != commandContainerName {
+			if !isCommandContainer(container) {
 				continue
 			}
 
@@ -55,4 +48,17 @@ func (rc *ResourceClass) Apply(podSpec *corev1.PodSpec) {
 			maps.Copy(container.Resources.Limits, rc.Resource.Limits)
 		}
 	}
+}
+
+// Detect if a container is a buildkite command container.
+// The detection logic is a heuristic, but there is a very low likelihood of false positives.
+// This duplicates model.IsCommandContainer to avoid cyclic dependency
+func isCommandContainer(container *corev1.Container) bool {
+	for _, env := range container.Env {
+		if env.Name == "BUILDKITE_COMMAND" && env.Value != "" {
+			return true
+		}
+	}
+
+	return false
 }
