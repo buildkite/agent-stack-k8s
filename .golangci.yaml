@@ -2,6 +2,8 @@ version: "2"
 run:
   timeout: 10m
 linters:
+  enable:
+    - testifylint
   exclusions:
     generated: lax
     presets:
@@ -13,6 +15,12 @@ linters:
       - third_party$
       - builtin$
       - examples$
+  settings:
+    testifylint:
+      disable-all: true
+      enable:
+        - require-error
+        - useless-assert
 formatters:
   exclusions:
     generated: lax
