@@ -195,7 +195,7 @@ func TestPodSpecPatchRejectsPatchingAgentContainerCommand(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 
 	tc.AssertFail(ctx, build)
-	fm := tc.FailureMessage(build, tc.FirstCommandJobID(build), cfg.ExperimentalStacksAPISupport)
+	fm := tc.FailureMessage(tc.FirstCommandJobID(build))
 	assert.Contains(t, fm, scheduler.ErrNoCommandModification.Error(), "expected failure message to mention command modification")
 }
 
@@ -531,7 +531,7 @@ func TestInvalidPodSpec(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
-	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	fm := tc.FailureMessage(jobID)
 	assert.Contains(t, fm, `is invalid: spec.template.spec.containers[0].volumeMounts[0].name: Not found: "this-doesnt-exist"`)
 }
 
@@ -548,7 +548,7 @@ func TestInvalidPodJSON(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
-	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	fm := tc.FailureMessage(jobID)
 	assert.Contains(t, fm, "failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.podSpec.containers.env.value of type string")
 }
 
@@ -565,7 +565,7 @@ func TestMissingServiceAccount(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
-	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	fm := tc.FailureMessage(jobID)
 	assert.Contains(t, fm, "error looking up service account")
 }
 
@@ -597,7 +597,7 @@ func TestImagePullBackOffFailed(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
-	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	fm := tc.FailureMessage(jobID)
 	assert.Contains(t, fm, "The following images could not be pulled or were unavailable:\n")
 	assert.Contains(t, fm, `"buildkite/non-existant-image:latest"`)
 	assert.Contains(t, fm, "ImagePullBackOff")
@@ -619,7 +619,7 @@ func TestPullPolicyNeverMissingImage(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
-	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	fm := tc.FailureMessage(jobID)
 	assert.Contains(t, fm, "The following images could not be pulled or were unavailable:\n")
 	assert.Contains(t, fm, `"buildkite/agent-extreme:never"`)
 	assert.Contains(t, fm, "ErrImageNeverPull")
@@ -638,7 +638,7 @@ func TestBrokenInitContainer(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
-	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	fm := tc.FailureMessage(jobID)
 	assert.Contains(t, fm, "The following init containers failed:")
 	assert.Contains(t, fm, "well this isn't going to work")
 }
@@ -656,7 +656,7 @@ func TestInvalidImageRefFormat(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
-	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	fm := tc.FailureMessage(jobID)
 	assert.Contains(t, fm, `invalid reference format "buildkite/agent:latest plus some extra junk" for container "container-0"`)
 }
 

@@ -147,7 +147,6 @@ func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddUint16("prometheus-port", c.PrometheusPort)
 	enc.AddBool("prohibit-kubernetes-plugin", c.ProhibitKubernetesPlugin)
 	enc.AddBool("allow-pod-spec-patch-unsafe-command-modification", c.AllowPodSpecPatchUnsafeCmdMod)
-	enc.AddBool("experimental-stacks-api-support", c.ExperimentalStacksAPISupport)
 	if err := enc.AddArray("additional-redacted-vars", c.AdditionalRedactedVars); err != nil {
 		return err
 	}

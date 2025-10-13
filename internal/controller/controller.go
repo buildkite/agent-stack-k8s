@@ -29,12 +29,7 @@ import (
 
 const agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 
-func Run(
-	ctx context.Context,
-	logger *zap.Logger,
-	k8sClient kubernetes.Interface,
-	cfg *config.Config,
-) {
+func Run(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface, cfg *config.Config) {
 	httpMuxes := make(map[string]*http.ServeMux)
 
 	if cfg.ProfilerAddress != "" {
@@ -125,7 +120,6 @@ func Run(
 		StackID:         cfg.ID,
 		AgentQueryRules: cfg.Tags,
 		Logger:          logger,
-		UseStacksAPI:    cfg.ExperimentalStacksAPISupport,
 	})
 	if err != nil {
 		logger.Error("Couldn't create Agent API client", zap.Error(err))
@@ -216,10 +210,7 @@ func Run(
 	//
 	// This happens right after monitor so we can maximize our collected signals.
 	// But it does bring a trade-off of more likely reservation expiration.
-	reserver := reserver.New(logger.Named("reserver"), agentClient,
-		limiter,
-		cfg.ExperimentalStacksAPISupport,
-	)
+	reserver := reserver.New(logger.Named("reserver"), agentClient, limiter)
 
 	// PodCompletionWatcher watches k8s for pods where the agent has terminated,
 	// in order to clean up the pod. This is necessary because "sidecars" are
@@ -262,22 +253,18 @@ func Run(
 	case <-ctx.Done():
 		logger.Info("gracefully shutting down controller...")
 
-		// The DeregisterStack call is a no-op if stacks API support is disabled, but we don't want to log "deregistered stack"
-		// unless we actually did it.
-		if cfg.ExperimentalStacksAPISupport {
-			ctx = context.WithoutCancel(ctx) // we want stack deregistration to happen, even though the context has been cancelled
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
+		ctx = context.WithoutCancel(ctx) // we want stack deregistration to happen, even though the context has been cancelled
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 
-			agentClient.Stop()
-			// Try best-effort to deregister the stack, but if it fails or times out, the backend will still clean it up.
-			if err := agentClient.DeregisterStack(ctx); err != nil {
-				logger.Error("failed to deregister stack", zap.Error(err))
-				return
-			}
-
-			logger.Info("deregistered stack")
+		agentClient.Stop()
+		// Try best-effort to deregister the stack, but if it fails or times out, the backend will still clean it up.
+		if err := agentClient.DeregisterStack(ctx); err != nil {
+			logger.Error("failed to deregister stack", zap.Error(err))
+			return
 		}
+
+		logger.Info("deregistered stack")
 
 		logger.Info("controller exiting", zap.Error(ctx.Err()))
 
