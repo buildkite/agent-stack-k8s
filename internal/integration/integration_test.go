@@ -473,7 +473,6 @@ func TestSidecars(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	time.Sleep(15 * time.Second)
 	tc.AssertLogsContain(build, "Welcome to nginx!")
 }
 
@@ -582,7 +581,6 @@ func TestEnvVariables(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	tc.AssertLogsContain(build, "Testing some env variables: set")
 }
 
@@ -689,7 +687,6 @@ func TestInterposerBuildkite(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	logs := tc.FetchLogs(build)
 	assert.Contains(t, logs, "Hello World!")
 	assert.Contains(t, logs, "Goodbye World!")
@@ -710,7 +707,6 @@ func TestInterposerVector(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 	logs := tc.FetchLogs(build)
-	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	assert.Contains(t, logs, "Hello World!")
 	assert.Contains(t, logs, "Goodbye World!")
 }
@@ -837,7 +833,6 @@ func TestHooksAndPlugins(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 
-	time.Sleep(15 * time.Second) // Logs take a minute to appear sometimes
 	logs := tc.FetchLogs(build)
 	t.Logf("tc.FetchLogs(build) = %s", logs)
 	for _, hook := range []string{"environment", "pre-checkout", "post-checkout", "pre-command", "post-command"} {

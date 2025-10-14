@@ -47,6 +47,9 @@ type testcase struct {
 	Org          string
 	ClusterUUID  string
 	CustomQueue  string
+
+	// Logs take a minute to appear sometimes, so let's wait a tick before fetching them, but only once per build
+	hasWaitedForLogs bool
 }
 
 // QueueName returns either t.CustomQueue if set, or t.ShortPipelineName.
@@ -278,6 +281,11 @@ func (t testcase) FetchLogs(build api.Build) string {
 	require.NoError(t, err)
 	t.Buildkite = client
 
+	if !t.hasWaitedForLogs {
+		time.Sleep(15 * time.Second)
+		t.hasWaitedForLogs = true
+	}
+
 	var logs strings.Builder
 	for _, edge := range build.Jobs.Edges {
 		job, wasJob := edge.Node.(*api.JobJobTypeCommand)
@@ -359,7 +367,6 @@ func (t testcase) FailureMessage(build api.Build, jobID string, useStacksAPI boo
 	t.Helper()
 
 	if !useStacksAPI {
-		time.Sleep(10 * time.Second) // Wait for logs to be available
 		return t.FetchLogs(build)
 	}
 
