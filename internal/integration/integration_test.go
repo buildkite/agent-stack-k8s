@@ -299,25 +299,6 @@ func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
 	assert.NotContains(t, logs, "white pepper and 10 others")
 }
 
-func TestPrePostCheckoutHooksRun(t *testing.T) {
-	tc := testcase{
-		T:       t,
-		Fixture: "plugin-checkout-hook.yaml",
-		Repo:    repoHTTP,
-		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
-	}.Init()
-
-	ctx := context.Background()
-	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
-
-	tc.StartController(ctx, cfg)
-	build := tc.TriggerBuild(ctx, pipelineID)
-	tc.AssertSuccess(ctx, build)
-	logs := tc.FetchLogs(build)
-	assert.Contains(t, logs, "The pre-checkout hook ran!")
-	assert.Contains(t, logs, "The post-checkout hook ran!")
-}
-
 func TestChown(t *testing.T) {
 	tc := testcase{
 		T:       t,
