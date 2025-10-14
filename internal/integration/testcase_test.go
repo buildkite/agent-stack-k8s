@@ -341,6 +341,57 @@ func (t testcase) AssertCancelled(ctx context.Context, build api.Build) {
 	assert.Equal(t, api.BuildStatesCanceled, t.waitForBuild(ctx, build))
 }
 
+func (t testcase) FirstCommandJobID(build api.Build) string {
+	t.Helper()
+	for _, edge := range build.Jobs.Edges {
+		job, wasJob := edge.Node.(*api.JobJobTypeCommand)
+		if !wasJob {
+			continue
+		}
+		return job.Uuid
+	}
+
+	t.Error("no command job found")
+	return ""
+}
+
+func (t testcase) FailureMessage(build api.Build, jobID string, useStacksAPI bool) string {
+	t.Helper()
+
+	if !useStacksAPI {
+		time.Sleep(10 * time.Second) // Wait for logs to be available
+		return t.FetchLogs(build)
+	}
+
+	time.Sleep(1 * time.Second) // Wait for job events to be available (quicker than logs)
+	jobEvents, err := api.GetJobEvents(t.Context(), t.GraphQL, jobID)
+	if err != nil {
+		t.Fatalf("failed to get job stack errors: %v", err)
+	}
+
+	cj, ok := jobEvents.Job.(*api.GetJobEventsJobJobTypeCommand)
+	if !ok {
+		t.Fatalf("unexpected job type: %T", jobEvents.Job)
+	}
+
+	stackErrorEvents := make([]string, 0, 1) // Theoretically there can only ever be one errored event, but use a slice just in case.
+	for _, edge := range cj.Events.Edges {
+		if event, ok := edge.Node.(*api.GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError); ok {
+			stackErrorEvents = append(stackErrorEvents, event.ErrorDetail)
+		}
+	}
+
+	if len(stackErrorEvents) == 0 {
+		t.Fatalf("no stack error events found for job %s", jobID)
+	}
+
+	if len(stackErrorEvents) > 1 {
+		t.Logf("multiple stack error events found for job %s, using the first one", jobID)
+	}
+
+	return stackErrorEvents[0]
+}
+
 func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildStates {
 	t.Helper()
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/Khan/genqlient/graphql"
 )
@@ -604,6 +605,940 @@ type GetBuildsResponse struct {
 // GetPipeline returns GetBuildsResponse.Pipeline, and is useful for accessing the field via an interface.
 func (v *GetBuildsResponse) GetPipeline() GetBuildsPipeline { return v.Pipeline }
 
+// GetJobEventsJob includes the requested fields of the GraphQL interface Job.
+//
+// GetJobEventsJob is implemented by the following types:
+// GetJobEventsJobJobTypeBlock
+// GetJobEventsJobJobTypeCommand
+// GetJobEventsJobJobTypeTrigger
+// GetJobEventsJobJobTypeWait
+// The GraphQL type's documentation follows.
+//
+// Kinds of jobs that can exist on a build
+type GetJobEventsJob interface {
+	implementsGraphQLInterfaceGetJobEventsJob()
+	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
+	GetTypename() string
+}
+
+func (v *GetJobEventsJobJobTypeBlock) implementsGraphQLInterfaceGetJobEventsJob()   {}
+func (v *GetJobEventsJobJobTypeCommand) implementsGraphQLInterfaceGetJobEventsJob() {}
+func (v *GetJobEventsJobJobTypeTrigger) implementsGraphQLInterfaceGetJobEventsJob() {}
+func (v *GetJobEventsJobJobTypeWait) implementsGraphQLInterfaceGetJobEventsJob()    {}
+
+func __unmarshalGetJobEventsJob(b []byte, v *GetJobEventsJob) error {
+	if string(b) == "null" {
+		return nil
+	}
+
+	var tn struct {
+		TypeName string `json:"__typename"`
+	}
+	err := json.Unmarshal(b, &tn)
+	if err != nil {
+		return err
+	}
+
+	switch tn.TypeName {
+	case "JobTypeBlock":
+		*v = new(GetJobEventsJobJobTypeBlock)
+		return json.Unmarshal(b, *v)
+	case "JobTypeCommand":
+		*v = new(GetJobEventsJobJobTypeCommand)
+		return json.Unmarshal(b, *v)
+	case "JobTypeTrigger":
+		*v = new(GetJobEventsJobJobTypeTrigger)
+		return json.Unmarshal(b, *v)
+	case "JobTypeWait":
+		*v = new(GetJobEventsJobJobTypeWait)
+		return json.Unmarshal(b, *v)
+	case "":
+		return fmt.Errorf(
+			"response was missing Job.__typename")
+	default:
+		return fmt.Errorf(
+			`unexpected concrete type for GetJobEventsJob: "%v"`, tn.TypeName)
+	}
+}
+
+func __marshalGetJobEventsJob(v *GetJobEventsJob) ([]byte, error) {
+
+	var typename string
+	switch v := (*v).(type) {
+	case *GetJobEventsJobJobTypeBlock:
+		typename = "JobTypeBlock"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeBlock
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommand:
+		typename = "JobTypeCommand"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommand
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeTrigger:
+		typename = "JobTypeTrigger"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeTrigger
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeWait:
+		typename = "JobTypeWait"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeWait
+		}{typename, v}
+		return json.Marshal(result)
+	case nil:
+		return []byte("null"), nil
+	default:
+		return nil, fmt.Errorf(
+			`unexpected concrete type for GetJobEventsJob: "%T"`, v)
+	}
+}
+
+// GetJobEventsJobJobTypeBlock includes the requested fields of the GraphQL type JobTypeBlock.
+// The GraphQL type's documentation follows.
+//
+// A type of job that requires a user to unblock it before proceeding in a build pipeline
+type GetJobEventsJobJobTypeBlock struct {
+	Typename string `json:"__typename"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeBlock.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeBlock) GetTypename() string { return v.Typename }
+
+// GetJobEventsJobJobTypeCommand includes the requested fields of the GraphQL type JobTypeCommand.
+// The GraphQL type's documentation follows.
+//
+// A type of job that runs a command on an agent
+type GetJobEventsJobJobTypeCommand struct {
+	Typename string `json:"__typename"`
+	// Job events
+	Events GetJobEventsJobJobTypeCommandEventsJobEventConnection `json:"events"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommand.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommand) GetTypename() string { return v.Typename }
+
+// GetEvents returns GetJobEventsJobJobTypeCommand.Events, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommand) GetEvents() GetJobEventsJobJobTypeCommandEventsJobEventConnection {
+	return v.Events
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnection includes the requested fields of the GraphQL type JobEventConnection.
+type GetJobEventsJobJobTypeCommandEventsJobEventConnection struct {
+	Edges []GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge `json:"edges"`
+}
+
+// GetEdges returns GetJobEventsJobJobTypeCommandEventsJobEventConnection.Edges, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnection) GetEdges() []GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge {
+	return v.Edges
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge includes the requested fields of the GraphQL type JobEventEdge.
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge struct {
+	Node GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent `json:"-"`
+}
+
+// GetNode returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge.Node, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge) GetNode() GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent {
+	return v.Node
+}
+
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge
+		Node json.RawMessage `json:"node"`
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	{
+		dst := &v.Node
+		src := firstPass.Node
+		if len(src) != 0 && string(src) != "null" {
+			err = __unmarshalGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent(
+				src, dst)
+			if err != nil {
+				return fmt.Errorf(
+					"unable to unmarshal GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge.Node: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+type __premarshalGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge struct {
+	Node json.RawMessage `json:"node"`
+}
+
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge) __premarshalJSON() (*__premarshalGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge, error) {
+	var retval __premarshalGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge
+
+	{
+
+		dst := &retval.Node
+		src := v.Node
+		var err error
+		*dst, err = __marshalGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent(
+			&src)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"unable to marshal GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdge.Node: %w", err)
+		}
+	}
+	return &retval, nil
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent includes the requested fields of the GraphQL interface JobEvent.
+//
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent is implemented by the following types:
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent interface {
+	implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent()
+	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
+	GetTypename() string
+	// GetId returns the interface-field "id" from its implementation.
+	GetId() string
+	// GetType returns the interface-field "type" from its implementation.
+	// The GraphQL interface field's documentation follows.
+	//
+	// The type of event
+	GetType() JobEventType
+	// GetTimestamp returns the interface-field "timestamp" from its implementation.
+	// The GraphQL interface field's documentation follows.
+	//
+	// The time when the event occurred
+	GetTimestamp() time.Time
+}
+
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut) implementsGraphQLInterfaceGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent() {
+}
+
+func __unmarshalGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent(b []byte, v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent) error {
+	if string(b) == "null" {
+		return nil
+	}
+
+	var tn struct {
+		TypeName string `json:"__typename"`
+	}
+	err := json.Unmarshal(b, &tn)
+	if err != nil {
+		return err
+	}
+
+	switch tn.TypeName {
+	case "JobEventAssigned":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned)
+		return json.Unmarshal(b, *v)
+	case "JobEventBuildStepUploadCreated":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated)
+		return json.Unmarshal(b, *v)
+	case "JobEventCanceled":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled)
+		return json.Unmarshal(b, *v)
+	case "JobEventFinished":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished)
+		return json.Unmarshal(b, *v)
+	case "JobEventGeneric":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric)
+		return json.Unmarshal(b, *v)
+	case "JobEventReprioritized":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized)
+		return json.Unmarshal(b, *v)
+	case "JobEventRetried":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried)
+		return json.Unmarshal(b, *v)
+	case "JobEventRetryFailed":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed)
+		return json.Unmarshal(b, *v)
+	case "JobEventStackError":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError)
+		return json.Unmarshal(b, *v)
+	case "JobEventStackFinished":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished)
+		return json.Unmarshal(b, *v)
+	case "JobEventStackNotification":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification)
+		return json.Unmarshal(b, *v)
+	case "JobEventTimedOut":
+		*v = new(GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut)
+		return json.Unmarshal(b, *v)
+	case "":
+		return fmt.Errorf(
+			"response was missing JobEvent.__typename")
+	default:
+		return fmt.Errorf(
+			`unexpected concrete type for GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent: "%v"`, tn.TypeName)
+	}
+}
+
+func __marshalGetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent(v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent) ([]byte, error) {
+
+	var typename string
+	switch v := (*v).(type) {
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned:
+		typename = "JobEventAssigned"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated:
+		typename = "JobEventBuildStepUploadCreated"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled:
+		typename = "JobEventCanceled"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished:
+		typename = "JobEventFinished"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric:
+		typename = "JobEventGeneric"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized:
+		typename = "JobEventReprioritized"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried:
+		typename = "JobEventRetried"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed:
+		typename = "JobEventRetryFailed"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError:
+		typename = "JobEventStackError"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished:
+		typename = "JobEventStackFinished"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification:
+		typename = "JobEventStackNotification"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification
+		}{typename, v}
+		return json.Marshal(result)
+	case *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut:
+		typename = "JobEventTimedOut"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut
+		}{typename, v}
+		return json.Marshal(result)
+	case nil:
+		return []byte("null"), nil
+	default:
+		return nil, fmt.Errorf(
+			`unexpected concrete type for GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEvent: "%T"`, v)
+	}
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned includes the requested fields of the GraphQL type JobEventAssigned.
+// The GraphQL type's documentation follows.
+//
+// An event created when the dispatcher assigns the job to an agent
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventAssigned) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated includes the requested fields of the GraphQL type JobEventBuildStepUploadCreated.
+// The GraphQL type's documentation follows.
+//
+// An event created when the job creates new build steps via pipeline upload
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventBuildStepUploadCreated) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled includes the requested fields of the GraphQL type JobEventCanceled.
+// The GraphQL type's documentation follows.
+//
+// An event created when the job is canceled
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventCanceled) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished includes the requested fields of the GraphQL type JobEventFinished.
+// The GraphQL type's documentation follows.
+//
+// An event created when the job is finished
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventFinished) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric includes the requested fields of the GraphQL type JobEventGeneric.
+// The GraphQL type's documentation follows.
+//
+// A generic event type that doesn't have any additional meta-information associated with the event
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventGeneric) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized includes the requested fields of the GraphQL type JobEventReprioritized.
+// The GraphQL type's documentation follows.
+//
+// A job event for when a job's priority has been changed
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventReprioritized) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried includes the requested fields of the GraphQL type JobEventRetried.
+// The GraphQL type's documentation follows.
+//
+// An event created when the job is retried
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetried) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed includes the requested fields of the GraphQL type JobEventRetryFailed.
+// The GraphQL type's documentation follows.
+//
+// An event created when job fails to retry
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventRetryFailed) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError includes the requested fields of the GraphQL type JobEventStackError.
+// The GraphQL type's documentation follows.
+//
+// An event created when a stack error is reported
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+	// Details about the stack error
+	ErrorDetail string `json:"errorDetail"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetErrorDetail returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError.ErrorDetail, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackError) GetErrorDetail() string {
+	return v.ErrorDetail
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished includes the requested fields of the GraphQL type JobEventStackFinished.
+// The GraphQL type's documentation follows.
+//
+// An event created when a stack finishes a job and marks it as success
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackFinished) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification includes the requested fields of the GraphQL type JobEventStackNotification.
+// The GraphQL type's documentation follows.
+//
+// An event created when a stack notification is triggered
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut includes the requested fields of the GraphQL type JobEventTimedOut.
+// The GraphQL type's documentation follows.
+//
+// An event created when the job is timed out
+type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut struct {
+	Typename string `json:"__typename"`
+	Id       string `json:"id"`
+	// The type of event
+	Type JobEventType `json:"type"`
+	// The time when the event occurred
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut.Id, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut) GetId() string {
+	return v.Id
+}
+
+// GetType returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut.Type, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut) GetType() JobEventType {
+	return v.Type
+}
+
+// GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut.Timestamp, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut) GetTimestamp() time.Time {
+	return v.Timestamp
+}
+
+// GetJobEventsJobJobTypeTrigger includes the requested fields of the GraphQL type JobTypeTrigger.
+// The GraphQL type's documentation follows.
+//
+// A type of job that triggers another build on a pipeline
+type GetJobEventsJobJobTypeTrigger struct {
+	Typename string `json:"__typename"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeTrigger.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeTrigger) GetTypename() string { return v.Typename }
+
+// GetJobEventsJobJobTypeWait includes the requested fields of the GraphQL type JobTypeWait.
+// The GraphQL type's documentation follows.
+//
+// A type of job that waits for all previous jobs to pass before proceeding the build pipeline
+type GetJobEventsJobJobTypeWait struct {
+	Typename string `json:"__typename"`
+}
+
+// GetTypename returns GetJobEventsJobJobTypeWait.Typename, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeWait) GetTypename() string { return v.Typename }
+
+// GetJobEventsResponse is returned by GetJobEvents on success.
+type GetJobEventsResponse struct {
+	// Find a build job
+	Job GetJobEventsJob `json:"-"`
+}
+
+// GetJob returns GetJobEventsResponse.Job, and is useful for accessing the field via an interface.
+func (v *GetJobEventsResponse) GetJob() GetJobEventsJob { return v.Job }
+
+func (v *GetJobEventsResponse) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*GetJobEventsResponse
+		Job json.RawMessage `json:"job"`
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.GetJobEventsResponse = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	{
+		dst := &v.Job
+		src := firstPass.Job
+		if len(src) != 0 && string(src) != "null" {
+			err = __unmarshalGetJobEventsJob(
+				src, dst)
+			if err != nil {
+				return fmt.Errorf(
+					"unable to unmarshal GetJobEventsResponse.Job: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+type __premarshalGetJobEventsResponse struct {
+	Job json.RawMessage `json:"job"`
+}
+
+func (v *GetJobEventsResponse) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *GetJobEventsResponse) __premarshalJSON() (*__premarshalGetJobEventsResponse, error) {
+	var retval __premarshalGetJobEventsResponse
+
+	{
+
+		dst := &retval.Job
+		src := v.Job
+		var err error
+		*dst, err = __marshalGetJobEventsJob(
+			&src)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"unable to marshal GetJobEventsResponse.Job: %w", err)
+		}
+	}
+	return &retval, nil
+}
+
 // Job includes the GraphQL fields of Job requested by the fragment Job.
 // The GraphQL type's documentation follows.
 //
@@ -704,6 +1639,102 @@ func __marshalJob(v *Job) ([]byte, error) {
 		return nil, fmt.Errorf(
 			`unexpected concrete type for Job: "%T"`, v)
 	}
+}
+
+// All the possible types of events that happen to a Job
+type JobEventType string
+
+const (
+	// The Job was accepted by an agent
+	JobEventTypeAccepted JobEventType = "ACCEPTED"
+	// The agent took too long to start the job
+	JobEventTypeAcceptedExpired JobEventType = "ACCEPTED_EXPIRED"
+	// The agent disconnected while processing this job
+	JobEventTypeAgentDisconnected JobEventType = "AGENT_DISCONNECTED"
+	// The agent was lost while processing this job
+	JobEventTypeAgentLost JobEventType = "AGENT_LOST"
+	// The agent was stopped while processing this job
+	JobEventTypeAgentStopped JobEventType = "AGENT_STOPPED"
+	// The Job was assigned to an agent
+	JobEventTypeAssigned JobEventType = "ASSIGNED"
+	// The agent took too long to accept the job
+	JobEventTypeAssignedExpired JobEventType = "ASSIGNED_EXPIRED"
+	// The Job uploaded steps to the current build
+	JobEventTypeBuildStepUploadCreated JobEventType = "BUILD_STEP_UPLOAD_CREATED"
+	// The Job was marked for cancelation by a user
+	JobEventTypeCancelation JobEventType = "CANCELATION"
+	// The Job was canceled
+	JobEventTypeCanceled JobEventType = "CANCELED"
+	// The Job was changed
+	JobEventTypeChanged JobEventType = "CHANGED"
+	// The Job expired before it was started on an agent
+	JobEventTypeExpired JobEventType = "EXPIRED"
+	// The Job was finished by an agent
+	JobEventTypeFinished JobEventType = "FINISHED"
+	// The Job is limited by a concurrency group
+	JobEventTypeLimited JobEventType = "LIMITED"
+	// The job log exceeded the limit
+	JobEventTypeLogSizeLimitExceeded JobEventType = "LOG_SIZE_LIMIT_EXCEEDED"
+	// The Job sent a notification
+	JobEventTypeNotification JobEventType = "NOTIFICATION"
+	// The Job is limited by a platform limit
+	JobEventTypePlatformLimited JobEventType = "PLATFORM_LIMITED"
+	// The Job's priority was changed
+	JobEventTypeReprioritized JobEventType = "REPRIORITIZED"
+	// The Job was reserved by a stack for later execution
+	JobEventTypeReserved JobEventType = "RESERVED"
+	// The Job was reserved by a stack but the stack took too long to spin up agent
+	JobEventTypeReservedExpired JobEventType = "RESERVED_EXPIRED"
+	// The Job was retried either automatically or by a user
+	JobEventTypeRetried JobEventType = "RETRIED"
+	// The Job was unable to be retried
+	JobEventTypeRetryFailed JobEventType = "RETRY_FAILED"
+	// The Job was scheduled
+	JobEventTypeScheduled JobEventType = "SCHEDULED"
+	// Stack encountered an error handling this job
+	JobEventTypeStackErrored JobEventType = "STACK_ERRORED"
+	// Stack ends this job without raising error
+	JobEventTypeStackFinished JobEventType = "STACK_FINISHED"
+	// Stack sent a notification for this job
+	JobEventTypeStackNotification JobEventType = "STACK_NOTIFICATION"
+	// The Job was started by an agent
+	JobEventTypeStarted JobEventType = "STARTED"
+	// The Job was timed out
+	JobEventTypeTimedOut JobEventType = "TIMED_OUT"
+	// The Job was unblocked by a user
+	JobEventTypeUnblocked JobEventType = "UNBLOCKED"
+)
+
+var AllJobEventType = []JobEventType{
+	JobEventTypeAccepted,
+	JobEventTypeAcceptedExpired,
+	JobEventTypeAgentDisconnected,
+	JobEventTypeAgentLost,
+	JobEventTypeAgentStopped,
+	JobEventTypeAssigned,
+	JobEventTypeAssignedExpired,
+	JobEventTypeBuildStepUploadCreated,
+	JobEventTypeCancelation,
+	JobEventTypeCanceled,
+	JobEventTypeChanged,
+	JobEventTypeExpired,
+	JobEventTypeFinished,
+	JobEventTypeLimited,
+	JobEventTypeLogSizeLimitExceeded,
+	JobEventTypeNotification,
+	JobEventTypePlatformLimited,
+	JobEventTypeReprioritized,
+	JobEventTypeReserved,
+	JobEventTypeReservedExpired,
+	JobEventTypeRetried,
+	JobEventTypeRetryFailed,
+	JobEventTypeScheduled,
+	JobEventTypeStackErrored,
+	JobEventTypeStackFinished,
+	JobEventTypeStackNotification,
+	JobEventTypeStarted,
+	JobEventTypeTimedOut,
+	JobEventTypeUnblocked,
 }
 
 // Job includes the GraphQL fields of JobTypeBlock requested by the fragment Job.
@@ -924,6 +1955,14 @@ func (v *__GetBuildsInput) GetState() []BuildStates { return v.State }
 
 // GetFirst returns __GetBuildsInput.First, and is useful for accessing the field via an interface.
 func (v *__GetBuildsInput) GetFirst() int { return v.First }
+
+// __GetJobEventsInput is used internally by genqlient
+type __GetJobEventsInput struct {
+	JobId string `json:"jobId"`
+}
+
+// GetJobId returns __GetJobEventsInput.JobId, and is useful for accessing the field via an interface.
+func (v *__GetJobEventsInput) GetJobId() string { return v.JobId }
 
 // __PipelineDeleteInput is used internally by genqlient
 type __PipelineDeleteInput struct {
@@ -1152,6 +2191,55 @@ func GetBuilds(
 	}
 
 	data_ = &GetBuildsResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by GetJobEvents.
+const GetJobEvents_Operation = `
+query GetJobEvents ($jobId: ID!) {
+	job(uuid: $jobId) {
+		__typename
+		... on JobTypeCommand {
+			events(last: 100) {
+				edges {
+					node {
+						__typename
+						id
+						type
+						timestamp
+						... on JobEventStackError {
+							errorDetail
+						}
+					}
+				}
+			}
+		}
+	}
+}
+`
+
+func GetJobEvents(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	jobId string,
+) (data_ *GetJobEventsResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "GetJobEvents",
+		Query:  GetJobEvents_Operation,
+		Variables: &__GetJobEventsInput{
+			JobId: jobId,
+		},
+	}
+
+	data_ = &GetJobEventsResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(
