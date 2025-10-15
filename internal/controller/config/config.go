@@ -111,9 +111,6 @@ type Config struct {
 	// then the pod will malfunction.
 	AllowPodSpecPatchUnsafeCmdMod bool `json:"allow-pod-spec-patch-unsafe-command-modification" validate:"omitempty"`
 
-	// Enable using the stacks API - this feature is in progress.
-	ExperimentalStacksAPISupport bool `json:"experimental-stacks-api-support" validate:"omitempty"`
-
 	// These are only used for integration tests.
 	BuildkiteToken  string `json:"buildkite-token"  validate:"omitempty"`
 	GraphQLEndpoint string `json:"graphql-endpoint" validate:"omitempty"`

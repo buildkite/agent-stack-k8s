@@ -129,11 +129,6 @@ func AddConfigFlags(cmd *cobra.Command) {
 		false,
 		"Permits PodSpecPatch to modify the command or args fields of stack-provided containers. See the warning in the README before enabling this option",
 	)
-	cmd.Flags().Bool(
-		"experimental-stacks-api-support",
-		false,
-		"Experimental - enables integration with the Buildkite Stacks API for interactions with the Buildkite control plane.",
-	)
 	cmd.Flags().Int(
 		"pagination-page-size",
 		config.DefaultPaginationPageSize,
