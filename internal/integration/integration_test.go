@@ -195,11 +195,8 @@ func TestPodSpecPatchRejectsPatchingAgentContainerCommand(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 
 	tc.AssertFail(ctx, build)
-	if !cfg.ExperimentalStacksAPISupport {
-		// We no longer put stack error in logs with Stack API.
-		// Instead, they appear on Job Timeline. TODO: Better test tooling is needed to validate those.
-		tc.AssertLogsContain(build, scheduler.ErrNoCommandModification.Error())
-	}
+	fm := tc.FailureMessage(build, tc.FirstCommandJobID(build), cfg.ExperimentalStacksAPISupport)
+	assert.Contains(t, fm, scheduler.ErrNoCommandModification.Error(), "expected failure message to mention command modification")
 }
 
 func TestPodSpecPatchInController(t *testing.T) {
@@ -300,25 +297,6 @@ func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
 	assert.Contains(t, logs, "Redaction should work in the checkout container")
 	assert.Contains(t, logs, "Redaction should work in the command container:")
 	assert.NotContains(t, logs, "white pepper and 10 others")
-}
-
-func TestPrePostCheckoutHooksRun(t *testing.T) {
-	tc := testcase{
-		T:       t,
-		Fixture: "plugin-checkout-hook.yaml",
-		Repo:    repoHTTP,
-		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
-	}.Init()
-
-	ctx := context.Background()
-	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
-
-	tc.StartController(ctx, cfg)
-	build := tc.TriggerBuild(ctx, pipelineID)
-	tc.AssertSuccess(ctx, build)
-	logs := tc.FetchLogs(build)
-	assert.Contains(t, logs, "The pre-checkout hook ran!")
-	assert.Contains(t, logs, "The post-checkout hook ran!")
 }
 
 func TestChown(t *testing.T) {
@@ -495,7 +473,6 @@ func TestSidecars(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	time.Sleep(15 * time.Second)
 	tc.AssertLogsContain(build, "Welcome to nginx!")
 }
 
@@ -553,15 +530,9 @@ func TestInvalidPodSpec(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	if !cfg.ExperimentalStacksAPISupport {
-		// We no longer put stack error in logs with Stack API.
-		// Instead, they appear on Job Timeline. TODO: Better test tooling is needed to validate those.
-		time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
-		tc.AssertLogsContain(
-			build,
-			`is invalid: spec.template.spec.containers[0].volumeMounts[0].name: Not found: "this-doesnt-exist"`,
-		)
-	}
+	jobID := tc.FirstCommandJobID(build)
+	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	assert.Contains(t, fm, `is invalid: spec.template.spec.containers[0].volumeMounts[0].name: Not found: "this-doesnt-exist"`)
 }
 
 func TestInvalidPodJSON(t *testing.T) {
@@ -576,15 +547,9 @@ func TestInvalidPodJSON(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	if !cfg.ExperimentalStacksAPISupport {
-		// We no longer put stack error in logs with Stack API.
-		// Instead, they appear on Job Timeline. TODO: Better test tooling is needed to validate those.
-		time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
-		tc.AssertLogsContain(
-			build,
-			"failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.podSpec.containers.env.value of type string",
-		)
-	}
+	jobID := tc.FirstCommandJobID(build)
+	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	assert.Contains(t, fm, "failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.podSpec.containers.env.value of type string")
 }
 
 func TestMissingServiceAccount(t *testing.T) {
@@ -599,12 +564,9 @@ func TestMissingServiceAccount(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	if !cfg.ExperimentalStacksAPISupport {
-		// We no longer put stack error in logs with Stack API.
-		// Instead, they appear on Job Timeline. TODO: Better test tooling is needed to validate those.
-		time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
-		tc.AssertLogsContain(build, "error looking up service account")
-	}
+	jobID := tc.FirstCommandJobID(build)
+	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	assert.Contains(t, fm, "error looking up service account")
 }
 
 func TestEnvVariables(t *testing.T) {
@@ -619,7 +581,6 @@ func TestEnvVariables(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	tc.AssertLogsContain(build, "Testing some env variables: set")
 }
 
@@ -635,16 +596,14 @@ func TestImagePullBackOffFailed(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	if !cfg.ExperimentalStacksAPISupport {
-		// We no longer put stack error in logs with Stack API.
-		// Instead, they appear on Job Timeline. TODO: Better test tooling is needed to validate those.
-		time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
-		logs := tc.FetchLogs(build)
-		assert.Contains(t, logs, "other job has run")
-		assert.Contains(t, logs, "The following images could not be pulled or were unavailable:\n")
-		assert.Contains(t, logs, `"buildkite/non-existant-image:latest"`)
-		assert.Contains(t, logs, "ImagePullBackOff")
-	}
+	jobID := tc.FirstCommandJobID(build)
+	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	assert.Contains(t, fm, "The following images could not be pulled or were unavailable:\n")
+	assert.Contains(t, fm, `"buildkite/non-existant-image:latest"`)
+	assert.Contains(t, fm, "ImagePullBackOff")
+
+	// The second job should run just fine, so load all the logs for the build and make sure it did
+	tc.AssertLogsContain(build, "other job has run")
 }
 
 func TestPullPolicyNeverMissingImage(t *testing.T) {
@@ -659,15 +618,11 @@ func TestPullPolicyNeverMissingImage(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	if !cfg.ExperimentalStacksAPISupport {
-		// We no longer put stack error in logs with Stack API.
-		// Instead, they appear on Job Timeline. TODO: Better test tooling is needed to validate those.
-		time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
-		logs := tc.FetchLogs(build)
-		assert.Contains(t, logs, "The following images could not be pulled or were unavailable:\n")
-		assert.Contains(t, logs, `"buildkite/agent-extreme:never"`)
-		assert.Contains(t, logs, "ErrImageNeverPull")
-	}
+	jobID := tc.FirstCommandJobID(build)
+	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	assert.Contains(t, fm, "The following images could not be pulled or were unavailable:\n")
+	assert.Contains(t, fm, `"buildkite/agent-extreme:never"`)
+	assert.Contains(t, fm, "ErrImageNeverPull")
 }
 
 func TestBrokenInitContainer(t *testing.T) {
@@ -682,14 +637,10 @@ func TestBrokenInitContainer(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-	if !cfg.ExperimentalStacksAPISupport {
-		// We no longer put stack error in logs with Stack API.
-		// Instead, they appear on Job Timeline. TODO: Better test tooling is needed to validate those.
-		time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
-		logs := tc.FetchLogs(build)
-		assert.Contains(t, logs, "The following init containers failed:")
-		assert.Contains(t, logs, "well this isn't going to work")
-	}
+	jobID := tc.FirstCommandJobID(build)
+	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	assert.Contains(t, fm, "The following init containers failed:")
+	assert.Contains(t, fm, "well this isn't going to work")
 }
 
 func TestInvalidImageRefFormat(t *testing.T) {
@@ -704,13 +655,9 @@ func TestInvalidImageRefFormat(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertFail(ctx, build)
-
-	if !cfg.ExperimentalStacksAPISupport {
-		time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
-		// We no longer put stack error in logs with Stack API.
-		// Instead, they appear on Job Timeline. TODO: Better test tooling is needed to validate those.
-		tc.AssertLogsContain(build, `invalid reference format "buildkite/agent:latest plus some extra junk" for container "container-0"`)
-	}
+	jobID := tc.FirstCommandJobID(build)
+	fm := tc.FailureMessage(build, jobID, cfg.ExperimentalStacksAPISupport)
+	assert.Contains(t, fm, `invalid reference format "buildkite/agent:latest plus some extra junk" for container "container-0"`)
 }
 
 func TestArtifactsUploadFailedJobs(t *testing.T) {
@@ -740,7 +687,6 @@ func TestInterposerBuildkite(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
-	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	logs := tc.FetchLogs(build)
 	assert.Contains(t, logs, "Hello World!")
 	assert.Contains(t, logs, "Goodbye World!")
@@ -761,7 +707,6 @@ func TestInterposerVector(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 	logs := tc.FetchLogs(build)
-	time.Sleep(15 * time.Second) // trying to reduce flakes: logs not immediately available
 	assert.Contains(t, logs, "Hello World!")
 	assert.Contains(t, logs, "Goodbye World!")
 }
@@ -887,6 +832,7 @@ func TestHooksAndPlugins(t *testing.T) {
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
+
 	logs := tc.FetchLogs(build)
 	t.Logf("tc.FetchLogs(build) = %s", logs)
 	for _, hook := range []string{"environment", "pre-checkout", "post-checkout", "pre-command", "post-command"} {
