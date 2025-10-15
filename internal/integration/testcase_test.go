@@ -363,12 +363,8 @@ func (t testcase) FirstCommandJobID(build api.Build) string {
 	return ""
 }
 
-func (t testcase) FailureMessage(build api.Build, jobID string, useStacksAPI bool) string {
+func (t testcase) FailureMessage(jobID string) string {
 	t.Helper()
-
-	if !useStacksAPI {
-		return t.FetchLogs(build)
-	}
 
 	time.Sleep(1 * time.Second) // Wait for job events to be available (quicker than logs)
 	jobEvents, err := api.GetJobEvents(t.Context(), t.GraphQL, jobID)

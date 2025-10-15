@@ -1138,26 +1138,10 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 		Reason: agent.SignalReasonStackError,
 	}
 
-	if w.agentClient.UseStackAPI() {
-		if err := w.agentClient.FailJob(ctx, inputs.uuid, failureInfo.Message); err != nil {
-			w.logger.Error("failed to fail the job via Buildkite Stack API", zap.Error(err))
-			schedulerBuildkiteJobFailErrorsCounter.Inc()
-			return err
-		}
-	} else {
-		// Need to fetch the agent token ourselves.
-		agentToken, err := fetchAgentToken(ctx, w.logger, w.client, w.cfg.Namespace, w.cfg.AgentTokenSecretName)
-		if err != nil {
-			w.logger.Error("fetching agent token from secret", zap.Error(err))
-			return err
-		}
-
-		opts := w.cfg.AgentConfig.ControllerOptions()
-		if err := acquireAndFail(ctx, w.logger, agentToken, w.cfg.JobPrefix, inputs.uuid, inputs.agentQueryRules, failureInfo, opts...); err != nil {
-			w.logger.Error("failed to acquire and fail the job on Buildkite", zap.Error(err))
-			schedulerBuildkiteJobFailErrorsCounter.Inc()
-			return err
-		}
+	if err := w.agentClient.FailJob(ctx, inputs.uuid, failureInfo.Message); err != nil {
+		w.logger.Error("failed to fail the job via Buildkite Stack API", zap.Error(err))
+		schedulerBuildkiteJobFailErrorsCounter.Inc()
+		return err
 	}
 
 	schedulerBuildkiteJobFailsCounter.Inc()

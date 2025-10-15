@@ -241,7 +241,7 @@ func (w *jobWatcher) failJob(ctx context.Context, log *zap.Logger, kjob *batchv1
 		// We can know almost all failures triggered by job watcher are stack related error.
 		Reason: agent.SignalReasonStackError,
 	}
-	if err := failForK8sObject(ctx, log, kjob, failureInfo, w.agentClient, w.k8s, w.cfg); err != nil {
+	if err := failForK8sObject(ctx, log, kjob, failureInfo, w.agentClient); err != nil {
 		// Maybe the job was cancelled in the meantime?
 		log.Error("Could not fail Buildkite job", zap.Error(err))
 		jobWatcherBuildkiteJobFailErrorsCounter.Inc()

@@ -23,16 +23,14 @@ type Reserver struct {
 	// Logs goes here
 	logger *zap.Logger
 
-	enabled bool
-	paused  bool
+	paused bool
 }
 
-func New(logger *zap.Logger, agentClient *api.AgentClient, nextHandler model.ManyJobHandler, enabled bool) *Reserver {
+func New(logger *zap.Logger, agentClient *api.AgentClient, nextHandler model.ManyJobHandler) *Reserver {
 	r := &Reserver{
 		handler:     nextHandler,
 		agentClient: agentClient,
 		logger:      logger,
-		enabled:     enabled,
 	}
 
 	return r
@@ -48,10 +46,6 @@ func (r *Reserver) Pause(pause bool) {
 func (r *Reserver) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob) error {
 	if r.paused {
 		return nil
-	}
-
-	if !r.enabled {
-		return r.handler.HandleMany(ctx, jobs)
 	}
 
 	jobIDs := make([]string, 0, len(jobs))

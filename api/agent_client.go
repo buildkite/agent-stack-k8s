@@ -8,8 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
@@ -31,8 +29,7 @@ type AgentClient struct {
 	queue     string
 	stack     *stacksapi.RegisterStackResponse
 
-	logger      *zap.Logger
-	useStackAPI bool
+	logger *zap.Logger
 
 	notificationBatcher         *notificationBatcher
 	notificationBatcherCancelFn context.CancelFunc
@@ -46,7 +43,6 @@ type AgentClientOpts struct {
 	StackID         string
 	AgentQueryRules []string
 	Logger          *zap.Logger
-	UseStacksAPI    bool
 }
 
 func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, error) {
@@ -73,64 +69,54 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 			Timeout:   60 * time.Second,
 			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, opts.Token)),
 		},
-		clusterID:   opts.ClusterID,
-		queue:       opts.Queue,
-		logger:      opts.Logger,
-		useStackAPI: opts.UseStacksAPI,
+		clusterID: opts.ClusterID,
+		queue:     opts.Queue,
+		logger:    opts.Logger,
 	}
 
-	if opts.UseStacksAPI {
-		zapSlogHandler := slogzap.Option{Logger: opts.Logger}.NewZapHandler()
+	zapSlogHandler := slogzap.Option{Logger: opts.Logger}.NewZapHandler()
 
-		client.stacksAPIClient, err = stacksapi.NewClient(
-			opts.Token,
-			stacksapi.WithLogger(slog.New(zapSlogHandler)),
-			stacksapi.WithBaseURL(endpointURL),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("couldn't create Buildkite Stacks API client: %w", err)
-		}
-
-		stackKey := opts.StackID
-		if stackKey == "" {
-			stackKey = "agent-stack-k8s"
-		}
-
-		stack, _, err := client.stacksAPIClient.RegisterStack(ctx, stacksapi.RegisterStackRequest{
-			Type:     stacksapi.StackTypeKubernetes,
-			QueueKey: opts.Queue,
-			Key:      stackKey,
-			Metadata: map[string]string{},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("registering stack with Buildkite Stacks API: %w", err)
-		}
-
-		client.stack = stack
-		client.notificationBatcher = newNotificationBatcher(stackKey, client.stacksAPIClient, opts.Logger)
+	client.stacksAPIClient, err = stacksapi.NewClient(
+		opts.Token,
+		stacksapi.WithLogger(slog.New(zapSlogHandler)),
+		stacksapi.WithBaseURL(endpointURL),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't create Buildkite Stacks API client: %w", err)
 	}
+
+	stackKey := opts.StackID
+	if stackKey == "" {
+		stackKey = "agent-stack-k8s"
+	}
+
+	client.notificationBatcher = newNotificationBatcher(stackKey, client.stacksAPIClient, opts.Logger)
+	stack, _, err := client.stacksAPIClient.RegisterStack(ctx, stacksapi.RegisterStackRequest{
+		Type:     stacksapi.StackTypeKubernetes,
+		QueueKey: opts.Queue,
+		Key:      stackKey,
+		Metadata: map[string]string{},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("registering stack with Buildkite Stacks API: %w", err)
+	}
+
+	client.stack = stack
 
 	return client, nil
 }
 
 // Starting internal goroutines for AgentClient.
 func (e *AgentClient) Start(ctx context.Context) error {
-	if e.UseStackAPI() {
-		ctxWithCancel, cancel := context.WithCancel(ctx)
-		e.notificationBatcherCancelFn = cancel
-		if err := e.notificationBatcher.start(ctxWithCancel); err != nil {
-			return err
-		}
-	}
-	return nil
+	ctxWithCancel, cancel := context.WithCancel(ctx)
+	e.notificationBatcherCancelFn = cancel
+	return e.notificationBatcher.start(ctxWithCancel)
 }
 
 // Ends all internal goroutines and wait for them to finish pending works.
 func (e *AgentClient) Stop() {
-	if e.UseStackAPI() {
-		e.notificationBatcherCancelFn()
-		e.notificationBatcher.waitDone()
-	}
+	e.notificationBatcherCancelFn()
+	e.notificationBatcher.waitDone()
 }
 
 // AgentError is the JSON object of the response body returned when the HTTP
@@ -197,55 +183,6 @@ type AgentScheduledJob struct {
 
 // GetScheduledJobs gets a page of jobs that could be run.
 func (c *AgentClient) GetScheduledJobs(ctx context.Context, afterCursor string, limit int) (*AgentScheduledJobs, time.Duration, error) {
-	if c.UseStackAPI() {
-		return c.getStackScheduledJobs(ctx, afterCursor, limit)
-	}
-
-	u := c.endpoint.JoinPath(
-		"clusters", railsPathEscape(c.clusterID),
-		"queues", railsPathEscape(c.queue),
-		"scheduled_jobs",
-	)
-	v := make(url.Values)
-	if afterCursor != "" {
-		v.Add("after", afterCursor)
-	}
-	v.Add("limit", strconv.Itoa(limit))
-	u.RawQuery = v.Encode()
-
-	resp, err := c.httpClient.Get(u.String())
-	if err != nil {
-		return nil, 0, err
-	}
-	defer resp.Body.Close()
-
-	result, retryAfter, err := decodeResponse[AgentScheduledJobs](resp)
-	if result != nil {
-		now := time.Now()
-		for _, j := range result.Jobs {
-			j.QueriedAt = now
-			j.AgentQueryRules = c.normaliseAgentQueryRules(j.AgentQueryRules)
-		}
-	}
-
-	return result, retryAfter, err
-}
-
-func (c *AgentClient) normaliseAgentQueryRules(rules []string) []string {
-	if c.queue == defaultQueueKey {
-		// When we poll from default queue, we don't know the queue key, so in rest of the system queue="".
-		// The job might contain a queue key `agents: queue: default`, in that case it will cause mismatch in local
-		// job queue key "" vs our configuration queue key "default".
-		return agenttags.RemoveTag(rules, "queue")
-	} else {
-		// Ensure the job has the queue tag. We queried a queue-specific
-		// endpoint, but it may be the default queue, which doesn't require
-		// `agents: queue: ...`, so the queue tag might not be present.
-		return agenttags.SetTag(rules, "queue", c.queue)
-	}
-}
-
-func (c *AgentClient) getStackScheduledJobs(ctx context.Context, afterCursor string, limit int) (*AgentScheduledJobs, time.Duration, error) {
 	req := stacksapi.ListScheduledJobsRequest{
 		StackKey:        c.stack.Key,
 		ClusterQueueKey: c.stack.ClusterQueueKey,
@@ -284,6 +221,20 @@ func (c *AgentClient) getStackScheduledJobs(ctx context.Context, afterCursor str
 	}, readRetryAfter(header), nil
 }
 
+func (c *AgentClient) normaliseAgentQueryRules(rules []string) []string {
+	if c.queue == defaultQueueKey {
+		// When we poll from default queue, we don't know the queue key, so in rest of the system queue="".
+		// The job might contain a queue key `agents: queue: default`, in that case it will cause mismatch in local
+		// job queue key "" vs our configuration queue key "default".
+		return agenttags.RemoveTag(rules, "queue")
+	} else {
+		// Ensure the job has the queue tag. We queried a queue-specific
+		// endpoint, but it may be the default queue, which doesn't require
+		// `agents: queue: ...`, so the queue tag might not be present.
+		return agenttags.SetTag(rules, "queue", c.queue)
+	}
+}
+
 type AgentJob struct {
 	ID      string            `json:"id"`
 	Command string            `json:"command"`
@@ -292,52 +243,23 @@ type AgentJob struct {
 
 // GetJobToRun gets info about a specific job needed to run it.
 func (c *AgentClient) GetJobToRun(ctx context.Context, id string) (result *AgentJob, retryAfter time.Duration, err error) {
-	if c.UseStackAPI() {
-		job, header, err := c.stacksAPIClient.GetJob(
-			ctx,
-			stacksapi.GetJobRequest{
-				StackKey: c.stack.Key,
-				JobUUID:  id,
-			},
-			// The caller handles the retry, we may not want that in the future
-			stacksapi.WithNoRetry(),
-		)
-		if err != nil {
-			return nil, readRetryAfter(header), err
-		}
-		return &AgentJob{
-			ID:      job.ID,
-			Env:     job.Env,
-			Command: job.Command,
-		}, readRetryAfter(header), err
-	}
-
-	u := c.endpoint.JoinPath(
-		"clusters", railsPathEscape(c.clusterID),
-		"queues", railsPathEscape(c.queue),
-		"scheduled_jobs", railsPathEscape(id),
+	job, header, err := c.stacksAPIClient.GetJob(
+		ctx,
+		stacksapi.GetJobRequest{
+			StackKey: c.stack.Key,
+			JobUUID:  id,
+		},
+		// The caller handles the retry, we may not want that in the future
+		stacksapi.WithNoRetry(),
 	)
-
-	// Usage of the stack API implies that we're reserving jobs, so we want to
-	// include_reserved=true to be able to fetch jobs that we've reserved.
-	if c.UseStackAPI() {
-		v := u.Query()
-		v.Add("include_reserved", "true")
-		u.RawQuery = v.Encode()
-	}
-
-	resp, err := c.httpClient.Get(u.String())
 	if err != nil {
-		return nil, 0, err
+		return nil, readRetryAfter(header), err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusNotFound {
-		// It's no longer available to run (cancelled, probably).
-		return nil, 0, nil
-	}
-
-	return decodeResponse[AgentJob](resp)
+	return &AgentJob{
+		ID:      job.ID,
+		Env:     job.Env,
+		Command: job.Command,
+	}, readRetryAfter(header), err
 }
 
 // AgentJobState describes the current state of a job.
@@ -349,39 +271,18 @@ type AgentJobState struct {
 // GetJobState gets the state of a specific job.
 func (c *AgentClient) GetJobState(ctx context.Context, id string) (result *AgentJobState, retryAfter time.Duration, err error) {
 	// Use the batch API as a shim when useStackAPI is on.
-	if c.UseStackAPI() {
-		state, retryAfter, err := c.GetJobStates(ctx, []string{id})
-		if err != nil {
-			return nil, retryAfter, err
-		}
-		return &AgentJobState{
-			ID:    id,
-			State: state[id],
-		}, retryAfter, nil
-	}
-
-	u := c.endpoint.JoinPath(
-		"clusters", railsPathEscape(c.clusterID),
-		"queues", railsPathEscape(c.queue),
-		"jobs", railsPathEscape(id),
-		"state",
-	)
-
-	resp, err := c.httpClient.Get(u.String())
+	state, retryAfter, err := c.GetJobStates(ctx, []string{id})
 	if err != nil {
-		return nil, 0, err
+		return nil, retryAfter, err
 	}
-	defer resp.Body.Close()
-
-	return decodeResponse[AgentJobState](resp)
+	return &AgentJobState{
+		ID:    id,
+		State: state[id],
+	}, retryAfter, nil
 }
 
 // GetJobStates gets state for a batch of jobs.
 func (c *AgentClient) GetJobStates(ctx context.Context, ids []string) (result map[string]JobState, retryAfter time.Duration, err error) {
-	if !c.UseStackAPI() {
-		// We don't expect this to happen in prod. It's mainly a defensive mechanism.
-		return nil, 0, errors.New("cannot use batch job state loading without Stack API")
-	}
 	req := stacksapi.GetJobStatesRequest{
 		StackKey: c.stack.Key,
 		JobUUIDs: ids,
@@ -399,11 +300,6 @@ func (c *AgentClient) GetJobStates(ctx context.Context, ids []string) (result ma
 
 // ReserveJobs reserves a batch of jobs.
 func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string) (*stacksapi.BatchReserveJobsResponse, time.Duration, error) {
-	if !c.UseStackAPI() {
-		// We don't expect this to happen in prod. It's mainly a defensive mechanism.
-		return nil, 0, errors.New("reservation not enabled")
-	}
-
 	reservations, header, err := c.stacksAPIClient.BatchReserveJobs(ctx, stacksapi.BatchReserveJobsRequest{
 		StackKey: c.stack.Key,
 		JobUUIDs: ids,
@@ -424,16 +320,7 @@ func (c *AgentClient) DeregisterStack(ctx context.Context) error {
 	return err
 }
 
-// UseStackAPI returns whether the client is configured to use the Stack API.
-func (c *AgentClient) UseStackAPI() bool {
-	return c.useStackAPI
-}
-
 func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail string) error {
-	if !c.UseStackAPI() {
-		return fmt.Errorf("cannot call FailJob when useStackAPI is off")
-	}
-
 	req := stacksapi.FinishJobRequest{
 		StackKey:   c.stack.Key,
 		JobUUID:    jobUUID,
@@ -447,10 +334,6 @@ func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail s
 
 // CreateStackNotification queues a stack notification for a job to be sent in a batch.
 func (c *AgentClient) CreateStackNotification(ctx context.Context, jobUUID string, detail string) {
-	if !c.UseStackAPI() || c.notificationBatcher == nil {
-		return
-	}
-
 	const croppedMessage = "… (cropped)"
 	const maxDetailSize = 255 - len(croppedMessage)
 
@@ -505,9 +388,4 @@ func readRetryAfter(headers http.Header) time.Duration {
 		return 0
 	}
 	return ra
-}
-
-// Rails doesn't accept dots in some path segments.
-func railsPathEscape(s string) string {
-	return strings.ReplaceAll(url.PathEscape(s), ".", "%2E")
 }
