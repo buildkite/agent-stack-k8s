@@ -626,6 +626,38 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		},
 	}
 
+	// Set log collection grace period based on termination grace period.
+	// This allows the agent to coordinate log collection timing with pod termination.
+	if podSpec.TerminationGracePeriodSeconds != nil {
+		termGraceSecs := int(*podSpec.TerminationGracePeriodSeconds)
+		// When the agent cancels the job (e.g. when it receives SIGTERM), it
+		// first interrupts the job, waits for signal-grace-period, then
+		// terminates the job before waiting the remainder of the cancel-grace-
+		// period.
+		// When the pod is deleted, Kubernetes first sends SIGTERM to all
+		// containers. From Agent v3.110.0, kubernetes-bootstrap absorbs that
+		// signal and instead waits for the agent container to send an interrupt
+		// over the socket.
+		// Kubernetes will then take care of killing the job after
+		// TerminationGracePeriodSeconds is up. But we should still configure
+		// signal-grace-period so that the agent has time to upload logs and
+		// mark the job as finished, and also cancel-grace-period in case it
+		// needs to know how long it has left.
+		signalGracePeriod := max(0, termGraceSecs-10)
+		// Note that the agent requires cancelGracePeriod > signalGracePeriod.
+		cancelGracePeriod := max(termGraceSecs, 1)
+		agentContainer.Env = append(agentContainer.Env,
+			corev1.EnvVar{
+				Name:  "BUILDKITE_CANCEL_GRACE_PERIOD",
+				Value: strconv.Itoa(cancelGracePeriod),
+			},
+			corev1.EnvVar{
+				Name:  "BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS",
+				Value: strconv.Itoa(signalGracePeriod),
+			},
+		)
+	}
+
 	// Append some agent config and checkout config to the agent container.
 	// The agent will transform them as needed and pass them along to the other
 	// containers via the socket connection between them.
