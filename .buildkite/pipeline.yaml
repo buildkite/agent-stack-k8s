@@ -231,6 +231,7 @@ steps:
     key: release
     depends_on:
       - deploy
+      - push-main-or-tag
     plugins:
       - kubernetes:
           checkout:
