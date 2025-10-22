@@ -105,7 +105,8 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	appendBoolToEnvOpt(ctr, "BUILDKITE_AGENT_DEBUG_SIGNING", a.DebugSigning)
 
 	a.applyHooksVolumeTo(ctr)
-	appendToEnvOpt(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)
+	setEnvVarIfAbsentOrDifferent(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)
+	//appendToEnvOpt(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)
 
 	a.applyPluginsVolumeTo(ctr)
 	appendToEnvOpt(ctr, "BUILDKITE_PLUGINS_PATH", a.PluginsPath)
@@ -204,6 +205,21 @@ func (a *AgentConfig) applyPluginsVolumeTo(ctr *corev1.Container) {
 		Name:      a.PluginsVolume.Name,
 		MountPath: *a.PluginsPath,
 	})
+}
+
+func setEnvVarIfAbsentOrDifferent(ctr *corev1.Container, name string, value *string) {
+	if ctr == nil || value == nil {
+		return
+	}
+	for i := range ctr.Env {
+		if ctr.Env[i].Name == name {
+			if ctr.Env[i].Value != *value {
+				ctr.Env[i].Value = *value
+			}
+			return
+		}
+	}
+	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: *value})
 }
 
 // normaliseJWKSFile normalises the *string field pointed to by jwksFileField
