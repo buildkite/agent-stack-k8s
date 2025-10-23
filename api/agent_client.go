@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
-	"github.com/buildkite/agent-stack-k8s/v2/internal/stacksapi"
+	"github.com/buildkite/stacksapi"
 	slogzap "github.com/samber/slog-zap/v2"
 	"go.uber.org/zap"
 )

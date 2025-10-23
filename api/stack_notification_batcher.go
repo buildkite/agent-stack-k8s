@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/buildkite/agent-stack-k8s/v2/internal/stacksapi"
+	"github.com/buildkite/stacksapi"
 	"go.uber.org/zap"
 )
 
