@@ -5,7 +5,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 
-	"go.uber.org/zap"
+	"log/slog"
 
 	v1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,7 +18,7 @@ import (
 )
 
 type completionsWatcher struct {
-	logger *zap.Logger
+	logger *slog.Logger
 	k8s    kubernetes.Interface
 
 	// This is the context passed to RegisterInformer.
@@ -29,7 +29,7 @@ type completionsWatcher struct {
 	resourceEventHandlerCtx context.Context
 }
 
-func NewPodCompletionWatcher(logger *zap.Logger, k8s kubernetes.Interface) *completionsWatcher {
+func NewPodCompletionWatcher(logger *slog.Logger, k8s kubernetes.Interface) *completionsWatcher {
 	watcher := &completionsWatcher{
 		logger: logger,
 		k8s:    k8s,
@@ -83,8 +83,8 @@ func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *v1.Pod) {
 	}
 	w.logger.Debug(
 		"agent finished",
-		zap.String("uuid", pod.Labels[config.UUIDLabel]),
-		zap.Int32("exit code", terminated.ExitCode),
+		"uuid", pod.Labels[config.UUIDLabel],
+		"exit code", terminated.ExitCode,
 	)
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -97,7 +97,7 @@ func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *v1.Pod) {
 		return err
 	}); err != nil {
 		completionWatcherJobCleanupErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
-		w.logger.Error("failed to update job with ActiveDeadlineSeconds", zap.Error(err))
+		w.logger.Error("failed to update job with ActiveDeadlineSeconds", "error", err)
 		return
 	}
 	completionWatcherJobCleanupsCounter.Inc()

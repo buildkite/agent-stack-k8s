@@ -5,17 +5,17 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/google/uuid"
-	"go.uber.org/zap"
+	"log/slog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // loggerForObject curries a logger with namespace, name, and job UUID taken
 // from the object labels.
-func loggerForObject(baseLog *zap.Logger, obj metav1.Object) *zap.Logger {
+func loggerForObject(baseLog *slog.Logger, obj metav1.Object) *slog.Logger {
 	return baseLog.With(
-		zap.String("namespace", obj.GetNamespace()),
-		zap.String("name", obj.GetName()),
-		zap.String("jobUUID", obj.GetLabels()[config.UUIDLabel]),
+		"namespace", obj.GetNamespace(),
+		"name", obj.GetName(),
+		"jobUUID", obj.GetLabels()[config.UUIDLabel],
 	)
 }
 

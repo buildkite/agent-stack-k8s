@@ -7,7 +7,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/google/uuid"
-	"go.uber.org/zap"
+	"log/slog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -16,7 +16,7 @@ import (
 // It operate on individual jobs basis, relying on legacy Agent API.
 // In the future version, we will get rid of it.
 type BuildkiteJobChecker struct {
-	logger      *zap.Logger
+	logger      *slog.Logger
 	agentClient *api.AgentClient
 	k8s         kubernetes.Interface
 
@@ -30,7 +30,7 @@ type BuildkiteJobChecker struct {
 
 // NewBuildkiteJobChecker creates a new Buildkite job checker.
 func NewBuildkiteJobChecker(
-	logger *zap.Logger,
+	logger *slog.Logger,
 	agentClient *api.AgentClient,
 	k8s kubernetes.Interface,
 	interval time.Duration,
@@ -46,7 +46,7 @@ func NewBuildkiteJobChecker(
 
 // StartChecking starts monitoring a job for cancellation.
 // This should only be called for jobs in pending state.
-func (c *BuildkiteJobChecker) StartChecking(ctx context.Context, log *zap.Logger, podMeta metav1.ObjectMeta, jobUUID uuid.UUID) {
+func (c *BuildkiteJobChecker) StartChecking(ctx context.Context, log *slog.Logger, podMeta metav1.ObjectMeta, jobUUID uuid.UUID) {
 	c.cancelCheckerChsMu.Lock()
 	defer c.cancelCheckerChsMu.Unlock()
 
@@ -81,7 +81,7 @@ func (c *BuildkiteJobChecker) GetActiveCheckCount() int {
 // calls the callback if the job becomes cancelled. This should only be used for
 // pods that are still pending: stopCh should be closed as soon as the agent
 // container starts running.
-func (c *BuildkiteJobChecker) jobCancelChecker(ctx context.Context, stopCh <-chan struct{}, log *zap.Logger, podMeta metav1.ObjectMeta, jobUUID uuid.UUID) {
+func (c *BuildkiteJobChecker) jobCancelChecker(ctx context.Context, stopCh <-chan struct{}, log *slog.Logger, podMeta metav1.ObjectMeta, jobUUID uuid.UUID) {
 	log.Debug("Checking job state for cancellation")
 	defer log.Debug("Stopped checking job state for cancellation")
 
@@ -116,7 +116,7 @@ func (c *BuildkiteJobChecker) jobCancelChecker(ctx context.Context, stopCh <-cha
 
 		job, retryAfter, err := c.agentClient.GetJobState(ctx, jobUUID.String())
 		if api.IsPermanentError(err) {
-			log.Error("Couldn't fetch state of job", zap.Error(err))
+			log.Error("Couldn't fetch state of job", "error", err)
 			return
 		}
 		retryAfterCh = time.After(retryAfter)
@@ -124,7 +124,7 @@ func (c *BuildkiteJobChecker) jobCancelChecker(ctx context.Context, stopCh <-cha
 			// *shrug* Check again soon.
 			continue
 		}
-		log := log.With(zap.String("job_state", string(job.State)))
+		log := log.With("job_state", string(job.State))
 
 		switch job.State {
 		case api.JobStateCanceled, api.JobStateCanceling:

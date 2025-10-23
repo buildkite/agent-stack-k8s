@@ -16,11 +16,9 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty/v6 v6.6.8
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
-	github.com/samber/slog-zap/v2 v2.6.2
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
 	github.com/xeipuuv/gojsonschema v1.2.0
-	go.uber.org/zap v1.27.0
 	gotest.tools/gotestsum v1.13.0
 	k8s.io/api v0.33.4
 	k8s.io/apimachinery v0.33.4
@@ -35,14 +33,13 @@ require (
 	github.com/DataDog/go-libddwaf/v4 v4.5.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ec2 v1.257.2 // indirect
 	github.com/hashicorp/go-version v1.7.0 // indirect
-	github.com/samber/lo v1.47.0 // indirect
-	github.com/samber/slog-common v0.18.1 // indirect
 	github.com/theckman/httpforwarded v0.4.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.43.0 // indirect
 	go.opentelemetry.io/collector/internal/telemetry v0.137.0 // indirect
 	go.opentelemetry.io/contrib/bridges/otelzap v0.13.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.38.0 // indirect
 	go.opentelemetry.io/otel/log v0.14.0 // indirect
+	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 )
 

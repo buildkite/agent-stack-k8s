@@ -13,7 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
-	"go.uber.org/zap"
+	"log/slog"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +33,7 @@ import (
 // deadline so that it is cleaned up.
 type jobWatcher struct {
 	// Logs go here
-	logger *zap.Logger
+	logger *slog.Logger
 
 	k8s kubernetes.Interface
 	cfg *config.Config
@@ -57,7 +57,7 @@ type jobWatcher struct {
 }
 
 // NewJobWatcher creates a JobWatcher.
-func NewJobWatcher(logger *zap.Logger, k8sClient kubernetes.Interface, agentClient *api.AgentClient, cfg *config.Config) *jobWatcher {
+func NewJobWatcher(logger *slog.Logger, k8sClient kubernetes.Interface, agentClient *api.AgentClient, cfg *config.Config) *jobWatcher {
 	w := &jobWatcher{
 		logger:       logger,
 		k8s:          k8sClient,
@@ -158,7 +158,7 @@ func (w *jobWatcher) runChecks(ctx context.Context, kjob *batchv1.Job) {
 	}
 }
 
-func (w *jobWatcher) checkFinishedWithoutPod(ctx context.Context, log *zap.Logger, kjob *batchv1.Job) {
+func (w *jobWatcher) checkFinishedWithoutPod(ctx context.Context, log *slog.Logger, kjob *batchv1.Job) {
 	log.Debug("Checking job for finishing without a pod")
 
 	// If the job is finished, there should be one finished pod.
@@ -190,7 +190,7 @@ func (w *jobWatcher) checkFinishedWithoutPod(ctx context.Context, log *zap.Logge
 	w.failJob(ctx, log, kjob, message)
 }
 
-func (w *jobWatcher) checkStalledWithoutPod(log *zap.Logger, jobUUID uuid.UUID, kjob *batchv1.Job) {
+func (w *jobWatcher) checkStalledWithoutPod(log *slog.Logger, jobUUID uuid.UUID, kjob *batchv1.Job) {
 	log.Debug("Checking job for stalling without a pod")
 
 	// If the job is not finished and there is no pod, it should start one
@@ -215,7 +215,7 @@ func (w *jobWatcher) checkStalledWithoutPod(log *zap.Logger, jobUUID uuid.UUID, 
 	w.addToStalling(jobUUID, kjob)
 }
 
-func (w *jobWatcher) fetchEvents(ctx context.Context, log *zap.Logger, kjob *batchv1.Job) string {
+func (w *jobWatcher) fetchEvents(ctx context.Context, log *slog.Logger, kjob *batchv1.Job) string {
 	// List the events for the job, which might contain useful info for
 	// diagnosing the problem.
 	events := w.k8s.CoreV1().Events(w.cfg.Namespace)
@@ -226,7 +226,7 @@ func (w *jobWatcher) fetchEvents(ctx context.Context, log *zap.Logger, kjob *bat
 		).String(),
 	})
 	if err != nil {
-		log.Error("Couldn't get events for job", zap.Error(err))
+		log.Error("Couldn't get events for job", "error", err)
 		return fmt.Sprintf("Couldn't get events for job %s: %v", kjob.Name, err)
 	}
 	if evlist == nil {
@@ -235,7 +235,7 @@ func (w *jobWatcher) fetchEvents(ctx context.Context, log *zap.Logger, kjob *bat
 	return w.formatEvents(evlist)
 }
 
-func (w *jobWatcher) failJob(ctx context.Context, log *zap.Logger, kjob *batchv1.Job, message string) {
+func (w *jobWatcher) failJob(ctx context.Context, log *slog.Logger, kjob *batchv1.Job, message string) {
 	failureInfo := FailureInfo{
 		Message: message,
 		// We can know almost all failures triggered by job watcher are stack related error.
@@ -243,7 +243,7 @@ func (w *jobWatcher) failJob(ctx context.Context, log *zap.Logger, kjob *batchv1
 	}
 	if err := failForK8sObject(ctx, log, kjob, failureInfo, w.agentClient); err != nil {
 		// Maybe the job was cancelled in the meantime?
-		log.Error("Could not fail Buildkite job", zap.Error(err))
+		log.Error("Could not fail Buildkite job", "error", err)
 		jobWatcherBuildkiteJobFailErrorsCounter.Inc()
 		return
 	}
@@ -349,7 +349,7 @@ func (w *jobWatcher) cleanupStalledJob(ctx context.Context, kjob *batchv1.Job) {
 		return err
 	}); err != nil {
 		jobWatcherJobCleanupErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
-		w.logger.Error("failed to update job with ActiveDeadlineSeconds", zap.Error(err))
+		w.logger.Error("failed to update job with ActiveDeadlineSeconds", "error", err)
 		return
 	}
 	jobWatcherJobCleanupsCounter.Inc()

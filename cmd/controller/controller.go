@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"reflect"
 	"regexp"
@@ -24,7 +25,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -281,15 +281,13 @@ func New() *cobra.Command {
 				return fmt.Errorf("failed to parse config: %w", err)
 			}
 
-			config := zap.NewDevelopmentConfig()
+			var logger *slog.Logger
 			if cfg.Debug {
-				config.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+				logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 			} else {
-				config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+				logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 			}
-
-			logger := zap.Must(config.Build())
-			logger.Info("configuration loaded", zap.Object("config", cfg))
+			logger.Info("configuration loaded", "config", cfg)
 
 			clientConfig := restconfig.GetConfigOrDie()
 			clientConfig.QPS = float32(cfg.K8sClientRateLimiterQPS)
@@ -301,7 +299,7 @@ func New() *cobra.Command {
 
 			k8sClient, err := kubernetes.NewForConfig(clientConfig)
 			if err != nil {
-				logger.Error("failed to create clientset", zap.Error(err))
+				logger.Error("failed to create clientset", "error", err)
 			}
 
 			controller.Run(ctx, logger, k8sClient, cfg)

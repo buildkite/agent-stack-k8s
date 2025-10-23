@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"os"
 	"slices"
@@ -26,8 +27,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -37,7 +36,7 @@ import (
 
 type testcase struct {
 	*testing.T
-	Logger       *zap.Logger
+	Logger       *slog.Logger
 	Fixture      string
 	Repo         string
 	GraphQL      graphql.Client
@@ -92,7 +91,7 @@ func (t testcase) Init() testcase {
 		t.PipelineName = strings.ToLower(fmt.Sprintf("test-%s-%s", namePrefix, jobID))
 	}
 
-	t.Logger = zaptest.NewLogger(t).Named(t.Name())
+	t.Logger = slog.Default().With("test", t.Name())
 
 	clientConfig, err := restconfig.GetConfig()
 	require.NoError(t, err)
@@ -409,7 +408,7 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 
 			return getBuild.Build.State
 		case api.BuildStatesScheduled, api.BuildStatesRunning:
-			t.Logger.Debug("sleeping", zap.Any("build state", getBuild.Build.State))
+			t.Logger.Debug("sleeping", "build state", getBuild.Build.State)
 			time.Sleep(time.Second)
 		default:
 			t.Errorf("unknown build state %q", getBuild.Build.State)
@@ -510,11 +509,11 @@ func (t testcase) getAgentTokenIdentity() *agentApi.AgentTokenIdentity {
 
 const agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 
-func fetchAgentToken(ctx context.Context, logger *zap.Logger, k8sClient kubernetes.Interface, namespace, agentTokenSecretName string) (string, error) {
+func fetchAgentToken(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interface, namespace, agentTokenSecretName string) (string, error) {
 	// Need to fetch the agent token ourselves.
 	tokenSecret, err := k8sClient.CoreV1().Secrets(namespace).Get(ctx, agentTokenSecretName, v1.GetOptions{})
 	if err != nil {
-		logger.Error("fetching agent token from secret", zap.Error(err), zap.String("namespace", namespace))
+		logger.Error("fetching agent token from secret", "error", err, "namespace", namespace)
 		return "", err
 	}
 	agentToken := string(tokenSecret.Data[agentTokenKey])
