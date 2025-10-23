@@ -112,7 +112,7 @@ type Config struct {
 	AllowPodSpecPatchUnsafeCmdMod bool `json:"allow-pod-spec-patch-unsafe-command-modification" validate:"omitempty"`
 
 	// These are only used for integration tests.
-	BuildkiteToken  string `json:"buildkite-token"  validate:"omitempty"`
+	BuildkiteToken  string `json:"integration-test-buildkite-token"  validate:"omitempty"`
 	GraphQLEndpoint string `json:"graphql-endpoint" validate:"omitempty"`
 }
 

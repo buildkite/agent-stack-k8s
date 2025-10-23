@@ -18,7 +18,7 @@ helm upgrade agent-stack-k8s "${helm_repo_pecr}/agent-stack-k8s" \
   --install \
   --create-namespace \
   --wait \
-  --set agentToken="${BUILDKITE_AGENT_TOKEN}" \
+  --set agentToken="${DEFAULT_CLUSTER_TOKEN}" \
   --set config.image="${agent_image}" \
   --set config.debug=true \
   --set config.profiler-address=localhost:6060 \

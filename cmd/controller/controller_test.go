@@ -159,12 +159,8 @@ func TestReadAndParseConfig(t *testing.T) {
 		},
 	}
 
-	// The buildkite token is required, but it is set from a Kubernetes secret, not the config file,
-	// which is itself set from a config map that is used to create env variables in the controller
-	// container. As this is required, we set it here to avoid the validation error.
-	t.Setenv("BUILDKITE_TOKEN", "my-graphql-enabled-token")
-
 	// These need to be unset to as it is set in CI which pollutes the test environment
+	t.Setenv("INTEGRATION_TEST_BUILDKITE_TOKEN", "")
 	t.Setenv("IMAGE", "")
 	t.Setenv("NAMESPACE", "")
 

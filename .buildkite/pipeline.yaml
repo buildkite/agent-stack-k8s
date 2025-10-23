@@ -1,19 +1,17 @@
 x-anchors:
   push-helm: &push-helm
     label: ":helm::docker: build and push helm chart"
+    env:
+      KO_DOCKER_REPO: ghcr.io/buildkite
+    secrets:
+      REGISTRY_PASSWORD: ghcr_password
+      REGISTRY_USERNAME: ghcr_username
+    image: alpine:latest
+    command: .buildkite/steps/build-and-push-helm.sh
     plugins:
       - kubernetes:
           checkout:
             fetchFlags: -v --tags
-          podSpec:
-            serviceAccountName: deploy
-            containers:
-              - name: deploy
-                image: alpine:latest
-                command: [.buildkite/steps/build-and-push-helm.sh]
-                envFrom:
-                  - secretRef:
-                      name: deploy-secrets
 
   go-cache-env: &go-cache-env
     name: GOCACHE
@@ -124,6 +122,9 @@ steps:
     key: tests
     depends_on: agent
     artifact_paths: junit-*.xml
+    secrets:
+      INTEGRATION_TEST_BUILDKITE_TOKEN: integration_test_buildkite_api_token
+      BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
     plugins:
       - kubernetes:
           podSpec:
@@ -143,9 +144,6 @@ steps:
                     value: /etc/config.yaml
                   - *go-cache-env
                   - *go-mod-cache-env
-                envFrom:
-                  - secretRef:
-                      name: agent-stack-k8s-secrets
                 volumeMounts:
                   - mountPath: /etc/config.yaml
                     name: agent-stack-k8s-config
@@ -156,16 +154,17 @@ steps:
                   requests:
                     cpu: 1000m
                     memory: 512Mi
-      - cluster-secrets#v1.0.0:
-          variables:
-            BUILDKITE_TOKEN: integration_test_buildkite_api_token
-            BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
       - test-collector:
           files: junit-*.xml
           format: junit
 
   - label: ":docker: build and push controller image"
     key: controller
+    env:
+      KO_DOCKER_REPO: ghcr.io/buildkite
+    secrets:
+      REGISTRY_PASSWORD: ghcr_password
+      REGISTRY_USERNAME: ghcr_username
     plugins:
       - kubernetes:
           podSpec:
@@ -173,9 +172,6 @@ steps:
               - name: ko
                 image: golang:1.24
                 command: [.buildkite/steps/build-and-push-controller.sh]
-                envFrom:
-                  - secretRef:
-                      name: deploy-secrets
                 env: *go-env
                 volumeMounts: *go-mounts
             volumes: *go-volumes
@@ -206,10 +202,14 @@ steps:
       - tests
 
   - if: build.branch == pipeline.default_branch
-    label: ":shipit: deploy"
+    label: ":shipit: deploy to our own k8s cluster"
     key: deploy
     depends_on:
       - push-main-or-tag
+    secrets:
+      REGISTRY_PASSWORD: ghcr_password
+      REGISTRY_USERNAME: ghcr_username
+      DEFAULT_CLUSTER_TOKEN: default_cluster_token
     plugins:
       - kubernetes:
           checkout:
@@ -220,11 +220,6 @@ steps:
               - name: deploy
                 image: alpine:latest
                 command: [.buildkite/steps/deploy.sh]
-                envFrom:
-                  - secretRef:
-                      name: deploy-secrets
-                  - secretRef:
-                      name: agent-stack-k8s-secrets
 
   - if: build.tag =~ /^.+\$/
     label: ":rocket: release"
@@ -232,19 +227,19 @@ steps:
     depends_on:
       - deploy
       - push-main-or-tag
+    secrets:
+      REGISTRY_PASSWORD: ghcr_password
+      REGISTRY_USERNAME: ghcr_username
+      GITHUB_TOKEN: github_release_token
     plugins:
       - kubernetes:
           checkout:
             fetchFlags: -v --tags
           podSpec:
-            serviceAccountName: release
             containers:
               - name: release
                 image: golang:1.24-alpine # Note goreleaser shells out to go!
                 command: [.buildkite/steps/release.sh]
-                envFrom:
-                  - secretRef:
-                      name: release-secrets
                 env: *go-env
                 volumeMounts: *go-mounts
             volumes: *go-volumes

@@ -17,7 +17,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"buildkite-agent-token",
 		"name of the Buildkite agent token secret",
 	)
-	cmd.Flags().String("buildkite-token", "", "Deprecated - Buildkite API token with GraphQL scopes")
+	cmd.Flags().String("integration-test-buildkite-token", "", "Deprecated - Buildkite API token with GraphQL scopes")
 
 	// in the config file
 	cmd.Flags().String(
