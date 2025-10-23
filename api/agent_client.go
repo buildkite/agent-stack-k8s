@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 	"github.com/buildkite/stacksapi"
 	slogzap "github.com/samber/slog-zap/v2"
 	"go.uber.org/zap"
@@ -80,6 +81,7 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		opts.Token,
 		stacksapi.WithLogger(slog.New(zapSlogHandler)),
 		stacksapi.WithBaseURL(endpointURL),
+		stacksapi.PrependToUserAgent("agent-stack-k8s/"+version.Version()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create Buildkite Stacks API client: %w", err)
