@@ -16,6 +16,8 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
+	"github.com/lmittmann/tint"
+	"github.com/mattn/go-isatty"
 
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
@@ -281,12 +283,37 @@ func New() *cobra.Command {
 				return fmt.Errorf("failed to parse config: %w", err)
 			}
 
-			var logger *slog.Logger
-			if cfg.Debug {
-				logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
-			} else {
-				logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			level := slog.LevelInfo
+			if cfg.LogLevel != "" {
+				err := level.UnmarshalText([]byte(cfg.LogLevel))
+				if err != nil {
+					return fmt.Errorf("invalid log level %q: %w", cfg.LogLevel, err)
+				}
 			}
+
+			if cfg.Debug {
+				// The debug flag trumps the log level flag
+				level = slog.LevelDebug
+			}
+
+			var handler slog.Handler
+			switch cfg.LogFormat {
+			case "json":
+				handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+
+			case "logfmt":
+				handler = tint.NewHandler(os.Stdout, &tint.Options{
+					AddSource: true,
+					Level:     level,
+					NoColor:   cfg.NoColor || !isatty.IsTerminal(os.Stdout.Fd()),
+				})
+
+			default:
+				// Handled by the config validator above, but nice to have just in case.
+				return fmt.Errorf("unknown log format: %s", cfg.LogFormat)
+			}
+
+			logger := slog.New(handler)
 			logger.Info("configuration loaded", "config", cfg)
 
 			clientConfig := restconfig.GetConfigOrDie()

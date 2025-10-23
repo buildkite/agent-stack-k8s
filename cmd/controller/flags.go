@@ -40,7 +40,7 @@ func AddConfigFlags(cmd *cobra.Command) {
 		config.DefaultNamespace,
 		"kubernetes namespace to create resources in",
 	)
-	cmd.Flags().Bool("debug", false, "debug logs")
+	cmd.Flags().Bool("debug", false, "sets log level to debug. Overrides --log-level if set")
 	cmd.Flags().Int("max-in-flight", 25, "max jobs in flight, 0 means no max")
 	cmd.Flags().Duration(
 		"job-ttl",
@@ -163,5 +163,20 @@ func AddConfigFlags(cmd *cobra.Command) {
 		"image-check-container-memory-limit",
 		config.DefaultImageCheckContainerMemoryLimit,
 		"Configures the memory resource limits for all imagecheck-* containers",
+	)
+	cmd.Flags().String(
+		"log-format",
+		"logfmt",
+		`Sets the log format. One of "logfmt" (for plain/colored text output) or "json". Defaults to "logfmt"`,
+	)
+	cmd.Flags().Bool(
+		"no-color",
+		false,
+		"Disable colored log output (ANSI escape codes). If the output is not a terminal, colors are disabled automatically",
+	)
+	cmd.Flags().String(
+		"log-level",
+		"info",
+		`Sets the log level. One of "debug", "info", "warn", "error". Overridden by the --debug flag if set`,
 	)
 }

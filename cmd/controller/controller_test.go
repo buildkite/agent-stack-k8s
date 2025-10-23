@@ -48,6 +48,9 @@ func TestReadAndParseConfig(t *testing.T) {
 		WorkQueueLimit:                       2_000_000,
 		ImageCheckContainerCPULimit:          "201m",
 		ImageCheckContainerMemoryLimit:       "129Mi",
+		LogFormat:                            "logfmt",
+		LogLevel:                             "info",
+		NoColor:                              false,
 
 		ResourceClasses: map[string]*config.ResourceClass{
 			"small": {

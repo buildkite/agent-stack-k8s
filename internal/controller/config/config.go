@@ -113,6 +113,10 @@ type Config struct {
 	// These are only used for integration tests.
 	BuildkiteToken  string `json:"integration-test-buildkite-token"  validate:"omitempty"`
 	GraphQLEndpoint string `json:"graphql-endpoint" validate:"omitempty"`
+
+	LogFormat string `json:"log-format" validate:"omitempty,oneof=logfmt json"`
+	NoColor   bool   `json:"no-color"   validate:"omitempty"`
+	LogLevel  string `json:"log-level"  validate:"omitempty,oneof=debug info warn error"`
 }
 
 // Helpers for applying configs / params to container env.
