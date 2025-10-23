@@ -106,7 +106,6 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 
 	a.applyHooksVolumeTo(ctr)
 	setEnvVarIfAbsentOrDifferent(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)
-	//appendToEnvOpt(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)
 
 	a.applyPluginsVolumeTo(ctr)
 	appendToEnvOpt(ctr, "BUILDKITE_PLUGINS_PATH", a.PluginsPath)
