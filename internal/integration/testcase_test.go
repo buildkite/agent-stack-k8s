@@ -514,7 +514,7 @@ func fetchAgentToken(ctx context.Context, logger *zap.Logger, k8sClient kubernet
 	// Need to fetch the agent token ourselves.
 	tokenSecret, err := k8sClient.CoreV1().Secrets(namespace).Get(ctx, agentTokenSecretName, v1.GetOptions{})
 	if err != nil {
-		logger.Error("fetching agent token from secret", zap.Error(err))
+		logger.Error("fetching agent token from secret", zap.Error(err), zap.String("namespace", namespace))
 		return "", err
 	}
 	agentToken := string(tokenSecret.Data[agentTokenKey])

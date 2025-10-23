@@ -13,110 +13,38 @@ x-anchors:
           checkout:
             fetchFlags: -v --tags
 
-  go-cache-env: &go-cache-env
-    name: GOCACHE
-    value: /var/cache/go-build
-  go-mod-cache-env: &go-mod-cache-env
-    name: GOMODCACHE
-    value: /var/cache/go-mod
-
-  go-cache-mount: &go-cache-mount
-    name: go-build
-    mountPath: /var/cache/go-build
-  go-mod-cache-mount: &go-mod-cache-mount
-    name: go-mod
-    mountPath: /var/cache/go-mod
-
-  go-cache-volume: &go-cache-volume
-    name: go-build
-    hostPath:
-      path: /var/cache/buildkite/agent-stack-k8s-ci/go-build
-      type: DirectoryOrCreate
-  go-mod-cache-volume: &go-mod-cache-volume
-    name: go-mod
-    hostPath:
-      path: /var/cache/buildkite/agent-stack-k8s-ci/go-mod
-      type: DirectoryOrCreate
-
-  go-env: &go-env
-    - *go-cache-env
-    - *go-mod-cache-env
-  go-mounts: &go-mounts
-    - *go-cache-mount
-    - *go-mod-cache-mount
-  go-volumes: &go-volumes
-    - *go-cache-volume
-    - *go-mod-cache-volume
-
 agents:
   queue: kubernetes
 
 steps:
   - label: ":go::broom: tidy"
     key: tidy
+    image: golang:1.24-alpine
+    command: .buildkite/steps/tidy.sh
     plugins:
       - kubernetes:
-          podSpec:
-            containers:
-              - image: golang:1.24-alpine
-                command: [.buildkite/steps/tidy.sh]
-                env: *go-env
-                volumeMounts: *go-mounts
-            volumes: *go-volumes
+          podTemplate: go-with-cache
 
   - label: ":go::lint-roller: lint"
     key: lint
+    image: golangci/golangci-lint:latest
+    command: golangci-lint run -v ./...
     plugins:
       - kubernetes:
-          podSpec:
-            containers:
-              - image: golangci/golangci-lint:latest
-                command:
-                  - golangci-lint run -v ./...
-                resources:
-                  requests:
-                    cpu: 1000m
-                    memory: 1Gi
-                env:
-                  - name: GOLANGCI_LINT_CACHE
-                    value: /var/cache/golangci-lint
-                  - *go-cache-env
-                  - *go-mod-cache-env
-                volumeMounts:
-                  - name: golangci-lint-cache
-                    mountPath: /var/cache/golangci-lint
-                  - *go-cache-mount
-                  - *go-mod-cache-mount
-            volumes:
-              - name: golangci-lint-cache
-                hostPath:
-                  path: /var/cache/buildkite/agent-stack-k8s-ci/golangci-lint
-                  type: DirectoryOrCreate
-              - *go-cache-volume
-              - *go-mod-cache-volume
+          podTemplate: go-with-cache
 
   - label: ":golang::robot_face: check code generation"
     key: check-code-generation
+    image: golang:1.24-alpine
+    command: .buildkite/steps/check-code-generation.sh
     plugins:
       - kubernetes:
-          podSpec:
-            containers:
-              - name: docker
-                image: golang:1.24-alpine
-                command: [.buildkite/steps/check-code-generation.sh]
-                env: *go-env
-                volumeMounts: *go-mounts
-            volumes: *go-volumes
+          podTemplate: go-with-cache
 
   - label: ":docker::buildkite: choose agent image"
     key: agent
-    plugins:
-      - kubernetes:
-          podSpec:
-            containers:
-              - name: docker
-                image: alpine:latest
-                command: [.buildkite/steps/agent.sh]
+    image: alpine:latest
+    command: .buildkite/steps/agent.sh
 
   - label: ":buildkite::test_tube: tests"
     key: tests
@@ -125,35 +53,13 @@ steps:
     secrets:
       INTEGRATION_TEST_BUILDKITE_TOKEN: integration_test_buildkite_api_token
       BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
+    image: golang:latest
+    command: .buildkite/steps/tests.sh
     plugins:
       - kubernetes:
-          podSpec:
+          podTemplate: go-with-cache
+          podSpecPatch:
             serviceAccountName: integration-tests
-            volumes:
-              - name: agent-stack-k8s-config
-                configMap:
-                  name: agent-stack-k8s-config
-              - *go-cache-volume
-              - *go-mod-cache-volume
-            containers:
-              - name: tests
-                image: golang:latest
-                command: [.buildkite/steps/tests.sh]
-                env:
-                  - name: CONFIG
-                    value: /etc/config.yaml
-                  - *go-cache-env
-                  - *go-mod-cache-env
-                volumeMounts:
-                  - mountPath: /etc/config.yaml
-                    name: agent-stack-k8s-config
-                    subPath: config.yaml
-                  - *go-cache-mount
-                  - *go-mod-cache-mount
-                resources:
-                  requests:
-                    cpu: 1000m
-                    memory: 512Mi
       - test-collector:
           files: junit-*.xml
           format: junit
@@ -165,16 +71,11 @@ steps:
     secrets:
       REGISTRY_PASSWORD: ghcr_password
       REGISTRY_USERNAME: ghcr_username
+    image: golang:1.24
+    command: .buildkite/steps/build-and-push-controller.sh
     plugins:
       - kubernetes:
-          podSpec:
-            containers:
-              - name: ko
-                image: golang:1.24
-                command: [.buildkite/steps/build-and-push-controller.sh]
-                env: *go-env
-                volumeMounts: *go-mounts
-            volumes: *go-volumes
+          podTemplate: go-with-cache
 
   # On feature branches, don't wait for tests. We may want to deploy
   # to a test cluster to debug the feature branch.
@@ -210,16 +111,14 @@ steps:
       REGISTRY_PASSWORD: ghcr_password
       REGISTRY_USERNAME: ghcr_username
       DEFAULT_CLUSTER_TOKEN: default_cluster_token
+    image: alpine:latest
+    command: .buildkite/steps/deploy.sh
     plugins:
       - kubernetes:
           checkout:
             fetchFlags: -v --tags
           podSpec:
             serviceAccountName: deploy
-            containers:
-              - name: deploy
-                image: alpine:latest
-                command: [.buildkite/steps/deploy.sh]
 
   - if: build.tag =~ /^.+\$/
     label: ":rocket: release"
@@ -231,15 +130,10 @@ steps:
       REGISTRY_PASSWORD: ghcr_password
       REGISTRY_USERNAME: ghcr_username
       GITHUB_TOKEN: github_release_token
+    image: golang:1.24-alpine # Note goreleaser shells out to go!
+    command: .buildkite/steps/release.sh
     plugins:
       - kubernetes:
+          podTemplate: go-with-cache
           checkout:
             fetchFlags: -v --tags
-          podSpec:
-            containers:
-              - name: release
-                image: golang:1.24-alpine # Note goreleaser shells out to go!
-                command: [.buildkite/steps/release.sh]
-                env: *go-env
-                volumeMounts: *go-mounts
-            volumes: *go-volumes
