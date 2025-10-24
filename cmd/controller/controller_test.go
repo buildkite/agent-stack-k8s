@@ -163,6 +163,7 @@ func TestReadAndParseConfig(t *testing.T) {
 	t.Setenv("INTEGRATION_TEST_BUILDKITE_TOKEN", "")
 	t.Setenv("IMAGE", "")
 	t.Setenv("NAMESPACE", "")
+	t.Setenv("AGENT_TOKEN_SECRET", "")
 
 	cmd := &cobra.Command{}
 	controller.AddConfigFlags(cmd)

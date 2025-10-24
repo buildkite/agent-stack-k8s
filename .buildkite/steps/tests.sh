@@ -15,6 +15,7 @@ export IMAGE
 # The buildkite namespace is reserved for CI workloads.
 # Integration tests will use their own namespace and out-of-cluster k8s controller to manage job pods.
 export NAMESPACE="buildkite-k8s-integration-test"
+export AGENT_TOKEN_SECRET="agent-stack-k8s-secrets"
 
 gotestsum --junitfile "junit-${BUILDKITE_JOB_ID}.xml" -- \
   -count=1 \

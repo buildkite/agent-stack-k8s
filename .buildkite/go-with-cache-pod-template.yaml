@@ -1,0 +1,45 @@
+# This file is manually deployed to our cluster.
+---
+apiVersion: v1
+kind: PodTemplate
+metadata:
+  name: go-with-cache
+  namespace: buildkite
+template:
+  spec:
+    containers:
+      - name: container-0
+        image: golang:1.24-alpine
+        # These golang related cache uses node local storage.
+        # We will soon refactor this to use the incoming Buildkite Cache.
+        env:
+          - name: GOCACHE
+            value: /var/cache/go-build
+          - name: GOMODCACHE
+            value: /var/cache/go-mod
+          - name: GOLANGCI_LINT_CACHE
+            value: /var/cache/golangci-lint
+        volumeMounts:
+          - name: go-build
+            mountPath: /var/cache/go-build
+          - name: go-mod
+            mountPath: /var/cache/go-mod
+          - name: golangci-lint-cache
+            mountPath: /var/cache/golangci-lint
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 1Gi
+    volumes:
+      - name: go-build
+        hostPath:
+          path: /var/cache/buildkite/agent-stack-k8s-ci/go-build
+          type: DirectoryOrCreate
+      - name: go-mod
+        hostPath:
+          path: /var/cache/buildkite/agent-stack-k8s-ci/go-mod
+          type: DirectoryOrCreate
+      - name: golangci-lint-cache
+        hostPath:
+          path: /var/cache/buildkite/agent-stack-k8s-ci/golangci-lint
+          type: DirectoryOrCreate
