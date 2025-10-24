@@ -1,4 +1,5 @@
 agent-token-secret: my-kubernetes-secret
+integration-test-buildkite-token: my-graphql-enabled-token
 debug: true
 image: my.registry.dev/buildkite-agent:latest
 job-ttl: 5m
