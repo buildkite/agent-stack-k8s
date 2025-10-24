@@ -16,7 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
-	"go.uber.org/zap"
+	"log/slog"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,7 +26,7 @@ import (
 )
 
 type podWatcher struct {
-	logger      *zap.Logger
+	logger      *slog.Logger
 	k8s         kubernetes.Interface
 	agentClient *api.AgentClient
 	cfg         *config.Config
@@ -73,7 +73,7 @@ type podWatcher struct {
 //   - If a pod is pending, every so often Buildkite will be checked to see if
 //     the corresponding job has been cancelled so that the pod can be evicted
 //     early.
-func NewPodWatcher(logger *zap.Logger, k8s kubernetes.Interface, agentClient *api.AgentClient, cfg *config.Config) *podWatcher {
+func NewPodWatcher(logger *slog.Logger, k8s kubernetes.Interface, agentClient *api.AgentClient, cfg *config.Config) *podWatcher {
 	imagePullBackOffGracePeriod := cfg.ImagePullBackOffGracePeriod
 	if imagePullBackOffGracePeriod <= 0 {
 		imagePullBackOffGracePeriod = config.DefaultImagePullBackOffGracePeriod
@@ -224,7 +224,7 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 // a container in an image-related failing state (ImagePullBackOff,
 // ErrImageNeverPull, etc) for too long. If the slice is empty or nil, the pod
 // is not failing (yet).
-func (w *podWatcher) podHasFailingImages(log *zap.Logger, pod *corev1.Pod) []corev1.ContainerStatus {
+func (w *podWatcher) podHasFailingImages(log *slog.Logger, pod *corev1.Pod) []corev1.ContainerStatus {
 	failImmediately := false // becomes true for InvalidImageName
 
 	var statuses []corev1.ContainerStatus
@@ -259,7 +259,7 @@ func (w *podWatcher) podHasFailingImages(log *zap.Logger, pod *corev1.Pod) []cor
 		switch waiting.Reason {
 		case "ImagePullBackOff", "ErrImageNeverPull":
 			if !isSystemContainer(&containerStatus) {
-				log.Info("Ignoring container during ImagePullBackOff watch.", zap.String("name", containerStatus.Name))
+				log.Info("Ignoring container during ImagePullBackOff watch.", "name", containerStatus.Name)
 				continue
 			}
 			statuses = append(statuses, containerStatus)
@@ -295,7 +295,7 @@ func (w *podWatcher) podHasFailingImages(log *zap.Logger, pod *corev1.Pod) []cor
 
 // failOnInitContainerFailure looks for init containers that failed, and fails
 // the job on Buildkite.
-func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Logger, pod *corev1.Pod) {
+func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *slog.Logger, pod *corev1.Pod) {
 	log.Debug("Checking pod for failed init containers")
 
 	containerFails := make(map[string]*corev1.ContainerStateTerminated)
@@ -333,7 +333,7 @@ func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *zap.Lo
 	}
 	if err := failForK8sObject(ctx, log, pod, failureInfo, w.agentClient); err != nil {
 		// Maybe the job was cancelled in the meantime?
-		log.Error("Could not fail Buildkite job", zap.Error(err))
+		log.Error("Could not fail Buildkite job", "error", err)
 		podWatcherBuildkiteJobFailErrorsCounter.Inc()
 		return
 	}
@@ -387,7 +387,7 @@ func (w *podWatcher) stopCheckingBuildkiteJob(jobUUID uuid.UUID) {
 
 func forcefullyDeletePod(
 	ctx context.Context,
-	log *zap.Logger,
+	log *slog.Logger,
 	k8s kubernetes.Interface,
 	podMetadata *metav1.ObjectMeta,
 	reason string,
@@ -402,7 +402,7 @@ func forcefullyDeletePod(
 	}
 
 	if err := k8s.CoreV1().Pods(podMetadata.Namespace).Delete(ctx, podMetadata.Name, deleteOptions); err != nil {
-		log.Error("Couldn't forcefully delete pod", zap.Error(err))
+		log.Error("Couldn't forcefully delete pod", "error", err)
 		forcefulPodDeletionErrorsCounter.WithLabelValues(reason, string(kerrors.ReasonForError(err))).Inc()
 		return err
 	}
@@ -414,7 +414,7 @@ func forcefullyDeletePod(
 // imageFailureChecker is a goroutine that periodically checks pending and
 // running pods for container statuses such as ImagePullBackOff,
 // ErrImageNeverPull, etc.
-func (w *podWatcher) imageFailureChecker(ctx context.Context, log *zap.Logger) {
+func (w *podWatcher) imageFailureChecker(ctx context.Context, log *slog.Logger) {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -435,8 +435,8 @@ func (w *podWatcher) imageFailureChecker(ctx context.Context, log *zap.Logger) {
 			statuses := w.podHasFailingImages(log, pod)
 			log.Debug(
 				"checking pod for image failure",
-				zap.String("pod_name", pod.Name),
-				zap.Int("len(statuses)", len(statuses)),
+				"pod_name", pod.Name,
+				"len(statuses)", len(statuses),
 			)
 			if len(statuses) == 0 {
 				continue
@@ -464,7 +464,7 @@ type failingPod struct {
 
 // failForImageFailure fails or cancels the corresponding job on Buildkite, and
 // evicts the pod as needed.
-func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, failingPod failingPod) {
+func (w *podWatcher) failForImageFailure(ctx context.Context, log *slog.Logger, failingPod failingPod) {
 	jobUUID := failingPod.jobUUID
 	pod := failingPod.pod
 	statuses := failingPod.statuses
@@ -485,10 +485,10 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		return job, err
 	})
 	if err != nil {
-		log.Warn("Failed to fetch state of job", zap.Error(err))
+		log.Warn("Failed to fetch state of job", "error", err)
 		return
 	}
-	log = log.With(zap.String("job_state", string(job.State)))
+	log = log.With("job_state", string(job.State))
 
 	switch job.State {
 	case api.JobStateScheduled, api.JobStateReserved:
@@ -505,7 +505,7 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 			// Maybe the job was acquired by an agent in the meantime?
 			// Maybe the job was cancelled in the meantime?
 			// Either way we've done what we can here.
-			log.Error("Could not fail Buildkite job", zap.Error(err))
+			log.Error("Could not fail Buildkite job", "error", err)
 			return
 		}
 		podWatcherBuildkiteJobFailsCounter.Inc()
@@ -523,7 +523,7 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *zap.Logger, f
 		// Mark the job as ignored to avoid further processing
 		jobUUID, err := jobUUIDForObject(&pod.ObjectMeta)
 		if err != nil {
-			log.Error("Could find Job UUID from pod metadata", zap.Error(err))
+			log.Error("Could find Job UUID from pod metadata", "error", err)
 			return
 		}
 		w.ignoreJob(jobUUID)

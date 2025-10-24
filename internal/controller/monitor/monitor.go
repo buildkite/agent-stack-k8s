@@ -10,13 +10,13 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
-	"go.uber.org/zap"
+	"log/slog"
 )
 
 // Monitor is responsible for polling Buildkite for jobs.
 type Monitor struct {
 	agentClient *api.AgentClient
-	logger      *zap.Logger
+	logger      *slog.Logger
 	cfg         Config
 	cursor      string // for the next GetScheduledJobs
 	lastQuery   time.Time
@@ -36,7 +36,7 @@ type Config struct {
 	QueryResetInterval   time.Duration
 }
 
-func New(logger *zap.Logger, agentClient *api.AgentClient, cfg Config) (*Monitor, error) {
+func New(logger *slog.Logger, agentClient *api.AgentClient, cfg Config) (*Monitor, error) {
 	// Poll no more frequently than every 1s (please don't DoS us).
 	cfg.PollInterval = max(cfg.PollInterval, time.Second)
 
@@ -50,7 +50,7 @@ func New(logger *zap.Logger, agentClient *api.AgentClient, cfg Config) (*Monitor
 // getScheduledCommandJobs gets scheduled jobs from the API.
 func (m *Monitor) getScheduledCommandJobs(ctx context.Context) (jobs []*api.AgentScheduledJob, retryAfter time.Duration, err error) {
 	m.logger.Info("retrieving scheduled jobs via Agent API...",
-		zap.Duration("poll-interval", m.cfg.PollInterval),
+		"poll-interval", m.cfg.PollInterval,
 	)
 
 	jobQueryCounter.Inc()
@@ -151,13 +151,11 @@ func (m *Monitor) Start(ctx context.Context, handler model.ManyJobHandler) <-cha
 				if ctx.Err() != nil {
 					return
 				}
-				m.logger.Warn("failed to get scheduled command jobs", zap.Error(err))
+				m.logger.Warn("failed to get scheduled command jobs", "error", err)
 				continue
 			}
 
-			m.logger.Info("job processing of Agent API results completed...",
-				zap.Int("agent-api-jobs-processed", len(jobs)),
-			)
+			m.logger.Info("job processing of Agent API results completed...", "agent-api-jobs-processed", len(jobs))
 
 			if len(jobs) == 0 {
 				continue
@@ -183,7 +181,7 @@ func (m *Monitor) passJobsToNextHandler(
 		// Convert the job tags to a map.
 		jobTags, tagErrs := agenttags.TagMapFromTags(job.AgentQueryRules)
 		if len(tagErrs) != 0 {
-			m.logger.Warn("making a map of job tags", zap.Errors("err", tagErrs))
+			m.logger.Warn("making a map of job tags", "err", tagErrs)
 		}
 
 		// The API returns all jobs within the queue, with any combo of tags.
@@ -191,9 +189,9 @@ func (m *Monitor) passJobsToNextHandler(
 		if !agenttags.MatchJobTags(m.cfg.TagMap, jobTags) {
 			jobsFilteredOutCounter.Inc()
 			m.logger.Info("job tags do not match expected tags in configuration, skipping...",
-				zap.String("job-uuid", job.ID),
-				zap.Any("controller-tags", m.cfg.TagMap),
-				zap.Any("buildkite-job-tags", jobTags),
+				"job-uuid", job.ID,
+				"controller-tags", m.cfg.TagMap,
+				"buildkite-job-tags", jobTags,
 			)
 			continue
 		}
@@ -203,8 +201,8 @@ func (m *Monitor) passJobsToNextHandler(
 
 	// The next handler should be the limiter, which handles batches.
 	m.logger.Debug("passing jobs to next handler",
-		zap.Stringer("handler", reflect.TypeOf(handler)),
-		zap.Int("job-count", len(filteredJobs)),
+		"handler", reflect.TypeOf(handler),
+		"job-count", len(filteredJobs),
 	)
 	jobHandlerCallsCounter.Inc()
 	jobsHandledCounter.Add(float64(len(filteredJobs)))
@@ -213,7 +211,7 @@ func (m *Monitor) passJobsToNextHandler(
 		if ctx.Err() != nil {
 			return
 		}
-		m.logger.Error("failed to create jobs", zap.Error(err))
+		m.logger.Error("failed to create jobs", "error", err)
 		jobHandlerErrorCounter.Inc()
 		jobsHandledErrorsCounter.Add(float64(len(filteredJobs)))
 	}

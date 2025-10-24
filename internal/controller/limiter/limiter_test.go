@@ -3,6 +3,7 @@ package limiter_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
@@ -10,7 +11,6 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
 	"github.com/google/uuid"
-	"go.uber.org/zap/zaptest"
 )
 
 func TestLimiter(t *testing.T) {
@@ -20,7 +20,7 @@ func TestLimiter(t *testing.T) {
 	t.Cleanup(cancel)
 
 	fakeSched := model.NewFakeScheduler(1, nil)
-	limiter := limiter.New(ctx, zaptest.NewLogger(t), fakeSched, 1, 1, -1)
+	limiter := limiter.New(ctx, slog.Default(), fakeSched, 1, 1, -1)
 	fakeSched.EventHandler = limiter
 	fakeSched.Add(50)
 
@@ -56,7 +56,7 @@ func TestLimiter_SchedulerErrors(t *testing.T) {
 	defer cancel()
 
 	fakeSched := model.NewFakeScheduler(0, errors.New("invalid"))
-	limiter := limiter.New(ctx, zaptest.NewLogger(t), fakeSched, 1, 1, -1)
+	limiter := limiter.New(ctx, slog.Default(), fakeSched, 1, 1, -1)
 	fakeSched.EventHandler = limiter
 	fakeSched.Add(50)
 

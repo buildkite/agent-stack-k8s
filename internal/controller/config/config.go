@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/buildkite/agent/v3/version"
-	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -56,7 +55,7 @@ type Config struct {
 	AgentTokenSecret       string        `json:"agent-token-secret"       validate:"required"`
 	Image                  string        `json:"image"                    validate:"required"`
 	MaxInFlight            int           `json:"max-in-flight"            validate:"min=0"`
-	Tags                   stringSlice   `json:"tags"`
+	Tags                   []string      `json:"tags"`
 	PrometheusPort         uint16        `json:"prometheus-port"          validate:"omitempty"`
 	ProfilerAddress        string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
 	PollInterval           time.Duration `json:"poll-interval"`
@@ -89,7 +88,7 @@ type Config struct {
 	DefaultCommandParams   *CommandParams  `json:"default-command-params"   validate:"omitempty"`
 	DefaultSidecarParams   *SidecarParams  `json:"default-sidecar-params"   validate:"omitempty"`
 	DefaultMetadata        Metadata        `json:"default-metadata"         validate:"omitempty"`
-	AdditionalRedactedVars stringSlice     `json:"additional-redacted-vars" validate:"omitempty"`
+	AdditionalRedactedVars []string        `json:"additional-redacted-vars" validate:"omitempty"`
 
 	ResourceClasses map[string]*ResourceClass `json:"resource-classes" validate:"omitempty"`
 
@@ -114,70 +113,10 @@ type Config struct {
 	// These are only used for integration tests.
 	BuildkiteToken  string `json:"integration-test-buildkite-token"  validate:"omitempty"`
 	GraphQLEndpoint string `json:"graphql-endpoint" validate:"omitempty"`
-}
 
-type stringSlice []string
-
-func (s stringSlice) MarshalLogArray(enc zapcore.ArrayEncoder) error {
-	for _, x := range s {
-		enc.AppendString(x)
-	}
-	return nil
-}
-
-func (c Config) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddString("agent-token-secret", c.AgentTokenSecret)
-	enc.AddBool("debug", c.Debug)
-	enc.AddString("image", c.Image)
-	enc.AddString("job-prefix", c.JobPrefix)
-	enc.AddDuration("job-ttl", c.JobTTL)
-	enc.AddInt("job-active-deadline-seconds", c.JobActiveDeadlineSeconds)
-	enc.AddDuration("poll-interval", c.PollInterval)
-	enc.AddInt("job-creation-concurrency", c.JobCreationConcurrency)
-	enc.AddInt("max-in-flight", c.MaxInFlight)
-	enc.AddString("namespace", c.Namespace)
-	enc.AddString("id", c.ID)
-	if err := enc.AddArray("tags", c.Tags); err != nil {
-		return err
-	}
-	enc.AddString("profiler-address", c.ProfilerAddress)
-	enc.AddUint16("prometheus-port", c.PrometheusPort)
-	enc.AddBool("prohibit-kubernetes-plugin", c.ProhibitKubernetesPlugin)
-	enc.AddBool("allow-pod-spec-patch-unsafe-command-modification", c.AllowPodSpecPatchUnsafeCmdMod)
-	if err := enc.AddArray("additional-redacted-vars", c.AdditionalRedactedVars); err != nil {
-		return err
-	}
-	if err := enc.AddReflected("pod-spec-patch", c.PodSpecPatch); err != nil {
-		return err
-	}
-	enc.AddDuration("image-pull-backoff-grace-period", c.ImagePullBackOffGracePeriod)
-	enc.AddDuration("job-cancel-checker-poll-interval", c.JobCancelCheckerPollInterval)
-	if err := enc.AddReflected("agent-config", c.AgentConfig); err != nil {
-		return err
-	}
-	if err := enc.AddReflected("default-checkout-params", c.DefaultCheckoutParams); err != nil {
-		return err
-	}
-	if err := enc.AddReflected("default-command-params", c.DefaultCommandParams); err != nil {
-		return err
-	}
-	if err := enc.AddReflected("default-sidecar-params", c.DefaultSidecarParams); err != nil {
-		return err
-	}
-	if err := enc.AddReflected("default-metadata", c.DefaultMetadata); err != nil {
-		return err
-	}
-	enc.AddString("default-image-pull-policy", string(c.DefaultImagePullPolicy))
-	enc.AddString("default-image-check-pull-policy", string(c.DefaultImageCheckPullPolicy))
-	enc.AddBool("enable-queue-pause", c.EnableQueuePause)
-	enc.AddInt("pagination-page-size", c.PaginationPageSize)
-	enc.AddInt("pagination-depth-limit", c.PaginationDepthLimit)
-	enc.AddDuration("query-reset-interval", c.QueryResetInterval)
-	enc.AddInt("work-queue-limit", c.WorkQueueLimit)
-	if err := enc.AddReflected("resource-classes", c.ResourceClasses); err != nil {
-		return err
-	}
-	return nil
+	LogFormat string `json:"log-format" validate:"omitempty,oneof=logfmt json"`
+	NoColor   bool   `json:"no-color"   validate:"omitempty"`
+	LogLevel  string `json:"log-level"  validate:"omitempty,oneof=debug info warn error"`
 }
 
 // Helpers for applying configs / params to container env.

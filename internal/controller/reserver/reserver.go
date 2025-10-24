@@ -3,11 +3,11 @@ package reserver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
-	"go.uber.org/zap"
 )
 
 // Reserver is a JobHandler.
@@ -21,12 +21,12 @@ type Reserver struct {
 	agentClient *api.AgentClient
 
 	// Logs goes here
-	logger *zap.Logger
+	logger *slog.Logger
 
 	paused bool
 }
 
-func New(logger *zap.Logger, agentClient *api.AgentClient, nextHandler model.ManyJobHandler) *Reserver {
+func New(logger *slog.Logger, agentClient *api.AgentClient, nextHandler model.ManyJobHandler) *Reserver {
 	r := &Reserver{
 		handler:     nextHandler,
 		agentClient: agentClient,
@@ -53,7 +53,7 @@ func (r *Reserver) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob
 		jobIDs = append(jobIDs, job.ID)
 	}
 
-	r.logger.Info("reserving jobs via Agent API...", zap.Int("count", len(jobIDs)))
+	r.logger.Info("reserving jobs via Agent API...", "count", len(jobIDs))
 
 	result, _, err := r.agentClient.ReserveJobs(ctx, jobIDs)
 	if err != nil {

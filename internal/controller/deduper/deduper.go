@@ -12,7 +12,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
 	"github.com/google/uuid"
-	"go.uber.org/zap"
+	"log/slog"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
@@ -25,7 +25,7 @@ type Deduper struct {
 	handler model.JobHandler
 
 	// Logs go here
-	logger *zap.Logger
+	logger *slog.Logger
 
 	// Map to track in-flight jobs, and mutex to protect it.
 	inFlightMu sync.Mutex
@@ -33,7 +33,7 @@ type Deduper struct {
 }
 
 // New creates a Deduper.
-func New(logger *zap.Logger, handler model.JobHandler) *Deduper {
+func New(logger *slog.Logger, handler model.JobHandler) *Deduper {
 	d := &Deduper{
 		handler:  handler,
 		logger:   logger,
@@ -71,14 +71,14 @@ func (d *Deduper) RegisterInformer(ctx context.Context, factory informers.Shared
 func (d *Deduper) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 	uuid, err := uuid.Parse(job.ID)
 	if err != nil {
-		d.logger.Error("invalid UUID in CommandJob", zap.Error(err))
+		d.logger.Error("invalid UUID in CommandJob", "error", err)
 		return err
 	}
 	if numInFlight, ok := d.casa(uuid, true); !ok {
 		jobsAlreadyRunningCounter.WithLabelValues("Handle").Inc()
 		d.logger.Debug("job is already in-flight",
-			zap.String("job-uuid", job.ID),
-			zap.Int("num-in-flight", numInFlight),
+			"job-uuid", job.ID,
+			"num-in-flight", numInFlight,
 		)
 		return model.ErrDuplicateJob
 	}
@@ -87,8 +87,8 @@ func (d *Deduper) Handle(ctx context.Context, job *api.AgentScheduledJob) error 
 	// Not a duplicate: pass to the next handler, which could be either the
 	// limiter or the scheudler.
 	d.logger.Debug("passing job to next handler",
-		zap.Stringer("handler", reflect.TypeOf(d.handler)),
-		zap.String("job-uuid", job.ID),
+		"handler", reflect.TypeOf(d.handler),
+		"job-uuid", job.ID,
 	)
 	jobHandlerCallsCounter.Inc()
 
@@ -111,9 +111,9 @@ func (d *Deduper) Handle(ctx context.Context, job *api.AgentScheduledJob) error 
 		}
 
 		d.logger.Debug("next handler failed",
-			zap.String("job-uuid", job.ID),
-			zap.Int("num-in-flight", numInFlight),
-			zap.Error(err),
+			"job-uuid", job.ID,
+			"num-in-flight", numInFlight,
+			"error", err,
 		)
 		return err
 	}
@@ -136,7 +136,7 @@ func (d *Deduper) OnAdd(obj any, inInitialList bool) {
 	}
 	id, err := uuid.Parse(job.Labels[config.UUIDLabel])
 	if err != nil {
-		d.logger.Error("invalid UUID in job label", zap.Error(err))
+		d.logger.Error("invalid UUID in job label", "error", err)
 		return
 	}
 
@@ -145,16 +145,16 @@ func (d *Deduper) OnAdd(obj any, inInitialList bool) {
 	if !ok {
 		jobsAlreadyRunningCounter.WithLabelValues("OnAdd").Inc()
 		d.logger.Debug("job was already in inFlight!",
-			zap.String("uuid", id.String()),
-			zap.Int("num-in-flight", numInFlight),
+			"uuid", id.String(),
+			"num-in-flight", numInFlight,
 		)
 		return
 	}
 
 	jobsMarkedRunningCounter.WithLabelValues("OnAdd").Inc()
 	d.logger.Debug("added previous job to inFlight",
-		zap.String("uuid", id.String()),
-		zap.Int("num-in-flight", numInFlight),
+		"uuid", id.String(),
+		"num-in-flight", numInFlight,
 	)
 }
 
@@ -178,7 +178,7 @@ func (d *Deduper) OnDelete(prev any) {
 	// Whether or not the job had become terminal, it's now deleted.
 	id, err := uuid.Parse(prevState.Labels[config.UUIDLabel])
 	if err != nil {
-		d.logger.Error("invalid UUID in job label", zap.Error(err))
+		d.logger.Error("invalid UUID in job label", "error", err)
 		return
 	}
 
@@ -186,16 +186,16 @@ func (d *Deduper) OnDelete(prev any) {
 	numInFlight, ok := d.casa(id, false)
 	if !ok {
 		d.logger.Debug("job was already missing from inFlight!",
-			zap.String("job-uuid", id.String()),
-			zap.Int("num-in-flight", numInFlight),
+			"job-uuid", id.String(),
+			"num-in-flight", numInFlight,
 		)
 		jobsAlreadyNotRunningCounter.WithLabelValues("OnDelete").Inc()
 		return
 	}
 
 	d.logger.Debug("job removed from inFlight",
-		zap.String("job-uuid", id.String()),
-		zap.Int("num-in-flight", numInFlight),
+		"job-uuid", id.String(),
+		"num-in-flight", numInFlight,
 	)
 	jobsUnmarkedRunningCounter.WithLabelValues("OnDelete").Inc()
 }

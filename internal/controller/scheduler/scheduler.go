@@ -26,7 +26,7 @@ import (
 
 	"github.com/distribution/reference"
 	"github.com/jedib0t/go-pretty/v6/table"
-	"go.uber.org/zap"
+	"log/slog"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -81,17 +81,18 @@ type Config struct {
 	ResourceClasses                      map[string]*config.ResourceClass
 }
 
-func New(logger *zap.Logger, client kubernetes.Interface, agentClient *api.AgentClient, cfg Config) *worker {
+func New(logger *slog.Logger, client kubernetes.Interface, agentClient *api.AgentClient, cfg Config) *worker {
 	ref, err := reference.Parse(cfg.Image)
 	if err != nil {
-		logger.Fatal("Invalid default image reference!", zap.Error(err))
+		logger.Error("Invalid default image reference!", "error", err)
+		panic(err)
 	}
 	return &worker{
 		cfg:             cfg,
 		defaultImageRef: ref,
 		client:          client,
 		agentClient:     agentClient,
-		logger:          logger.Named("worker"),
+		logger:          logger.With("component", "worker"),
 	}
 }
 
@@ -114,11 +115,11 @@ type worker struct {
 	defaultImageRef reference.Reference
 	client          kubernetes.Interface
 	agentClient     *api.AgentClient
-	logger          *zap.Logger
+	logger          *slog.Logger
 }
 
 func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
-	logger := w.logger.With(zap.String("job-uuid", job.ID))
+	logger := w.logger.With("job-uuid", job.ID)
 	logger.Info("fetching job info")
 
 	retrier := roko.NewRetrier(
@@ -138,7 +139,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 		return jtr, nil
 	})
 	if err != nil {
-		logger.Error("Couldn't get critical job information to run job", zap.Error(err))
+		logger.Error("Couldn't get critical job information to run job", "error", err)
 		return err
 	}
 	if jobToRun == nil {
@@ -149,7 +150,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 	logger.Info("creating job")
 	inputs, err := w.ParseJob(jobToRun, job)
 	if err != nil {
-		logger.Warn("Job parsing failed, failing job", zap.Error(err))
+		logger.Warn("Job parsing failed, failing job", "error", err)
 		return w.failJob(ctx, inputs, fmt.Sprintf("agent-stack-k8s failed to parse the job: %v", err))
 	}
 
@@ -167,7 +168,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 			ptName := inputs.k8sPlugin.PodTemplate
 			pt, err := w.client.CoreV1().PodTemplates(w.cfg.Namespace).Get(ctx, ptName, metav1.GetOptions{})
 			if err != nil {
-				logger.Warn("Error fetching podTemplate", zap.String("podTemplate", ptName), zap.Error(err))
+				logger.Warn("Error fetching podTemplate", "podTemplate", ptName, "error", err)
 				return w.failJob(ctx, inputs, fmt.Sprintf("Error fetching podTemplate %q: %v", ptName, err))
 			}
 			podSpec = &pt.Template.Spec
@@ -176,7 +177,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 
 	kjob, err := w.Build(podSpec, false, inputs)
 	if err != nil {
-		logger.Warn("Job definition error detected, failing job", zap.Error(err))
+		logger.Warn("Job definition error detected, failing job", "error", err)
 		return w.failJob(ctx, inputs, fmt.Sprintf("agent-stack-k8s failed to build a podSpec for the job: %v", err))
 	}
 
@@ -186,7 +187,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 
 		switch {
 		case kerrors.IsAlreadyExists(err):
-			logger.Warn("Job creation failed because it already exists", zap.Error(err))
+			logger.Warn("Job creation failed because it already exists", "error", err)
 			return fmt.Errorf("%w: %w", model.ErrDuplicateJob, err)
 
 		case kerrors.IsInvalid(err):
@@ -197,7 +198,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 			} else {
 				out = string(yamlOut)
 			}
-			logger.Warn("Job invalid, failing job on Buildkite", zap.Error(err))
+			logger.Warn("Job invalid, failing job on Buildkite", "error", err)
 			return w.failJob(ctx, inputs, fmt.Sprintf("Kubernetes rejected the podSpec built by agent-stack-k8s: %v\n\n%s", err, out))
 
 		default:
@@ -244,11 +245,11 @@ func (w *worker) ParseJob(job *api.AgentJob, sjob *api.AgentScheduledJob) (build
 	var plugins []map[string]json.RawMessage
 	if pluginsJSON, ok := parsed.envMap["BUILDKITE_PLUGINS"]; ok {
 		if err := json.Unmarshal([]byte(pluginsJSON), &plugins); err != nil {
-			w.logger.Debug("invalid plugin spec", zap.String("json", pluginsJSON))
+			w.logger.Debug("invalid plugin spec", "json", pluginsJSON)
 			return parsed, fmt.Errorf("failed parsing plugins: %w", err)
 		}
 	}
-	w.logger.Info("parsing", zap.Any("plugins", plugins))
+	w.logger.Info("parsing", "plugins", plugins)
 	for _, plugin := range plugins {
 		if len(plugin) != 1 {
 			return parsed, fmt.Errorf("found invalid plugin: %v", plugin)
@@ -312,7 +313,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// These tag labels have no impact, consider moving them into annotation instead.
 	tagLabels, errs := agenttags.LabelsFromTags(inputs.agentQueryRules)
 	if len(errs) > 0 {
-		w.logger.Warn("converting all tags to labels", zap.Errors("errs", errs))
+		w.logger.Warn("converting all tags to labels", "errs", errs)
 	}
 	maps.Copy(kjob.Labels, tagLabels)
 
@@ -326,7 +327,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	kjob.Annotations[config.PipelineSlugAnnotation] = pipelineSlug
 	jobURL, err := w.jobURL(inputs.uuid, buildURL)
 	if err != nil {
-		w.logger.Warn("could not parse BuildURL when annotating with JobURL", zap.String("buildURL", buildURL))
+		w.logger.Warn("could not parse BuildURL when annotating with JobURL", "buildURL", buildURL)
 	}
 	if jobURL != "" {
 		kjob.Annotations[config.JobURLAnnotation] = jobURL
@@ -514,7 +515,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	tags, errs := agenttags.TagMapFromTags(inputs.agentQueryRules)
 	if len(errs) > 0 {
-		w.logger.Warn("errors parsing job tags", zap.String("job", inputs.uuid), zap.Errors("errors", errs))
+		w.logger.Warn("errors parsing job tags", "job", inputs.uuid, "errors", errs)
 	}
 	maps.Copy(agentTags, tags)
 
@@ -741,7 +742,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			return nil, fmt.Errorf("failed to apply podSpec patch from controller: %w", err)
 		}
 		podSpec = patched
-		w.logger.Debug("Applied podSpec patch from controller", zap.Any("patched", patched))
+		w.logger.Debug("Applied podSpec patch from controller", "patched", patched)
 	}
 
 	// Support `image: ` syntax, this HAS TO happen between controller podSpec patch and plugin podSpec patch.
@@ -754,7 +755,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
 		}
 		podSpec = patched
-		w.logger.Debug("Applied podSpec patch from k8s plugin", zap.Any("patched", patched))
+		w.logger.Debug("Applied podSpec patch from k8s plugin", "patched", patched)
 	}
 
 	// Removes all containers named "checkout" when checkout disabled via controller config or plugin
@@ -764,7 +765,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			switch pod.Name {
 			case CheckoutContainerName:
 				podSpec.Containers = slices.Delete(podSpec.Containers, i, i+1)
-				w.logger.Info("skipCheckout is set to 'true', removing 'checkout' container from podSpec.Containers", zap.String("job-uuid", inputs.uuid))
+				w.logger.Info("skipCheckout is set to 'true', removing 'checkout' container from podSpec.Containers", "job-uuid", inputs.uuid)
 
 			default:
 				continue
@@ -1157,7 +1158,7 @@ func (w *worker) failJob(ctx context.Context, inputs buildInputs, message string
 	}
 
 	if err := w.agentClient.FailJob(ctx, inputs.uuid, failureInfo.Message); err != nil {
-		w.logger.Error("failed to fail the job via Buildkite Stack API", zap.Error(err))
+		w.logger.Error("failed to fail the job via Buildkite Stack API", "error", err)
 		schedulerBuildkiteJobFailErrorsCounter.Inc()
 		return err
 	}

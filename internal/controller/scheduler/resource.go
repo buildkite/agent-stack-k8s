@@ -3,7 +3,6 @@ package scheduler
 import (
 	"fmt"
 
-	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -24,7 +23,7 @@ func (w *worker) applyResourceClass(podSpec *corev1.PodSpec, tags map[string]str
 	}
 
 	resourceClass.Apply(podSpec)
-	w.logger.Debug("Applied resource class", zap.String("resource_class", resourceClassName))
+	w.logger.Debug("Applied resource class", "resource_class", resourceClassName)
 
 	return nil
 }
