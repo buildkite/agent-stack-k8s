@@ -202,33 +202,3 @@ var (
 		Help:      "Count of failures to delete pod forcefully by podWatcher",
 	}, []string{"delete_reason", "error_reason"})
 )
-
-// Completion watcher metrics
-
-var (
-	completionWatcherOnAddEventCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: promNamespace,
-		Subsystem: "completion_watcher",
-		Name:      "onadd_events_total",
-		Help:      "Count of OnAdd informer events",
-	})
-	completionWatcherOnUpdateEventCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: promNamespace,
-		Subsystem: "completion_watcher",
-		Name:      "onupdate_events_total",
-		Help:      "Count of OnUpdate informer events",
-	})
-
-	completionWatcherJobCleanupsCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Namespace: promNamespace,
-		Subsystem: "completion_watcher",
-		Name:      "cleanups_total",
-		Help:      "Count of jobs with finished agents successfully cleaned up",
-	})
-	completionWatcherJobCleanupErrorsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: promNamespace,
-		Subsystem: "completion_watcher",
-		Name:      "cleanup_errors_total",
-		Help:      "Count of errors during attempts to clean up a job with a finished agent",
-	}, []string{"reason"})
-)
