@@ -9,7 +9,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/google/uuid"
-	"go.uber.org/zap"
+	"log/slog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -18,7 +18,7 @@ import (
 // Unlike the old legacy BuildkiteJobChecker, this checker check all pending jobs together,
 // relying on the new Stack API.
 type BatchBuildkiteJobChecker struct {
-	logger      *zap.Logger
+	logger      *slog.Logger
 	agentClient *api.AgentClient
 	k8s         kubernetes.Interface
 
@@ -32,7 +32,7 @@ type BatchBuildkiteJobChecker struct {
 
 // NewBatchBuildkiteJobChecker creates a new Batch Buildkite job checker.
 func NewBatchBuildkiteJobChecker(
-	logger *zap.Logger,
+	logger *slog.Logger,
 	agentClient *api.AgentClient,
 	k8s kubernetes.Interface,
 	interval time.Duration,
@@ -100,8 +100,8 @@ func (c *BatchBuildkiteJobChecker) checkJobStates(ctx context.Context) {
 
 			jobStates, _, err := c.agentClient.GetJobStates(ctx, batch)
 			if err != nil {
-				c.logger.Error("Couldn't fetch states of jobs", zap.Error(err), zap.Int("batch_size", len(batch)))
-				return
+			c.logger.Error("Couldn't fetch states of jobs", "error", err, "batch_size", len(batch))
+			return
 			}
 
 			jobStatesCh <- jobStates
@@ -139,13 +139,13 @@ func (c *BatchBuildkiteJobChecker) StopCheckingJob(jobUUID uuid.UUID) {
 }
 
 func (c *BatchBuildkiteJobChecker) handleJobState(ctx context.Context, jobUUIDStr string, jobState api.JobState, podMeta metav1.ObjectMeta) {
-	log := c.logger.With(zap.String("job_uuid", jobUUIDStr), zap.String("job_state", string(jobState)))
+	log := c.logger.With("job_uuid", jobUUIDStr, "job_state", string(jobState))
 
 	switch jobState {
 	case api.JobStateCanceled, api.JobStateCanceling:
 		log.Info("Deleting pending pod for cancelled job")
 		if err := forcefullyDeletePod(ctx, log, c.k8s, &podMeta, "job_cancelled"); err != nil {
-			log.Error("Failed to delete pod for cancelled job", zap.Error(err))
+			log.Error("Failed to delete pod for cancelled job", "error", err)
 			return
 		}
 		// Remove the job from checking list after successful deletion

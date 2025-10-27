@@ -13,8 +13,6 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 	"github.com/buildkite/stacksapi"
-	slogzap "github.com/samber/slog-zap/v2"
-	"go.uber.org/zap"
 )
 
 // This is a special keyword supported on backend for polling from the current default queue in the cluster.
@@ -30,7 +28,7 @@ type AgentClient struct {
 	queue     string
 	stack     *stacksapi.RegisterStackResponse
 
-	logger *zap.Logger
+	logger *slog.Logger
 
 	notificationBatcher         *notificationBatcher
 	notificationBatcherCancelFn context.CancelFunc
@@ -43,7 +41,7 @@ type AgentClientOpts struct {
 	Queue           string
 	StackID         string
 	AgentQueryRules []string
-	Logger          *zap.Logger
+	Logger          *slog.Logger
 }
 
 func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, error) {
@@ -75,11 +73,9 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		logger:    opts.Logger,
 	}
 
-	zapSlogHandler := slogzap.Option{Logger: opts.Logger}.NewZapHandler()
-
 	client.stacksAPIClient, err = stacksapi.NewClient(
 		opts.Token,
-		stacksapi.WithLogger(slog.New(zapSlogHandler)),
+		stacksapi.WithLogger(opts.Logger),
 		stacksapi.WithBaseURL(endpointURL),
 		stacksapi.PrependToUserAgent("agent-stack-k8s/"+version.Version()),
 	)
@@ -340,7 +336,7 @@ func (c *AgentClient) CreateStackNotification(ctx context.Context, jobUUID strin
 	const maxDetailSize = 255 - len(croppedMessage)
 
 	if len(detail) > maxDetailSize {
-		c.logger.Warn("Stack notification detail exceeds character limit, cropping", zap.Int("original_size", len(detail)))
+		c.logger.Warn("Stack notification detail exceeds character limit, cropping", "original_size", len(detail))
 		detail = detail[:maxDetailSize] + croppedMessage
 	}
 
@@ -351,7 +347,7 @@ func (c *AgentClient) CreateStackNotification(ctx context.Context, jobUUID strin
 		Timestamp: time.Now(),
 	})
 	if err != nil {
-		c.logger.Error("Abort sending Stack notification", zap.Error(err))
+		c.logger.Error("Abort sending Stack notification", "error", err)
 	}
 }
 

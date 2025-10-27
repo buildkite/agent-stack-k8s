@@ -2,13 +2,13 @@ package deduper_test
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/deduper"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"github.com/google/uuid"
-	"go.uber.org/zap/zaptest"
 )
 
 func TestDeduper_SkipsDuplicateJobs(t *testing.T) {
@@ -18,7 +18,7 @@ func TestDeduper_SkipsDuplicateJobs(t *testing.T) {
 	t.Cleanup(cancel)
 
 	fakeSched := model.NewFakeScheduler(0, nil)
-	dd := deduper.New(zaptest.NewLogger(t), fakeSched)
+	dd := deduper.New(slog.Default(), fakeSched)
 	fakeSched.EventHandler = dd
 	fakeSched.Add(1) // only 1 job should get through
 

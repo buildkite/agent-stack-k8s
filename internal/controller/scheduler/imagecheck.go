@@ -6,7 +6,6 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/distribution/reference"
-	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -95,9 +94,9 @@ func selectImagesToCheck(w *worker, podSpec *corev1.PodSpec) (preflightImageChec
 		pnr, has := preflightImageChecks[c.Image]
 		if !has {
 			w.logger.Debug("setting initial pull policy for preflight image check",
-				zap.String("container", c.Name),
-				zap.String("image", c.Image),
-				zap.String("new-policy", string(nominalPolicy)),
+				"container", c.Name,
+				"image", c.Image,
+				"new-policy", string(nominalPolicy),
 			)
 			preflightImageChecks[c.Image] = policyAndRef{
 				policy: nominalPolicy,
@@ -117,10 +116,10 @@ func selectImagesToCheck(w *worker, podSpec *corev1.PodSpec) (preflightImageChec
 		s := pullPolicyPreference[pnr.policy]
 		if r > s {
 			w.logger.Debug("updating pull policy for preflight image check",
-				zap.String("container", c.Name),
-				zap.String("image", c.Image),
-				zap.String("old-policy", string(pnr.policy)),
-				zap.String("new-policy", string(nominalPolicy)),
+				"container", c.Name,
+				"image", c.Image,
+				"old-policy", string(pnr.policy),
+				"new-policy", string(nominalPolicy),
 			)
 			preflightImageChecks[c.Image] = policyAndRef{
 				policy: nominalPolicy,
@@ -162,9 +161,9 @@ func cullCheckForExisting(
 	// the image check container we would add, then no need to add it.
 	if r >= s {
 		w.logger.Debug("removing preflight image check because of lower policy preference",
-			zap.String("container", c.Name),
-			zap.String("image", c.Image),
-			zap.String("old-policy", string(pnr.policy)),
+			"container", c.Name,
+			"image", c.Image,
+			"old-policy", string(pnr.policy),
 		)
 		delete(preflightImageChecks, c.Image)
 	}
@@ -196,9 +195,9 @@ func makeImageCheckContainers(
 
 		w.logger.Debug(
 			"adding preflight image check init container",
-			zap.String("name", name),
-			zap.String("image", image),
-			zap.String("policy", string(policy)),
+			"name", name,
+			"image", image,
+			"policy", string(policy),
 		)
 		containers = append(containers, corev1.Container{
 			Name:            name,

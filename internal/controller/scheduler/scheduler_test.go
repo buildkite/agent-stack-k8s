@@ -3,6 +3,7 @@ package scheduler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
@@ -12,7 +13,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zaptest"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
@@ -377,7 +377,7 @@ func TestJobPluginConversion(t *testing.T) {
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
 	worker := New(
-		zaptest.NewLogger(t),
+		slog.Default(),
 		nil,
 		nil,
 		Config{
@@ -435,7 +435,7 @@ func TestJobPluginConversion(t *testing.T) {
 
 func TestTagEnv(t *testing.T) {
 	t.Parallel()
-	logger := zaptest.NewLogger(t)
+	logger := slog.Default()
 
 	pluginConfig := KubernetesPlugin{
 		PodSpec: &corev1.PodSpec{
@@ -501,7 +501,7 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 		Command: "echo hello world",
 	}
 	sjob := &api.AgentScheduledJob{}
-	worker := New(zaptest.NewLogger(t), nil, nil, Config{
+	worker := New(slog.Default(), nil, nil, Config{
 		Image: "buildkite/agent:latest",
 	})
 	inputs, err := worker.ParseJob(job, sjob)
@@ -540,7 +540,7 @@ func TestBuild(t *testing.T) {
 	}
 
 	worker := New(
-		zaptest.NewLogger(t),
+		slog.Default(),
 		nil,
 		nil,
 		Config{
@@ -615,7 +615,7 @@ func TestBuildSkipCheckout(t *testing.T) {
 	}
 
 	worker := New(
-		zaptest.NewLogger(t),
+		slog.Default(),
 		nil,
 		nil,
 		Config{
@@ -663,7 +663,7 @@ func TestBuildCheckoutEmptyConfigEnv(t *testing.T) {
 	}
 
 	worker := New(
-		zaptest.NewLogger(t),
+		slog.Default(),
 		nil,
 		nil,
 		Config{
@@ -696,7 +696,7 @@ func TestBuildDefaultCheckoutParams(t *testing.T) {
 		Command: "echo hello world",
 	}
 	sjob := &api.AgentScheduledJob{}
-	worker := New(zaptest.NewLogger(t), nil, nil, Config{
+	worker := New(slog.Default(), nil, nil, Config{
 		Image: "buildkite/agent:latest",
 		DefaultCheckoutParams: &config.CheckoutParams{
 			GitCredentialsSecret: &corev1.SecretVolumeSource{
@@ -803,7 +803,7 @@ func TestBuildCheckoutParams(t *testing.T) {
 	}
 
 	worker := New(
-		zaptest.NewLogger(t),
+		slog.Default(),
 		nil,
 		nil,
 		Config{
@@ -884,7 +884,7 @@ func TestFailureJobs(t *testing.T) {
 	sjob := &api.AgentScheduledJob{
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	wrapper := New(zaptest.NewLogger(t), nil, nil, Config{
+	wrapper := New(slog.Default(), nil, nil, Config{
 		Image: "buildkite/agent:latest",
 	})
 	_, err = wrapper.ParseJob(job, sjob)
@@ -907,7 +907,7 @@ func TestProhibitKubernetesPlugin(t *testing.T) {
 	sjob := &api.AgentScheduledJob{
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	worker := New(zaptest.NewLogger(t), nil, nil, Config{
+	worker := New(slog.Default(), nil, nil, Config{
 		Image:             "buildkite/agent:latest",
 		ProhibitK8sPlugin: true,
 	})
@@ -937,7 +937,7 @@ func TestCustomImageSyntax_pluginTakesTopPriority(t *testing.T) {
 	sjob := &api.AgentScheduledJob{
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	worker := New(zaptest.NewLogger(t), nil, nil, Config{
+	worker := New(slog.Default(), nil, nil, Config{
 		Image: "buildkite/agent:latest",
 	})
 	inputs, err := worker.ParseJob(job, sjob)
@@ -963,7 +963,7 @@ func TestCustomImageSyntax_jobLevelImagePriority(t *testing.T) {
 	sjob := &api.AgentScheduledJob{
 		AgentQueryRules: []string{"queue=kubernetes"},
 	}
-	worker := New(zaptest.NewLogger(t), nil, nil, Config{
+	worker := New(slog.Default(), nil, nil, Config{
 		Image: "buildkite/agent:latest",
 		PodSpecPatch: &corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -1409,7 +1409,7 @@ func TestImagePullPolicies(t *testing.T) {
 			t.Parallel()
 
 			worker := New(
-				zaptest.NewLogger(t),
+				slog.Default(),
 				nil,
 				nil,
 				Config{
@@ -1584,7 +1584,7 @@ func TestPipelineSigningOptions(t *testing.T) {
 			t.Parallel()
 
 			worker := New(
-				zaptest.NewLogger(t),
+				slog.Default(),
 				nil,
 				nil,
 				Config{

@@ -14,7 +14,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
-	"go.uber.org/zap"
+	"log/slog"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
@@ -38,7 +38,7 @@ type Limiter struct {
 	handler model.JobHandler
 
 	// Logs go here
-	logger *zap.Logger
+	logger *slog.Logger
 
 	// tokenBucket implements the max-in-flight limit using a channel.
 	// When a job starts, it takes a token from the bucket.
@@ -59,7 +59,7 @@ type Limiter struct {
 
 // New creates a Limiter. maxInFlight must be non-negative, but 0 is interpreted
 // as no limit. Zero or negative concurrency is replaced with the default.
-func New(ctx context.Context, logger *zap.Logger, scheduler model.JobHandler, maxInFlight, concurrency, workQueueLimit int) *Limiter {
+func New(ctx context.Context, logger *slog.Logger, scheduler model.JobHandler, maxInFlight, concurrency, workQueueLimit int) *Limiter {
 	if maxInFlight < 0 {
 		// Using panic, because getting here is severe programmer error and the
 		// whole controller is still just starting up.
@@ -143,12 +143,12 @@ func (l *Limiter) RegisterInformer(ctx context.Context, factory informers.Shared
 	informerStore := jobInformer.GetStore()
 	informerCacheKeys := informerStore.ListKeys()
 	l.logger.Debug("informer cache sync complete, dump informer cache keys...",
-		zap.Int("cache-keys-found", len(informerCacheKeys)),
+		"cache-keys-found", len(informerCacheKeys),
 	)
 
 	for _, cacheKey := range informerCacheKeys {
 		l.logger.Debug("informer cache key found",
-			zap.String("informer-cache-key", fmt.Sprint(cacheKey)),
+			"informer-cache-key", fmt.Sprint(cacheKey),
 		)
 	}
 
@@ -221,9 +221,9 @@ func (l *Limiter) worker(ctx context.Context) {
 		start := time.Now()
 
 		l.logger.Debug("Waiting for token",
-			zap.Int("max-in-flight", l.MaxInFlight),
-			zap.Int("available-tokens", len(l.tokenBucket)),
-			zap.Int("new-work", len(l.newWork)),
+			"max-in-flight", l.MaxInFlight,
+			"available-tokens", len(l.tokenBucket),
+			"new-work", len(l.newWork),
 		)
 
 		// Block until there's a token in the bucket.
@@ -238,16 +238,16 @@ func (l *Limiter) worker(ctx context.Context) {
 		waitingForTokenGauge.Dec()
 		tokenWaitDurationHistogram.Observe(time.Since(start).Seconds())
 		l.logger.Debug("token acquired",
-			zap.Int("available-tokens", len(l.tokenBucket)),
+			"available-tokens", len(l.tokenBucket),
 		)
 
 		// We got a token from the bucket above! Is there work we can do?
 		// Track time to acquire work.
 		start = time.Now()
 		l.logger.Debug("Waiting for work",
-			zap.Int("max-in-flight", l.MaxInFlight),
-			zap.Int("available-tokens", len(l.tokenBucket)),
-			zap.Int("new-work", len(l.newWork)),
+			"max-in-flight", l.MaxInFlight,
+			"available-tokens", len(l.tokenBucket),
+			"new-work", len(l.newWork),
 		)
 		waitingForWorkGauge.Inc()
 		select {
@@ -262,9 +262,9 @@ func (l *Limiter) worker(ctx context.Context) {
 		workWaitDurationHistogram.Observe(time.Since(start).Seconds())
 
 		l.logger.Debug("Dequeueing some work",
-			zap.Int("max-in-flight", l.MaxInFlight),
-			zap.Int("available-tokens", len(l.tokenBucket)),
-			zap.Int("new-work", len(l.newWork)),
+			"max-in-flight", l.MaxInFlight,
+			"available-tokens", len(l.tokenBucket),
+			"new-work", len(l.newWork),
 		)
 		job := l.tryDequeueWork()
 		if job == nil {
@@ -275,7 +275,7 @@ func (l *Limiter) worker(ctx context.Context) {
 		}
 
 		l.logger.Debug("passing job to next handler",
-			zap.Stringer("handler", reflect.TypeOf(l.handler)),
+			"handler", reflect.TypeOf(l.handler),
 		)
 		jobHandlerCallsCounter.Inc()
 		if err := l.handler.Handle(ctx, job); err != nil {
@@ -292,10 +292,10 @@ func (l *Limiter) worker(ctx context.Context) {
 			}
 
 			l.logger.Debug("next handler failed",
-				zap.String("job-uuid", job.ID),
-				zap.Int("available-tokens", len(l.tokenBucket)),
-				zap.Int("new-work", len(l.newWork)),
-				zap.Error(err),
+				"job-uuid", job.ID,
+				"available-tokens", len(l.tokenBucket),
+				"new-work", len(l.newWork),
+				"error", err,
 			)
 			continue
 		}
@@ -325,8 +325,8 @@ func (l *Limiter) OnAdd(obj any, inInitialList bool) {
 	if !model.JobFinished(job) {
 		l.tryTakeToken("OnAdd")
 		l.logger.Debug("existing not-finished job discovered",
-			zap.String("job-uuid", job.Labels[config.UUIDLabel]),
-			zap.Int("tokens-available", len(l.tokenBucket)),
+			"job-uuid", job.Labels[config.UUIDLabel],
+			"tokens-available", len(l.tokenBucket),
 		)
 	}
 }
@@ -344,8 +344,8 @@ func (l *Limiter) OnUpdate(prev, curr any) {
 	if !model.JobFinished(prevState) && model.JobFinished(currState) {
 		l.tryReturnToken("OnUpdate")
 		l.logger.Debug("job state changed from not-finished to finished",
-			zap.String("job-uuid", currState.Labels[config.UUIDLabel]),
-			zap.Int("tokens-available", len(l.tokenBucket)),
+			"job-uuid", currState.Labels[config.UUIDLabel],
+			"tokens-available", len(l.tokenBucket),
 		)
 	}
 }
@@ -364,8 +364,8 @@ func (l *Limiter) OnDelete(obj any) {
 	if !model.JobFinished(prevState) {
 		l.tryReturnToken("OnDelete")
 		l.logger.Debug("not-finished job was deleted",
-			zap.String("job-uuid", prevState.Labels[config.UUIDLabel]),
-			zap.Int("tokens-available", len(l.tokenBucket)),
+			"job-uuid", prevState.Labels[config.UUIDLabel],
+			"tokens-available", len(l.tokenBucket),
 		)
 	}
 }
@@ -377,13 +377,13 @@ func (l *Limiter) tryTakeToken(source string) {
 	case <-l.tokenBucket:
 		// Success.
 		l.logger.Debug("Token taken successfully",
-			zap.String("source", source),
-			zap.Int("remaining-tokens", len(l.tokenBucket)),
+			"source", source,
+			"remaining-tokens", len(l.tokenBucket),
 		)
 	default:
 		l.logger.Debug("Failed to take token - bucket empty",
-			zap.String("source", source),
-			zap.Int("max-in-flight", l.MaxInFlight),
+			"source", source,
+			"max-in-flight", l.MaxInFlight,
 		)
 		tokenUnderflowCounter.WithLabelValues(source).Inc()
 	}
@@ -398,13 +398,13 @@ func (l *Limiter) tryReturnToken(source string) {
 	case l.tokenBucket <- struct{}{}:
 		// Success.
 		l.logger.Debug("Token returned successfully",
-			zap.String("source", source),
-			zap.Int("available-tokens", len(l.tokenBucket)),
+			"source", source,
+			"available-tokens", len(l.tokenBucket),
 		)
 	default:
 		l.logger.Warn("Failed to return token - bucket full",
-			zap.String("source", source),
-			zap.Int("max-in-flight", l.MaxInFlight),
+			"source", source,
+			"max-in-flight", l.MaxInFlight,
 		)
 		tokenOverflowCounter.WithLabelValues(source).Inc()
 	}

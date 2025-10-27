@@ -3,12 +3,12 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/buildkite/stacksapi"
-	"go.uber.org/zap"
 )
 
 const (
@@ -31,12 +31,12 @@ type notificationBatcher struct {
 	notifications chan stacksapi.StackNotification
 	stackKey      string
 	client        *stacksapi.Client
-	logger        *zap.Logger
+	logger        *slog.Logger
 	done          chan struct{}
 	running       bool
 }
 
-func newNotificationBatcher(stackKey string, client *stacksapi.Client, logger *zap.Logger) *notificationBatcher {
+func newNotificationBatcher(stackKey string, client *stacksapi.Client, logger *slog.Logger) *notificationBatcher {
 	nb := &notificationBatcher{
 		notifications: make(chan stacksapi.StackNotification, maxBufferSize),
 		stackKey:      stackKey,
@@ -123,16 +123,16 @@ func (nb *notificationBatcher) sendBatch(ctx context.Context, notifications []st
 	resp, _, err := nb.client.CreateStackNotifications(ctx, req, stacksapi.WithNoRetry())
 	if err != nil {
 		nb.logger.Warn("Failed sending batch stack notifications",
-			zap.Error(err),
-			zap.Int("count", len(notifications)))
+			"error", err,
+			"count", len(notifications))
 		return
 	}
 
 	if len(resp.Errors) > 0 {
 		for _, e := range resp.Errors {
 			nb.logger.Warn("Stack notification errors for some notifications",
-				zap.String("error", e.Error),
-				zap.Int("count", len(e.Indexes)))
+				"error", e.Error,
+				"count", len(e.Indexes))
 		}
 	}
 }
