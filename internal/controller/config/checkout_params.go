@@ -33,14 +33,14 @@ func (co *CheckoutParams) ApplyToAgentStart(ctr *corev1.Container) {
 	if co == nil || ctr == nil {
 		return
 	}
-	appendToEnvOpt(ctr, "BUILDKITE_GIT_CHECKOUT_FLAGS", co.CheckoutFlags)
-	appendToEnvOpt(ctr, "BUILDKITE_GIT_CLEAN_FLAGS", co.CleanFlags)
-	appendToEnvOpt(ctr, "BUILDKITE_GIT_CLONE_FLAGS", co.CloneFlags)
-	appendToEnvOpt(ctr, "BUILDKITE_GIT_FETCH_FLAGS", co.FetchFlags)
-	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_GIT_SUBMODULES", co.NoSubmodules)
+	setEnvOpt(ctr, "BUILDKITE_GIT_CHECKOUT_FLAGS", co.CheckoutFlags)
+	setEnvOpt(ctr, "BUILDKITE_GIT_CLEAN_FLAGS", co.CleanFlags)
+	setEnvOpt(ctr, "BUILDKITE_GIT_CLONE_FLAGS", co.CloneFlags)
+	setEnvOpt(ctr, "BUILDKITE_GIT_FETCH_FLAGS", co.FetchFlags)
+	setEnvBoolOpt(ctr, "BUILDKITE_NO_GIT_SUBMODULES", co.NoSubmodules)
 	// TODO: Agent start doesn't know about submodule clone config, but
 	// agent bootstrap does...
-	appendCommaSepToEnv(ctr, "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", co.SubmoduleCloneConfig)
+	setEnvCommaSep(ctr, "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG", co.SubmoduleCloneConfig)
 
 	co.GitMirrors.ApplyToAgentStart(ctr)
 }
@@ -85,12 +85,12 @@ func (gm *GitMirrorsParams) ApplyToAgentStart(ctr *corev1.Container) {
 			gm.Path = &path
 		}
 	}
-	appendToEnvOpt(ctr, "BUILDKITE_GIT_MIRRORS_PATH", gm.Path)
-	appendToEnvOpt(ctr, "BUILDKITE_GIT_CLONE_MIRROR_FLAGS", gm.CloneFlags)
+	setEnvOpt(ctr, "BUILDKITE_GIT_MIRRORS_PATH", gm.Path)
+	setEnvOpt(ctr, "BUILDKITE_GIT_CLONE_MIRROR_FLAGS", gm.CloneFlags)
 	if gm.LockTimeout > 0 {
-		appendToEnv(ctr, "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(gm.LockTimeout))
+		setEnv(ctr, "BUILDKITE_GIT_MIRRORS_LOCK_TIMEOUT", strconv.Itoa(gm.LockTimeout))
 	}
-	appendBoolToEnvOpt(ctr, "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE", gm.SkipUpdate)
+	setEnvBoolOpt(ctr, "BUILDKITE_GIT_MIRRORS_SKIP_UPDATE", gm.SkipUpdate)
 }
 
 func (gm *GitMirrorsParams) ApplyToCheckout(ctr *corev1.Container) {

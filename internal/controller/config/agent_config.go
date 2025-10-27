@@ -93,30 +93,30 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	if a == nil || ctr == nil {
 		return
 	}
-	appendToEnvOpt(ctr, "BUILDKITE_AGENT_ENDPOINT", a.Endpoint)
-	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_HTTP2", a.NoHTTP2)
-	appendCommaSepToEnv(ctr, "BUILDKITE_AGENT_EXPERIMENT", a.Experiments)
-	appendToEnvOpt(ctr, "BUILDKITE_SHELL", a.Shell)
-	appendBoolToEnvOpt(ctr, "BUILDKITE_AGENT_NO_COLOR", a.NoColor)
-	appendBoolToEnvOpt(ctr, "BUILDKITE_STRICT_SINGLE_HOOKS", a.StrictSingleHooks)
-	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", a.NoMultipartArtifactUpload)
-	appendToEnvOpt(ctr, "BUILDKITE_TRACE_CONTEXT_ENCODING", a.TraceContextEncoding)
-	appendCommaSepToEnv(ctr, "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", a.DisableWarningsFor)
-	appendBoolToEnvOpt(ctr, "BUILDKITE_AGENT_DEBUG_SIGNING", a.DebugSigning)
+	setEnvOpt(ctr, "BUILDKITE_AGENT_ENDPOINT", a.Endpoint)
+	setEnvBoolOpt(ctr, "BUILDKITE_NO_HTTP2", a.NoHTTP2)
+	setEnvCommaSep(ctr, "BUILDKITE_AGENT_EXPERIMENT", a.Experiments)
+	setEnvOpt(ctr, "BUILDKITE_SHELL", a.Shell)
+	setEnvBoolOpt(ctr, "BUILDKITE_AGENT_NO_COLOR", a.NoColor)
+	setEnvBoolOpt(ctr, "BUILDKITE_STRICT_SINGLE_HOOKS", a.StrictSingleHooks)
+	setEnvBoolOpt(ctr, "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", a.NoMultipartArtifactUpload)
+	setEnvOpt(ctr, "BUILDKITE_TRACE_CONTEXT_ENCODING", a.TraceContextEncoding)
+	setEnvCommaSep(ctr, "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", a.DisableWarningsFor)
+	setEnvBoolOpt(ctr, "BUILDKITE_AGENT_DEBUG_SIGNING", a.DebugSigning)
 
 	a.applyHooksVolumeTo(ctr)
-	appendToEnvOpt(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)
+	setEnvOpt(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)
 
 	a.applyPluginsVolumeTo(ctr)
-	appendToEnvOpt(ctr, "BUILDKITE_PLUGINS_PATH", a.PluginsPath)
+	setEnvOpt(ctr, "BUILDKITE_PLUGINS_PATH", a.PluginsPath)
 
 	// The agent transforms these into the corresponding negated versions when
 	// passing env vars down to the bootstrap.
-	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_PTY", a.NoPTY)
-	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_COMMAND_EVAL", a.NoCommandEval)
-	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_LOCAL_HOOKS", a.NoLocalHooks)
-	appendBoolToEnvOpt(ctr, "BUILDKITE_NO_PLUGINS", a.NoPlugins)
-	appendNegatedToEnvOpt(ctr, "BUILDKITE_NO_PLUGIN_VALIDATION", a.PluginValidation)
+	setEnvBoolOpt(ctr, "BUILDKITE_NO_PTY", a.NoPTY)
+	setEnvBoolOpt(ctr, "BUILDKITE_NO_COMMAND_EVAL", a.NoCommandEval)
+	setEnvBoolOpt(ctr, "BUILDKITE_NO_LOCAL_HOOKS", a.NoLocalHooks)
+	setEnvBoolOpt(ctr, "BUILDKITE_NO_PLUGINS", a.NoPlugins)
+	setEnvNegatedOpt(ctr, "BUILDKITE_NO_PLUGIN_VALIDATION", a.PluginValidation)
 
 	// The signing key, if provided to the agent, is transformed by the agent
 	// into the corresponding env var for subprocesses.
@@ -127,8 +127,8 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	if a.SigningJWKSFile != nil {
 		normaliseJWKSFile(a.SigningJWKSVolume, &a.SigningJWKSFile, "/buildkite/signing-jwks", "key")
 	}
-	appendToEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_JWKS_FILE", a.SigningJWKSFile)
-	appendToEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID", a.SigningJWKSKeyID)
+	setEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_JWKS_FILE", a.SigningJWKSFile)
+	setEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID", a.SigningJWKSKeyID)
 
 	// See notes in normaliseJWKSFile about the default directory/file handling.
 	// Similarly to SigningJWKSFile, if there is no VerificationJWKSVolume but
@@ -141,7 +141,7 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 			MountPath: dir,
 		})
 	}
-	appendToEnvOpt(ctr, "BUILDKITE_AGENT_VERIFICATION_JWKS_FILE", a.VerificationJWKSFile)
+	setEnvOpt(ctr, "BUILDKITE_AGENT_VERIFICATION_JWKS_FILE", a.VerificationJWKSFile)
 
 	if a.VerificationJWKSFile == nil && a.VerificationFailureBehavior == nil {
 		// The agent defaults to "block", but this makes it slightly harder to
@@ -150,7 +150,7 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 		// rejects jobs with secrets if the key is missing.
 		a.VerificationFailureBehavior = ptr.To("warn")
 	}
-	appendToEnvOpt(ctr, "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR", a.VerificationFailureBehavior)
+	setEnvOpt(ctr, "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR", a.VerificationFailureBehavior)
 }
 
 func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {
