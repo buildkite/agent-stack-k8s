@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"net/url"
 	"path/filepath"
@@ -26,7 +27,6 @@ import (
 
 	"github.com/distribution/reference"
 	"github.com/jedib0t/go-pretty/v6/table"
-	"log/slog"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -503,7 +503,9 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			}
 			maps.Copy(kjob.Spec.Template.Annotations, sidecarAnnotation)
 
-			podSpec.Containers = append(podSpec.Containers, c)
+			// Per https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/
+			c.RestartPolicy = ptr.To(corev1.ContainerRestartPolicyAlways)
+			podSpec.InitContainers = append(podSpec.InitContainers, c)
 
 			sidecarCounterCount += 1
 		}
@@ -536,7 +538,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// The coordinating agent container are expecting those managed containers to connect.
 	//
 	// Calculating this imperatively is risky given we lack control over the context, this is subject to refactor.
-	managedContainerCount := len(podSpec.Containers) + systemContainerCount - sidecarCounterCount
+	managedContainerCount := len(podSpec.Containers) + systemContainerCount
 
 	agentContainer := corev1.Container{
 		Name:         AgentContainerName,
