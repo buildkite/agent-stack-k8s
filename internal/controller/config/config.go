@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -121,39 +122,57 @@ type Config struct {
 
 // Helpers for applying configs / params to container env.
 
-func appendToEnv(ctr *corev1.Container, name, value string) {
-	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: value})
+// setEnv sets an env var in a container to a particular string value. If the
+// env var already exists its value is overwritten, otherwise a new env var is appended.
+func setEnv(ctr *corev1.Container, name, value string) {
+	if ctr == nil {
+		return
+	}
+	// slices.IndexFunc is O(n), and we could be setting n vars, so the whole
+	// thing is O(n²). But n is not particularly big (worst case around 30).
+	i := slices.IndexFunc(ctr.Env, func(e corev1.EnvVar) bool {
+		return e.Name == name
+	})
+	if i >= 0 {
+		ctr.Env[i].Value = value
+	} else {
+		ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: value})
+	}
 }
 
-func appendToEnvOpt(ctr *corev1.Container, name string, value *string) {
+// setEnvOpt sets an env var in a container to a string value, if not nil.
+func setEnvOpt(ctr *corev1.Container, name string, value *string) {
 	if value == nil {
 		return
 	}
-	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: *value})
+	setEnv(ctr, name, *value)
 }
 
-func appendBoolToEnvOpt(ctr *corev1.Container, name string, value *bool) {
+// setEnvBoolOpt sets an env var to either "true" or "false", if not nil.
+func setEnvBoolOpt(ctr *corev1.Container, name string, value *bool) {
 	if value == nil {
 		return
 	}
-	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: strconv.FormatBool(*value)})
+	setEnv(ctr, name, strconv.FormatBool(*value))
 }
 
-func appendNegatedToEnvOpt(ctr *corev1.Container, name string, value *bool) {
+// setEnvNegatedOpt sets an env var to either "true" or "false", if not nil,
+// setting to "false" when value is true (and vice-versa).
+func setEnvNegatedOpt(ctr *corev1.Container, name string, value *bool) {
 	if value == nil {
 		return
 	}
-	ctr.Env = append(ctr.Env, corev1.EnvVar{Name: name, Value: strconv.FormatBool(!*value)})
+	setEnv(ctr, name, strconv.FormatBool(!*value))
+
 }
 
-func appendCommaSepToEnv(ctr *corev1.Container, name string, values []string) {
+// setEnvCommaSep sets an env var to a comma-separated list of values, if not
+// empty.
+func setEnvCommaSep(ctr *corev1.Container, name string, values []string) {
 	if len(values) == 0 {
 		return
 	}
-	ctr.Env = append(ctr.Env, corev1.EnvVar{
-		Name:  name,
-		Value: strings.Join(values, ","),
-	})
+	setEnv(ctr, name, strings.Join(values, ","))
 }
 
 // Iterates over Containers in PodSpec to deduplicate VolumeMounts
