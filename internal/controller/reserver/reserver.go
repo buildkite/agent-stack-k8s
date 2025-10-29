@@ -53,22 +53,43 @@ func (r *Reserver) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob
 		jobIDs = append(jobIDs, job.ID)
 	}
 
-	r.logger.Info("reserving jobs via Agent API...", "count", len(jobIDs))
+	chunkedIDs := slices.Collect(slices.Chunk(jobIDs, 1000))
+	numChunks := len(chunkedIDs)
 
-	result, _, err := r.agentClient.ReserveJobs(ctx, jobIDs)
-	if err != nil {
-		return fmt.Errorf("error when reserving jobs: %w", err)
+	reservedJobIDs := make([]string, 0, len(jobs))
+	notReservedJobIDs := make([]string, 0, len(jobs))
+	for i, chunk := range chunkedIDs {
+		r.logger.Info("reserving jobs via Stacks API...",
+			"count", len(chunk),
+			"total-to-reserve", len(jobIDs),
+			"chunk", fmt.Sprintf("%d/%d", i+1, numChunks),
+		)
+		result, _, err := r.agentClient.ReserveJobs(ctx, chunk)
+		if err != nil {
+			return fmt.Errorf("error when reserving jobs: %w", err)
+		}
+
+		reservedJobIDs = append(reservedJobIDs, result.Reserved...)
+		notReservedJobIDs = append(notReservedJobIDs, result.NotReserved...)
+	}
+
+	r.logger.Info("job reservation completed",
+		"reserved-job-count", len(reservedJobIDs),
+		"not-reserved-job-count", len(notReservedJobIDs),
+	)
+	if len(notReservedJobIDs) > 0 {
+		r.logger.Info("some jobs were not reserved. This is likely because they were already reserved or assigned to an agent", "not-reserved-job-ids", notReservedJobIDs)
 	}
 
 	// There is a chance that this job is already reserved or assigned.
 	// In general, we ignore the job and the job should execute correctly.
 	// The worst case is that when controller crashes after job reservation and before k8s job were created.
 	// In that case, a reservatation expiration is bound to happen.
-	reservedJobs := findJobsIn(jobs, result.Reserved)
-
+	reservedJobs := findJobsIn(jobs, reservedJobIDs)
 	if len(reservedJobs) > 0 {
 		return r.handler.HandleMany(ctx, reservedJobs)
 	}
+
 	return nil
 }
 
