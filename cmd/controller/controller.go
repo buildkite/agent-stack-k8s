@@ -314,7 +314,7 @@ func New() *cobra.Command {
 			}
 
 			logger := slog.New(handler)
-			logger.Info("configuration loaded", "config", cfg)
+			logger.Debug("configuration loaded", "config", cfg)
 
 			clientConfig := restconfig.GetConfigOrDie()
 			clientConfig.QPS = float32(cfg.K8sClientRateLimiterQPS)

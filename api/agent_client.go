@@ -75,7 +75,7 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 
 	client.stacksAPIClient, err = stacksapi.NewClient(
 		opts.Token,
-		stacksapi.WithLogger(opts.Logger),
+		stacksapi.WithLogger(opts.Logger.With("component", "stacksapi")),
 		stacksapi.WithBaseURL(endpointURL),
 		stacksapi.PrependToUserAgent("agent-stack-k8s/"+version.Version()),
 	)
