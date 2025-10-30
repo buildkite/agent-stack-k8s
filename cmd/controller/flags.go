@@ -36,6 +36,11 @@ func AddConfigFlags(cmd *cobra.Command) {
 		`A comma-separated list of agent tags. The "queue" tag must be unique (e.g. "queue=kubernetes,os=linux")`,
 	)
 	cmd.Flags().String(
+		"queue",
+		"",
+		"The Buildkite queue to poll for jobs (overrides the 'queue' tag if set)",
+	)
+	cmd.Flags().String(
 		"namespace",
 		config.DefaultNamespace,
 		"kubernetes namespace to create resources in",

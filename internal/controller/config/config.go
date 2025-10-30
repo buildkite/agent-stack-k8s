@@ -57,6 +57,7 @@ type Config struct {
 	Image                  string        `json:"image"                    validate:"required"`
 	MaxInFlight            int           `json:"max-in-flight"            validate:"min=0"`
 	Tags                   []string      `json:"tags"`
+	Queue                  string        `json:"queue"`
 	PrometheusPort         uint16        `json:"prometheus-port"          validate:"omitempty"`
 	ProfilerAddress        string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
 	PollInterval           time.Duration `json:"poll-interval"`

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/reserver"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
+	"github.com/buildkite/stacksapi"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -82,9 +84,10 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		return
 	}
 
-	queue := agentTags["queue"]
+	queue := cmp.Or(cfg.Queue, agentTags["queue"])
 	if queue == "" {
-		logger.Info("Listening to the default queue for the given cluster. To listen to a specific queue, please pass in 'queue' as a tag, e.g. --tags='queue=kubernetes'")
+		logger.Info("Listening to the default queue for the given cluster. To listen to a specific queue, set the `queue` configuration option, or set the `queue` tag in the `tags` configuration option.")
+		queue = stacksapi.DefaultQueue
 	}
 
 	agentTokenClient, err := api.NewAgentTokenClient(agentToken, agentEndpoint)

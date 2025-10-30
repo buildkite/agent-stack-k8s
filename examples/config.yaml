@@ -34,8 +34,8 @@ resource-classes:
         memory: "512Mi"
         hugepages-2Mi: "1Mi"
 
+queue: my-queue
 tags:
-  - queue=my-queue
   - priority=high
 
 # Causes the controller to prohibit the kubernetes plugin specified within jobs
