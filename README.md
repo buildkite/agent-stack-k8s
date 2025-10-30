@@ -28,7 +28,7 @@ To specify a non-default queue:
 ```sh
 helm install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --set agentToken=<buildkite-agent-token> \
-    --set-json 'config.queue="arm64"'
+    --set config.queue=arm64
 ```
 
 Full instructions can be found [in the documentation](https://buildkite.com/docs/agent/v3/agent-stack-k8s/installation).
