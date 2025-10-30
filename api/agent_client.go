@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
@@ -15,8 +16,10 @@ import (
 	"github.com/buildkite/stacksapi"
 )
 
-// This is a special keyword supported on backend for polling from the current default queue in the cluster.
-const defaultQueueKey = "_default"
+func isDefaultQueue(queue string) bool {
+	// All of these mean "use the default queue for this cluster"
+	return slices.Contains([]string{stacksapi.DefaultQueue, "~", "-"}, queue)
+}
 
 // AgentClient is a client for Agent API methods for retrieving jobs.
 type AgentClient struct {
@@ -56,10 +59,6 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 	endpointURL, err := url.Parse(opts.Endpoint)
 	if err != nil {
 		return nil, err
-	}
-
-	if opts.Queue == "" {
-		opts.Queue = defaultQueueKey
 	}
 
 	client := &AgentClient{
@@ -220,7 +219,7 @@ func (c *AgentClient) GetScheduledJobs(ctx context.Context, afterCursor string, 
 }
 
 func (c *AgentClient) normaliseAgentQueryRules(rules []string) []string {
-	if c.queue == defaultQueueKey {
+	if isDefaultQueue(c.queue) {
 		// When we poll from default queue, we don't know the queue key, so in rest of the system queue="".
 		// The job might contain a queue key `agents: queue: default`, in that case it will cause mismatch in local
 		// job queue key "" vs our configuration queue key "default".
