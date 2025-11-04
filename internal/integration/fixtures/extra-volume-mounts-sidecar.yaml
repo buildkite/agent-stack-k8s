@@ -23,6 +23,10 @@ steps:
                   mv /tmp/extra-volume-mount-sidecar/pass-the-parcel /tmp/extra-volume-mount/pass-the-parcel
                   ls -lah /tmp/extra-volume-mount-sidecar
                   ls -lah /tmp/extra-volume-mount
+                  # So Kubernetes can mark this as Started
+                  # In reality a sidecar should not be used like this.
+                  # As this is effectively an ad-hoc initContainer.
+                  sleep infinity
           podSpec:
             containers:
               - image: alpine:latest

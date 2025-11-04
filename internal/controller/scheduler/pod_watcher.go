@@ -3,6 +3,7 @@ package scheduler
 import (
 	"cmp"
 	"context"
+	"log/slog"
 	"regexp"
 	"slices"
 	"strconv"
@@ -16,7 +17,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
-	"log/slog"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -580,12 +580,6 @@ func (w *podWatcher) stopWatchingForImageFailure(jobUUID uuid.UUID) {
 
 // All container-\d containers will have the agent installed as their PID 1.
 // Therefore, their lifecycle is well monitored in our backend, allowing us to terminate them if they fail to start.
-//
-// However, sidecar containers are completely unmonitored.
-// We avoid terminating jobs due to sidecar image pull backoff watcher
-// to prevent customer confusion.
-//
-// Most importantly, the CI can still pass (in theory) even if sidecars fail.
 //
 // (The name "system container" is subject to more debate.)
 func isSystemContainer(containerStatus *corev1.ContainerStatus) bool {
