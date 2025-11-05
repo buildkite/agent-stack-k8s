@@ -25,4 +25,4 @@ appVersion: "1.16.0"
 
 # Sidecar support requires the SidecarContainers feature gate, first enabled
 # by default in Kubernetes 1.29.
-kubeVersion: ">=1.29.0"
+kubeVersion: ">=1.29.0-0"
