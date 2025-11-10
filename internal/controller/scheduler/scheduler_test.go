@@ -1534,17 +1534,17 @@ func TestPipelineSigningOptions(t *testing.T) {
 		{
 			name: "both keys",
 			agentConfig: &config.AgentConfig{
-				VerificationJWKSFile:   ptr.To("/path/to/verification.jwks"),
+				VerificationJWKSFile:   ptr.To("/verification/path/verification.jwks"),
 				VerificationJWKSVolume: verificationVol,
-				SigningJWKSFile:        ptr.To("/path/to/signing.jwks"),
+				SigningJWKSFile:        ptr.To("/signing/path/signing.jwks"),
 				SigningJWKSVolume:      signingVol,
 			},
 			wantPodVolumes: []string{verificationVol.Name, signingVol.Name},
 			wantAgentEnv: map[string]string{
-				"BUILDKITE_AGENT_SIGNING_JWKS_FILE":      "/path/to/signing.jwks",
-				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE": "/path/to/verification.jwks",
+				"BUILDKITE_AGENT_SIGNING_JWKS_FILE":      "/signing/path/signing.jwks",
+				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE": "/verification/path/verification.jwks",
 			},
-			wantAgentMounts:   []string{verificationVol.Name},
+			wantAgentMounts:   []string{verificationVol.Name, signingVol.Name},
 			wantCommandMounts: []string{signingVol.Name},
 		},
 		{
@@ -1558,7 +1558,7 @@ func TestPipelineSigningOptions(t *testing.T) {
 				"BUILDKITE_AGENT_SIGNING_JWKS_FILE":      "/buildkite/signing-jwks/key",
 				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE": "/buildkite/verification-jwks/key",
 			},
-			wantAgentMounts:   []string{verificationVol.Name},
+			wantAgentMounts:   []string{verificationVol.Name, signingVol.Name},
 			wantCommandMounts: []string{signingVol.Name},
 		},
 		{
@@ -1574,7 +1574,7 @@ func TestPipelineSigningOptions(t *testing.T) {
 				"BUILDKITE_AGENT_SIGNING_JWKS_FILE":      "/buildkite/signing-jwks/my-special-key",
 				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE": "/buildkite/verification-jwks/my-awesome-key",
 			},
-			wantAgentMounts:   []string{verificationVol.Name},
+			wantAgentMounts:   []string{verificationVol.Name, signingVol.Name},
 			wantCommandMounts: []string{signingVol.Name},
 		},
 	}

@@ -120,12 +120,18 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 
 	// The signing key, if provided to the agent, is transformed by the agent
 	// into the corresponding env var for subprocesses.
-	// But the file itself is used by volume should be attached to the command container!
+	// The signing key volume needs to be attached to both the agent container
+	// (for validation on startup) and the command container (for pipeline upload
+	// and agent tool sign commands).
 	// If there is no SigningJWKSVolume but the user set SigningJWKSFile, it's
 	// up to the user to set it to the path of a key file supplied in their
 	// container.
-	if a.SigningJWKSFile != nil {
-		normaliseJWKSFile(a.SigningJWKSVolume, &a.SigningJWKSFile, "/buildkite/signing-jwks", "key")
+	if a.SigningJWKSVolume != nil {
+		dir := normaliseJWKSFile(a.SigningJWKSVolume, &a.SigningJWKSFile, "/buildkite/signing-jwks", "key")
+		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
+			Name:      a.SigningJWKSVolume.Name,
+			MountPath: dir,
+		})
 	}
 	setEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_JWKS_FILE", a.SigningJWKSFile)
 	setEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID", a.SigningJWKSKeyID)
