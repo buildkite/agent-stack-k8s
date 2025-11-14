@@ -13,6 +13,13 @@ x-anchors:
           checkout:
             fetchFlags: -v --tags
 
+env:
+  BUILDKITE_CACHE_BUCKET_URL: "s3://buildkite-agent-stack-k8s-cache"
+  AWS_ROLE_ARN: "arn:aws:iam::172840064832:role/pipeline-buildkite-kubernetes-stack-kubernetes-agent-stack"
+  #GOCACHE: .cache/go-build
+  #GOMODCACHE: .cache/go-mod
+  #GOLANGCI_LINT_CACHE: /var/cache/golangci-lint
+
 agents:
   queue: kubernetes
 
@@ -21,119 +28,121 @@ steps:
     key: tidy
     image: golang:1.24-alpine
     command: .buildkite/steps/tidy.sh
-    plugins:
-      - kubernetes:
-          podTemplate: go-with-cache
 
-  - label: ":go::lint-roller: lint"
-    key: lint
-    image: golangci/golangci-lint:latest
-    command: golangci-lint run -v ./...
-    plugins:
-      - kubernetes:
-          podTemplate: go-with-cache
-
-  - label: ":golang::robot_face: check code generation"
-    key: check-code-generation
-    image: golang:1.24-alpine
-    command: .buildkite/steps/check-code-generation.sh
-    plugins:
-      - kubernetes:
-          podTemplate: go-with-cache
-
-  - label: ":docker::buildkite: choose agent image"
-    key: agent
+  - label: ":go::broom: network bandwidth"
+    key: bandwidth
     image: alpine:latest
-    command: .buildkite/steps/agent.sh
+    command: .buildkite/steps/s3_bandwidth.sh
 
-  - label: ":buildkite::test_tube: tests"
-    key: tests
-    depends_on: agent
-    artifact_paths: junit-*.xml
-    secrets:
-      INTEGRATION_TEST_BUILDKITE_TOKEN: integration_test_buildkite_api_token
-      BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
-    image: golang:latest
-    command: .buildkite/steps/tests.sh
-    plugins:
-      - kubernetes:
-          podTemplate: go-with-cache
-          podSpecPatch:
-            serviceAccountName: integration-tests
-      - test-collector:
-          files: junit-*.xml
-          format: junit
+  #- label: ":go::lint-roller: lint"
+  #  key: lint
+  #  image: golangci/golangci-lint:latest
+  #  command: golangci-lint run -v ./...
+  #  plugins:
+  #    - kubernetes:
+  #        podTemplate: go-with-cache
 
-  - label: ":docker: build and push controller image"
-    key: controller
-    env:
-      KO_DOCKER_REPO: ghcr.io/buildkite
-    secrets:
-      REGISTRY_PASSWORD: ghcr_password
-      REGISTRY_USERNAME: ghcr_username
-    image: golang:1.24
-    command: .buildkite/steps/build-and-push-controller.sh
-    plugins:
-      - kubernetes:
-          podTemplate: go-with-cache
+  #- label: ":golang::robot_face: check code generation"
+  #  key: check-code-generation
+  #  image: golang:1.24-alpine
+  #  command: .buildkite/steps/check-code-generation.sh
+  #  plugins:
+  #    - kubernetes:
+  #        podTemplate: go-with-cache
 
-  # On feature branches, don't wait for tests. We may want to deploy
-  # to a test cluster to debug the feature branch.
-  - if: build.branch != pipeline.default_branch && build.tag !~ /^.+\$/
-    <<: *push-helm
-    key: push-feature-branch
-    depends_on:
-      - tidy
-      - lint
-      - check-code-generation
-      - agent
-      - controller
+  #- label: ":docker::buildkite: choose agent image"
+  #  key: agent
+  #  image: alpine:latest
+  #  command: .buildkite/steps/agent.sh
 
-  # On the main branch or tags, wait for tests. We don't want to
-  # push a new image or chart unless the tests pass.
-  - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
-    <<: *push-helm
-    key: push-main-or-tag
-    depends_on:
-      - tidy
-      - lint
-      - check-code-generation
-      - agent
-      - controller
-      - tests
+  #- label: ":buildkite::test_tube: tests"
+  #  key: tests
+  #  depends_on: agent
+  #  artifact_paths: junit-*.xml
+  #  secrets:
+  #    INTEGRATION_TEST_BUILDKITE_TOKEN: integration_test_buildkite_api_token
+  #    BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
+  #  image: golang:latest
+  #  command: .buildkite/steps/tests.sh
+  #  plugins:
+  #    - kubernetes:
+  #        podTemplate: go-with-cache
+  #        podSpecPatch:
+  #          serviceAccountName: integration-tests
+  #    - test-collector:
+  #        files: junit-*.xml
+  #        format: junit
 
-  - if: build.branch == pipeline.default_branch
-    label: ":shipit: deploy to our own k8s cluster"
-    key: deploy
-    depends_on:
-      - push-main-or-tag
-    secrets:
-      REGISTRY_PASSWORD: ghcr_password
-      REGISTRY_USERNAME: ghcr_username
-      DEFAULT_CLUSTER_TOKEN: default_cluster_token
-    image: alpine:latest
-    command: .buildkite/steps/deploy.sh
-    plugins:
-      - kubernetes:
-          checkout:
-            fetchFlags: -v --tags
-          podSpec:
-            serviceAccountName: deploy
+  #- label: ":docker: build and push controller image"
+  #  key: controller
+  #  env:
+  #    KO_DOCKER_REPO: ghcr.io/buildkite
+  #  secrets:
+  #    REGISTRY_PASSWORD: ghcr_password
+  #    REGISTRY_USERNAME: ghcr_username
+  #  image: golang:1.24
+  #  command: .buildkite/steps/build-and-push-controller.sh
+  #  plugins:
+  #    - kubernetes:
+  #        podTemplate: go-with-cache
 
-  - if: build.tag =~ /^.+\$/
-    label: ":rocket: release"
-    key: release
-    depends_on:
-      - deploy
-      - push-main-or-tag
-    secrets:
-      REGISTRY_PASSWORD: ghcr_password
-      REGISTRY_USERNAME: ghcr_username
-      GITHUB_TOKEN: github_release_token
-    image: golang:1.24-alpine # Note goreleaser shells out to go!
-    command: .buildkite/steps/release.sh
-    plugins:
-      - kubernetes:
-          podTemplate: go-with-cache
-          checkout:
-            fetchFlags: -v --tags
+  ## On feature branches, don't wait for tests. We may want to deploy
+  ## to a test cluster to debug the feature branch.
+  #- if: build.branch != pipeline.default_branch && build.tag !~ /^.+\$/
+  #  <<: *push-helm
+  #  key: push-feature-branch
+  #  depends_on:
+  #    - tidy
+  #    - lint
+  #    - check-code-generation
+  #    - agent
+  #    - controller
+
+  ## On the main branch or tags, wait for tests. We don't want to
+  ## push a new image or chart unless the tests pass.
+  #- if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
+  #  <<: *push-helm
+  #  key: push-main-or-tag
+  #  depends_on:
+  #    - tidy
+  #    - lint
+  #    - check-code-generation
+  #    - agent
+  #    - controller
+  #    - tests
+
+  #- if: build.branch == pipeline.default_branch
+  #  label: ":shipit: deploy to our own k8s cluster"
+  #  key: deploy
+  #  depends_on:
+  #    - push-main-or-tag
+  #  secrets:
+  #    REGISTRY_PASSWORD: ghcr_password
+  #    REGISTRY_USERNAME: ghcr_username
+  #    DEFAULT_CLUSTER_TOKEN: default_cluster_token
+  #  image: alpine:latest
+  #  command: .buildkite/steps/deploy.sh
+  #  plugins:
+  #    - kubernetes:
+  #        checkout:
+  #          fetchFlags: -v --tags
+  #        podSpec:
+  #          serviceAccountName: deploy
+
+  #- if: build.tag =~ /^.+\$/
+  #  label: ":rocket: release"
+  #  key: release
+  #  depends_on:
+  #    - deploy
+  #    - push-main-or-tag
+  #  secrets:
+  #    REGISTRY_PASSWORD: ghcr_password
+  #    REGISTRY_USERNAME: ghcr_username
+  #    GITHUB_TOKEN: github_release_token
+  #  image: golang:1.24-alpine # Note goreleaser shells out to go!
+  #  command: .buildkite/steps/release.sh
+  #  plugins:
+  #    - kubernetes:
+  #        podTemplate: go-with-cache
+  #        checkout:
+  #          fetchFlags: -v --tags
