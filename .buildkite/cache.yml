@@ -1,0 +1,7 @@
+dependencies:
+  - id: "golang"
+    key: '{{ id }}-{{ agent.os }}-{{ agent.arch }}-{{ checksum "go.sum" }}'
+    fallback_keys: ["{{ id }}-{{ agent.os }}-{{ agent.arch }}-"]
+    paths:
+      - ".cache/go-build"
+      - ".cache/go-mod"
