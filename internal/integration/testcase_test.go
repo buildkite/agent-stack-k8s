@@ -156,9 +156,12 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 		).DoWithContext(context.Background(), func(r *roko.Retrier) error {
 			// There is a small chance that we are deleting queue too soon before queue realize agent has disconnected.
 			_, err := t.Buildkite.ClusterQueues.Delete(t.Org, t.ClusterUUID, *queue.ID)
+			if err != nil {
+				t.Logf("Unable to clean up cluster queue %q (%v): %v", *queue.ID, r, err)
+			}
 			return err
 		}); err != nil {
-			t.Errorf("Unable to clean up cluster queue %s: %v", *queue.ID, err)
+			t.Errorf("Unable to clean up cluster queue %q: %v", *queue.ID, err)
 			return
 		}
 		t.Logf("deleted cluster queue! %s", *queue.ID)
