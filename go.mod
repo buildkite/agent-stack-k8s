@@ -1,6 +1,6 @@
 module github.com/buildkite/agent-stack-k8s/v2
 
-go 1.24.5
+go 1.25.4
 
 require (
 	github.com/Khan/genqlient v0.8.1

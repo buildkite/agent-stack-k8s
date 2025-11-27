@@ -9,7 +9,7 @@ template:
   spec:
     containers:
       - name: container-0
-        image: golang:1.24-alpine
+        image: golang:1.25-alpine
         # These golang related cache uses node local storage.
         # We will soon refactor this to use the incoming Buildkite Cache.
         env:
