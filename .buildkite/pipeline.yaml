@@ -19,7 +19,7 @@ agents:
 steps:
   - label: ":go::broom: tidy"
     key: tidy
-    image: golang:1.24-alpine
+    image: golang:1.25-alpine
     command: .buildkite/steps/tidy.sh
     plugins:
       - kubernetes:
@@ -35,7 +35,7 @@ steps:
 
   - label: ":golang::robot_face: check code generation"
     key: check-code-generation
-    image: golang:1.24-alpine
+    image: golang:1.25-alpine
     command: .buildkite/steps/check-code-generation.sh
     plugins:
       - kubernetes:
@@ -71,7 +71,7 @@ steps:
     secrets:
       REGISTRY_PASSWORD: ghcr_password
       REGISTRY_USERNAME: ghcr_username
-    image: golang:1.24
+    image: golang:1.25
     command: .buildkite/steps/build-and-push-controller.sh
     plugins:
       - kubernetes:
@@ -130,7 +130,7 @@ steps:
       REGISTRY_PASSWORD: ghcr_password
       REGISTRY_USERNAME: ghcr_username
       GITHUB_TOKEN: github_release_token
-    image: golang:1.24-alpine # Note goreleaser shells out to go!
+    image: golang:1.25-alpine # Note goreleaser shells out to go!
     command: .buildkite/steps/release.sh
     plugins:
       - kubernetes:
