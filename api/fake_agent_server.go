@@ -31,6 +31,9 @@ type FakeAgentServer struct {
 
 	// ReserveError configures an error message to return.
 	ReserveError string
+
+	// NotificationCalls records all notification batches sent to the server.
+	NotificationCalls [][]stacksapi.StackNotification
 }
 
 // NewFakeAgentServer creates and starts a fake agent API server.
@@ -43,6 +46,7 @@ func NewFakeAgentServer() *FakeAgentServer {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stacks/register", fake.handleRegisterStack)
 	mux.HandleFunc("/stacks/test-stack/scheduled-jobs/batch-reserve", fake.handleReserveJobs)
+	mux.HandleFunc("/stacks/test-stack/notifications", fake.handleNotifications)
 
 	fake.server = httptest.NewServer(mux)
 	return fake
@@ -144,5 +148,33 @@ func (f *FakeAgentServer) handleReserveJobs(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(f.ReserveStatusCode)
 	if _, err := w.Write(buf.Bytes()); err != nil {
 		log.Printf("fake: failed to write reserve jobs response: %v", err)
+	}
+}
+
+func (f *FakeAgentServer) handleNotifications(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req stacksapi.CreateStackNotificationsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	f.mu.Lock()
+	f.NotificationCalls = append(f.NotificationCalls, req.Notifications)
+	f.mu.Unlock()
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(stacksapi.CreateStackNotificationsResponse{}); err != nil {
+		http.Error(w, "fake: failed to encode response: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		log.Printf("fake: failed to write notifications response: %v", err)
 	}
 }
