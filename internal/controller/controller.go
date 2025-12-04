@@ -90,6 +90,8 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		queue = stacksapi.DefaultQueue
 	}
 
+	agentTags["queue"] = queue
+
 	agentTokenClient, err := api.NewAgentTokenClient(agentToken, agentEndpoint)
 	if err != nil {
 		logger.Error("Couldn't create Agent token API client", "error", err)
