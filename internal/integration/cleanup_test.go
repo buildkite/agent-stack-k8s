@@ -31,8 +31,6 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(numPipelines)
 	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
-		pipeline := pipeline // prevent loop variable capture
-
 		tc := testcase{
 			T:            t,
 			GraphQL:      api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),

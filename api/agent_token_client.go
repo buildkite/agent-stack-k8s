@@ -7,8 +7,7 @@ import (
 	"time"
 )
 
-// This is a special agent client: it can only be used to query the GET /token API.
-// Meaning for this client to function, there isn't a need for a cluster id nor queue id.
+// NewAgentTokenClient creates a new AgentTokenClient.
 func NewAgentTokenClient(token, endpoint string) (*AgentTokenClient, error) {
 	if endpoint == "" {
 		endpoint = "https://agent.buildkite.com/v3"
@@ -26,6 +25,9 @@ func NewAgentTokenClient(token, endpoint string) (*AgentTokenClient, error) {
 	}, nil
 }
 
+// AgentTokenClient is a special Agent API client: it can only be used to query
+// the GET /token API.
+// This client doesn't need a cluster ID or queue ID in advance.
 type AgentTokenClient struct {
 	endpoint   *url.URL
 	httpClient *http.Client
@@ -44,7 +46,7 @@ type AgentTokenIdentity struct {
 	OrganizationQueueKey  string `json:"organization_queue_key"`
 }
 
-// GetJobState gets the state of a specific job.
+// GetTokenIdentity gets the identity information of an agent token.
 func (c *AgentTokenClient) GetTokenIdentity(ctx context.Context) (result *AgentTokenIdentity, retryAfter time.Duration, err error) {
 	u := c.endpoint.JoinPath("token")
 

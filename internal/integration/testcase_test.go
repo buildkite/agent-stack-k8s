@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/utils/ptr"
 	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
@@ -183,7 +184,7 @@ func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName strin
 		Name:       t.PipelineName,
 		Repository: t.Repo,
 		ProviderSettings: &buildkite.GitHubSettings{
-			TriggerMode: strPtr("none"),
+			TriggerMode: ptr.To("none"),
 		},
 		Configuration: steps.String(),
 		ClusterID:     t.ClusterUUID,
@@ -417,30 +418,6 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 	}
 }
 
-func (t testcase) AssertMetadata(ctx context.Context, annotations, labelz map[string]string) {
-	t.Helper()
-
-	tagReq, err := labels.NewRequirement("tag.buildkite.com/queue", selection.Equals, []string{t.QueueName()})
-	require.NoError(t, err)
-
-	selector := labels.NewSelector().Add(*tagReq)
-
-	jobs, err := t.Kubernetes.BatchV1().
-		Jobs(cfg.Namespace).
-		List(ctx, v1.ListOptions{LabelSelector: selector.String()})
-	require.NoError(t, err)
-	require.Len(t, jobs.Items, 1)
-
-	for k, v := range annotations {
-		assert.Equal(t, jobs.Items[0].Annotations[k], v)
-		assert.Equal(t, jobs.Items[0].Spec.Template.Annotations[k], v)
-	}
-	for k, v := range labelz {
-		assert.Equal(t, jobs.Items[0].Labels[k], v)
-		assert.Equal(t, jobs.Items[0].Spec.Template.Labels[k], v)
-	}
-}
-
 func (t testcase) AssertHostAlias(ctx context.Context, alias string, host string) {
 	t.Helper()
 
@@ -457,19 +434,13 @@ func (t testcase) AssertHostAlias(ctx context.Context, alias string, host string
 
 	for _, hostAlias := range jobs.Items[0].Spec.Template.Spec.HostAliases {
 		if hostAlias.IP == host {
-			for _, actualAlias := range hostAlias.Hostnames {
-				if actualAlias == alias {
-					return
-				}
+			if slices.Contains(hostAlias.Hostnames, alias) {
+				return
 			}
 		}
 	}
 
 	assert.Fail(t, "host alias not found")
-}
-
-func strPtr(p string) *string {
-	return &p
 }
 
 func ignorableError(err error) bool {
