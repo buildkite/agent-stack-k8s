@@ -2,9 +2,6 @@
 
 set -eufo pipefail
 
-echo "--- Installing gotestsum :golang::test_tube:"
-go install gotest.tools/gotestsum
-
 echo "+++ Running integration tests :test_tube:"
 package="github.com/buildkite/agent-stack-k8s/v2/internal/integration_test"
 branch="${BUILDKITE_BRANCH:-main}"
@@ -17,7 +14,7 @@ export IMAGE
 export NAMESPACE="buildkite-k8s-integration-test"
 export AGENT_TOKEN_SECRET="agent-stack-k8s-secrets"
 
-gotestsum --junitfile "junit-${BUILDKITE_JOB_ID}.xml" -- \
+go tool gotestsum --junitfile "junit-${BUILDKITE_JOB_ID}.xml" -- \
   -count=1 \
   -ldflags="-X ${package}.branch=${branch}" \
   ./...
