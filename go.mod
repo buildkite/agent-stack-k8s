@@ -17,7 +17,7 @@ require (
 	github.com/jedib0t/go-pretty/v6 v6.7.7
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/lmittmann/tint v1.1.2
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/xeipuuv/gojsonschema v1.2.0
 	gotest.tools/gotestsum v1.13.0
