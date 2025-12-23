@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 	"testing"
 	"time"
 
@@ -28,16 +27,14 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 	numPipelines := len(pipelines.Organization.Pipelines.Edges)
 	t.Logf("found %d pipelines to delete", numPipelines)
 
-	var wg sync.WaitGroup
-	wg.Add(numPipelines)
 	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
-		tc := testcase{
-			T:            t,
-			GraphQL:      api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
-			PipelineName: pipeline.Node.Name,
-		}.Init()
-
 		t.Run(pipeline.Node.Name, func(t *testing.T) {
+			tc := testcase{
+				T:            t,
+				GraphQL:      graphqlClient,
+				PipelineName: pipeline.Node.Name,
+			}.Init()
+
 			builds, err := api.GetBuilds(
 				ctx,
 				graphqlClient,
