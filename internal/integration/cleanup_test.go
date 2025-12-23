@@ -67,7 +67,7 @@ func (t testcase) deletePipeline(ctx context.Context) {
 			roko.WithMaxAttempts(10),
 			roko.WithStrategy(roko.Exponential(time.Second, 5*time.Second)),
 		).DoWithContext(ctx, func(r *roko.Retrier) error {
-			resp, err := t.Buildkite.Pipelines.Delete(t.Org, t.PipelineName)
+			resp, err := t.Buildkite.Pipelines.Delete(ctx, t.Org, t.PipelineName)
 			if err != nil {
 				if resp.StatusCode == http.StatusNotFound {
 					return nil

@@ -112,7 +112,7 @@ func TestDefaultQueue(t *testing.T) {
 		"queue=default",
 		"pseudoQueue="+tc.ShortPipelineName(),
 	)
-	build := tc.TriggerBuild(ctx, *pipeline.GraphQLID)
+	build := tc.TriggerBuild(ctx, pipeline.GraphQLID)
 	tc.AssertSuccess(ctx, build)
 	tc.AssertLogsContain(build, "Hi there")
 }
@@ -141,7 +141,7 @@ func TestExplicitDefaultQueue(t *testing.T) {
 	tc.StartController(ctx, cfg,
 		"pseudoQueue="+tc.ShortPipelineName(),
 	)
-	build := tc.TriggerBuild(ctx, *pipeline.GraphQLID)
+	build := tc.TriggerBuild(ctx, pipeline.GraphQLID)
 	tc.AssertSuccess(ctx, build)
 	tc.AssertLogsContain(build, "Hi there")
 }
@@ -367,19 +367,14 @@ func TestMaxInFlightLimited(t *testing.T) {
 	buildID := tc.TriggerBuild(ctx, pipelineID).Number
 
 	for {
-		build, _, err := tc.Buildkite.Builds.Get(
-			tc.Org,
-			tc.PipelineName,
-			strconv.Itoa(buildID),
-			nil,
-		)
+		build, _, err := tc.Buildkite.Builds.Get(ctx, tc.Org, tc.PipelineName, strconv.Itoa(buildID), nil)
 		if err != nil {
 			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", tc.Org, tc.PipelineName, buildID, err)
 		}
 
-		switch *build.State {
+		switch build.State {
 		case "running":
-			if got, want := *build.Pipeline.RunningJobsCount, cfg.MaxInFlight; got > want {
+			if got, want := build.Pipeline.RunningJobsCount, cfg.MaxInFlight; got > want {
 				t.Fatalf("*build.Pipeline.RunningJobsCount = %d, want <= %d", got, want)
 			}
 
@@ -390,7 +385,7 @@ func TestMaxInFlightLimited(t *testing.T) {
 			t.Log("waiting for build to start")
 
 		default:
-			t.Fatalf("unexpected build state: %v", *build.State)
+			t.Fatalf("unexpected build state: %v", build.State)
 		}
 
 		// Don't want to hammer the API.
@@ -417,21 +412,16 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 	maxRunningJobs := 0
 fetchBuildStateLoop:
 	for {
-		build, _, err := tc.Buildkite.Builds.Get(
-			tc.Org,
-			tc.PipelineName,
-			strconv.Itoa(buildID),
-			nil,
-		)
+		build, _, err := tc.Buildkite.Builds.Get(ctx, tc.Org, tc.PipelineName, strconv.Itoa(buildID), nil)
 		if err != nil {
 			t.Fatalf("tc.Buildkite.Builds.Get(%q, %q, %d, nil) error = %v", tc.Org, tc.PipelineName, buildID, err)
 		}
 
-		switch *build.State {
+		switch build.State {
 		case "running":
 			runningJobs := 0
 			for _, job := range build.Jobs {
-				if *job.State == "running" {
+				if job.State == "running" {
 					runningJobs++
 				}
 			}
@@ -445,7 +435,7 @@ fetchBuildStateLoop:
 			t.Log("waiting for build to start")
 
 		default:
-			t.Fatalf("unexpected build state: %v", *build.State)
+			t.Fatalf("unexpected build state: %v", build.State)
 		}
 
 		// Don't want to hammer the API.
