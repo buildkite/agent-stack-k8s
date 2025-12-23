@@ -52,7 +52,7 @@ func TestMain(m *testing.M) {
 	if !cleanupPipelines && branch == "" {
 		log.Fatalf(
 			`The tests need to be run with the flag: -ldflags="-X %s.branch=$BRANCH_NAME"`,
-			reflect.TypeOf(testcase{}).PkgPath(),
+			reflect.TypeFor[testcase]().PkgPath(),
 		)
 	}
 

@@ -154,8 +154,8 @@ func (t testcase) createClusterQueueWithCleanup() buildkite.ClusterQueue {
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).DoWithContext(context.Background(), func(r *roko.Retrier) error {
-			// There is a small chance that we are deleting queue too soon before queue realize agent has disconnected.
-			_, err := t.Buildkite.ClusterQueues.Delete(t.Context(), t.Org, t.ClusterUUID, queue.ID)
+			// t.Context() has been cancelled by the time this runs, so just use context.Background
+			_, err := t.Buildkite.ClusterQueues.Delete(context.Background(), t.Org, t.ClusterUUID, queue.ID)
 			return err
 		}); err != nil {
 			t.Errorf("Unable to clean up cluster queue %s: %v", queue.ID, err)
@@ -191,7 +191,9 @@ func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName strin
 	require.NoError(t, err)
 	EnsureCleanup(t.T, func() {
 		if !t.preserveEphemeralObjects() {
-			t.deletePipeline(ctx)
+			EnsureCleanup(t.T, func() {
+				deletePipeline(ctx, t.T, t.Buildkite, t.Org, t.PipelineName)
+			})
 		}
 	})
 
