@@ -23,6 +23,7 @@ var (
 	branch           string
 	cfg              config.Config
 	cleanupPipelines bool
+	cleanupQueues    bool
 	// Preserve pipelines even if the test passses.
 	// By default, failed pipeline will always be kept.
 	preservePipelines bool
@@ -47,9 +48,10 @@ func TestMain(m *testing.M) {
 	cfg = *testCfg
 
 	cleanupPipelines = parseBoolEnvVar("CLEANUP_PIPELINES")
+	cleanupQueues = parseBoolEnvVar("CLEANUP_QUEUES")
 	preservePipelines = parseBoolEnvVar("PRESERVE_PIPELINES")
 
-	if !cleanupPipelines && branch == "" {
+	if !cleanupPipelines && !cleanupQueues && branch == "" {
 		log.Fatalf(
 			`The tests need to be run with the flag: -ldflags="-X %s.branch=$BRANCH_NAME"`,
 			reflect.TypeOf(testcase{}).PkgPath(),

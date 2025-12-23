@@ -98,3 +98,63 @@ query SearchPipelines($slug: ID!, $search: String!, $first: Int!, $after: String
         }
     }
 }
+
+### The following are used in the cleanup integration "test" for queues
+query GetOrganizationQueues($slug: ID!, $clustersFirst: Int!, $clustersAfter: String, $queuesFirst: Int!) {
+    organization(slug: $slug) {
+        id
+        clusters(first: $clustersFirst, after: $clustersAfter) {
+            edges {
+                node {
+                    id
+                    uuid
+                    name
+                    queues(first: $queuesFirst) {
+                        edges {
+                            node {
+                                id
+                                key
+                                description
+                            }
+                        }
+                        pageInfo {
+                            hasNextPage
+                            endCursor
+                        }
+                    }
+                }
+            }
+            pageInfo {
+                hasNextPage
+                endCursor
+            }
+        }
+    }
+}
+
+query GetClusterQueues($orgSlug: ID!, $clusterUUID: ID!, $first: Int!, $after: String) {
+    organization(slug: $orgSlug) {
+        cluster(id: $clusterUUID) {
+            id
+            queues(first: $first, after: $after) {
+                edges {
+                    node {
+                        id
+                        key
+                        description
+                    }
+                }
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
+            }
+        }
+    }
+}
+
+mutation ClusterQueueDelete($input: ClusterQueueDeleteInput!) {
+    clusterQueueDelete(input: $input) {
+        deletedClusterQueueId
+    }
+}
