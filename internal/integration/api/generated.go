@@ -1867,12 +1867,18 @@ func (v *SearchPipelinesOrganization) GetPipelines() SearchPipelinesOrganization
 
 // SearchPipelinesOrganizationPipelinesPipelineConnection includes the requested fields of the GraphQL type PipelineConnection.
 type SearchPipelinesOrganizationPipelinesPipelineConnection struct {
-	Edges []SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge `json:"edges"`
+	Edges    []SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge `json:"edges"`
+	PageInfo SearchPipelinesOrganizationPipelinesPipelineConnectionPageInfo            `json:"pageInfo"`
 }
 
 // GetEdges returns SearchPipelinesOrganizationPipelinesPipelineConnection.Edges, and is useful for accessing the field via an interface.
 func (v *SearchPipelinesOrganizationPipelinesPipelineConnection) GetEdges() []SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge {
 	return v.Edges
+}
+
+// GetPageInfo returns SearchPipelinesOrganizationPipelinesPipelineConnection.PageInfo, and is useful for accessing the field via an interface.
+func (v *SearchPipelinesOrganizationPipelinesPipelineConnection) GetPageInfo() SearchPipelinesOrganizationPipelinesPipelineConnectionPageInfo {
+	return v.PageInfo
 }
 
 // SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge includes the requested fields of the GraphQL type PipelineEdge.
@@ -1903,6 +1909,27 @@ func (v *SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge
 // GetName returns SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdgeNodePipeline.Name, and is useful for accessing the field via an interface.
 func (v *SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdgeNodePipeline) GetName() string {
 	return v.Name
+}
+
+// SearchPipelinesOrganizationPipelinesPipelineConnectionPageInfo includes the requested fields of the GraphQL type PageInfo.
+// The GraphQL type's documentation follows.
+//
+// Information about pagination in a connection.
+type SearchPipelinesOrganizationPipelinesPipelineConnectionPageInfo struct {
+	// When paginating forwards, are there more items?
+	HasNextPage bool `json:"hasNextPage"`
+	// When paginating forwards, the cursor to continue.
+	EndCursor string `json:"endCursor"`
+}
+
+// GetHasNextPage returns SearchPipelinesOrganizationPipelinesPipelineConnectionPageInfo.HasNextPage, and is useful for accessing the field via an interface.
+func (v *SearchPipelinesOrganizationPipelinesPipelineConnectionPageInfo) GetHasNextPage() bool {
+	return v.HasNextPage
+}
+
+// GetEndCursor returns SearchPipelinesOrganizationPipelinesPipelineConnectionPageInfo.EndCursor, and is useful for accessing the field via an interface.
+func (v *SearchPipelinesOrganizationPipelinesPipelineConnectionPageInfo) GetEndCursor() string {
+	return v.EndCursor
 }
 
 // SearchPipelinesResponse is returned by SearchPipelines on success.
@@ -1977,6 +2004,7 @@ type __SearchPipelinesInput struct {
 	Slug   string `json:"slug"`
 	Search string `json:"search"`
 	First  int    `json:"first"`
+	After  string `json:"after"`
 }
 
 // GetSlug returns __SearchPipelinesInput.Slug, and is useful for accessing the field via an interface.
@@ -1987,6 +2015,9 @@ func (v *__SearchPipelinesInput) GetSearch() string { return v.Search }
 
 // GetFirst returns __SearchPipelinesInput.First, and is useful for accessing the field via an interface.
 func (v *__SearchPipelinesInput) GetFirst() int { return v.First }
+
+// GetAfter returns __SearchPipelinesInput.After, and is useful for accessing the field via an interface.
+func (v *__SearchPipelinesInput) GetAfter() string { return v.After }
 
 // The mutation executed by BuildCancel.
 const BuildCancel_Operation = `
@@ -2288,14 +2319,18 @@ func PipelineDelete(
 
 // The query executed by SearchPipelines.
 const SearchPipelines_Operation = `
-query SearchPipelines ($slug: ID!, $search: String!, $first: Int!) {
+query SearchPipelines ($slug: ID!, $search: String!, $first: Int!, $after: String) {
 	organization(slug: $slug) {
-		pipelines(search: $search, first: $first) {
+		pipelines(search: $search, first: $first, after: $after) {
 			edges {
 				node {
 					id
 					name
 				}
+			}
+			pageInfo {
+				hasNextPage
+				endCursor
 			}
 		}
 	}
@@ -2308,6 +2343,7 @@ func SearchPipelines(
 	slug string,
 	search string,
 	first int,
+	after string,
 ) (data_ *SearchPipelinesResponse, err_ error) {
 	req_ := &graphql.Request{
 		OpName: "SearchPipelines",
@@ -2316,6 +2352,7 @@ func SearchPipelines(
 			Slug:   slug,
 			Search: search,
 			First:  first,
+			After:  after,
 		},
 	}
 

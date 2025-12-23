@@ -82,14 +82,18 @@ mutation PipelineDelete($input: PipelineDeleteInput!) {
     }
 }
 
-query SearchPipelines($slug: ID!, $search: String!, $first: Int!) {
+query SearchPipelines($slug: ID!, $search: String!, $first: Int!, $after: String) {
     organization(slug: $slug) {
-        pipelines(search: $search, first: $first) {
+        pipelines(search: $search, first: $first, after: $after) {
             edges {
                 node {
                     id
                     name
                 }
+            }
+            pageInfo {
+                hasNextPage
+                endCursor
             }
         }
     }

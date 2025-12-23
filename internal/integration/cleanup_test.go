@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Khan/genqlient/graphql"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
 	"github.com/buildkite/roko"
 	"github.com/stretchr/testify/assert"
@@ -20,14 +21,14 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 
 	ctx := context.Background()
 	graphqlClient := api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint)
+	orgSlug := getOrgSlug(t)
 
-	pipelines, err := api.SearchPipelines(ctx, graphqlClient, getOrgSlug(t), "test-", 100)
+	allPipelines, err := searchAllPipelines(ctx, t, graphqlClient, orgSlug, "test-")
 	require.NoError(t, err)
 
-	numPipelines := len(pipelines.Organization.Pipelines.Edges)
-	t.Logf("found %d pipelines to delete", numPipelines)
+	t.Logf("found %d total pipelines to delete", len(allPipelines))
 
-	for _, pipeline := range pipelines.Organization.Pipelines.Edges {
+	for _, pipeline := range allPipelines {
 		t.Run(pipeline.Node.Name, func(t *testing.T) {
 			tc := testcase{
 				T:            t,
@@ -89,4 +90,37 @@ func getOrgSlug(t *testing.T) string {
 		T: t,
 	}.Init()
 	return tc.Org
+}
+
+// searchAllPipelines fetches all pipelines matching the search prefix, paginating through all results.
+func searchAllPipelines(
+	ctx context.Context,
+	t *testing.T,
+	client graphql.Client,
+	orgSlug string,
+	searchPrefix string,
+) ([]api.SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge, error) {
+	var allPipelines []api.SearchPipelinesOrganizationPipelinesPipelineConnectionEdgesPipelineEdge
+	var cursor string
+	pageNum := 0
+
+	for {
+		pageNum++
+		pipelines, err := api.SearchPipelines(ctx, client, orgSlug, searchPrefix, 100, cursor)
+		if err != nil {
+			return nil, err
+		}
+
+		edges := pipelines.Organization.Pipelines.Edges
+		t.Logf("page %d: found %d pipelines", pageNum, len(edges))
+		allPipelines = append(allPipelines, edges...)
+
+		pageInfo := pipelines.Organization.Pipelines.PageInfo
+		if !pageInfo.HasNextPage {
+			break
+		}
+		cursor = pageInfo.EndCursor
+	}
+
+	return allPipelines, nil
 }
