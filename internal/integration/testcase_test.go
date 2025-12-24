@@ -22,7 +22,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
-	"github.com/buildkite/go-buildkite/v3/buildkite"
+	"github.com/buildkite/go-buildkite/v4"
 	"github.com/buildkite/roko"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/utils/ptr"
 	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
@@ -125,21 +124,21 @@ func (t testcase) PrepareQueueAndPipelineWithCleanup(ctx context.Context) string
 
 	var queueName string
 	queue := t.createClusterQueueWithCleanup()
-	queueName = *queue.Key
+	queueName = queue.Key
 
 	if queueName == "" {
 		queueName = t.QueueName()
 	}
 	p := t.createPipelineWithCleanup(ctx, queueName, nil)
-	return *p.GraphQLID
+	return p.GraphQLID
 }
 
-func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
+func (t testcase) createClusterQueueWithCleanup() buildkite.ClusterQueue {
 	t.Helper()
 
 	queueName := t.QueueName()
-	queue, _, err := t.Buildkite.ClusterQueues.Create(t.Org, t.ClusterUUID, &buildkite.ClusterQueueCreate{
-		Key: &queueName,
+	queue, _, err := t.Buildkite.ClusterQueues.Create(t.Context(), t.Org, t.ClusterUUID, buildkite.ClusterQueueCreate{
+		Key: queueName,
 	})
 	if err != nil {
 		t.Errorf("Unable to create cluster queue %s: %v", queueName, err)
@@ -155,20 +154,20 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
 		).DoWithContext(context.Background(), func(r *roko.Retrier) error {
-			// There is a small chance that we are deleting queue too soon before queue realize agent has disconnected.
-			_, err := t.Buildkite.ClusterQueues.Delete(t.Org, t.ClusterUUID, *queue.ID)
+			// t.Context() has been cancelled by the time this runs, so just use context.Background
+			_, err := t.Buildkite.ClusterQueues.Delete(context.Background(), t.Org, t.ClusterUUID, queue.ID)
 			return err
 		}); err != nil {
-			t.Errorf("Unable to clean up cluster queue %s: %v", *queue.ID, err)
+			t.Errorf("Unable to clean up cluster queue %s: %v", queue.ID, err)
 			return
 		}
-		t.Logf("deleted cluster queue! %s", *queue.ID)
+		t.Logf("deleted cluster queue! %s", queue.ID)
 	})
 
 	return queue
 }
 
-func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName string, custom map[string]string) *buildkite.Pipeline {
+func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName string, custom map[string]string) buildkite.Pipeline {
 	t.Helper()
 
 	tpl, err := template.ParseFS(fixtures, fmt.Sprintf("fixtures/%s", t.Fixture))
@@ -180,11 +179,11 @@ func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName strin
 	}
 	maps.Copy(tmplInput, custom)
 	require.NoError(t, tpl.Execute(&steps, tmplInput))
-	pipeline, _, err := t.Buildkite.Pipelines.Create(t.Org, &buildkite.CreatePipeline{
+	pipeline, _, err := t.Buildkite.Pipelines.Create(t.Context(), t.Org, buildkite.CreatePipeline{
 		Name:       t.PipelineName,
 		Repository: t.Repo,
 		ProviderSettings: &buildkite.GitHubSettings{
-			TriggerMode: ptr.To("none"),
+			TriggerMode: "none",
 		},
 		Configuration: steps.String(),
 		ClusterID:     t.ClusterUUID,
@@ -192,7 +191,9 @@ func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName strin
 	require.NoError(t, err)
 	EnsureCleanup(t.T, func() {
 		if !t.preserveEphemeralObjects() {
-			t.deletePipeline(ctx)
+			EnsureCleanup(t.T, func() {
+				deletePipeline(ctx, t.T, t.Buildkite, t.Org, t.PipelineName)
+			})
 		}
 	})
 
@@ -293,17 +294,12 @@ func (t testcase) FetchLogs(build api.Build) string {
 			continue
 		}
 
-		jobLog, _, err := client.Jobs.GetJobLog(
-			t.Org,
-			t.PipelineName,
-			strconv.Itoa(build.Number),
-			job.Uuid,
-		)
+		jobLog, _, err := client.Jobs.GetJobLog(t.Context(), t.Org, t.PipelineName, strconv.Itoa(build.Number), job.Uuid)
 		if !assert.NoError(t, err) || !assert.NotNil(t, jobLog.Content) {
 			continue
 		}
 
-		_, err = logs.WriteString(*jobLog.Content)
+		_, err = logs.WriteString(jobLog.Content)
 		assert.NoError(t, err)
 	}
 
@@ -322,17 +318,12 @@ func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 	require.NoError(t, err)
 	t.Buildkite = client
 
-	artifacts, _, err := client.Artifacts.ListByBuild(
-		t.Org,
-		t.PipelineName,
-		strconv.Itoa(build.Number),
-		nil,
-	)
+	artifacts, _, err := client.Artifacts.ListByBuild(t.Context(), t.Org, t.PipelineName, strconv.Itoa(build.Number), nil)
 	require.NoError(t, err)
 
 	filenames := make([]string, 0, len(artifacts))
 	for _, filename := range artifacts {
-		filenames = append(filenames, *filename.Filename)
+		filenames = append(filenames, filename.Filename)
 	}
 	for _, e := range expected {
 		assert.True(t, slices.Contains(filenames, e), "expected %v to contain %v", filenames, e)
