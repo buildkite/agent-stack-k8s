@@ -19,7 +19,7 @@ import (
 
 const (
 	pipelineSchema = "https://raw.githubusercontent.com/buildkite/pipeline-schema/main/schema.json"
-	k8sSchema      = "https://kubernetesjsonschema.dev/master/_definitions.json"
+	k8sSchema      = "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.35.0/_definitions.json"
 )
 
 //go:embed schema.json
