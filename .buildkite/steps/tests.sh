@@ -17,4 +17,5 @@ export AGENT_TOKEN_SECRET="agent-stack-k8s-secrets"
 go tool gotestsum --junitfile "junit-${BUILDKITE_JOB_ID}.xml" -- \
   -count=1 \
   -ldflags="-X ${package}.branch=${branch}" \
+  "$@" \
   ./...

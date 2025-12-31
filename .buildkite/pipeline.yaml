@@ -13,6 +13,22 @@ x-anchors:
           checkout:
             fetchFlags: -v --tags
 
+  run-tests: &run-tests
+    artifact_paths: junit-*.xml
+    secrets:
+      INTEGRATION_TEST_BUILDKITE_TOKEN: integration_test_buildkite_api_token
+      BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
+    image: golang:1.25.5@sha256:a22b2e6c5e753345b9759fba9e5c1731ebe28af506745e98f406cc85d50c828e
+    command: .buildkite/steps/tests.sh
+    plugins:
+      - kubernetes:
+          podTemplate: go-with-cache
+          podSpecPatch:
+            serviceAccountName: integration-tests
+      - test-collector:
+          files: junit-*.xml
+          format: junit
+
 agents:
   queue: kubernetes
 
@@ -47,22 +63,26 @@ steps:
     command: .buildkite/steps/agent.sh
 
   - label: ":buildkite::test_tube: tests"
+    <<: *run-tests
     key: tests
     depends_on: agent
-    artifact_paths: junit-*.xml
-    secrets:
-      INTEGRATION_TEST_BUILDKITE_TOKEN: integration_test_buildkite_api_token
-      BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
-    image: golang:1.25.5@sha256:a22b2e6c5e753345b9759fba9e5c1731ebe28af506745e98f406cc85d50c828e
-    command: .buildkite/steps/tests.sh
+
+  - input: "Cleanup orphaned buildkite resources?"
+    key: cleanup-orphans-block
+    depends_on: tests
+
+  - label: ":broom::buildkite: Clean up orphaned pipelines and queues"
+    <<: *run-tests
+    key: cleanup-orphans
+    depends_on: cleanup-orphans-block
+    command: .buildkite/steps/tests.sh -v -run TestCleanupOrphanedResources
+    env:
+      CLEANUP_PIPELINES: "true"
     plugins:
       - kubernetes:
           podTemplate: go-with-cache
           podSpecPatch:
             serviceAccountName: integration-tests
-      - test-collector:
-          files: junit-*.xml
-          format: junit
 
   - label: ":docker: build and push controller image"
     key: controller
