@@ -34,6 +34,8 @@ resource-classes:
         memory: "512Mi"
         hugepages-2Mi: "1Mi"
 
+default-resource-class-name: "small"
+
 queue: my-queue
 tags:
   - priority=high

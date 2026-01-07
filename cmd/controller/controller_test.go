@@ -64,6 +64,7 @@ func TestReadAndParseConfig(t *testing.T) {
 				},
 			},
 		},
+		DefaultResourceClassName: "small",
 
 		WorkspaceVolume: &corev1.Volume{
 			Name: "workspace-2-the-reckoning",
