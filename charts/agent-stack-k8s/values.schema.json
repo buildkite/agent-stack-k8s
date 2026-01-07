@@ -677,6 +677,72 @@
           "default": 1000000,
           "minimum": 1,
           "title": "Sets the maximum number of Jobs the controller will hold in the work queue."
+        },
+        "resource-classes": {
+          "type": "object",
+          "default": null,
+          "title": "Resource classes",
+          "description": "Define reusable resource configurations that can be applied to jobs based on the resource_class agent tag.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "resource": {
+                "$ref": "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+              },
+              "nodeSelector": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "examples": [
+            {
+              "xs": {
+                "resource": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  },
+                  "limits": {
+                    "cpu": "200m",
+                    "memory": "256Mi"
+                  }
+                }
+              },
+              "gpu": {
+                "resource": {
+                  "requests": {
+                    "nvidia.com/gpu": "1",
+                    "cpu": "1000m",
+                    "memory": "2Gi"
+                  },
+                  "limits": {
+                    "nvidia.com/gpu": "1",
+                    "cpu": "2000m",
+                    "memory": "4Gi"
+                  }
+                },
+                "nodeSelector": {
+                  "accelerator": "nvidia-tesla-k80"
+                }
+              },
+              "spot": {
+                "nodeSelector": {
+                  "node-type": "spot",
+                  "instance-type": "large"
+                }
+              }
+            }
+          ]
+        },
+        "default-resource-class-name": {
+          "type": "string",
+          "default": "",
+          "title": "Default resource class name",
+          "description": "The name of a resource class (defined in resource-classes) to apply by default to jobs that do not specify a resource_class agent tag.",
+          "examples": ["xs", "spot"]
         }
       },
       "examples": [
