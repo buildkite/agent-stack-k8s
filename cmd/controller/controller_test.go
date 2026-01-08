@@ -186,3 +186,58 @@ func TestReadAndParseConfig(t *testing.T) {
 		t.Errorf("parsed config diff (-got +want):\n%s", diff)
 	}
 }
+
+func TestParseAndValidateConfig_DefaultResourceClassValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		config  map[string]any
+		wantErr string
+	}{
+		{
+			name: "default references non-existent resource class",
+			config: map[string]any{
+				"agent-token-secret":          "test",
+				"image":                       "test:latest",
+				"job-active-deadline-seconds": 3600,
+				"namespace":                   "default",
+				"default-resource-class-name": "nonexistent",
+				"resource-classes": map[string]any{
+					"small": map[string]any{
+						"resource": map[string]any{
+							"requests": map[string]any{"cpu": "100m"},
+						},
+					},
+				},
+			},
+			wantErr: `default-resource-class-name "nonexistent" not found in resource-classes`,
+		},
+		{
+			name: "default specified but no resource classes defined",
+			config: map[string]any{
+				"agent-token-secret":          "test",
+				"image":                       "test:latest",
+				"job-active-deadline-seconds": 3600,
+				"namespace":                   "default",
+				"default-resource-class-name": "small",
+			},
+			wantErr: `default-resource-class-name "small" specified but no resource-classes defined`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := &cobra.Command{}
+			controller.AddConfigFlags(cmd)
+			v, err := controller.ReadConfigFromFileArgsAndEnv(cmd, []string{})
+			require.NoError(t, err)
+
+			for k, val := range tt.config {
+				v.Set(k, val)
+			}
+
+			_, err = controller.ParseAndValidateConfig(v)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}

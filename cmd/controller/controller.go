@@ -167,6 +167,15 @@ func ParseAndValidateConfig(v *viper.Viper) (*config.Config, error) {
 		}
 	}
 
+	if cfg.DefaultResourceClassName != "" {
+		if cfg.ResourceClasses == nil {
+			return nil, fmt.Errorf("default-resource-class-name %q specified but no resource-classes defined", cfg.DefaultResourceClassName)
+		}
+		if _, exists := cfg.ResourceClasses[cfg.DefaultResourceClassName]; !exists {
+			return nil, fmt.Errorf("default-resource-class-name %q not found in resource-classes", cfg.DefaultResourceClassName)
+		}
+	}
+
 	if _, err := resource.ParseQuantity(cfg.ImageCheckContainerCPULimit); err != nil {
 		return nil, fmt.Errorf("invalid CPU resource limit defined: %s", cfg.ImageCheckContainerCPULimit)
 	}
