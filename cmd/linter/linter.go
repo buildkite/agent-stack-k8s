@@ -9,10 +9,9 @@ import (
 	"log"
 	"os"
 
+	"github.com/alecthomas/kong"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/buildkite/go-buildkite/v3/buildkite"
-	"github.com/go-playground/validator/v10"
-	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
 	"sigs.k8s.io/yaml"
 )
@@ -25,39 +24,32 @@ const (
 //go:embed schema.json
 var schema string
 
-type Options struct {
-	File string `validate:"required,file"`
+// CLI represents the lint subcommand for Kong.
+type CLI struct {
+	File string `kong:"arg,required,help='Path to the pipeline file'"`
 }
 
-func (o *Options) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVarP(&o.File, "file", "f", "", "path to the pipeline file, or {-} for stdin")
-}
-
-func (o *Options) Validate() error {
-	return validator.New().Struct(o)
-}
-
-func New() *cobra.Command {
-	o := &Options{}
-
-	cmd := &cobra.Command{
-		Use:          "lint",
-		Short:        "A tool for linting Buildkite pipelines",
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := o.Validate(); err != nil {
-				return fmt.Errorf("failed to validate config: %w", err)
-			}
-			return Lint(cmd.Context(), o)
-		},
+// Run parses CLI arguments and executes the lint command.
+func Run() error {
+	cli := &CLI{}
+	parser, err := kong.New(
+		cli,
+		kong.Name("agent-stack-k8s lint"),
+		kong.Description("A tool for linting Buildkite pipelines"),
+		kong.UsageOnError(),
+	)
+	if err != nil {
+		return err
 	}
-	o.AddFlags(cmd)
+	_, err = parser.Parse(os.Args[2:])
+	parser.FatalIfErrorf(err)
 
-	return cmd
+	return Lint(context.Background(), cli.File)
 }
 
-func Lint(ctx context.Context, options *Options) error {
-	contents, err := os.ReadFile(options.File)
+// Lint validates a Buildkite pipeline file against the schema.
+func Lint(ctx context.Context, file string) error {
+	contents, err := os.ReadFile(file)
 	if err != nil {
 		return fmt.Errorf("failed to open file: %w", err)
 	}
@@ -105,7 +97,7 @@ func Lint(ctx context.Context, options *Options) error {
 	if err := schemaLoader.AddSchema(k8sSchema, gojsonschema.NewReferenceLoader(k8sSchema)); err != nil {
 		return fmt.Errorf("failed to add kubernetes schema: %w", err)
 	}
-	schema, err := schemaLoader.Compile(gojsonschema.NewStringLoader(schema))
+	compiledSchema, err := schemaLoader.Compile(gojsonschema.NewStringLoader(schema))
 	if err != nil {
 		return fmt.Errorf("failed to compile schemas: %w", err)
 	}
@@ -115,7 +107,7 @@ func Lint(ctx context.Context, options *Options) error {
 	}
 	documentLoader := gojsonschema.NewBytesLoader(bs)
 
-	result, err := schema.Validate(documentLoader)
+	result, err := compiledSchema.Validate(documentLoader)
 	if err != nil {
 		return fmt.Errorf("failed to validate: %w", err)
 	}
