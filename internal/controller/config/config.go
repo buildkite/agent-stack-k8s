@@ -92,7 +92,8 @@ type Config struct {
 	DefaultMetadata        Metadata        `json:"default-metadata"         validate:"omitempty"`
 	AdditionalRedactedVars []string        `json:"additional-redacted-vars" validate:"omitempty"`
 
-	ResourceClasses map[string]*ResourceClass `json:"resource-classes" validate:"omitempty"`
+	ResourceClasses          map[string]*ResourceClass `json:"resource-classes"          validate:"omitempty"`
+	DefaultResourceClassName string                    `json:"default-resource-class-name" validate:"omitempty"`
 
 	DefaultImagePullPolicy      corev1.PullPolicy `json:"default-image-pull-policy"       validate:"omitempty"`
 	DefaultImageCheckPullPolicy corev1.PullPolicy `json:"default-image-check-pull-policy" validate:"omitempty"`

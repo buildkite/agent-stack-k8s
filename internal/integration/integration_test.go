@@ -73,6 +73,40 @@ func TestResourceClass(t *testing.T) {
 	tc.AssertLogsContain(build, "✅ CPU limit is correctly set to ~500m")
 }
 
+func TestDefaultResourceClass(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "default-resource-class.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+
+	testCfg := cfg
+	testCfg.ResourceClasses = map[string]*config.ResourceClass{
+		"default-class": {
+			Resource: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("125m"),
+					corev1.ResourceMemory: resource.MustParse("128Mi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("250m"),
+					corev1.ResourceMemory: resource.MustParse("256Mi"),
+				},
+			},
+		},
+	}
+	testCfg.DefaultResourceClassName = "default-class"
+
+	tc.StartController(ctx, testCfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "✅ Memory limit is correctly set to ~256MB (from default resource class)")
+	tc.AssertLogsContain(build, "✅ CPU limit is correctly set to ~250m (from default resource class)")
+}
+
 func TestPodTemplate(t *testing.T) {
 	tc := testcase{
 		T:       t,

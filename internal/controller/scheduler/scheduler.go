@@ -79,6 +79,7 @@ type Config struct {
 	ImageCheckContainerCPULimit          string
 	ImageCheckContainerMemoryLimit       string
 	ResourceClasses                      map[string]*config.ResourceClass
+	DefaultResourceClassName             string
 }
 
 func New(logger *slog.Logger, client kubernetes.Interface, agentClient *api.AgentClient, cfg Config) *worker {

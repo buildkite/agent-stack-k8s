@@ -1,0 +1,66 @@
+steps:
+  - label: ":memory: Default Resource Class Test"
+    agents:
+      queue: "{{.queue}}"
+    image: alpine:latest
+    command: |-
+      echo "=== Memory Limit Check ==="
+      # Check memory limit from cgroup v1 or v2
+      if [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then
+        # cgroup v1
+        MEMORY_LIMIT=$$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes)
+      elif [ -f /sys/fs/cgroup/memory.max ]; then
+        # cgroup v2
+        MEMORY_LIMIT=$$(cat /sys/fs/cgroup/memory.max)
+      else
+        echo "Could not find memory limit file"
+        exit 1
+      fi
+
+      echo "Memory limit: $$MEMORY_LIMIT bytes"
+
+      # Convert to MB for easier comparison (256Mi = 268435456 bytes)
+      MEMORY_LIMIT_MB=$$((MEMORY_LIMIT / 1024 / 1024))
+      echo "Memory limit: $${MEMORY_LIMIT_MB}MB"
+
+      # Check if memory limit is approximately 256MB (allowing some variance)
+      # We expect 256Mi which is 268435456 bytes = 256MB
+      if [ "$$MEMORY_LIMIT_MB" -ge 240 ] && [ "$$MEMORY_LIMIT_MB" -le 280 ]; then
+        echo "✅ Memory limit is correctly set to ~256MB (from default resource class)"
+      else
+        echo "❌ Memory limit is not as expected. Got $${MEMORY_LIMIT_MB}MB, expected ~256MB"
+        exit 1
+      fi
+
+      echo "=== CPU Limit Check ==="
+      # Check CPU limit from cgroup
+      if [ -f /sys/fs/cgroup/cpu/cpu.cfs_quota_us ] && [ -f /sys/fs/cgroup/cpu/cpu.cfs_period_us ]; then
+        # cgroup v1
+        CPU_QUOTA=$$(cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us)
+        CPU_PERIOD=$$(cat /sys/fs/cgroup/cpu/cpu.cfs_period_us)
+      elif [ -f /sys/fs/cgroup/cpu.max ]; then
+        # cgroup v2
+        CPU_MAX=$$(cat /sys/fs/cgroup/cpu.max)
+        CPU_QUOTA=$$(echo $$CPU_MAX | cut -d' ' -f1)
+        CPU_PERIOD=$$(echo $$CPU_MAX | cut -d' ' -f2)
+      else
+        echo "Could not find CPU limit files"
+        exit 1
+      fi
+
+      if [ "$$CPU_QUOTA" != "-1" ] && [ "$$CPU_QUOTA" != "max" ]; then
+        CPU_CORES=$$((CPU_QUOTA * 1000 / CPU_PERIOD))
+        echo "CPU quota: $${CPU_QUOTA}, CPU period: $${CPU_PERIOD}"
+        echo "CPU limit: $${CPU_CORES}m cores"
+
+        # Check if CPU limit is approximately 250m (allowing some variance)
+        if [ "$$CPU_CORES" -ge 200 ] && [ "$$CPU_CORES" -le 300 ]; then
+          echo "✅ CPU limit is correctly set to ~250m (from default resource class)"
+        else
+          echo "❌ CPU limit is not as expected. Got $${CPU_CORES}m, expected ~250m"
+          exit 1
+        fi
+      else
+        echo "❌ No CPU limit set"
+        exit 1
+      fi

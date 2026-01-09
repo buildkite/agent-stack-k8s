@@ -185,6 +185,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		ImageCheckContainerCPULimit:          cfg.ImageCheckContainerCPULimit,
 		ImageCheckContainerMemoryLimit:       cfg.ImageCheckContainerMemoryLimit,
 		ResourceClasses:                      cfg.ResourceClasses,
+		DefaultResourceClassName:             cfg.DefaultResourceClassName,
 	})
 
 	informerFactory, err := NewInformerFactory(k8sClient, cfg.Namespace, cfg.ID)
