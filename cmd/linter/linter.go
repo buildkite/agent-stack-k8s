@@ -10,7 +10,7 @@ import (
 	"os"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
-	"github.com/buildkite/go-buildkite/v3/buildkite"
+	"github.com/buildkite/go-buildkite/v4"
 	"github.com/go-playground/validator/v10"
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"

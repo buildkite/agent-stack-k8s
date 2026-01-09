@@ -1,16 +1,18 @@
 package integration_test
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"sync"
 	"testing"
 )
 
-var cf struct {
-	o sync.Once
-	m sync.RWMutex
-	f []func()
+var cleanupper struct {
+	o            sync.Once
+	mtx          sync.RWMutex
+	cleanupFuncs []func()
 }
 
 func init() {
@@ -20,28 +22,37 @@ func init() {
 }
 
 func cleanupOnInterrupt(c chan os.Signal) {
-	for range c {
-		cf.o.Do(func() {
-			cf.m.RLock()
-			defer cf.m.RUnlock()
-			for i := len(cf.f) - 1; i >= 0; i-- {
-				cf.f[i]()
-			}
-			os.Exit(1)
-		})
-	}
-}
+	wasAlreadySignalled := false
 
-func CleanupOnInterrupt(cleanup func()) {
-	cf.m.Lock()
-	defer cf.m.Unlock()
-	cf.f = append(cf.f, cleanup)
+	for range c {
+		if wasAlreadySignalled {
+			fmt.Println("Interrupt received again, exiting without cleaning up Buildkite resources...")
+			os.Exit(1)
+		}
+
+		wasAlreadySignalled = true
+		go func() {
+			cleanupper.o.Do(func() {
+				cleanupper.mtx.RLock()
+				defer cleanupper.mtx.RUnlock()
+				for _, f := range slices.Backward(cleanupper.cleanupFuncs) {
+					f()
+				}
+				os.Exit(1)
+			})
+		}()
+	}
 }
 
 // EnsureCleanup will run the provided cleanup function when the test ends,
 // either via t.Cleanup or on interrupt via CleanupOnInterrupt.
 // But this can't cover test timeout case.
 func EnsureCleanup(t *testing.T, cleanup func()) {
+	// Register a normal t.Cleanup for when tests finish normally
 	t.Cleanup(cleanup)
-	CleanupOnInterrupt(cleanup)
+
+	// Now, ensure that the cleanup funcs run even if the test is interrupted by a signal
+	cleanupper.mtx.Lock()
+	defer cleanupper.mtx.Unlock()
+	cleanupper.cleanupFuncs = append(cleanupper.cleanupFuncs, cleanup)
 }

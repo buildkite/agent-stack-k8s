@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/Khan/genqlient v0.8.1
 	github.com/buildkite/agent/v3 v3.115.2
-	github.com/buildkite/go-buildkite/v3 v3.13.0
+	github.com/buildkite/go-buildkite/v4 v4.13.1
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/stacksapi v1.0.0
 	github.com/distribution/reference v0.6.0
@@ -98,7 +98,7 @@ require (
 	github.com/buildkite/go-pipeline v0.16.0 // indirect
 	github.com/buildkite/interpolate v0.1.5 // indirect
 	github.com/buildkite/shellwords v1.0.1 // indirect
-	github.com/cenkalti/backoff v1.1.1-0.20171020064038-309aa717adbf // indirect
+	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
