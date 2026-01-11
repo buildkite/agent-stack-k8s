@@ -11,7 +11,6 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
-	"github.com/spf13/cobra"
 )
 
 const (
@@ -32,14 +31,24 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	cmd := &cobra.Command{}
-	controller.AddConfigFlags(cmd)
-	v, err := controller.ReadConfigFromFileArgsAndEnv(cmd, os.Args[1:])
-	if err != nil {
-		log.Fatalf("Error reading config: %s", err)
+	// Build args for config parsing from os.Args
+	// Accepts -f, --config, -f=, --config= flags
+	var configArgs []string
+	for i, arg := range os.Args {
+		if arg == "-f" || arg == "--config" {
+			if i+1 < len(os.Args) {
+				configArgs = append(configArgs, "--config="+os.Args[i+1])
+			}
+		}
+		if strings.HasPrefix(arg, "-f=") {
+			configArgs = append(configArgs, "--config="+strings.TrimPrefix(arg, "-f="))
+		}
+		if strings.HasPrefix(arg, "--config=") {
+			configArgs = append(configArgs, arg)
+		}
 	}
 
-	testCfg, err := controller.ParseAndValidateConfig(v)
+	testCfg, err := controller.BuildConfigFromArgs(configArgs)
 	if err != nil {
 		log.Fatalf("Error parsing config: %s", err)
 	}

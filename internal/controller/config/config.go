@@ -37,9 +37,7 @@ const (
 
 var DefaultAgentImage = "ghcr.io/buildkite/agent:" + version.Version()
 
-// viper requires mapstructure struct tags, but the k8s types only have json struct tags.
-// mapstructure (the module) supports switching the struct tag to "json", viper does not. So we have
-// to have the `mapstructure` tag for viper and the `json` tag is used by the mapstructure!
+// Config holds the controller configuration.
 type Config struct {
 	Debug bool `json:"debug"`
 
