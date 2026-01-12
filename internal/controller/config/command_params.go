@@ -1,8 +1,8 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -129,23 +129,16 @@ var AllowedInterposers = []Interposer{
 // BUILDKITE_COMMAND.
 type Interposer string
 
-var interposerType = reflect.TypeOf(InterposerBuildkite)
-
-// StringToInterposer implements a [mapstructure.DecodeHookFunc] for decoding
-// a string into CmdInterposer.
-func StringToInterposer(from, to reflect.Type, data any) (any, error) {
-	if from.Kind() != reflect.String {
-		return data, nil
+// UnmarshalJSON validates that the interposer value is one of the allowed values.
+func (i *Interposer) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
 	}
-	if to != interposerType {
-		return data, nil
-	}
-	interp := Interposer(data.(string))
-	if interp == "" {
-		return "", nil
-	}
+	interp := Interposer(s)
 	if !slices.Contains(AllowedInterposers, interp) {
-		return data, fmt.Errorf("invalid command interposer %q", interp)
+		return fmt.Errorf("invalid interposer %q, must be one of: %v", s, AllowedInterposers)
 	}
-	return interp, nil
+	*i = interp
+	return nil
 }
