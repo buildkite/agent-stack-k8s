@@ -221,6 +221,16 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 	// But it does bring a trade-off of more likely reservation expiration.
 	reserver := reserver.New(logger.With("component", "reserver"), agentClient, limiter)
 
+	// PodCompletionWatcher watches k8s for pods where the agent has terminated,
+	// in order to clean up the pod. This is necessary for cleaning up unmanaged
+	// containers added via podSpecPatch, and also provides backward compatibility
+	// with legacy sidecars from older controller versions (pre-KEP-753).
+	completions := scheduler.NewPodCompletionWatcher(logger.With("component", "completions"), k8sClient)
+	if err := completions.RegisterInformer(ctx, informerFactory); err != nil {
+		logger.Error("failed to register completions informer", "error", err)
+		return
+	}
+
 	// JobWatcher watches for jobs in bad conditions to clean up:
 	// * Jobs that fail without ever creating a pod
 	// * Jobs that stall forever without ever creating a pod
