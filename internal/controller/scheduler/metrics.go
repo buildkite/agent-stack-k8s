@@ -130,6 +130,37 @@ var (
 	}, []string{"reason"})
 )
 
+// Completions watcher metrics
+// These metrics track the legacy sidecar cleanup process for backward compatibility
+// with jobs created by older controller versions.
+
+var (
+	completionWatcherOnAddEventCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "completion_watcher",
+		Name:      "onadd_events_total",
+		Help:      "Count of OnAdd informer events",
+	})
+	completionWatcherOnUpdateEventCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "completion_watcher",
+		Name:      "onupdate_events_total",
+		Help:      "Count of OnUpdate informer events",
+	})
+	completionWatcherJobCleanupsCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "completion_watcher",
+		Name:      "cleanups_total",
+		Help:      "Count of legacy sidecar jobs successfully cleaned up",
+	})
+	completionWatcherJobCleanupErrorsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "completion_watcher",
+		Name:      "cleanup_errors_total",
+		Help:      "Count of errors during attempts to clean up a legacy sidecar job",
+	}, []string{"reason"})
+)
+
 // Pod watcher metrics
 
 var (
