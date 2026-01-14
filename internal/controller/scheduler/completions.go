@@ -45,8 +45,9 @@ import (
 // Always), this cleanup is redundant but harmless as Kubernetes already handles
 // their termination automatically.
 type completionsWatcher struct {
-	logger *slog.Logger
-	k8s    kubernetes.Interface
+	logger                        *slog.Logger
+	k8s                           kubernetes.Interface
+	terminationGracePeriodSeconds int64
 
 	// This is the context passed to RegisterInformer.
 	// It's being stored here (grrrr!) because the k8s ResourceEventHandler
@@ -56,10 +57,11 @@ type completionsWatcher struct {
 	resourceEventHandlerCtx context.Context
 }
 
-func NewPodCompletionWatcher(logger *slog.Logger, k8s kubernetes.Interface) *completionsWatcher {
+func NewPodCompletionWatcher(logger *slog.Logger, k8s kubernetes.Interface, terminationGracePeriodSeconds int) *completionsWatcher {
 	return &completionsWatcher{
-		logger: logger,
-		k8s:    k8s,
+		logger:                        logger,
+		k8s:                           k8s,
+		terminationGracePeriodSeconds: int64(terminationGracePeriodSeconds),
 	}
 }
 
@@ -125,7 +127,7 @@ func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *corev1.Po
 		if err != nil {
 			return err
 		}
-		job.Spec.ActiveDeadlineSeconds = ptr.To[int64](config.DefaultTerminationGracePeriodSeconds)
+		job.Spec.ActiveDeadlineSeconds = ptr.To(w.terminationGracePeriodSeconds)
 		_, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(ctx, job, metav1.UpdateOptions{})
 		return err
 	}); err != nil {

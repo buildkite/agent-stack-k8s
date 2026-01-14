@@ -1,0 +1,17 @@
+steps:
+  - label: ":broom: completions cleanup"
+    agents:
+      queue: "{{.queue}}"
+    command: echo "Job completed successfully"
+    plugins:
+      - kubernetes:
+          sidecars:
+            # Native Kubernetes sidecar (KEP-753) - Kubernetes automatically terminates
+            # this when all regular containers complete. Using nginx as it runs indefinitely.
+            - image: nginx:latest
+          podSpecPatch:
+            containers:
+              # Unmanaged container added via podSpecPatch - needs completionsWatcher to clean up.
+              # Without completionsWatcher, this container would run forever preventing pod cleanup.
+              - name: unmanaged-sidecar
+                image: nginx:latest
