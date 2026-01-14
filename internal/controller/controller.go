@@ -226,7 +226,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 	// in order to clean up the pod. This is necessary for cleaning up unmanaged
 	// containers added via podSpecPatch, and also provides backward compatibility
 	// with legacy sidecars from older controller versions (pre-KEP-753).
-	completions := scheduler.NewPodCompletionWatcher(logger.With("component", "completions"), k8sClient)
+	completions := scheduler.NewPodCompletionWatcher(logger.With("component", "completions"), k8sClient, cfg.DefaultTerminationGracePeriodSeconds)
 	if err := completions.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Error("failed to register completions informer", "error", err)
 		return
