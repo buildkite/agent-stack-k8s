@@ -26,10 +26,6 @@ template:
             mountPath: /var/cache/go-mod
           - name: golangci-lint-cache
             mountPath: /var/cache/golangci-lint
-        resources:
-          requests:
-            cpu: 1000m
-            memory: 1Gi
     volumes:
       - name: go-build
         hostPath:

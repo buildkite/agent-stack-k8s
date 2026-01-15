@@ -1,0 +1,22 @@
+# Helm values for deploying to our in-house k8s cluster
+config:
+  debug: true
+  profiler-address: localhost:6060
+
+  default-resource-class-name: small
+  resource-classes:
+    small:
+      resource:
+        requests:
+          cpu: "1"
+          memory: 1Gi
+    medium:
+      resource:
+        requests:
+          cpu: "2"
+          memory: 2Gi
+
+monitoring:
+  podMonitor:
+    deploy: true
+  deployGrafanaDashboard: true
