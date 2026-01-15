@@ -909,3 +909,71 @@ func TestImageAttribute(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 }
+
+// TestCompletionsWatcherCleansUpSidecars verifies that pods with sidecar
+// containers are properly cleaned up after the agent container terminates.
+//
+// This test covers two cleanup mechanisms:
+//  1. Kubernetes native sidecars (KEP-753): A sidecar defined via the `sidecars`
+//     field, which Kubernetes automatically terminates when all regular
+//     containers complete.
+//  2. completionsWatcher: An unmanaged container added via podSpecPatch, which
+//     requires the completionsWatcher to set ActiveDeadlineSeconds on the K8s
+//     Job to trigger cleanup.
+//
+// Both sidecars run "sleep infinity". Without proper cleanup, they would run
+// forever. The test verifies that the K8s Job reaches a terminal state,
+// confirming both cleanup mechanisms are working.
+func TestCompletionsWatcherCleansUpSidecars(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "completions-cleanup.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+
+	// Use a short termination grace period so the test runs faster.
+	// The completionsWatcher sets ActiveDeadlineSeconds to this value when
+	// the agent terminates, triggering cleanup of unmanaged containers.
+	testCfg := cfg
+	testCfg.DefaultTerminationGracePeriodSeconds = 5
+
+	tc.StartController(ctx, testCfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+
+	// Get the job UUID from the build
+	job := build.Jobs.Edges[0].Node.(*api.JobJobTypeCommand)
+	jobName := testCfg.JobPrefix + job.Uuid
+
+	// Wait for the K8s Job to reach a terminal state.
+	// The completionsWatcher should have set ActiveDeadlineSeconds, causing
+	// Kubernetes to terminate the job (and the unmanaged "sleep infinity" container).
+	// The job will be in "Failed" state because it exceeded ActiveDeadlineSeconds.
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(30),
+		roko.WithStrategy(roko.Constant(2*time.Second)),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		k8sJob, err := tc.Kubernetes.BatchV1().Jobs(testCfg.Namespace).Get(ctx, jobName, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get job %s: %w", jobName, err)
+		}
+
+		for _, condition := range k8sJob.Status.Conditions {
+			if condition.Type == "Complete" && condition.Status == corev1.ConditionTrue {
+				t.Logf("K8s Job %s completed successfully", jobName)
+				return nil
+			}
+			if condition.Type == "Failed" && condition.Status == corev1.ConditionTrue {
+				// This is expected - the job fails because ActiveDeadlineSeconds is exceeded
+				t.Logf("K8s Job %s terminated via ActiveDeadlineSeconds (expected)", jobName)
+				return nil
+			}
+		}
+
+		return fmt.Errorf("job %s not yet in terminal state, conditions: %v", jobName, k8sJob.Status.Conditions)
+	})
+	require.NoError(t, err, "K8s Job should reach terminal state after completionsWatcher cleanup")
+}
