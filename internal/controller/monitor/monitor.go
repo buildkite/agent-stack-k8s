@@ -49,9 +49,7 @@ func New(logger *slog.Logger, agentClient *api.AgentClient, cfg Config) (*Monito
 
 // getScheduledCommandJobs gets scheduled jobs from the API.
 func (m *Monitor) getScheduledCommandJobs(ctx context.Context) (jobs []*api.AgentScheduledJob, retryAfter time.Duration, err error) {
-	m.logger.Info("retrieving scheduled jobs via Agent API...",
-		"poll-interval", m.cfg.PollInterval,
-	)
+	m.logger.Debug("retrieving scheduled jobs via Agent API...", "poll-interval", m.cfg.PollInterval)
 
 	jobQueryCounter.Inc()
 	start := time.Now()
@@ -155,7 +153,11 @@ func (m *Monitor) Start(ctx context.Context, handler model.ManyJobHandler) <-cha
 				continue
 			}
 
-			m.logger.Info("job processing of Agent API results completed...", "agent-api-jobs-processed", len(jobs))
+			level := slog.LevelDebug
+			if len(jobs) > 0 {
+				level = slog.LevelInfo
+			}
+			m.logger.Log(ctx, level, "job processing of Agent API results completed", "agent-api-jobs-processed", len(jobs))
 
 			if len(jobs) == 0 {
 				continue
