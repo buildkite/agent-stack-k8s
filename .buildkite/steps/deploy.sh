@@ -18,9 +18,6 @@ helm upgrade agent-stack-k8s "${helm_repo_pecr}/agent-stack-k8s" \
   --install \
   --create-namespace \
   --wait \
+  -f .buildkite/production-helm-values.yaml \
   --set agentToken="${DEFAULT_CLUSTER_TOKEN}" \
-  --set config.image="${agent_image}" \
-  --set config.debug=true \
-  --set config.profiler-address=localhost:6060 \
-  --set monitoring.podMonitor.deploy=true \
-  --set monitoring.deployGrafanaDashboard=true
+  --set config.image="${agent_image}"
