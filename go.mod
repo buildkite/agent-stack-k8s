@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/Khan/genqlient v0.8.1
 	github.com/alecthomas/kong v1.13.0
-	github.com/buildkite/agent/v3 v3.115.3
+	github.com/buildkite/agent/v3 v3.115.4
 	github.com/buildkite/go-buildkite/v3 v3.13.0
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/stacksapi v1.0.0
