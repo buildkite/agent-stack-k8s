@@ -919,6 +919,36 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *co
 	return &patchedSpec, nil
 }
 
+// generatePortableUserScript generates a shell script that creates a user
+// and optionally a group, working on both Alpine (BusyBox) and glibc-based
+// systems (Debian, Ubuntu, RHEL).
+func generatePortableUserScript(uid, gid int64, username, groupname string) string {
+	var sb strings.Builder
+	sb.WriteString("# Portable user/group creation\n")
+	sb.WriteString("if command -v adduser >/dev/null 2>&1 && adduser --help 2>&1 | grep -q BusyBox; then\n")
+
+	// BusyBox (Alpine) branch
+	if groupname != "" && groupname != "root" {
+		fmt.Fprintf(&sb, "    addgroup -g %d %s 2>/dev/null || true\n", gid, groupname)
+	}
+	fmt.Fprintf(&sb, "    adduser -D -u %d -G %s -h /workspace %s\n", uid, groupname, username)
+
+	sb.WriteString("elif command -v useradd >/dev/null 2>&1; then\n")
+
+	// shadow-utils (Debian/Ubuntu/RHEL) branch
+	if groupname != "" && groupname != "root" {
+		fmt.Fprintf(&sb, "    groupadd -g %d %s 2>/dev/null || true\n", gid, groupname)
+	}
+	fmt.Fprintf(&sb, "    useradd -M -u %d -g %s -d /workspace -s /bin/sh %s\n", uid, groupname, username)
+
+	sb.WriteString("else\n")
+	sb.WriteString(`    echo "Error: No supported user creation tool found" >&2` + "\n")
+	sb.WriteString("    exit 1\n")
+	sb.WriteString("fi\n")
+
+	return sb.String()
+}
+
 func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspaceVolume *corev1.Volume) corev1.Container {
 	podUser, podGroup := int64(0), int64(0)
 	if podSpec.SecurityContext != nil {
@@ -969,14 +999,23 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 	// The very first init container prepares the workspace:
 	// - chown the workspace directory according to the security context
 	// - make /workspace/{build,plugins,sockets} directories usable by any user
-	// - copy buildkite-agent and tini-static into /workspace
+	// - copy buildkite-agent and tini (from /sbin/tini-static or /usr/sbin/tini) into /workspace
 	//
 	// We also use init containers to check that images can be pulled before
 	// any other containers run.
 	containerArgs.WriteString(`
 mkdir /workspace/build /workspace/plugins /workspace/sockets
 chmod 777 /workspace/build /workspace/plugins /workspace/sockets
-cp /usr/local/bin/buildkite-agent /sbin/tini-static /workspace
+cp /usr/local/bin/buildkite-agent /workspace
+# Copy tini from wherever it exists (Alpine: /sbin/tini-static, Ubuntu/Debian: /usr/sbin/tini)
+if [ -f /sbin/tini-static ]; then
+    cp /sbin/tini-static /workspace/tini-static
+elif [ -f /usr/sbin/tini ]; then
+    cp /usr/sbin/tini /workspace/tini-static
+else
+    echo "Error: No tini binary found" >&2
+    exit 1
+fi
 `)
 
 	return corev1.Container{
@@ -985,7 +1024,7 @@ cp /usr/local/bin/buildkite-agent /sbin/tini-static /workspace
 		Name:            CopyAgentContainerName,
 		Image:           w.cfg.Image,
 		ImagePullPolicy: cmp.Or(w.cfg.DefaultImagePullPolicy, defaultPullPolicyForImage(w.defaultImageRef)),
-		Command:         []string{"ash"},
+		Command:         []string{"/bin/sh"},
 		Args:            []string{"-cefx", containerArgs.String()},
 		SecurityContext: securityContext,
 		VolumeMounts: []corev1.VolumeMount{{
@@ -1109,13 +1148,11 @@ func (w *worker) createCheckoutContainer(
 			RunAsNonRoot: ptr.To(false),
 		}
 
-		checkoutContainer.Command = []string{"ash", "-c"}
-		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
-addgroup -g %d buildkite-agent
-adduser -D -u %d -G buildkite-agent -h /workspace buildkite-agent
-su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
-			podGroup,
-			podUser,
+		userScript := generatePortableUserScript(podUser, podGroup, "buildkite-agent", "buildkite-agent")
+		checkoutContainer.Command = []string{"/bin/sh", "-c"}
+		checkoutContainer.Args = []string{fmt.Sprintf(`set -exuf
+%ssu buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
+			userScript,
 			gitConfigCmd,
 		)}
 
@@ -1127,11 +1164,11 @@ su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
 			RunAsNonRoot: ptr.To(false),
 		}
 
-		checkoutContainer.Command = []string{"ash", "-c"}
-		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
-adduser -D -u %d -G root -h /workspace buildkite-agent
-su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
-			podUser,
+		userScript := generatePortableUserScript(podUser, 0, "buildkite-agent", "root")
+		checkoutContainer.Command = []string{"/bin/sh", "-c"}
+		checkoutContainer.Args = []string{fmt.Sprintf(`set -exuf
+%ssu buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
+			userScript,
 			gitConfigCmd,
 		)}
 
@@ -1140,8 +1177,8 @@ su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
 	// context has a non-root group.
 	default:
 		checkoutContainer.SecurityContext = nil
-		checkoutContainer.Command = []string{"ash", "-c"}
-		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
+		checkoutContainer.Command = []string{"/bin/sh", "-c"}
+		checkoutContainer.Args = []string{fmt.Sprintf(`set -exuf
 %s
 buildkite-agent-entrypoint kubernetes-bootstrap`,
 			gitConfigCmd)}
