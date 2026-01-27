@@ -919,36 +919,6 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *co
 	return &patchedSpec, nil
 }
 
-// generatePortableUserScript generates a shell script that creates a user
-// and optionally a group, working on both Alpine (BusyBox) and glibc-based
-// systems (Debian, Ubuntu, RHEL).
-func generatePortableUserScript(uid, gid int64, username, groupname string) string {
-	var sb strings.Builder
-	sb.WriteString("# Portable user/group creation\n")
-	sb.WriteString("if command -v adduser >/dev/null 2>&1 && adduser --help 2>&1 | grep -q BusyBox; then\n")
-
-	// BusyBox (Alpine) branch
-	if groupname != "" && groupname != "root" {
-		fmt.Fprintf(&sb, "    addgroup -g %d %s 2>/dev/null || true\n", gid, groupname)
-	}
-	fmt.Fprintf(&sb, "    adduser -D -u %d -G %s -h /workspace %s\n", uid, groupname, username)
-
-	sb.WriteString("elif command -v useradd >/dev/null 2>&1; then\n")
-
-	// shadow-utils (Debian/Ubuntu/RHEL) branch
-	if groupname != "" && groupname != "root" {
-		fmt.Fprintf(&sb, "    groupadd -g %d %s 2>/dev/null || true\n", gid, groupname)
-	}
-	fmt.Fprintf(&sb, "    useradd -M -u %d -g %s -d /workspace -s /bin/sh %s\n", uid, groupname, username)
-
-	sb.WriteString("else\n")
-	sb.WriteString(`    echo "Error: No supported user creation tool found" >&2` + "\n")
-	sb.WriteString("    exit 1\n")
-	sb.WriteString("fi\n")
-
-	return sb.String()
-}
-
 func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspaceVolume *corev1.Volume) corev1.Container {
 	podUser, podGroup := int64(0), int64(0)
 	if podSpec.SecurityContext != nil {
@@ -999,7 +969,7 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 	// The very first init container prepares the workspace:
 	// - chown the workspace directory according to the security context
 	// - make /workspace/{build,plugins,sockets} directories usable by any user
-	// - copy buildkite-agent and tini (from /sbin/tini-static or /usr/sbin/tini) into /workspace
+	// - copy buildkite-agent and tini-static (from /sbin/tini-static or /usr/bin/tini-static) into /workspace
 	//
 	// We also use init containers to check that images can be pulled before
 	// any other containers run.
@@ -1007,13 +977,14 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 mkdir /workspace/build /workspace/plugins /workspace/sockets
 chmod 777 /workspace/build /workspace/plugins /workspace/sockets
 cp /usr/local/bin/buildkite-agent /workspace
-# Copy tini from wherever it exists (Alpine: /sbin/tini-static, Ubuntu/Debian: /usr/sbin/tini)
+# Copy tini-static from wherever it exists
+# Alpine: /sbin/tini-static, Ubuntu/Debian: /usr/bin/tini-static
 if [ -f /sbin/tini-static ]; then
     cp /sbin/tini-static /workspace/tini-static
-elif [ -f /usr/sbin/tini ]; then
-    cp /usr/sbin/tini /workspace/tini-static
+elif [ -f /usr/bin/tini-static ]; then
+    cp /usr/bin/tini-static /workspace/tini-static
 else
-    echo "Error: No tini binary found" >&2
+    echo "Error: No tini-static binary found" >&2
     exit 1
 fi
 `)
@@ -1140,7 +1111,7 @@ func (w *worker) createCheckoutContainer(
 	// we will create a buildkite-agent user/group in the checkout container as needed and switch
 	// to it. The created user/group will have the uid/gid specified in the pod's security context.
 	switch {
-	case podUser != 0 && podGroup != 0:
+	case podUser != 0:
 		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
 		checkoutContainer.SecurityContext = &corev1.SecurityContext{
 			RunAsUser:    ptr.To[int64](0),
@@ -1148,40 +1119,28 @@ func (w *worker) createCheckoutContainer(
 			RunAsNonRoot: ptr.To(false),
 		}
 
-		userScript := generatePortableUserScript(podUser, podGroup, "buildkite-agent", "buildkite-agent")
-		checkoutContainer.Command = []string{"/bin/sh", "-c"}
-		checkoutContainer.Args = []string{fmt.Sprintf(`set -exuf
-%ssu buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
-			userScript,
-			gitConfigCmd,
-		)}
-
-	case podUser != 0 && podGroup == 0:
-		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
-		checkoutContainer.SecurityContext = &corev1.SecurityContext{
-			RunAsUser:    ptr.To[int64](0),
-			RunAsGroup:   ptr.To[int64](0),
-			RunAsNonRoot: ptr.To(false),
+		gid := podGroup
+		groupname := "buildkite-agent"
+		if podGroup == 0 {
+			groupname = "root"
 		}
 
-		userScript := generatePortableUserScript(podUser, 0, "buildkite-agent", "root")
+		createUserScript := generateCreateUserScript(podUser, gid, "buildkite-agent", groupname)
+		bootstrapCmd := fmt.Sprintf(`su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`, gitConfigCmd)
+		checkoutScript := strings.Join([]string{"set -exuf", createUserScript, bootstrapCmd}, "\n")
+
 		checkoutContainer.Command = []string{"/bin/sh", "-c"}
-		checkoutContainer.Args = []string{fmt.Sprintf(`set -exuf
-%ssu buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
-			userScript,
-			gitConfigCmd,
-		)}
+		checkoutContainer.Args = []string{checkoutScript}
 
 	// If the group is not root, but the user is root, I don't think we NEED to do anything. It's fine
 	// for the user and group to be root for the checked out repo, even though the Pod's security
 	// context has a non-root group.
 	default:
 		checkoutContainer.SecurityContext = nil
+		checkoutScript := strings.Join([]string{"set -exuf", gitConfigCmd, "buildkite-agent-entrypoint kubernetes-bootstrap"}, "\n")
+
 		checkoutContainer.Command = []string{"/bin/sh", "-c"}
-		checkoutContainer.Args = []string{fmt.Sprintf(`set -exuf
-%s
-buildkite-agent-entrypoint kubernetes-bootstrap`,
-			gitConfigCmd)}
+		checkoutContainer.Args = []string{checkoutScript}
 	}
 
 	return checkoutContainer
