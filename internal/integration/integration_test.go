@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
+	agentversion "github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/roko"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,24 @@ func TestWalkingSkeleton(t *testing.T) {
 	ctx := context.Background()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+}
+
+func TestUbuntuAgentImage(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "helloworld.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+
+	testCfg := cfg
+	testCfg.Image = "ghcr.io/buildkite/agent:" + agentversion.Version() + "-ubuntu-24.04"
+
+	tc.StartController(ctx, testCfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 }

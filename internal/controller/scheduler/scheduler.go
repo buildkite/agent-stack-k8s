@@ -969,14 +969,24 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 	// The very first init container prepares the workspace:
 	// - chown the workspace directory according to the security context
 	// - make /workspace/{build,plugins,sockets} directories usable by any user
-	// - copy buildkite-agent and tini-static into /workspace
+	// - copy buildkite-agent and tini-static (from /sbin/tini-static or /usr/bin/tini-static) into /workspace
 	//
 	// We also use init containers to check that images can be pulled before
 	// any other containers run.
 	containerArgs.WriteString(`
 mkdir /workspace/build /workspace/plugins /workspace/sockets
 chmod 777 /workspace/build /workspace/plugins /workspace/sockets
-cp /usr/local/bin/buildkite-agent /sbin/tini-static /workspace
+cp /usr/local/bin/buildkite-agent /workspace
+# Copy tini-static from wherever it exists
+# Alpine: /sbin/tini-static, Ubuntu/Debian: /usr/bin/tini-static
+if [ -f /sbin/tini-static ]; then
+    cp /sbin/tini-static /workspace/tini-static
+elif [ -f /usr/bin/tini-static ]; then
+    cp /usr/bin/tini-static /workspace/tini-static
+else
+    echo "Error: No tini-static binary found" >&2
+    exit 1
+fi
 `)
 
 	return corev1.Container{
@@ -985,7 +995,7 @@ cp /usr/local/bin/buildkite-agent /sbin/tini-static /workspace
 		Name:            CopyAgentContainerName,
 		Image:           w.cfg.Image,
 		ImagePullPolicy: cmp.Or(w.cfg.DefaultImagePullPolicy, defaultPullPolicyForImage(w.defaultImageRef)),
-		Command:         []string{"ash"},
+		Command:         []string{"/bin/sh"},
 		Args:            []string{"-cefx", containerArgs.String()},
 		SecurityContext: securityContext,
 		VolumeMounts: []corev1.VolumeMount{{
@@ -1101,7 +1111,7 @@ func (w *worker) createCheckoutContainer(
 	// we will create a buildkite-agent user/group in the checkout container as needed and switch
 	// to it. The created user/group will have the uid/gid specified in the pod's security context.
 	switch {
-	case podUser != 0 && podGroup != 0:
+	case podUser != 0:
 		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
 		checkoutContainer.SecurityContext = &corev1.SecurityContext{
 			RunAsUser:    ptr.To[int64](0),
@@ -1109,42 +1119,28 @@ func (w *worker) createCheckoutContainer(
 			RunAsNonRoot: ptr.To(false),
 		}
 
-		checkoutContainer.Command = []string{"ash", "-c"}
-		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
-addgroup -g %d buildkite-agent
-adduser -D -u %d -G buildkite-agent -h /workspace buildkite-agent
-su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
-			podGroup,
-			podUser,
-			gitConfigCmd,
-		)}
-
-	case podUser != 0 && podGroup == 0:
-		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
-		checkoutContainer.SecurityContext = &corev1.SecurityContext{
-			RunAsUser:    ptr.To[int64](0),
-			RunAsGroup:   ptr.To[int64](0),
-			RunAsNonRoot: ptr.To(false),
+		gid := podGroup
+		groupname := "buildkite-agent"
+		if podGroup == 0 {
+			groupname = "root"
 		}
 
-		checkoutContainer.Command = []string{"ash", "-c"}
-		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
-adduser -D -u %d -G root -h /workspace buildkite-agent
-su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`,
-			podUser,
-			gitConfigCmd,
-		)}
+		createUserScript := generateCreateUserScript(podUser, gid, "buildkite-agent", groupname)
+		bootstrapCmd := fmt.Sprintf(`su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`, gitConfigCmd)
+		checkoutScript := strings.Join([]string{"set -exuf", createUserScript, bootstrapCmd}, "\n")
+
+		checkoutContainer.Command = []string{"/bin/sh", "-c"}
+		checkoutContainer.Args = []string{checkoutScript}
 
 	// If the group is not root, but the user is root, I don't think we NEED to do anything. It's fine
 	// for the user and group to be root for the checked out repo, even though the Pod's security
 	// context has a non-root group.
 	default:
 		checkoutContainer.SecurityContext = nil
-		checkoutContainer.Command = []string{"ash", "-c"}
-		checkoutContainer.Args = []string{fmt.Sprintf(`set -exufo pipefail
-%s
-buildkite-agent-entrypoint kubernetes-bootstrap`,
-			gitConfigCmd)}
+		checkoutScript := strings.Join([]string{"set -exuf", gitConfigCmd, "buildkite-agent-entrypoint kubernetes-bootstrap"}, "\n")
+
+		checkoutContainer.Command = []string{"/bin/sh", "-c"}
+		checkoutContainer.Args = []string{checkoutScript}
 	}
 
 	return checkoutContainer
