@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "http://example.com/example.json",
   "type": "object",
   "default": {},
   "title": "Root Schema",
