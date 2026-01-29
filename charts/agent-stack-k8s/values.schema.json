@@ -84,7 +84,7 @@
       "default": [],
       "title": "K8s EnvVar environment variables to add to the agent-stack-k8s controller container",
       "items": {
-        "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.EnvVar"
+        "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.EnvVar"
       }
     },
     "nodeSelector": {
@@ -362,7 +362,7 @@
           "examples": [false]
         },
         "workspaceVolume": {
-          "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.Volume"
+          "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
         },
         "agent-config": {
           "type": "object",
@@ -433,10 +433,10 @@
               "type": "string"
             },
             "hooksVolume": {
-              "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.Volume"
+              "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
             },
             "pluginsVolume": {
-              "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.Volume"
+              "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
             },
             "debug-signing": {
               "type": "boolean"
@@ -448,7 +448,7 @@
               "type": "string"
             },
             "signingJWKSVolume": {
-              "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.Volume"
+              "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
             },
             "verification-jwks-file": {
               "type": "string"
@@ -457,7 +457,7 @@
               "type": "string"
             },
             "verificationJWKSVolume": {
-              "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.Volume"
+              "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
             }
           }
         },
@@ -504,7 +504,7 @@
                   "default": null
                 },
                 "volume": {
-                  "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.Volume"
+                  "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
                 },
                 "cloneFlags": {
                   "type": "string",
@@ -521,14 +521,14 @@
               }
             },
             "gitCredentialsSecret": {
-              "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.SecretVolumeSource"
+              "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.SecretVolumeSource"
             },
             "envFrom": {
               "type": "array",
               "default": [],
               "title": "k8s envFrom sources to add",
               "items": {
-                "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
+                "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
               }
             },
             "extraVolumeMounts": {
@@ -536,7 +536,7 @@
               "default": [],
               "title": "extra volumes to mount to all checkout containers",
               "items": {
-                "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.VolumeMount"
+                "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
               }
             }
           }
@@ -557,7 +557,7 @@
               "default": [],
               "title": "k8s envFrom sources to add",
               "items": {
-                "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
+                "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
               }
             },
             "extraVolumeMounts": {
@@ -565,7 +565,7 @@
               "default": [],
               "title": "extra volumes to mount to all command containers",
               "items": {
-                "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.VolumeMount"
+                "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
               }
             }
           }
@@ -580,7 +580,7 @@
               "default": [],
               "title": "k8s envFrom sources to add",
               "items": {
-                "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
+                "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.EnvFromSource"
               }
             },
             "extraVolumeMounts": {
@@ -588,7 +588,7 @@
               "default": [],
               "title": "extra volumes to mount to all sidecar containers",
               "items": {
-                "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.VolumeMount"
+                "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
               }
             }
           }
@@ -645,7 +645,7 @@
           "examples": ["Always", "IfNotPresent", "Never", ""]
         },
         "pod-spec-patch": {
-          "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.PodSpec"
+          "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.PodSpec"
         },
         "graphql-results-limit": {
           "deprecated": true,
@@ -686,7 +686,7 @@
             "type": "object",
             "properties": {
               "resource": {
-                "$ref": "schemas/kubernetes-v1.35.0.json#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+                "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.ResourceRequirements"
               },
               "nodeSelector": {
                 "type": "object",

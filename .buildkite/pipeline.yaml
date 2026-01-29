@@ -41,6 +41,11 @@ steps:
       - kubernetes:
           podTemplate: go-with-cache
 
+  - label: ":helm: lint chart"
+    key: helm-lint
+    image: alpine/helm:3.18.3
+    command: helm lint charts/agent-stack-k8s --set agentToken=test --set image=test:latest
+
   - label: ":docker::buildkite: choose agent image"
     key: agent
     image: alpine:3.23.0@sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375
@@ -85,6 +90,7 @@ steps:
     depends_on:
       - tidy
       - lint
+      - helm-lint
       - check-code-generation
       - agent
       - controller
@@ -97,6 +103,7 @@ steps:
     depends_on:
       - tidy
       - lint
+      - helm-lint
       - check-code-generation
       - agent
       - controller
