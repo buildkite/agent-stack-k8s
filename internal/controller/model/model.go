@@ -46,7 +46,7 @@ func JobFinished(job *batchv1.Job) bool {
 // The detection logic is a heuristic, but there is a very low likelihood of false positives.
 func IsCommandContainer(container *corev1.Container) bool {
 	for _, env := range container.Env {
-		if env.Name == "BUILDKITE_COMMAND" && env.Value != "" {
+		if env.Name == "BUILDKITE_COMMAND" {
 			return true
 		}
 	}
