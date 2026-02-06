@@ -129,6 +129,54 @@ func TestResourceClass_Apply(t *testing.T) {
 			},
 		},
 		{
+			name: "applies resource requirements when BUILDKITE_COMMAND is empty",
+			resourceClass: &ResourceClass{
+				Resource: &corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU: resource.MustParse("100m"),
+					},
+				},
+			},
+			podSpec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Env: []corev1.EnvVar{
+							{
+								Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+								Value: "plugin,command",
+							},
+							{
+								Name:  "BUILDKITE_COMMAND",
+								Value: "",
+							},
+						},
+					},
+				},
+			},
+			want: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Env: []corev1.EnvVar{
+							{
+								Name:  "BUILDKITE_BOOTSTRAP_PHASES",
+								Value: "plugin,command",
+							},
+							{
+								Name:  "BUILDKITE_COMMAND",
+								Value: "",
+							},
+						},
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU: resource.MustParse("100m"),
+							},
+							Limits: corev1.ResourceList{},
+						},
+					},
+				},
+			},
+		},
+		{
 			name:          "handles nil resource class",
 			resourceClass: nil,
 			podSpec: &corev1.PodSpec{

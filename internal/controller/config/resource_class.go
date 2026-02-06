@@ -55,7 +55,7 @@ func (rc *ResourceClass) Apply(podSpec *corev1.PodSpec) {
 // This duplicates model.IsCommandContainer to avoid cyclic dependency
 func isCommandContainer(container *corev1.Container) bool {
 	for _, env := range container.Env {
-		if env.Name == "BUILDKITE_COMMAND" && env.Value != "" {
+		if env.Name == "BUILDKITE_COMMAND" {
 			return true
 		}
 	}
