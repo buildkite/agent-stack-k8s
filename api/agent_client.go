@@ -72,11 +72,16 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		logger:    opts.Logger,
 	}
 
+	stacksAPIHttpClient := &http.Client{
+		Timeout:   60 * time.Second,
+		Transport: NewLogger(http.DefaultTransport),
+	}
 	client.stacksAPIClient, err = stacksapi.NewClient(
 		opts.Token,
 		stacksapi.WithLogger(opts.Logger.With("component", "stacksapi")),
 		stacksapi.WithBaseURL(endpointURL),
 		stacksapi.PrependToUserAgent("agent-stack-k8s/"+version.Version()),
+		stacksapi.WithHTTPClient(stacksAPIHttpClient),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create Buildkite Stacks API client: %w", err)
