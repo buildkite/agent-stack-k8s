@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	corev1 "k8s.io/api/core/v1"
@@ -48,6 +49,7 @@ type CLI struct {
 	PrometheusPort         *uint16        `kong:"help='Bind port to expose Prometheus /metrics; 0 disables it (default: 0)'"`
 	ProfilerAddress        string         `kong:"help='Bind address to expose the pprof profiler (e.g. localhost:6060)'"`
 	PollInterval           *time.Duration `kong:"help='Time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start (default: 1s)'"`
+	HTTPTimeout            *time.Duration `kong:"name='http-timeout',help='Timeout for HTTP requests to the Buildkite Agent API (default: 60s)'"`
 	PaginationPageSize     *int           `kong:"help='Sets the maximum number of Jobs per page when retrieving Buildkite Jobs to be Scheduled (default: 1000)'"`
 	PaginationDepthLimit   *int           `kong:"help='Sets the maximum number of pages when retrieving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite API and number of Jobs to be scheduled on the Kubernetes Cluster (default: 2)'"`
 	QueryResetInterval     *time.Duration `kong:"help='Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query (default: 10s)'"`
@@ -141,6 +143,7 @@ func newConfigWithDefaults() *config.Config {
 		JobActiveDeadlineSeconds:             21600,
 		DefaultTerminationGracePeriodSeconds: 60,
 		PollInterval:                         time.Second,
+		HTTPTimeout:                          api.DefaultHTTPTimeout,
 		JobCreationConcurrency:               25,
 		K8sClientRateLimiterQPS:              10,
 		K8sClientRateLimiterBurst:            20,
@@ -220,6 +223,7 @@ func convertDurations(m map[string]any) {
 	durationFields := map[string]struct{}{
 		"job-ttl":                          {},
 		"poll-interval":                    {},
+		"http-timeout":                     {},
 		"query-reset-interval":             {},
 		"image-pull-backoff-grace-period":  {},
 		"job-cancel-checker-poll-interval": {},

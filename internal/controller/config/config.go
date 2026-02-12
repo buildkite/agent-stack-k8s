@@ -59,6 +59,7 @@ type Config struct {
 	PrometheusPort         uint16        `json:"prometheus-port"          validate:"omitempty"`
 	ProfilerAddress        string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
 	PollInterval           time.Duration `json:"poll-interval"`
+	HTTPTimeout            time.Duration `json:"http-timeout"             validate:"omitempty"`
 	PaginationPageSize     int           `json:"pagination-page-size"     validate:"min=1,max=1000"`
 	PaginationDepthLimit   int           `json:"pagination-depth-limit"   validate:"min=1,max=20"`
 	QueryResetInterval     time.Duration `json:"query-reset-interval"     validate:"omitempty"`

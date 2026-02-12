@@ -8,9 +8,13 @@ import (
 )
 
 // NewAgentTokenClient creates a new AgentTokenClient.
-func NewAgentTokenClient(token, endpoint string) (*AgentTokenClient, error) {
+// If httpTimeout is 0, DefaultHTTPTimeout is used.
+func NewAgentTokenClient(token, endpoint string, httpTimeout time.Duration) (*AgentTokenClient, error) {
 	if endpoint == "" {
 		endpoint = "https://agent.buildkite.com/v3"
+	}
+	if httpTimeout == 0 {
+		httpTimeout = DefaultHTTPTimeout
 	}
 	endpointURL, err := url.Parse(endpoint)
 	if err != nil {
@@ -19,7 +23,7 @@ func NewAgentTokenClient(token, endpoint string) (*AgentTokenClient, error) {
 	return &AgentTokenClient{
 		endpoint: endpointURL,
 		httpClient: &http.Client{
-			Timeout:   60 * time.Second,
+			Timeout:   httpTimeout,
 			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, token)),
 		},
 	}, nil

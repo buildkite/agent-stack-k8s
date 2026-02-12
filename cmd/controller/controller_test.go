@@ -32,6 +32,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		JobCancelCheckerPollInterval:         10 * time.Second,
 		EmptyJobGracePeriod:                  50 * time.Second,
 		PollInterval:                         5 * time.Second,
+		HTTPTimeout:                          1 * time.Minute,
 		JobCreationConcurrency:               5,
 		MaxInFlight:                          100,
 		K8sClientRateLimiterQPS:              20,
