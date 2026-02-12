@@ -92,7 +92,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 
 	agentTags["queue"] = queue
 
-	agentTokenClient, err := api.NewAgentTokenClient(agentToken, agentEndpoint)
+	agentTokenClient, err := api.NewAgentTokenClient(agentToken, agentEndpoint, cfg.HTTPTimeout)
 	if err != nil {
 		logger.Error("Couldn't create Agent token API client", "error", err)
 		return
@@ -125,6 +125,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		StackID:         cfg.ID,
 		AgentQueryRules: cfg.Tags,
 		Logger:          logger,
+		HTTPTimeout:     cfg.HTTPTimeout,
 	})
 	if err != nil {
 		logger.Error("Couldn't create Agent API client", "error", err)

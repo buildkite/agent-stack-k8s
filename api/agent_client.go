@@ -24,7 +24,6 @@ func isDefaultQueue(queue string) bool {
 // AgentClient is a client for Agent API methods for retrieving jobs.
 type AgentClient struct {
 	endpoint        *url.URL
-	httpClient      *http.Client
 	stacksAPIClient *stacksapi.Client
 
 	clusterID string
@@ -37,6 +36,9 @@ type AgentClient struct {
 	notificationBatcherCancelFn context.CancelFunc
 }
 
+// DefaultHTTPTimeout is the default timeout for HTTP clients.
+const DefaultHTTPTimeout = 60 * time.Second
+
 type AgentClientOpts struct {
 	Token           string
 	Endpoint        string
@@ -45,6 +47,7 @@ type AgentClientOpts struct {
 	StackID         string
 	AgentQueryRules []string
 	Logger          *slog.Logger
+	HTTPTimeout     time.Duration
 }
 
 func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, error) {
@@ -56,17 +59,17 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		opts.ClusterID = "unclustered"
 	}
 
+	if opts.HTTPTimeout == 0 {
+		opts.HTTPTimeout = DefaultHTTPTimeout
+	}
+
 	endpointURL, err := url.Parse(opts.Endpoint)
 	if err != nil {
 		return nil, err
 	}
 
 	client := &AgentClient{
-		endpoint: endpointURL,
-		httpClient: &http.Client{
-			Timeout:   60 * time.Second,
-			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, opts.Token)),
-		},
+		endpoint:  endpointURL,
 		clusterID: opts.ClusterID,
 		queue:     opts.Queue,
 		logger:    opts.Logger,
@@ -76,6 +79,9 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		opts.Token,
 		stacksapi.WithLogger(opts.Logger.With("component", "stacksapi")),
 		stacksapi.WithBaseURL(endpointURL),
+		stacksapi.WithHTTPClient(&http.Client{
+			Timeout: opts.HTTPTimeout,
+		}),
 		stacksapi.PrependToUserAgent("agent-stack-k8s/"+version.Version()),
 	)
 	if err != nil {
