@@ -24,7 +24,6 @@ func isDefaultQueue(queue string) bool {
 // AgentClient is a client for Agent API methods for retrieving jobs.
 type AgentClient struct {
 	endpoint        *url.URL
-	httpClient      *http.Client
 	stacksAPIClient *stacksapi.Client
 
 	clusterID string
@@ -70,11 +69,7 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 	}
 
 	client := &AgentClient{
-		endpoint: endpointURL,
-		httpClient: &http.Client{
-			Timeout:   opts.HTTPTimeout,
-			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, opts.Token)),
-		},
+		endpoint:  endpointURL,
 		clusterID: opts.ClusterID,
 		queue:     opts.Queue,
 		logger:    opts.Logger,
