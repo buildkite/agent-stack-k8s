@@ -469,7 +469,10 @@ func (t testcase) getAgentTokenIdentity() *agentApi.AgentTokenIdentity {
 	if cfg.AgentConfig != nil && cfg.AgentConfig.Endpoint != nil {
 		agentEndpoint = *cfg.AgentConfig.Endpoint
 	}
-	client, err := agentApi.NewAgentTokenClient(token, agentEndpoint, 0)
+	client, err := agentApi.NewAgentTokenClient(agentApi.AgentTokenClientOpts{
+		Token:    token,
+		Endpoint: agentEndpoint,
+	})
 	require.NoError(t, err)
 
 	result, _, err := client.GetTokenIdentity(context.Background())

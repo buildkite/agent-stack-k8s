@@ -2,31 +2,28 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 )
 
-// NewAgentTokenClient creates a new AgentTokenClient.
-// If httpTimeout is 0, DefaultHTTPTimeout is used.
-func NewAgentTokenClient(token, endpoint string, httpTimeout time.Duration) (*AgentTokenClient, error) {
-	if endpoint == "" {
-		endpoint = "https://agent.buildkite.com/v3"
-	}
-	if httpTimeout == 0 {
-		httpTimeout = DefaultHTTPTimeout
-	}
-	endpointURL, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, err
-	}
-	return &AgentTokenClient{
-		endpoint: endpointURL,
-		httpClient: &http.Client{
-			Timeout:   httpTimeout,
-			Transport: NewLogger(NewAuthedTransportWithToken(http.DefaultTransport, token)),
-		},
-	}, nil
+// AgentTokenClientOpts contains the options for creating a new AgentTokenClient.
+type AgentTokenClientOpts struct {
+	// Token is the agent registration token.
+	Token string
+	// Endpoint is the Agent API endpoint. If empty, the default endpoint is used.
+	Endpoint string
+	// HTTPTimeout is the HTTP client timeout. If 0, DefaultHTTPTimeout is used.
+	HTTPTimeout time.Duration
+	// Logger is the structured logger. May be nil.
+	Logger *slog.Logger
+	// LogHTTPPayloads enables logging of full HTTP request/response bodies.
+	LogHTTPPayloads bool
 }
 
 // AgentTokenClient is a special Agent API client: it can only be used to query
@@ -35,6 +32,42 @@ func NewAgentTokenClient(token, endpoint string, httpTimeout time.Duration) (*Ag
 type AgentTokenClient struct {
 	endpoint   *url.URL
 	httpClient *http.Client
+	token      string
+}
+
+// NewAgentTokenClient creates a new AgentTokenClient.
+func NewAgentTokenClient(opts AgentTokenClientOpts) (*AgentTokenClient, error) {
+	if opts.Token == "" {
+		return nil, errors.New("token must not be empty")
+	}
+
+	if opts.Logger == nil {
+		opts.Logger = slog.New(slog.DiscardHandler)
+	}
+
+	httpTimeout := opts.HTTPTimeout
+	if httpTimeout == 0 {
+		httpTimeout = DefaultHTTPTimeout
+	}
+
+	endpoint := opts.Endpoint
+	if endpoint == "" {
+		endpoint = "https://agent.buildkite.com/v3"
+	}
+
+	endpointURL, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AgentTokenClient{
+		endpoint: endpointURL,
+		token:    opts.Token,
+		httpClient: &http.Client{
+			Timeout:   httpTimeout,
+			Transport: NewLogTransport(http.DefaultTransport, opts.Logger, opts.LogHTTPPayloads),
+		},
+	}, nil
 }
 
 // AgentTokenIdentity describes the token identity information.
@@ -54,7 +87,15 @@ type AgentTokenIdentity struct {
 func (c *AgentTokenClient) GetTokenIdentity(ctx context.Context) (result *AgentTokenIdentity, retryAfter time.Duration, err error) {
 	u := c.endpoint.JoinPath("token")
 
-	resp, err := c.httpClient.Get(u.String())
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return nil, 0, fmt.Errorf("creating token request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Token %s", c.token))
+	req.Header.Set("User-Agent", fmt.Sprintf("buildkite/agent-stack-k8s %s", version.Version()))
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
