@@ -97,7 +97,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		Endpoint:        agentEndpoint,
 		HTTPTimeout:     cfg.HTTPTimeout,
 		Logger:          logger,
-		LogHTTPPayloads: cfg.DangerouslyLogHTTPPayloads,
+		LogHTTPPayloads: cfg.LogHTTPPayloads,
 	})
 	if err != nil {
 		logger.Error("Couldn't create Agent token API client", "error", err)
@@ -132,6 +132,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		AgentQueryRules: cfg.Tags,
 		Logger:          logger,
 		HTTPTimeout:     cfg.HTTPTimeout,
+		LogHTTPPayloads: cfg.LogHTTPPayloads,
 	})
 	if err != nil {
 		logger.Error("Couldn't create Agent API client", "error", err)

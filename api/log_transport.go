@@ -95,10 +95,3 @@ func (t *logTransport) RoundTrip(in *http.Request) (*http.Response, error) {
 
 	return out, err
 }
-
-func userAgent() string {
-	// Ideally, we want to put a version number here too.
-	// But that requires a bit of work, making version as an embed, and slightly change how we release this controller.
-	// So I will kick the can down the road a bit.
-	return "buildkite-agent-k8s-stack"
-}

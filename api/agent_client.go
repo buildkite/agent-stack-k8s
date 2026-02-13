@@ -48,6 +48,10 @@ type AgentClientOpts struct {
 	AgentQueryRules []string
 	Logger          *slog.Logger
 	HTTPTimeout     time.Duration
+
+	// LogHTTPPayloads enables logging of full HTTP request and
+	// response bodies. This may expose sensitive data in logs.
+	LogHTTPPayloads bool
 }
 
 func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, error) {
@@ -75,15 +79,19 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		logger:    opts.Logger,
 	}
 
-	client.stacksAPIClient, err = stacksapi.NewClient(
-		opts.Token,
+	clientOpts := []stacksapi.ClientOpt{
 		stacksapi.WithLogger(opts.Logger.With("component", "stacksapi")),
 		stacksapi.WithBaseURL(endpointURL),
 		stacksapi.WithHTTPClient(&http.Client{
 			Timeout: opts.HTTPTimeout,
 		}),
-		stacksapi.PrependToUserAgent("agent-stack-k8s/"+version.Version()),
-	)
+		stacksapi.PrependToUserAgent("agent-stack-k8s/" + version.Version()),
+	}
+	if opts.LogHTTPPayloads {
+		clientOpts = append(clientOpts, stacksapi.LogHTTPPayloads())
+	}
+
+	client.stacksAPIClient, err = stacksapi.NewClient(opts.Token, clientOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create Buildkite Stacks API client: %w", err)
 	}
