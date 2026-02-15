@@ -119,6 +119,11 @@ type Config struct {
 	LogFormat string `json:"log-format" validate:"omitempty,oneof=logfmt json"`
 	NoColor   bool   `json:"no-color"   validate:"omitempty"`
 	LogLevel  string `json:"log-level"  validate:"omitempty,oneof=debug info warn error"`
+
+	// LogHTTPPayloads enables logging of full HTTP request and
+	// response bodies for the Stacks API client. This may expose sensitive
+	// data in logs and should only be used for debugging.
+	LogHTTPPayloads bool `json:"log-http-payloads" validate:"omitempty"`
 }
 
 // Helpers for applying configs / params to container env.

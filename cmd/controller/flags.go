@@ -30,8 +30,6 @@ type CLI struct {
 	// name= needed: Go field "ConfigFile" → Kong default "--config-file", but we want "--config"
 	ConfigFile string `kong:"name='config',short='f',help='Path to config file'"`
 
-	Debug *bool `kong:"help='Sets log level to debug. Overrides --log-level if set'"`
-
 	// Job / Pod settings
 	JobTTL                               *time.Duration `kong:"help='Time to retain kubernetes jobs after completion (default: 10m)'"`
 	JobActiveDeadlineSeconds             *int           `kong:"help='Maximum number of seconds a kubernetes job is allowed to run before terminating all pods and failing job (default: 21600)'"`
@@ -83,9 +81,11 @@ type CLI struct {
 	GraphQLEndpoint string `kong:"hidden,help='Buildkite GraphQL endpoint URL'"`
 
 	// Logging settings
-	LogFormat string `kong:"help='Sets the log format. One of \"logfmt\" (for plain/colored text output) or \"json\" (default: logfmt)'"`
-	NoColor   *bool  `kong:"help='Disable colored log output (ANSI escape codes). If the output is not a terminal, colors are disabled automatically'"`
-	LogLevel  string `kong:"help='Sets the log level. One of \"debug\", \"info\", \"warn\", \"error\". Overridden by the --debug flag if set (default: info)'"`
+	LogFormat       string `kong:"help='Sets the log format. One of \"logfmt\" (for plain/colored text output) or \"json\" (default: logfmt)'"`
+	NoColor         *bool  `kong:"help='Disable colored log output (ANSI escape codes). If the output is not a terminal, colors are disabled automatically'"`
+	Debug           *bool  `kong:"help='Sets log level to debug. Overrides --log-level if set'"`
+	LogLevel        string `kong:"help='Sets the log level. One of \"debug\", \"info\", \"warn\", \"error\". Overridden by the --debug flag if set (default: info)'"`
+	LogHTTPPayloads *bool  `kong:"help='Log full HTTP request and response payloads. Only works when log level is debug. WARNING: may log sensitive information including tokens and secrets'"`
 }
 
 // applyCLIOverrides applies CLI values to the config when explicitly set.
