@@ -38,6 +38,8 @@ type CLI struct {
 	Namespace                            string         `kong:"help='Kubernetes namespace to create resources in (default: default)'"`
 
 	// Controller settings
+	// name= and env= needed: Go field "ID" → Kong default "--i-d" and "$I_D", but we want "--id" and "$BUILDKITE_K8S_STACK_CONTROLLER_ID"
+	ID                     string         `kong:"name='id',env='BUILDKITE_K8S_STACK_CONTROLLER_ID',help='Unique identifier for this controller instance. Used as a k8s label to filter resources and as the Stack key when registering with the Buildkite API. Must be distinct per controller when running multiple instances in the same namespace, otherwise duplicate pods may be spawned'"`
 	JobCreationConcurrency *int           `kong:"help='Number of concurrent goroutines to run for converting Buildkite jobs into Kubernetes jobs (default: 25)'"`
 	AgentTokenSecret       string         `kong:"help='Name of the Buildkite agent token secret (default: buildkite-agent-token)'"`
 	Image                  string         `kong:"help='The image to use for the Buildkite agent'"`

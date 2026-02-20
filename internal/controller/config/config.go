@@ -67,10 +67,14 @@ type Config struct {
 	WorkQueueLimit         int           `json:"work-queue-limit"         validate:"omitempty"`
 	// Agent endpoint is set in agent-config.
 
-	// ID is an optional uniquely ID string for the controller.
-	// This is useful when running multiple bk k8s controllers within the same k8s namespace.
-	// So the controller can target the correct pods.
-	// By default, if helm is used to install, this will be set as helm release full name.
+	// ID is an optional unique identifier for the controller instance.
+	// It is used as both a Kubernetes label (buildkite.com/controller-id) to filter
+	// resources, and as the Stack key when registering with the Buildkite API.
+	// When running multiple controllers in the same namespace, each must have a
+	// distinct ID so that they target the correct pods and register separate stacks.
+	// If two controllers share the same ID, both may successfully reserve the same
+	// job, causing duplicate pods to be spawned.
+	// By default, if Helm is used to install, this is set to the Helm release full name.
 	ID string `json:"id" validate:"omitempty"`
 
 	K8sClientRateLimiterQPS   int `json:"k8s-client-rate-limiter-qps"   validate:"omitempty"`
