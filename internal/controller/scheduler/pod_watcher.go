@@ -205,7 +205,7 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 
 	// Check for an init container that failed for any reason.
 	// (Note: users can define their own init containers through podSpec.)
-	w.failOnInitContainerFailure(ctx, log, pod)
+	w.failOnInitContainerFailure(ctx, log, pod, jobUUID)
 
 	// Check for Buildkite job cancellation while the pod is pending.
 	// Check that the pod doesn't stay in ImagePullBackOff or ErrImageNeverPull
@@ -295,7 +295,7 @@ func (w *podWatcher) podHasFailingImages(log *slog.Logger, pod *corev1.Pod) []co
 
 // failOnInitContainerFailure looks for init containers that failed, and fails
 // the job on Buildkite.
-func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *slog.Logger, pod *corev1.Pod) {
+func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *slog.Logger, pod *corev1.Pod, jobUUID uuid.UUID) {
 	log.Debug("Checking pod for failed init containers")
 
 	containerFails := make(map[string]*corev1.ContainerStateTerminated)
@@ -332,9 +332,18 @@ func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *slog.L
 		Reason:   agent.SignalReasonStackError,
 	}
 	if err := failForK8sObject(ctx, log, pod, failureInfo, w.agentClient); err != nil {
-		// Maybe the job was cancelled in the meantime?
 		log.Error("Could not fail Buildkite job", "error", err)
 		podWatcherBuildkiteJobFailErrorsCounter.Inc()
+
+		// If the error is permanent (e.g. 404 - job no longer exists on
+		// Buildkite), ignore the job to prevent infinite retry on every
+		// informer re-sync.
+		if api.IsPermanentError(err) {
+			w.ignoreJob(jobUUID)
+			// We could do a pod cleanup here but it would be unnecessary.
+			// We expect k8s pod to enter the Failed state, subsequently k8s Job will enter the Failed state too.
+			// And then k8s will clean up the job/pod.
+		}
 		return
 	}
 	podWatcherBuildkiteJobFailsCounter.Inc()
