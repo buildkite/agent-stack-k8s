@@ -393,6 +393,15 @@ unknown-field: some-value
 		assert.Contains(t, err.Error(), "unknown-field")
 	})
 
+	t.Run("ID settable via CLI flag", func(t *testing.T) {
+		cleanTestEnv(t)
+
+		cfg, err := buildConfig(t, []string{"--id=my-controller"}, "")
+		require.NoError(t, err)
+
+		assert.Equal(t, "my-controller", cfg.ID)
+	})
+
 	t.Run("CLI can override config file tags with empty", func(t *testing.T) {
 		cleanTestEnv(t)
 		configFile := createTempConfigFile(t, `
@@ -424,6 +433,7 @@ func cleanTestEnv(t *testing.T) {
 		"MAX_IN_FLIGHT",
 		"DEBUG",
 		"JOB_TTL",
+		"BUILDKITE_K8S_STACK_CONTROLLER_ID",
 	} {
 		t.Setenv(env, "")
 		os.Unsetenv(env)
