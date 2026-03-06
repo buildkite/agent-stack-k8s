@@ -23,6 +23,7 @@ const (
 	DefaultImagePullBackOffGracePeriod    = 30 * time.Second
 	DefaultJobCancelCheckerPollInterval   = 5 * time.Second
 	DefaultEmptyJobGracePeriod            = 30 * time.Second
+	DefaultPodPendingTimeout              = 300 * time.Second
 	DefaultJobCreationConcurrency         = 25
 	DefaultK8sClientRateLimiterQPS        = 10
 	DefaultK8sClientRateLimiterBurst      = 20
@@ -83,6 +84,7 @@ type Config struct {
 	ImagePullBackOffGracePeriod  time.Duration `json:"image-pull-backoff-grace-period"  validate:"omitempty"`
 	JobCancelCheckerPollInterval time.Duration `json:"job-cancel-checker-poll-interval" validate:"omitempty"`
 	EmptyJobGracePeriod          time.Duration `json:"empty-job-grace-period"           validate:"omitempty"`
+	PodPendingTimeout            time.Duration `json:"pod-pending-timeout" validate:"omitempty"`
 
 	// WorkspaceVolume allows supplying a volume for /workspace. By default
 	// an EmptyDir volume is created for it.
@@ -173,7 +175,6 @@ func setEnvNegatedOpt(ctr *corev1.Container, name string, value *bool) {
 		return
 	}
 	setEnv(ctr, name, strconv.FormatBool(!*value))
-
 }
 
 // setEnvCommaSep sets an env var to a comma-separated list of values, if not

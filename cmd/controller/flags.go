@@ -64,6 +64,7 @@ type CLI struct {
 	ImagePullBackOffGracePeriod  *time.Duration `kong:"name='image-pull-backoff-grace-period',help='Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled) (default: 30s)'"`
 	JobCancelCheckerPollInterval *time.Duration `kong:"help='Controls the interval between job state queries while a pod is still Pending (default: 5s)'"`
 	EmptyJobGracePeriod          *time.Duration `kong:"help='Duration after starting a Kubernetes job that the controller will wait before considering failing the job due to a missing pod (e.g. when the podSpec specifies a missing service account) (default: 30s)'"`
+	PodPendingTimeout            *time.Duration `kong:"help='Duration after a pod enters Pending state that the controller will wait before failing the job (default: 5m)'"`
 
 	// Image settings
 	DefaultImagePullPolicy      corev1.PullPolicy `kong:"help='Configures a default image pull policy for containers that do not specify a pull policy and non-init containers created by the stack itself'"`
@@ -152,6 +153,7 @@ func newConfigWithDefaults() *config.Config {
 		ImagePullBackOffGracePeriod:          30 * time.Second,
 		JobCancelCheckerPollInterval:         5 * time.Second,
 		EmptyJobGracePeriod:                  30 * time.Second,
+		PodPendingTimeout:                    300 * time.Second,
 		PaginationPageSize:                   1000,
 		PaginationDepthLimit:                 2,
 		QueryResetInterval:                   10 * time.Second,
@@ -230,6 +232,7 @@ func convertDurations(m map[string]any) {
 		"image-pull-backoff-grace-period":  {},
 		"job-cancel-checker-poll-interval": {},
 		"empty-job-grace-period":           {},
+		"pod-pending-timeout":              {},
 	}
 
 	for key, value := range m {
