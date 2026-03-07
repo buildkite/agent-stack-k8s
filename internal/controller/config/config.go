@@ -23,7 +23,7 @@ const (
 	DefaultImagePullBackOffGracePeriod    = 30 * time.Second
 	DefaultJobCancelCheckerPollInterval   = 5 * time.Second
 	DefaultEmptyJobGracePeriod            = 30 * time.Second
-	DefaultPodPendingTimeout              = 300 * time.Second
+	DefaultPodPendingTimeout              = 15 * time.Minute
 	DefaultJobCreationConcurrency         = 25
 	DefaultK8sClientRateLimiterQPS        = 10
 	DefaultK8sClientRateLimiterBurst      = 20
