@@ -40,8 +40,8 @@ func TestMain(m *testing.M) {
 				configArgs = append(configArgs, "--config="+os.Args[i+1])
 			}
 		}
-		if strings.HasPrefix(arg, "-f=") {
-			configArgs = append(configArgs, "--config="+strings.TrimPrefix(arg, "-f="))
+		if after, ok := strings.CutPrefix(arg, "-f="); ok {
+			configArgs = append(configArgs, "--config="+after)
 		}
 		if strings.HasPrefix(arg, "--config=") {
 			configArgs = append(configArgs, arg)
@@ -61,7 +61,7 @@ func TestMain(m *testing.M) {
 	if !cleanupPipelines && branch == "" {
 		log.Fatalf(
 			`The tests need to be run with the flag: -ldflags="-X %s.branch=$BRANCH_NAME"`,
-			reflect.TypeOf(testcase{}).PkgPath(),
+			reflect.TypeFor[testcase]().PkgPath(),
 		)
 	}
 
