@@ -60,7 +60,6 @@ func TestMapFromTags(t *testing.T) {
 			expectedErrs: []error{errors.New(`invalid agent tag: "kubernetes"`)},
 		},
 	} {
-		test := test
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			t.Parallel()
 			m, errs := agenttags.TagMapFromTags(test.agentTags)
@@ -206,7 +205,6 @@ func TestMatchJobTags(t *testing.T) {
 			expectedResult: true,
 		},
 	} {
-		test := test
 
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			t.Parallel()

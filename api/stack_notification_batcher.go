@@ -105,11 +105,9 @@ func (nb *notificationBatcher) flush(ctx context.Context) {
 
 	var wg sync.WaitGroup
 	for batch := range slices.Chunk(notifications, maxNotificationsPerBatch) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			nb.sendBatch(ctx, batch)
-		}()
+		})
 	}
 	wg.Wait()
 }
