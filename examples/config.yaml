@@ -9,6 +9,7 @@ default-termination-grace-period-seconds: 80
 image-pull-backoff-grace-period: 60s
 job-cancel-checker-poll-interval: 10s
 empty-job-grace-period: 50s
+pod-pending-timeout: 15m
 poll-interval: 5s
 job-creation-concurrency: 5
 max-in-flight: 100
