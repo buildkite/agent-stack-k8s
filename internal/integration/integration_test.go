@@ -3,6 +3,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -653,7 +654,7 @@ func TestImagePullBackOffFailed(t *testing.T) {
 	fm := tc.FailureMessage(jobID)
 	assert.Contains(t, fm, "The following images could not be pulled or were unavailable:\n")
 	assert.Contains(t, fm, `"buildkite/non-existant-image:latest"`)
-	assert.Contains(t, fm, "ImagePullBackOff")
+	assert.Regexp(t, regexp.MustCompile("ErrImagePull|ImagePullBackOff"), fm)
 
 	// The second job should run just fine, so load all the logs for the build and make sure it did
 	tc.AssertLogsContain(build, "other job has run")
