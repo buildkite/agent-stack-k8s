@@ -486,15 +486,14 @@ func (w *podWatcher) imageFailureChecker(ctx context.Context, log *slog.Logger) 
 // pendingTimeoutChecker is a goroutine that periodically checks pending pods
 // to see if they have exceeded the pending timeout.
 func (w *podWatcher) pendingTimeoutChecker(ctx context.Context, log *slog.Logger) {
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ticker := time.Tick(time.Second)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 
-		case <-ticker.C:
+		case <-ticker:
 			// continue below
 		}
 
