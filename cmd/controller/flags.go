@@ -115,7 +115,7 @@ func applyCLIOverrides(cfg *config.Config, cli *CLI) {
 		}
 
 		switch cliField.Kind() {
-		case reflect.Ptr:
+		case reflect.Pointer:
 			// Pointer types (nil = not set)
 			if !cliField.IsNil() {
 				cfgField.Set(cliField.Elem())

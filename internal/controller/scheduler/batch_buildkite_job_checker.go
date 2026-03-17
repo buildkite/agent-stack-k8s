@@ -9,9 +9,9 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/google/uuid"
-	"log/slog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"log/slog"
 )
 
 // BatchBuildkiteJobChecker monitors Buildkite jobs for cancellation state changes.
@@ -94,18 +94,16 @@ func (c *BatchBuildkiteJobChecker) checkJobStates(ctx context.Context) {
 	jobStatesCh := make(chan map[string]api.JobState, batchCount)
 
 	for batch := range slices.Chunk(jobUUIDs, batchSize) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 
 			jobStates, _, err := c.agentClient.GetJobStates(ctx, batch)
 			if err != nil {
-			c.logger.Error("Couldn't fetch states of jobs", "error", err, "batch_size", len(batch))
-			return
+				c.logger.Error("Couldn't fetch states of jobs", "error", err, "batch_size", len(batch))
+				return
 			}
 
 			jobStatesCh <- jobStates
-		}()
+		})
 	}
 
 	// Wait for all batches to complete and close channel

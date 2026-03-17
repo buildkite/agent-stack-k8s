@@ -103,7 +103,7 @@ type KubernetesPlugin struct {
 	PodTemplate              string                 `json:"podTemplate,omitempty"`
 	GitEnvFrom               []corev1.EnvFromSource `json:"gitEnvFrom,omitempty"`
 	Sidecars                 []corev1.Container     `json:"sidecars,omitempty"`
-	Metadata                 config.Metadata        `json:"metadata,omitempty"`
+	Metadata                 config.Metadata        `json:"metadata"`
 	ExtraVolumeMounts        []corev1.VolumeMount   `json:"extraVolumeMounts,omitempty"`
 	CheckoutParams           *config.CheckoutParams `json:"checkout,omitempty"`
 	CommandParams            *config.CommandParams  `json:"commandParams,omitempty"`
