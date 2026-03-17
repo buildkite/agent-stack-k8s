@@ -138,7 +138,9 @@ func TestPodHasExceededPendingTimeout(t *testing.T) {
 			pod := tt.pod(now)
 			got := w.podHasExceededPendingTimeout(logger, pod)
 
-			assert.Equal(t, tt.want, got)
+			if got != tt.want {
+				t.Errorf("w.podHasExceededPendingTimeout(logger, %v) = %v, want %v", pod, got, tt.want)
+			}
 		})
 	}
 }
