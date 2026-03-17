@@ -31,6 +31,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		ImagePullBackOffGracePeriod:          60 * time.Second,
 		JobCancelCheckerPollInterval:         10 * time.Second,
 		EmptyJobGracePeriod:                  50 * time.Second,
+		PodPendingTimeout:                    15 * time.Minute,
 		PollInterval:                         5 * time.Second,
 		HTTPTimeout:                          1 * time.Minute,
 		JobCreationConcurrency:               5,
@@ -234,6 +235,7 @@ func TestConfigPrecedence(t *testing.T) {
 		assert.Equal(t, 25, cfg.MaxInFlight)
 		assert.Equal(t, "default", cfg.Namespace)
 		assert.Equal(t, 10*time.Minute, cfg.JobTTL)
+		assert.Equal(t, 15*time.Minute, cfg.PodPendingTimeout)
 		assert.False(t, cfg.Debug)
 	})
 

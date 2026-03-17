@@ -659,6 +659,28 @@ func TestImagePullBackOffFailed(t *testing.T) {
 	tc.AssertLogsContain(build, "other job has run")
 }
 
+func TestPodPendingTimeoutFailed(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "pod-pending-timeout.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+
+	testCfg := cfg
+	testCfg.PodPendingTimeout = 10 * time.Second
+
+	tc.StartController(ctx, testCfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+	jobID := tc.FirstCommandJobID(build)
+	fm := tc.FailureMessage(jobID)
+	assert.Contains(t, fm, "The pod has been in Pending state for")
+	assert.Contains(t, fm, "without starting.")
+}
+
 func TestPullPolicyNeverMissingImage(t *testing.T) {
 	tc := testcase{
 		T:       t,

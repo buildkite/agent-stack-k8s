@@ -3,6 +3,7 @@ package scheduler
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"log/slog"
 	"regexp"
 	"slices"
@@ -35,6 +36,10 @@ type podWatcher struct {
 	// creation before it cancels the job.
 	imagePullBackOffGracePeriod time.Duration
 
+	// podPendingTimeout waits this duration for a pod that has entered
+	// pending state before it will cancel the job
+	podPendingTimeout time.Duration
+
 	// Jobs that we've failed, cancelled, or were found to be in a terminal
 	// state.
 	ignoredJobsMu sync.RWMutex
@@ -44,6 +49,10 @@ type podWatcher struct {
 	// ErrImageNeverPull, etc)
 	watchingForImageFailureMu sync.Mutex
 	watchingForImageFailure   map[uuid.UUID]*corev1.Pod
+
+	// Pods being watched for exceeding the pending timeout
+	watchingForPendingTimeoutMu sync.Mutex
+	watchingForPendingTimeout   map[uuid.UUID]*corev1.Pod
 
 	// Buildkite job checker for handling job cancellation
 	// There is an argument to be made that these should live outside the podWatcher.
@@ -75,12 +84,16 @@ type podWatcher struct {
 //     early.
 func NewPodWatcher(logger *slog.Logger, k8s kubernetes.Interface, agentClient *api.AgentClient, cfg *config.Config) *podWatcher {
 	imagePullBackOffGracePeriod := cfg.ImagePullBackOffGracePeriod
+	podPendingTimeout := cfg.PodPendingTimeout
 	if imagePullBackOffGracePeriod <= 0 {
 		imagePullBackOffGracePeriod = config.DefaultImagePullBackOffGracePeriod
 	}
 	jobCancelCheckerInterval := cfg.JobCancelCheckerPollInterval
 	if jobCancelCheckerInterval <= 0 {
 		jobCancelCheckerInterval = config.DefaultJobCancelCheckerPollInterval
+	}
+	if podPendingTimeout <= 0 {
+		podPendingTimeout = config.DefaultPodPendingTimeout
 	}
 
 	pw := &podWatcher{
@@ -89,8 +102,10 @@ func NewPodWatcher(logger *slog.Logger, k8s kubernetes.Interface, agentClient *a
 		agentClient:                 agentClient,
 		cfg:                         cfg,
 		imagePullBackOffGracePeriod: imagePullBackOffGracePeriod,
+		podPendingTimeout:           podPendingTimeout,
 		ignoredJobs:                 make(map[uuid.UUID]struct{}),
 		watchingForImageFailure:     make(map[uuid.UUID]*corev1.Pod),
+		watchingForPendingTimeout:   make(map[uuid.UUID]*corev1.Pod),
 	}
 	pw.batchBkJobChecker = NewBatchBuildkiteJobChecker(logger, agentClient, k8s, jobCancelCheckerInterval)
 	podWatcherIgnoredJobsGaugeFunc = func() int {
@@ -118,6 +133,7 @@ func (w *podWatcher) RegisterInformer(ctx context.Context, factory informers.Sha
 	w.resourceEventHandlerCtx = ctx // 😡
 	go factory.Start(ctx.Done())
 	go w.imageFailureChecker(ctx, w.logger)
+	go w.pendingTimeoutChecker(ctx, w.logger)
 	return nil
 }
 
@@ -138,6 +154,7 @@ func (w *podWatcher) OnDelete(previousState any) {
 
 	// No need to continue watching for image-related failures or cancellation.
 	w.stopWatchingForImageFailure(jobUUID)
+	w.stopWatchingForPendingTimeout(jobUUID)
 	w.stopCheckingBuildkiteJob(jobUUID)
 
 	// The pod is gone, so we can stop ignoring it (if it comes back).
@@ -190,12 +207,14 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 		// Running: the agent container has started or is about to start, and it
 		//          can handle the cancellation and exit.
 		w.stopCheckingBuildkiteJob(jobUUID)
+		w.stopWatchingForPendingTimeout(jobUUID)
 
 	default:
 		// Succeeded, Failed: it's already over.
 		// Unknown: probably shouldn't interfere.
 		w.stopWatchingForImageFailure(jobUUID)
 		w.stopCheckingBuildkiteJob(jobUUID)
+		w.stopWatchingForPendingTimeout(jobUUID)
 	}
 
 	if w.isIgnored(jobUUID) {
@@ -213,6 +232,7 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 	switch pod.Status.Phase {
 	case corev1.PodPending:
 		w.watchForImageFailure(jobUUID, pod)
+		w.watchForPendingTimeout(jobUUID, pod)
 		w.batchBkJobChecker.AddJob(jobUUID, pod.ObjectMeta)
 
 	case corev1.PodRunning:
@@ -463,6 +483,138 @@ func (w *podWatcher) imageFailureChecker(ctx context.Context, log *slog.Logger) 
 	}
 }
 
+// pendingTimeoutChecker is a goroutine that periodically checks pending pods
+// to see if they have exceeded the pending timeout.
+func (w *podWatcher) pendingTimeoutChecker(ctx context.Context, log *slog.Logger) {
+	ticker := time.Tick(time.Second)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case <-ticker:
+			// continue below
+		}
+
+		var timedOutPods []*corev1.Pod
+
+		// Check all pending pods for timeout.
+		w.watchingForPendingTimeoutMu.Lock()
+		for jobUUID, pod := range w.watchingForPendingTimeout {
+			if w.podHasExceededPendingTimeout(log, pod) {
+				log.Debug(
+					"pod has exceeded pending timeout",
+					"pod_name", pod.Name,
+				)
+				timedOutPods = append(timedOutPods, pod)
+				delete(w.watchingForPendingTimeout, jobUUID)
+			}
+		}
+		w.watchingForPendingTimeoutMu.Unlock()
+
+		// Fail the corresponding jobs on Buildkite and delete the pods.
+		for _, pod := range timedOutPods {
+			w.failForPendingTimeout(ctx, log, pod)
+		}
+	}
+}
+
+// podHasExceededPendingTimeout checks if a pod has been in Pending state for
+// longer than the configured timeout. It excludes pods that are already being
+// handled by the image failure checker (ImagePullBackOff, ErrImageNeverPull, etc).
+func (w *podWatcher) podHasExceededPendingTimeout(log *slog.Logger, pod *corev1.Pod) bool {
+	// Only check pods that are actually in Pending state
+	if pod.Status.Phase != corev1.PodPending {
+		return false
+	}
+
+	// Exclude pods that are already being handled by image failure checker
+	// Check init containers for image-related failures
+	for _, containerStatus := range pod.Status.InitContainerStatuses {
+		waiting := containerStatus.State.Waiting
+		if waiting != nil {
+			switch waiting.Reason {
+			case "ImagePullBackOff", "ErrImageNeverPull", "InvalidImageName":
+				// This pod is already being handled by the image failure checker
+				log.Debug("Excluding pod from pending timeout check due to image failure", "reason", waiting.Reason)
+				return false
+			}
+		}
+	}
+
+	// Check regular containers for image-related failures
+	for _, containerStatus := range pod.Status.ContainerStatuses {
+		waiting := containerStatus.State.Waiting
+		if waiting != nil {
+			switch waiting.Reason {
+			case "ImagePullBackOff", "ErrImageNeverPull", "InvalidImageName":
+				// This pod is already being handled by the image failure checker
+				log.Debug("Excluding pod from pending timeout check due to image failure", "reason", waiting.Reason)
+				return false
+			}
+		}
+	}
+
+	// Check if the pod has exceeded the timeout
+	// Use CreationTimestamp instead of StartTime because StartTime is only set
+	// when a pod is assigned to a node. For pods that can't be scheduled
+	// (e.g., node selector mismatch, insufficient resources), StartTime remains nil.
+	createdAt := pod.CreationTimestamp.Time
+	return time.Since(createdAt) >= w.podPendingTimeout 
+}
+
+// failForPendingTimeout fails the job on Buildkite and deletes the pod.
+func (w *podWatcher) failForPendingTimeout(ctx context.Context, log *slog.Logger, pod *corev1.Pod) {
+	log = loggerForObject(log, pod)
+	jobUUID, err := jobUUIDForObject(pod)
+	if err != nil {
+		log.Error("Could not find Job UUID from pod metadata", "error", err)
+		return
+	}
+
+	log.Info("Pod has been pending too long. Failing job.")
+
+	// Create the failure message
+	pendingDuration := time.Since(pod.CreationTimestamp.Time)
+	message := fmt.Sprintf("The pod has been in Pending state for %s without starting.\n", pendingDuration.Round(time.Second))
+
+	// Add pod conditions to help diagnose the issue
+	if len(pod.Status.Conditions) > 0 {
+		message += "\nPod Conditions:\n"
+		for _, condition := range pod.Status.Conditions {
+			message += fmt.Sprintf("  - %s: %s (Reason: %s, Message: %s)\n",
+				condition.Type, condition.Status, condition.Reason, condition.Message)
+		}
+	}
+
+	failureInfo := FailureInfo{
+		Message: message,
+		Reason:  agent.SignalReasonStackError,
+	}
+
+	// Fail the job on Buildkite
+	if err := failForK8sObject(ctx, log, pod, failureInfo, w.agentClient); err != nil {
+		log.Error("Could not fail Buildkite job", "error", err)
+		podWatcherBuildkiteJobFailErrorsCounter.Inc()
+
+		// If the error is permanent, ignore the job to prevent infinite retry
+		if api.IsPermanentError(err) {
+			w.ignoreJob(jobUUID)
+		}
+		return
+	}
+	podWatcherBuildkiteJobFailsCounter.Inc()
+
+	// Delete the pod
+	if err := forcefullyDeletePod(ctx, log, w.k8s, &pod.ObjectMeta, "pending_timeout"); err != nil {
+		return
+	}
+
+	// Mark the job as ignored to avoid further processing
+	w.ignoreJob(jobUUID)
+}
+
 // failingPod captures information about a pending or running pod that is now
 // failing.
 type failingPod struct {
@@ -585,6 +737,18 @@ func (w *podWatcher) stopWatchingForImageFailure(jobUUID uuid.UUID) {
 	w.watchingForImageFailureMu.Lock()
 	defer w.watchingForImageFailureMu.Unlock()
 	delete(w.watchingForImageFailure, jobUUID)
+}
+
+func (w *podWatcher) watchForPendingTimeout(jobUUID uuid.UUID, pod *corev1.Pod) {
+	w.watchingForPendingTimeoutMu.Lock()
+	defer w.watchingForPendingTimeoutMu.Unlock()
+	w.watchingForPendingTimeout[jobUUID] = pod
+}
+
+func (w *podWatcher) stopWatchingForPendingTimeout(jobUUID uuid.UUID) {
+	w.watchingForPendingTimeoutMu.Lock()
+	defer w.watchingForPendingTimeoutMu.Unlock()
+	delete(w.watchingForPendingTimeout, jobUUID)
 }
 
 // All container-\d containers will have the agent installed as their PID 1.
