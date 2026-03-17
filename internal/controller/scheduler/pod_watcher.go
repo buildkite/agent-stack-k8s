@@ -562,17 +562,7 @@ func (w *podWatcher) podHasExceededPendingTimeout(log *slog.Logger, pod *corev1.
 	// when a pod is assigned to a node. For pods that can't be scheduled
 	// (e.g., node selector mismatch, insufficient resources), StartTime remains nil.
 	createdAt := pod.CreationTimestamp.Time
-	if createdAt.IsZero() {
-		// Shouldn't happen, but be safe
-		return false
-	}
-
-	if time.Since(createdAt) < w.podPendingTimeout {
-		// Pod hasn't been pending long enough
-		return false
-	}
-
-	return true
+	return time.Since(createdAt) >= w.podPendingTimeout 
 }
 
 // failForPendingTimeout fails the job on Buildkite and deletes the pod.
