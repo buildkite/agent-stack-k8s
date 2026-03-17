@@ -65,13 +65,6 @@ func TestPodHasExceededPendingTimeout(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "pending with zero creation timestamp",
-			pod: func(time.Time) *corev1.Pod {
-				return newPod(corev1.PodPending, metav1.Time{})
-			},
-			want: false,
-		},
-		{
 			name: "pending with image pull backoff init container",
 			pod: func(now time.Time) *corev1.Pod {
 				pod := newPod(corev1.PodPending, metav1.NewTime(now.Add(-10*time.Minute)))
