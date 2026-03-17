@@ -542,11 +542,12 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	managedContainerCount := len(podSpec.Containers) + systemContainerCount
 
 	agentContainer := corev1.Container{
-		Name:         AgentContainerName,
-		Args:         []string{"start"},
-		Image:        w.cfg.Image,
-		WorkingDir:   "/workspace",
-		VolumeMounts: volumeMounts,
+		Name:            AgentContainerName,
+		Args:            []string{"start"},
+		Image:           w.cfg.Image,
+		ImagePullPolicy: cmp.Or(w.cfg.DefaultImagePullPolicy, defaultPullPolicyForImage(w.defaultImageRef)),
+		WorkingDir:      "/workspace",
+		VolumeMounts:    volumeMounts,
 		Env: []corev1.EnvVar{
 			{
 				Name:  "BUILDKITE_KUBERNETES_EXEC",
@@ -1011,10 +1012,11 @@ func (w *worker) createCheckoutContainer(
 	k8sPlugin *KubernetesPlugin,
 ) corev1.Container {
 	checkoutContainer := corev1.Container{
-		Name:         CheckoutContainerName,
-		Image:        w.cfg.Image,
-		WorkingDir:   "/workspace",
-		VolumeMounts: volumeMounts,
+		Name:            CheckoutContainerName,
+		Image:           w.cfg.Image,
+		ImagePullPolicy: cmp.Or(w.cfg.DefaultImagePullPolicy, defaultPullPolicyForImage(w.defaultImageRef)),
+		WorkingDir:      "/workspace",
+		VolumeMounts:    volumeMounts,
 		Env: []corev1.EnvVar{
 			{
 				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
