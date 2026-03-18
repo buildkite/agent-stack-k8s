@@ -312,8 +312,8 @@ func (w *podWatcher) podHasFailingImages(log *slog.Logger, pod *corev1.Pod) []co
 	}
 
 	// These containers only run after the init containers have run.
-	// Theoretically this could still happen even if all the init containers
-	// successfully pulled.
+	// Theoretically image failures could still happen even if all the init containers
+	// successfully pulled. Container create errors are more likely.
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		waiting := containerStatus.State.Waiting
 		if waiting == nil {
@@ -447,7 +447,7 @@ func (w *podWatcher) formatImagePullFailureMessage(statuses []corev1.ContainerSt
 			status.State.Waiting.Message,
 		})
 	}
-	return "The following images could not be pulled or were unavailable:\n\n" + tw.Render()
+	return "The following containers could not be created or their images could not be pulled:\n\n" + tw.Render()
 }
 
 func (w *podWatcher) stopCheckingBuildkiteJob(jobUUID uuid.UUID) {
@@ -695,7 +695,7 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *slog.Logger, 
 	case api.JobStateScheduled, api.JobStateReserved:
 		// We can acquire it and fail it ourselves.
 		// Note with the reserved state, we are assuming that the current stack runtime would be the reservation owner.
-		log.Info("One or more job containers are waiting too long for images. Failing.")
+		log.Info("One or more job containers are waiting too long to create or for images to pull. Failing.")
 		message := w.formatImagePullFailureMessage(statuses)
 		failureInfo := FailureInfo{
 			Message: message,

@@ -652,12 +652,30 @@ func TestImagePullBackOffFailed(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
 	fm := tc.FailureMessage(jobID)
-	assert.Contains(t, fm, "The following images could not be pulled or were unavailable:\n")
+	assert.Contains(t, fm, "The following containers could not be created or their images could not be pulled:\n")
 	assert.Contains(t, fm, `"buildkite/non-existant-image:latest"`)
 	assert.Regexp(t, regexp.MustCompile("ErrImagePull|ImagePullBackOff"), fm)
 
 	// The second job should run just fine, so load all the logs for the build and make sure it did
 	tc.AssertLogsContain(build, "other job has run")
+}
+
+func TestCreateContainerConfigErrorFailed(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "create-container-config-error.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+	jobID := tc.FirstCommandJobID(build)
+	fm := tc.FailureMessage(jobID)
+	assert.Contains(t, fm, "The following containers could not be created or their images could not be pulled:\n")
+	assert.Contains(t, fm, "CreateContainerConfigError")
 }
 
 func TestPodPendingTimeoutFailed(t *testing.T) {
@@ -696,7 +714,7 @@ func TestPullPolicyNeverMissingImage(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
 	fm := tc.FailureMessage(jobID)
-	assert.Contains(t, fm, "The following images could not be pulled or were unavailable:\n")
+	assert.Contains(t, fm, "The following containers could not be created or their images could not be pulled:\n")
 	assert.Contains(t, fm, `"buildkite/agent-extreme:never"`)
 	assert.Contains(t, fm, "ErrImageNeverPull")
 }

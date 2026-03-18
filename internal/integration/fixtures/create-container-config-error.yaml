@@ -1,0 +1,24 @@
+steps:
+  - label: ":x:"
+    agents:
+      queue: "{{.queue}}"
+    plugins:
+      - kubernetes:
+          podSpec:
+            initContainers:
+              - name: invalid-configmap
+                image: alpine:3.17.2
+                command:
+                  - "true"
+                env:
+                  # Referring to a missing ConfigMap from env should
+                  # trigger CreateContainerConfigError.
+                  - name: INVALID
+                    valueFrom:
+                      configMapKeyRef:
+                        name: invalid-cm
+                        key: invalid-key
+            containers:
+              - image: alpine:3.17.2
+                command:
+                  - "true"
