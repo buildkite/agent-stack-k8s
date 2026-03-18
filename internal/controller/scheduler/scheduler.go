@@ -706,7 +706,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			return cmp.Compare(a.container, b.container)
 		})
 		tw := table.NewWriter()
-		tw.SetStyle(table.StyleColoredDark)
+		tw.SetStyle(table.StyleRounded)
 		tw.AppendHeader(table.Row{"CONTAINER", "IMAGE REF", "PARSE ERROR"})
 		tw.AppendSeparator()
 		for _, ie := range invalidRefs {

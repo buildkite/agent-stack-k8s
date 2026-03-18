@@ -11,9 +11,10 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"github.com/buildkite/agent/v3/agent"
 
+	"log/slog"
+
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
-	"log/slog"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -256,7 +257,7 @@ func (w *jobWatcher) formatEvents(evlist *corev1.EventList) string {
 	}
 
 	tw := table.NewWriter()
-	tw.SetStyle(table.StyleColoredDark)
+	tw.SetStyle(table.StyleRounded)
 	tw.AppendHeader(table.Row{"LAST EVENT", "REPEATED", "TYPE", "REASON", "MESSAGE"})
 	tw.AppendSeparator()
 	for _, event := range evlist.Items {

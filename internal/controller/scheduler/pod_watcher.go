@@ -240,6 +240,54 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 	}
 }
 
+// waitingReasonFail maps waiting.Reason to "should this fail the job immediately?"
+// false: it's failing, but don't fail the job immediately (apply grace period),
+// true: fail immediately.
+//
+// ### Where reasons come from
+//
+// waiting.Reason reflects the error string of the error returned by startContainer:
+// https://github.com/kubernetes/kubernetes/blob/6c8e5e2d416b2e0aba1c7bb7016d4fc6e691b867/pkg/kubelet/kuberuntime/kuberuntime_container.go#L199
+// This includes container creation errors listed here:
+// https://github.com/kubernetes/kubernetes/blob/6c8e5e2d416b2e0aba1c7bb7016d4fc6e691b867/pkg/kubelet/kuberuntime/kuberuntime_container.go#L66-L77
+// which are:
+//
+//   - CreateContainerConfigError - failed to create container config
+//   - PreCreateHookError - failed to execute PreCreateHook
+//   - CreateContainerError - failed to create container
+//   - PreStartHookError - failed to execute PreStartHook
+//   - PostStartHookError - failed to execute PostStartHook
+//
+// It may be worth digging into k8s some more to figure out which (if any)
+// of the container creation errors can be made insta-fail.
+//
+// as well as image puller errors from the image manager:
+// https://github.com/kubernetes/kubernetes/blob/6c8e5e2d416b2e0aba1c7bb7016d4fc6e691b867/pkg/kubelet/images/image_manager.go#L164
+// listed here:
+// https://github.com/kubernetes/kubernetes/blob/6c8e5e2d416b2e0aba1c7bb7016d4fc6e691b867/pkg/kubelet/images/types.go#L27-L42
+// These are:
+//
+//   - ImagePullBackOff - Container image pull failed, kubelet is backing off image pull
+//   - ImageInspectError - Unable to inspect image
+//   - ErrImagePull - General image pull error
+//   - ErrImageNeverPull - Required Image is absent on host and PullPolicy is NeverPullImage
+//   - InvalidImageName - Unable to parse the image name.
+//
+// re ErrImageNeverPull: in theory some process other than k8s itself
+// could make the image available locally within the grace period, so we
+// shouldn't necessarily insta-fail.
+var waitingReasonFail = map[string]bool{
+	"CreateContainerError":       false,
+	"CreateContainerConfigError": false,
+	"PreCreateHookError":         false,
+	"PreStartHookError":          false,
+	"ErrImageNeverPull":          false,
+	"ErrImagePull":               false,
+	"ImagePullBackOff":           false,
+	"ImageInspectError":          false,
+	"InvalidImageName":           true, // if it's invalid it can't ever be pulled
+}
+
 // podHasFailingImages returns a slice of container statuses when a pod has
 // a container in an image-related failing state (ImagePullBackOff,
 // ErrImageNeverPull, etc) for too long. If the slice is empty or nil, the pod
@@ -257,36 +305,28 @@ func (w *podWatcher) podHasFailingImages(log *slog.Logger, pod *corev1.Pod) []co
 			continue
 		}
 
-		switch waiting.Reason {
-		case "ImagePullBackOff", "ErrImageNeverPull":
+		if instafail, failing := waitingReasonFail[waiting.Reason]; failing {
 			statuses = append(statuses, containerStatus)
-
-		case "InvalidImageName":
-			statuses = append(statuses, containerStatus)
-			failImmediately = true
+			failImmediately = failImmediately || instafail
 		}
 	}
 
 	// These containers only run after the init containers have run.
-	// Theoretically this could still happen even if all the init containers
-	// successfully pulled.
+	// Theoretically image failures could still happen even if all the init containers
+	// successfully pulled. Container create errors are more likely.
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		waiting := containerStatus.State.Waiting
 		if waiting == nil {
 			continue
 		}
 
-		switch waiting.Reason {
-		case "ImagePullBackOff", "ErrImageNeverPull":
-			if !isSystemContainer(&containerStatus) {
-				log.Info("Ignoring container during ImagePullBackOff watch.", "name", containerStatus.Name)
+		if instafail, failing := waitingReasonFail[waiting.Reason]; failing {
+			if !instafail && !isSystemContainer(&containerStatus) {
+				log.Info("Ignoring sidecar or other container while watching for failing statuses", "name", containerStatus.Name, "reason", waiting.Reason)
 				continue
 			}
 			statuses = append(statuses, containerStatus)
-
-		case "InvalidImageName":
-			statuses = append(statuses, containerStatus)
-			failImmediately = true
+			failImmediately = failImmediately || instafail
 		}
 	}
 
@@ -379,7 +419,7 @@ func (w *podWatcher) formatInitContainerFails(terms map[string]*corev1.Container
 	slices.Sort(keys)
 
 	tw := table.NewWriter()
-	tw.SetStyle(table.StyleColoredDark)
+	tw.SetStyle(table.StyleRounded)
 	tw.AppendHeader(table.Row{"CONTAINER", "EXIT CODE", "SIGNAL", "REASON", "MESSAGE"})
 	tw.AppendSeparator()
 	for _, key := range keys {
@@ -395,7 +435,7 @@ func (w *podWatcher) formatImagePullFailureMessage(statuses []corev1.ContainerSt
 	})
 
 	tw := table.NewWriter()
-	tw.SetStyle(table.StyleColoredDark)
+	tw.SetStyle(table.StyleRounded)
 	tw.AppendHeader(table.Row{"CONTAINER", "IMAGE REF", "REASON", "MESSAGE"})
 	tw.AppendSeparator()
 	for _, status := range statuses {
@@ -407,7 +447,7 @@ func (w *podWatcher) formatImagePullFailureMessage(statuses []corev1.ContainerSt
 			status.State.Waiting.Message,
 		})
 	}
-	return "The following images could not be pulled or were unavailable:\n\n" + tw.Render()
+	return "The following containers could not be created or their images could not be pulled:\n\n" + tw.Render()
 }
 
 func (w *podWatcher) stopCheckingBuildkiteJob(jobUUID uuid.UUID) {
@@ -533,26 +573,26 @@ func (w *podWatcher) podHasExceededPendingTimeout(log *slog.Logger, pod *corev1.
 	// Check init containers for image-related failures
 	for _, containerStatus := range pod.Status.InitContainerStatuses {
 		waiting := containerStatus.State.Waiting
-		if waiting != nil {
-			switch waiting.Reason {
-			case "ImagePullBackOff", "ErrImageNeverPull", "InvalidImageName":
-				// This pod is already being handled by the image failure checker
-				log.Debug("Excluding pod from pending timeout check due to image failure", "reason", waiting.Reason)
-				return false
-			}
+		if waiting == nil {
+			continue
+		}
+		if _, imgFailChecker := waitingReasonFail[waiting.Reason]; imgFailChecker {
+			// This pod is already being handled by the image failure checker
+			log.Debug("Excluding pod from pending timeout check due to image failure", "reason", waiting.Reason)
+			return false
 		}
 	}
 
 	// Check regular containers for image-related failures
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		waiting := containerStatus.State.Waiting
-		if waiting != nil {
-			switch waiting.Reason {
-			case "ImagePullBackOff", "ErrImageNeverPull", "InvalidImageName":
-				// This pod is already being handled by the image failure checker
-				log.Debug("Excluding pod from pending timeout check due to image failure", "reason", waiting.Reason)
-				return false
-			}
+		if waiting == nil {
+			continue
+		}
+		if _, imgFailChecker := waitingReasonFail[waiting.Reason]; imgFailChecker {
+			// This pod is already being handled by the image failure checker
+			log.Debug("Excluding pod from pending timeout check due to image failure", "reason", waiting.Reason)
+			return false
 		}
 	}
 
@@ -561,7 +601,7 @@ func (w *podWatcher) podHasExceededPendingTimeout(log *slog.Logger, pod *corev1.
 	// when a pod is assigned to a node. For pods that can't be scheduled
 	// (e.g., node selector mismatch, insufficient resources), StartTime remains nil.
 	createdAt := pod.CreationTimestamp.Time
-	return time.Since(createdAt) >= w.podPendingTimeout 
+	return time.Since(createdAt) >= w.podPendingTimeout
 }
 
 // failForPendingTimeout fails the job on Buildkite and deletes the pod.
@@ -655,7 +695,7 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *slog.Logger, 
 	case api.JobStateScheduled, api.JobStateReserved:
 		// We can acquire it and fail it ourselves.
 		// Note with the reserved state, we are assuming that the current stack runtime would be the reservation owner.
-		log.Info("One or more job containers are waiting too long for images. Failing.")
+		log.Info("One or more job containers are waiting too long to create or for images to pull. Failing.")
 		message := w.formatImagePullFailureMessage(statuses)
 		failureInfo := FailureInfo{
 			Message: message,
