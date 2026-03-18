@@ -419,7 +419,7 @@ func (w *podWatcher) formatInitContainerFails(terms map[string]*corev1.Container
 	slices.Sort(keys)
 
 	tw := table.NewWriter()
-	tw.SetStyle(table.StyleColoredDark)
+	tw.SetStyle(table.StyleRounded)
 	tw.AppendHeader(table.Row{"CONTAINER", "EXIT CODE", "SIGNAL", "REASON", "MESSAGE"})
 	tw.AppendSeparator()
 	for _, key := range keys {
@@ -435,7 +435,7 @@ func (w *podWatcher) formatImagePullFailureMessage(statuses []corev1.ContainerSt
 	})
 
 	tw := table.NewWriter()
-	tw.SetStyle(table.StyleColoredDark)
+	tw.SetStyle(table.StyleRounded)
 	tw.AppendHeader(table.Row{"CONTAINER", "IMAGE REF", "REASON", "MESSAGE"})
 	tw.AppendSeparator()
 	for _, status := range statuses {
