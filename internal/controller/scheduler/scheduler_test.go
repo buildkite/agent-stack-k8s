@@ -1207,8 +1207,8 @@ func TestImagePullPolicies(t *testing.T) {
 			},
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullAlways, // TODO: does this make sense?
-				"agent":       corev1.PullAlways,
-				"checkout":    corev1.PullAlways,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1243,8 +1243,8 @@ func TestImagePullPolicies(t *testing.T) {
 			},
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullAlways, // TODO: does this make sense?
-				"agent":       corev1.PullAlways,
-				"checkout":    corev1.PullAlways,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1279,8 +1279,8 @@ func TestImagePullPolicies(t *testing.T) {
 			},
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent,
-				"agent":       corev1.PullAlways,
-				"checkout":    corev1.PullAlways,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1325,8 +1325,8 @@ func TestImagePullPolicies(t *testing.T) {
 			},
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullAlways, // TODO: does this make sense?
-				"agent":       corev1.PullAlways,
-				"checkout":    corev1.PullAlways,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1361,8 +1361,8 @@ func TestImagePullPolicies(t *testing.T) {
 			},
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullAlways, // TODO: does this make sense?
-				"agent":       corev1.PullAlways,
-				"checkout":    corev1.PullAlways,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1397,8 +1397,8 @@ func TestImagePullPolicies(t *testing.T) {
 			},
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent,
-				"agent":       corev1.PullAlways,
-				"checkout":    corev1.PullAlways,
+				"agent":       corev1.PullIfNotPresent,
+				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
