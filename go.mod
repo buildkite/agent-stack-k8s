@@ -19,9 +19,9 @@ require (
 	github.com/lmittmann/tint v1.1.3
 	github.com/xeipuuv/gojsonschema v1.2.0
 	gotest.tools/gotestsum v1.13.0
-	k8s.io/api v0.35.2
-	k8s.io/apimachinery v0.35.2
-	k8s.io/client-go v0.35.2
+	k8s.io/api v0.35.3
+	k8s.io/apimachinery v0.35.3
+	k8s.io/client-go v0.35.3
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/controller-runtime v0.23.3
 	sigs.k8s.io/yaml v1.6.0
