@@ -39,22 +39,23 @@ type CLI struct {
 
 	// Controller settings
 	// name= and env= needed: Go field "ID" → Kong default "--i-d" and "$I_D", but we want "--id" and "$BUILDKITE_K8S_STACK_CONTROLLER_ID"
-	ID                     string         `kong:"name='id',env='BUILDKITE_K8S_STACK_CONTROLLER_ID',help='Unique identifier for this controller instance. Used as a k8s label to filter resources and as the Stack key when registering with the Buildkite API. Must be distinct per controller when running multiple instances in the same namespace, otherwise duplicate pods may be spawned'"`
-	JobCreationConcurrency *int           `kong:"help='Number of concurrent goroutines to run for converting Buildkite jobs into Kubernetes jobs (default: 25)'"`
-	AgentTokenSecret       string         `kong:"help='Name of the Buildkite agent token secret (default: buildkite-agent-token)'"`
-	Image                  string         `kong:"help='The image to use for the Buildkite agent'"`
-	MaxInFlight            *int           `kong:"help='Max jobs in flight, 0 means no max (default: 25)'"`
-	Tags                   []string       `kong:"help='A comma-separated list of agent tags. The \"queue\" tag must be unique (e.g. \"queue=kubernetes,os=linux\")'"`
-	Queue                  string         `kong:"help='The Buildkite queue to poll for jobs (overrides the queue tag if set)'"`
-	PrometheusPort         *uint16        `kong:"help='Bind port to expose Prometheus /metrics; 0 disables it (default: 0)'"`
-	ProfilerAddress        string         `kong:"help='Bind address to expose the pprof profiler (e.g. localhost:6060)'"`
-	PollInterval           *time.Duration `kong:"help='Time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start (default: 1s)'"`
-	HTTPTimeout            *time.Duration `kong:"name='http-timeout',help='Timeout for HTTP requests to the Buildkite Agent API (default: 60s)'"`
-	PaginationPageSize     *int           `kong:"help='Sets the maximum number of Jobs per page when retrieving Buildkite Jobs to be Scheduled (default: 1000)'"`
-	PaginationDepthLimit   *int           `kong:"help='Sets the maximum number of pages when retrieving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite API and number of Jobs to be scheduled on the Kubernetes Cluster (default: 2)'"`
-	QueryResetInterval     *time.Duration `kong:"help='Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query (default: 10s)'"`
-	EnableQueuePause       *bool          `kong:"help='Allow controller to pause processing the jobs when queue is paused on Buildkite'"`
-	WorkQueueLimit         *int           `kong:"help='Sets the maximum number of Jobs the controller will hold in the work queue (default: 1000000)'"`
+	ID                       string         `kong:"name='id',env='BUILDKITE_K8S_STACK_CONTROLLER_ID',help='Unique identifier for this controller instance. Used as a k8s label to filter resources and as the Stack key when registering with the Buildkite API. Must be distinct per controller when running multiple instances in the same namespace, otherwise duplicate pods may be spawned'"`
+	JobCreationConcurrency   *int           `kong:"help='Number of concurrent goroutines to run for converting Buildkite jobs into Kubernetes jobs (default: 25)'"`
+	AgentTokenSecret         string         `kong:"help='Name of the Buildkite agent token secret (default: buildkite-agent-token)'"`
+	Image                    string         `kong:"help='The image to use for the Buildkite agent'"`
+	MaxInFlight              *int           `kong:"help='Max jobs in flight, 0 means no max (default: 25)'"`
+	Tags                     []string       `kong:"help='A comma-separated list of agent tags. The \"queue\" tag must be unique (e.g. \"queue=kubernetes,os=linux\")'"`
+	Queue                    string         `kong:"help='The Buildkite queue to poll for jobs (overrides the queue tag if set)'"`
+	PrometheusPort           *uint16        `kong:"help='Bind port to expose Prometheus /metrics; 0 disables it (default: 0)'"`
+	ProfilerAddress          string         `kong:"help='Bind address to expose the pprof profiler (e.g. localhost:6060)'"`
+	PollInterval             *time.Duration `kong:"help='Time to wait between polling for new jobs (minimum 1s); note that increasing this causes jobs to be slower to start (default: 1s)'"`
+	HTTPTimeout              *time.Duration `kong:"name='http-timeout',help='Timeout for HTTP requests to the Buildkite Agent API (default: 60s)'"`
+	PaginationPageSize       *int           `kong:"help='Sets the maximum number of Jobs per page when retrieving Buildkite Jobs to be Scheduled (default: 1000)'"`
+	PaginationDepthLimit     *int           `kong:"help='Sets the maximum number of pages when retrieving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite API and number of Jobs to be scheduled on the Kubernetes Cluster (default: 2)'"`
+	QueryResetInterval       *time.Duration `kong:"help='Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query (default: 10s)'"`
+	EnableQueuePause         *bool          `kong:"help='Allow controller to pause processing the jobs when queue is paused on Buildkite'"`
+	WorkQueueLimit           *int           `kong:"help='Sets the maximum number of Jobs the controller will hold in the work queue (default: 1000000)'"`
+	ReservationExpirySeconds *int           `kong:"help='Number of seconds until a job reservation expires. If the job is not started within this time, Buildkite will make it available for reservation again (default: 900, max: 3600)'"`
 
 	// name= and env= needed: Go field "K8s..." → Kong default "--k-8-s-..." and "$K_8_S_...", but we want "--k8s-..." and "$K8S_..."
 	K8sClientRateLimiterQPS   *int `kong:"name='k8s-client-rate-limiter-qps',env='K8S_CLIENT_RATE_LIMITER_QPS',help='The QPS value of the K8s client rate limiter (default: 10)'"`

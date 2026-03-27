@@ -5,8 +5,8 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/google/uuid"
-	"log/slog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"log/slog"
 )
 
 // loggerForObject curries a logger with namespace, name, and job UUID taken

@@ -7,8 +7,8 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 
-	"log/slog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"log/slog"
 )
 
 // FailureInfo contains data about a job failure for reporting to Buildkite.

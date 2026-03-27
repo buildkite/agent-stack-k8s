@@ -21,6 +21,9 @@ type FakeAgentServer struct {
 	// ReserveCalls records the job IDs passed to each ReserveJobs call.
 	ReserveCalls [][]string
 
+	// ReserveExpirySeconds records the reservation_expiry_seconds value from each ReserveJobs call.
+	ReserveExpirySeconds []int
+
 	// ReserveResponse configures the response for ReserveJobs.
 	// If nil, returns all job IDs as reserved.
 	ReserveResponse *stacksapi.BatchReserveJobsResponse
@@ -108,6 +111,7 @@ func (f *FakeAgentServer) handleReserveJobs(w http.ResponseWriter, r *http.Reque
 	// Record the call (mutex protects concurrent access from HTTP handler)
 	f.mu.Lock()
 	f.ReserveCalls = append(f.ReserveCalls, req.JobUUIDs)
+	f.ReserveExpirySeconds = append(f.ReserveExpirySeconds, req.ReservationExpirySeconds)
 	f.mu.Unlock()
 
 	// Return configured error if set

@@ -14,10 +14,10 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
-	"log/slog"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
+	"log/slog"
 )
 
 // Limiter manages a queue of jobs. While there are jobs available and less

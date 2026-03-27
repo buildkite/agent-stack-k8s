@@ -228,7 +228,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 	//
 	// This happens right after monitor so we can maximize our collected signals.
 	// But it does bring a trade-off of more likely reservation expiration.
-	reserver := reserver.New(logger.With("component", "reserver"), agentClient, limiter)
+	reserver := reserver.New(logger.With("component", "reserver"), agentClient, limiter, cfg.ReservationExpirySeconds)
 
 	// PodCompletionWatcher watches k8s for pods where the agent has terminated,
 	// in order to clean up the pod. This is necessary for cleaning up unmanaged

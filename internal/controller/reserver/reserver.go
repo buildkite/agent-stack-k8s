@@ -23,14 +23,19 @@ type Reserver struct {
 	// Logs goes here
 	logger *slog.Logger
 
+	// reservationExpirySeconds controls how long a job reservation is held.
+	// 0 means use the server default (900 seconds / 15 minutes).
+	reservationExpirySeconds int
+
 	paused bool
 }
 
-func New(logger *slog.Logger, agentClient *api.AgentClient, nextHandler model.ManyJobHandler) *Reserver {
+func New(logger *slog.Logger, agentClient *api.AgentClient, nextHandler model.ManyJobHandler, reservationExpirySeconds int) *Reserver {
 	r := &Reserver{
-		handler:     nextHandler,
-		agentClient: agentClient,
-		logger:      logger,
+		handler:                  nextHandler,
+		agentClient:              agentClient,
+		logger:                   logger,
+		reservationExpirySeconds: reservationExpirySeconds,
 	}
 
 	return r
@@ -64,7 +69,7 @@ func (r *Reserver) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob
 			"total-to-reserve", len(jobIDs),
 			"chunk", fmt.Sprintf("%d/%d", i+1, numChunks),
 		)
-		result, _, err := r.agentClient.ReserveJobs(ctx, chunk)
+		result, _, err := r.agentClient.ReserveJobs(ctx, chunk, r.reservationExpirySeconds)
 		if err != nil {
 			return fmt.Errorf("error when reserving jobs: %w", err)
 		}

@@ -42,7 +42,7 @@ func TestReserver_ChunksJobsInto1000(t *testing.T) {
 	}
 
 	fakeNext := &fakeHandler{}
-	r := New(slog.Default(), client, fakeNext)
+	r := New(slog.Default(), client, fakeNext, 0)
 
 	var jobs []*api.AgentScheduledJob
 	for range 2500 {
@@ -70,5 +70,45 @@ func TestReserver_ChunksJobsInto1000(t *testing.T) {
 
 	if got, want := fakeNext.called, 1; got != want {
 		t.Errorf("next handler called = %d times, want %d", got, want)
+	}
+}
+
+func TestReserver_PassesReservationExpirySeconds(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	server := api.NewFakeAgentServer()
+	defer server.Close()
+
+	client, err := api.NewAgentClient(ctx, api.AgentClientOpts{
+		Token:    "fake-token",
+		Endpoint: server.URL(),
+		StackID:  "test-stack",
+		Logger:   slog.Default(),
+	})
+	if err != nil {
+		t.Fatalf("NewAgentClient() error = %v", err)
+	}
+
+	fakeNext := &fakeHandler{}
+	const wantExpiry = 1800
+	r := New(slog.Default(), client, fakeNext, wantExpiry)
+
+	jobs := []*api.AgentScheduledJob{
+		{ID: uuid.New().String()},
+		{ID: uuid.New().String()},
+	}
+
+	if err := r.HandleMany(ctx, jobs); err != nil {
+		t.Errorf("r.HandleMany(ctx, jobs) = %v", err)
+	}
+
+	if got, want := len(server.ReserveCalls), 1; got != want {
+		t.Fatalf("number of ReserveJobs calls = %d, want %d", got, want)
+	}
+
+	if got := server.ReserveExpirySeconds[0]; got != wantExpiry {
+		t.Errorf("reservation_expiry_seconds = %d, want %d", got, wantExpiry)
 	}
 }

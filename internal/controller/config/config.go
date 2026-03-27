@@ -66,6 +66,11 @@ type Config struct {
 	QueryResetInterval     time.Duration `json:"query-reset-interval"     validate:"omitempty"`
 	EnableQueuePause       bool          `json:"enable-queue-pause"       validate:"omitempty"`
 	WorkQueueLimit         int           `json:"work-queue-limit"         validate:"omitempty"`
+	// ReservationExpirySeconds controls how long (in seconds) a job reservation
+	// is held before it expires. If the job is not started within this time,
+	// Buildkite will make it available for reservation again.
+	// Defaults to 900 (15 minutes) if not set. Maximum is 3600 (1 hour).
+	ReservationExpirySeconds int `json:"reservation-expiry-seconds" validate:"omitempty,min=0,max=3600"`
 	// Agent endpoint is set in agent-config.
 
 	// ID is an optional unique identifier for the controller instance.
