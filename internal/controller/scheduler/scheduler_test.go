@@ -1694,3 +1694,75 @@ func findEnv(t *testing.T, envs []corev1.EnvVar, name string) *corev1.EnvVar {
 
 	return nil
 }
+
+func TestBuildSafeToEvictDefault(t *testing.T) {
+	t.Parallel()
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+	}
+	sjob := &api.AgentScheduledJob{}
+	worker := New(slog.Default(), nil, nil, Config{
+		Image: "buildkite/agent:latest",
+	})
+	inputs, err := worker.ParseJob(job, sjob)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	assert.Equal(t, "false", kjob.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"])
+	assert.Equal(t, "false", kjob.Spec.Template.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"])
+}
+
+func TestBuildSafeToEvictDefaultMetadataOverride(t *testing.T) {
+	t.Parallel()
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+	}
+	sjob := &api.AgentScheduledJob{}
+	worker := New(slog.Default(), nil, nil, Config{
+		Image: "buildkite/agent:latest",
+		DefaultMetadata: config.Metadata{
+			Annotations: map[string]string{
+				"cluster-autoscaler.kubernetes.io/safe-to-evict": "true",
+			},
+		},
+	})
+	inputs, err := worker.ParseJob(job, sjob)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	assert.Equal(t, "true", kjob.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"])
+	assert.Equal(t, "true", kjob.Spec.Template.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"])
+}
+
+func TestBuildSafeToEvictPluginMetadataOverride(t *testing.T) {
+	t.Parallel()
+
+	pluginsYAML := `- github.com/buildkite-plugins/kubernetes-buildkite-plugin:
+    metadata:
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"`
+
+	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
+	require.NoError(t, err)
+
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+		Env:     map[string]string{"BUILDKITE_PLUGINS": string(pluginsJSON)},
+	}
+	sjob := &api.AgentScheduledJob{}
+	worker := New(slog.Default(), nil, nil, Config{
+		Image: "buildkite/agent:latest",
+	})
+	inputs, err := worker.ParseJob(job, sjob)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	assert.Equal(t, "true", kjob.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"])
+	assert.Equal(t, "true", kjob.Spec.Template.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"])
+}

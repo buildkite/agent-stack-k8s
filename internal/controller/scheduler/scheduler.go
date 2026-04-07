@@ -299,6 +299,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		},
 	}
 
+	// Prevent k8s cluster autoscaler from terminating the job before it finishes to scale down cluster.
+	// This default can be overridden, e.g. when targeting spot/preemptible nodes.
+	kjob.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
+
 	maps.Copy(kjob.Labels, w.cfg.DefaultMetadata.Labels)
 	maps.Copy(kjob.Annotations, w.cfg.DefaultMetadata.Annotations)
 	if inputs.k8sPlugin != nil {
@@ -334,9 +338,6 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		kjob.Annotations[config.JobURLAnnotation] = jobURL
 	}
 	kjob.Annotations[config.PriorityAnnotation] = strconv.Itoa(inputs.priority)
-
-	// Prevent k8s cluster autoscaler from terminating the job before it finishes to scale down cluster
-	kjob.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"] = "false"
 
 	kjob.Spec.Template.Labels = kjob.Labels
 	kjob.Spec.Template.Annotations = kjob.Annotations
