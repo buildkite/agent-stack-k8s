@@ -182,6 +182,14 @@ func setEnvNegatedOpt(ctr *corev1.Container, name string, value *bool) {
 	setEnv(ctr, name, strconv.FormatBool(!*value))
 }
 
+// setEnvDurationOpt sets an env var to a duration string (e.g. "5m0s"), if not nil.
+func setEnvDurationOpt(ctr *corev1.Container, name string, value *time.Duration) {
+	if value == nil {
+		return
+	}
+	setEnv(ctr, name, value.String())
+}
+
 // setEnvCommaSep sets an env var to a comma-separated list of values, if not
 // empty.
 func setEnvCommaSep(ctr *corev1.Container, name string, values []string) {

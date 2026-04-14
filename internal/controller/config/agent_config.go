@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
@@ -25,8 +26,9 @@ type AgentConfig struct {
 	StrictSingleHooks         *bool    `json:"strict-single-hooks,omitempty"`          // BUILDKITE_STRICT_SINGLE_HOOKS
 	NoMultipartArtifactUpload *bool    `json:"no-multipart-artifact-upload,omitempty"` // BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD
 	TraceContextEncoding      *string  `json:"trace-context-encoding,omitempty"`       // BUILDKITE_TRACE_CONTEXT_ENCODING
-	DisableWarningsFor        []string `json:"disable-warnings-for,omitempty"`         // BUILDKITE_AGENT_DISABLE_WARNINGS_FOR
-	DebugSigning              *bool    `json:"debug-signing,omitempty"`                // BUILDKITE_AGENT_DEBUG_SIGNING
+	DisableWarningsFor              []string       `json:"disable-warnings-for,omitempty"`               // BUILDKITE_AGENT_DISABLE_WARNINGS_FOR
+	DebugSigning                    *bool          `json:"debug-signing,omitempty"`                      // BUILDKITE_AGENT_DEBUG_SIGNING
+	ContainerStartTimeout *time.Duration `json:"container-start-timeout,omitempty"` // BUILDKITE_KUBERNETES_CONTAINER_START_TIMEOUT
 
 	// Applies differently depending on the container
 	//                                                          // agent start                    / bootstrap
@@ -103,6 +105,7 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	setEnvOpt(ctr, "BUILDKITE_TRACE_CONTEXT_ENCODING", a.TraceContextEncoding)
 	setEnvCommaSep(ctr, "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", a.DisableWarningsFor)
 	setEnvBoolOpt(ctr, "BUILDKITE_AGENT_DEBUG_SIGNING", a.DebugSigning)
+	setEnvDurationOpt(ctr, "BUILDKITE_KUBERNETES_CONTAINER_START_TIMEOUT", a.ContainerStartTimeout)
 
 	a.applyHooksVolumeTo(ctr)
 	setEnvOpt(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)

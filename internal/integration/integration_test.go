@@ -1037,3 +1037,36 @@ func TestCompletionsWatcherCleansUpSidecars(t *testing.T) {
 	})
 	require.NoError(t, err, "K8s Job should reach terminal state after completionsWatcher cleanup")
 }
+
+// TestContainerStartTimeout verifies that the agent fails the job when not all
+// containers connect within the configured container start timeout.
+//
+// It inflates BUILDKITE_CONTAINER_COUNT via podSpecPatch so the agent waits for
+// a phantom container that never connects, triggering the timeout.
+func TestContainerStartTimeout(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "container-start-timeout.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+
+	timeout := 30 * time.Second
+	testCfg := cfg
+	testCfg.AgentConfig = &config.AgentConfig{
+		ContainerStartTimeout: &timeout,
+	}
+	tc.StartController(ctx, testCfg)
+
+	startTime := time.Now()
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+	elapsed := time.Since(startTime)
+
+	assert.GreaterOrEqual(t, elapsed, 20*time.Second, "expected job to take at least 20s (30s timeout minus scheduling slack)")
+	assert.Less(t, elapsed, 3*time.Minute, "expected job to fail within 3 minutes")
+
+	tc.AssertLogsContain(build, "timed out waiting 30s for all containers to connect")
+}

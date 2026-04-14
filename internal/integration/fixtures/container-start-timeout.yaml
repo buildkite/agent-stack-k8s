@@ -1,0 +1,17 @@
+steps:
+  - label: ":hourglass:"
+    agents:
+      queue: "{{.queue}}"
+    plugins:
+      - kubernetes:
+          podSpec:
+            containers:
+              - image: alpine:latest
+                command:
+                  - echo "hello"
+          podSpecPatch:
+            containers:
+              - name: agent
+                env:
+                  - name: "BUILDKITE_CONTAINER_COUNT"
+                    value: "999"
