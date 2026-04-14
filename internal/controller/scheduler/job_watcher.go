@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -260,6 +261,9 @@ func (w *jobWatcher) formatEvents(evlist *corev1.EventList) string {
 	tw := table.NewWriter()
 	tw.SetStyle(table.StyleRounded)
 	tw.AppendHeader(table.Row{"LAST EVENT", "REPEATED", "TYPE", "REASON", "MESSAGE"})
+	tw.SetColumnConfigs([]table.ColumnConfig{
+		{Number: 5, WidthMax: 50, WidthMaxEnforcer: text.WrapSoft}, // Set the max width of the message column to 50 and soft wrap it
+	})
 	tw.AppendSeparator()
 	for _, event := range evlist.Items {
 		// Events can be produced by either the new-style recorder
