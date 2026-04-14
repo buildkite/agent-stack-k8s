@@ -12,10 +12,10 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
 	"github.com/google/uuid"
-	"log/slog"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
+	"log/slog"
 )
 
 // Deduper is a job handler that wraps another job handler (typically Limiter)

@@ -418,6 +418,62 @@ tags:
 		// CLI explicitly set tags to empty, should override config file
 		assert.Empty(t, cfg.Tags)
 	})
+
+	t.Run("reservation-expiry-seconds default is zero (use server default)", func(t *testing.T) {
+		cleanTestEnv(t)
+
+		cfg, err := buildConfig(t, []string{}, "")
+		require.NoError(t, err)
+
+		assert.Equal(t, 0, cfg.ReservationExpirySeconds)
+	})
+
+	t.Run("reservation-expiry-seconds settable via config file", func(t *testing.T) {
+		cleanTestEnv(t)
+		configFile := createTempConfigFile(t, `reservation-expiry-seconds: 1800`)
+
+		cfg, err := buildConfig(t, []string{}, configFile)
+		require.NoError(t, err)
+
+		assert.Equal(t, 1800, cfg.ReservationExpirySeconds)
+	})
+
+	t.Run("reservation-expiry-seconds settable via CLI flag", func(t *testing.T) {
+		cleanTestEnv(t)
+
+		cfg, err := buildConfig(t, []string{"--reservation-expiry-seconds=900"}, "")
+		require.NoError(t, err)
+
+		assert.Equal(t, 900, cfg.ReservationExpirySeconds)
+	})
+
+	t.Run("reservation-expiry-seconds CLI overrides config file", func(t *testing.T) {
+		cleanTestEnv(t)
+		configFile := createTempConfigFile(t, `reservation-expiry-seconds: 600`)
+
+		cfg, err := buildConfig(t, []string{"--reservation-expiry-seconds=1800"}, configFile)
+		require.NoError(t, err)
+
+		assert.Equal(t, 1800, cfg.ReservationExpirySeconds)
+	})
+
+	t.Run("reservation-expiry-seconds settable via env var", func(t *testing.T) {
+		cleanTestEnv(t)
+		t.Setenv("RESERVATION_EXPIRY_SECONDS", "3600")
+
+		cfg, err := buildConfig(t, []string{}, "")
+		require.NoError(t, err)
+
+		assert.Equal(t, 3600, cfg.ReservationExpirySeconds)
+	})
+
+	t.Run("reservation-expiry-seconds exceeding max is rejected", func(t *testing.T) {
+		cleanTestEnv(t)
+		configFile := createTempConfigFile(t, `reservation-expiry-seconds: 3601`)
+
+		_, err := buildConfig(t, []string{}, configFile)
+		require.Error(t, err)
+	})
 }
 
 // cleanTestEnv unsets environment variables that might be set in CI or .envrc
@@ -436,6 +492,7 @@ func cleanTestEnv(t *testing.T) {
 		"DEBUG",
 		"JOB_TTL",
 		"BUILDKITE_K8S_STACK_CONTROLLER_ID",
+		"RESERVATION_EXPIRY_SECONDS",
 	} {
 		t.Setenv(env, "")
 		os.Unsetenv(env)

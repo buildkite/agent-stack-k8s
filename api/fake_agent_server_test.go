@@ -29,7 +29,7 @@ func TestFakeAgentServer_DefaultBehavior(t *testing.T) {
 	}
 
 	jobIDs := []string{"job-1", "job-2", "job-3"}
-	result, retryAfter, err := client.ReserveJobs(ctx, jobIDs)
+	result, retryAfter, err := client.ReserveJobs(ctx, jobIDs, 0)
 	if err != nil {
 		t.Errorf("ReserveJobs(ctx, %q) error = %v, want nil", jobIDs, err)
 	}
@@ -63,11 +63,11 @@ func TestFakeAgentServer_RecordsCalls(t *testing.T) {
 	}
 
 	jobIDs := []string{"job-1", "job-2"}
-	_, _, err = client.ReserveJobs(ctx, jobIDs)
+	_, _, err = client.ReserveJobs(ctx, jobIDs, 0)
 	if err != nil {
 		t.Fatalf("ReserveJobs(ctx, %q) error = %v", jobIDs, err)
 	}
-	_, _, err = client.ReserveJobs(ctx, []string{"job-3"})
+	_, _, err = client.ReserveJobs(ctx, []string{"job-3"}, 0)
 	if err != nil {
 		t.Fatalf("ReserveJobs(ctx, %q) error = %v", jobIDs, err)
 	}
@@ -101,7 +101,7 @@ func TestFakeAgentServer_CustomError(t *testing.T) {
 	}
 
 	jobIDs := []string{"job-1"}
-	result, _, err := client.ReserveJobs(ctx, []string{"job-1"})
+	result, _, err := client.ReserveJobs(ctx, []string{"job-1"}, 0)
 	if err == nil {
 		t.Errorf("ReserveJobs(ctx, %q) error = nil, want error", jobIDs)
 	}
@@ -133,7 +133,7 @@ func TestFakeAgentServer_CustomResult(t *testing.T) {
 	}
 
 	jobIDs := []string{"job-1", "job-2", "job-3"}
-	result, _, err := client.ReserveJobs(ctx, jobIDs)
+	result, _, err := client.ReserveJobs(ctx, jobIDs, 0)
 	if err != nil {
 		t.Errorf("ReserveJobs(ctx, %q) error = %v, want nil", jobIDs, err)
 	}

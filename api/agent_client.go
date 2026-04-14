@@ -309,11 +309,13 @@ func (c *AgentClient) GetJobStates(ctx context.Context, ids []string) (result ma
 	return result, readRetryAfter(header), err
 }
 
-// ReserveJobs reserves a batch of jobs.
-func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string) (*stacksapi.BatchReserveJobsResponse, time.Duration, error) {
+// ReserveJobs reserves a batch of jobs. reservationExpirySeconds controls how
+// long the reservation is held; 0 means use the server default (900 seconds / 15 minutes).
+func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string, reservationExpirySeconds int) (*stacksapi.BatchReserveJobsResponse, time.Duration, error) {
 	reservations, header, err := c.stacksAPIClient.BatchReserveJobs(ctx, stacksapi.BatchReserveJobsRequest{
-		StackKey: c.stack.Key,
-		JobUUIDs: ids,
+		StackKey:                 c.stack.Key,
+		JobUUIDs:                 ids,
+		ReservationExpirySeconds: reservationExpirySeconds,
 	}, stacksapi.WithNoRetry())
 	if err != nil {
 		return nil, 0, err
