@@ -233,6 +233,7 @@ func (w *jobWatcher) fetchEvents(ctx context.Context, log *slog.Logger, kjob *ba
 	if evlist == nil {
 		return ""
 	}
+
 	return w.formatEvents(evlist)
 }
 
@@ -261,12 +262,28 @@ func (w *jobWatcher) formatEvents(evlist *corev1.EventList) string {
 	tw.AppendHeader(table.Row{"LAST EVENT", "REPEATED", "TYPE", "REASON", "MESSAGE"})
 	tw.AppendSeparator()
 	for _, event := range evlist.Items {
+		// Events can be produced by either the new-style recorder
+		// (EventTime + Series) or the old-style recorder
+		// (FirstTimestamp/LastTimestamp + Count). Use whichever is set.
+		eventTime := event.EventTime.Time
+		if eventTime.IsZero() {
+			eventTime = event.FirstTimestamp.Time
+		}
+
 		if event.Series == nil {
-			tw.AppendRow(table.Row{event.EventTime.Time, "-", event.Type, event.Reason, event.Message})
+			var repeated string
+			if event.Count > 1 {
+				repeated = fmt.Sprintf("x%d", event.Count)
+				eventTime = event.LastTimestamp.Time
+			} else {
+				repeated = "-"
+			}
+			tw.AppendRow(table.Row{eventTime, repeated, event.Type, event.Reason, event.Message})
 			continue
 		}
+
 		lastTime := event.Series.LastObservedTime.Time
-		firstToLast := duration.HumanDuration(lastTime.Sub(event.EventTime.Time))
+		firstToLast := duration.HumanDuration(lastTime.Sub(eventTime))
 		countMsg := fmt.Sprintf("x%d over %s", event.Series.Count, firstToLast)
 		tw.AppendRow(table.Row{lastTime, countMsg, event.Type, event.Reason, event.Message})
 	}
