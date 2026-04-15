@@ -232,8 +232,9 @@ func convertDurations(m map[string]any) {
 		"query-reset-interval":             {},
 		"image-pull-backoff-grace-period":  {},
 		"job-cancel-checker-poll-interval": {},
-		"empty-job-grace-period":           {},
-		"pod-pending-timeout":              {},
+		"empty-job-grace-period":                {},
+		"pod-pending-timeout":                   {},
+		"container-start-timeout":              {},
 	}
 
 	for key, value := range m {

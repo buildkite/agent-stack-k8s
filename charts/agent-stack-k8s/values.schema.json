@@ -441,6 +441,10 @@
             "debug-signing": {
               "type": "boolean"
             },
+            "container-start-timeout": {
+              "type": "string",
+              "title": "Timeout for waiting for all containers to start in a pod (e.g. 5m, 10m)"
+            },
             "signing-jwks-file": {
               "type": "string"
             },
