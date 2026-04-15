@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -233,6 +234,7 @@ func (w *jobWatcher) fetchEvents(ctx context.Context, log *slog.Logger, kjob *ba
 	if evlist == nil {
 		return ""
 	}
+
 	return w.formatEvents(evlist)
 }
 
@@ -259,14 +261,33 @@ func (w *jobWatcher) formatEvents(evlist *corev1.EventList) string {
 	tw := table.NewWriter()
 	tw.SetStyle(table.StyleRounded)
 	tw.AppendHeader(table.Row{"LAST EVENT", "REPEATED", "TYPE", "REASON", "MESSAGE"})
+	tw.SetColumnConfigs([]table.ColumnConfig{
+		{Number: 5, WidthMax: 50, WidthMaxEnforcer: text.WrapSoft}, // Set the max width of the message column to 50 and soft wrap it
+	})
 	tw.AppendSeparator()
 	for _, event := range evlist.Items {
+		// Events can be produced by either the new-style recorder
+		// (EventTime + Series) or the old-style recorder
+		// (FirstTimestamp/LastTimestamp + Count). Use whichever is set.
+		eventTime := event.EventTime.Time
+		if eventTime.IsZero() {
+			eventTime = event.FirstTimestamp.Time
+		}
+
 		if event.Series == nil {
-			tw.AppendRow(table.Row{event.EventTime.Time, "-", event.Type, event.Reason, event.Message})
+			var repeated string
+			if event.Count > 1 {
+				repeated = fmt.Sprintf("x%d", event.Count)
+				eventTime = event.LastTimestamp.Time
+			} else {
+				repeated = "-"
+			}
+			tw.AppendRow(table.Row{eventTime, repeated, event.Type, event.Reason, event.Message})
 			continue
 		}
+
 		lastTime := event.Series.LastObservedTime.Time
-		firstToLast := duration.HumanDuration(lastTime.Sub(event.EventTime.Time))
+		firstToLast := duration.HumanDuration(lastTime.Sub(eventTime))
 		countMsg := fmt.Sprintf("x%d over %s", event.Series.Count, firstToLast)
 		tw.AppendRow(table.Row{lastTime, countMsg, event.Type, event.Reason, event.Message})
 	}
