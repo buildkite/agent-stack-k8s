@@ -692,6 +692,9 @@
               "resource": {
                 "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.ResourceRequirements"
               },
+              "podResource": {
+                "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+              },
               "nodeSelector": {
                 "type": "object",
                 "additionalProperties": {

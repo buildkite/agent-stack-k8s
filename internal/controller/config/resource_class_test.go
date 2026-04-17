@@ -177,6 +177,87 @@ func TestResourceClass_Apply(t *testing.T) {
 			},
 		},
 		{
+			name: "applies podResource to pod-level resources",
+			resourceClass: &ResourceClass{
+				PodResource: &corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("256Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("512Mi"),
+					},
+				},
+			},
+			podSpec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "agent"},
+					{Name: "command", Env: commandContainerEnv},
+					{Name: "sidecar"},
+				},
+			},
+			want: &corev1.PodSpec{
+				Resources: &corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("256Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("2"),
+						corev1.ResourceMemory: resource.MustParse("512Mi"),
+					},
+				},
+				Containers: []corev1.Container{
+					{Name: "agent"},
+					{Name: "command", Env: commandContainerEnv},
+					{Name: "sidecar"},
+				},
+			},
+		},
+		{
+			name: "podResource and resource can be combined",
+			resourceClass: &ResourceClass{
+				Resource: &corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU: resource.MustParse("500m"),
+					},
+				},
+				PodResource: &corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU: resource.MustParse("2"),
+					},
+				},
+			},
+			podSpec: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{Name: "agent"},
+					{Name: "command", Env: commandContainerEnv},
+				},
+			},
+			want: &corev1.PodSpec{
+				Resources: &corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU: resource.MustParse("2"),
+					},
+					Limits: corev1.ResourceList{},
+				},
+				Containers: []corev1.Container{
+					{Name: "agent"},
+					{
+						Name: "command",
+						Env:  commandContainerEnv,
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU: resource.MustParse("500m"),
+							},
+							Limits: corev1.ResourceList{},
+						},
+					},
+				},
+			},
+		},
+		{
 			name:          "handles nil resource class",
 			resourceClass: nil,
 			podSpec: &corev1.PodSpec{

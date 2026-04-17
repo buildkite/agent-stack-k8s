@@ -10,6 +10,7 @@ import (
 // Affinity or Toleration/taint based configuration may come later.
 type ResourceClass struct {
 	Resource     *corev1.ResourceRequirements `json:"resource,omitempty"`
+	PodResource  *corev1.ResourceRequirements `json:"podResource,omitempty"`
 	NodeSelector map[string]string            `json:"nodeSelector,omitempty"`
 }
 
@@ -47,6 +48,20 @@ func (rc *ResourceClass) Apply(podSpec *corev1.PodSpec) {
 			maps.Copy(container.Resources.Requests, rc.Resource.Requests)
 			maps.Copy(container.Resources.Limits, rc.Resource.Limits)
 		}
+	}
+
+	if rc.PodResource != nil {
+		if podSpec.Resources == nil {
+			podSpec.Resources = &corev1.ResourceRequirements{}
+		}
+		if podSpec.Resources.Requests == nil {
+			podSpec.Resources.Requests = make(corev1.ResourceList)
+		}
+		if podSpec.Resources.Limits == nil {
+			podSpec.Resources.Limits = make(corev1.ResourceList)
+		}
+		maps.Copy(podSpec.Resources.Requests, rc.PodResource.Requests)
+		maps.Copy(podSpec.Resources.Limits, rc.PodResource.Limits)
 	}
 }
 
