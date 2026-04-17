@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 func TestPodHasExceededPendingTimeout(t *testing.T) {
@@ -135,4 +137,26 @@ func TestPodHasExceededPendingTimeout(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestIsSidecarInitContainer(t *testing.T) {
+	t.Parallel()
+
+	pod := &corev1.Pod{
+		Spec: corev1.PodSpec{
+			InitContainers: []corev1.Container{
+				{Name: "checkout"},
+				{
+					Name:          "sidecar-0",
+					RestartPolicy: ptr.To(corev1.ContainerRestartPolicyAlways),
+				},
+				{Name: "imagecheck-0"},
+			},
+		},
+	}
+
+	assert.False(t, isSidecarInitContainer(pod, "checkout"))
+	assert.True(t, isSidecarInitContainer(pod, "sidecar-0"))
+	assert.False(t, isSidecarInitContainer(pod, "imagecheck-0"))
+	assert.False(t, isSidecarInitContainer(pod, "nonexistent"))
 }

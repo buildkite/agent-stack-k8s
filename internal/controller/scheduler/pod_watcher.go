@@ -363,9 +363,15 @@ func (w *podWatcher) failOnInitContainerFailure(ctx context.Context, log *slog.L
 
 	// If any init container fails, whether it's one we added specifically to
 	// check for pull failure or not, the pod won't run.
+	// However, native sidecar containers (init containers with RestartPolicy:
+	// Always) run alongside main containers and are expected to terminate with
+	// non-zero exit codes (e.g. SIGKILL/SIGTERM) during normal pod shutdown.
 	for _, containerStatus := range pod.Status.InitContainerStatuses {
 		term := containerStatus.State.Terminated
 		if term == nil || term.ExitCode == 0 { // not terminated, or succeeded
+			continue
+		}
+		if isSidecarInitContainer(pod, containerStatus.Name) {
 			continue
 		}
 		containerFails[containerStatus.Name] = term
@@ -789,6 +795,18 @@ func (w *podWatcher) stopWatchingForPendingTimeout(jobUUID uuid.UUID) {
 	w.watchingForPendingTimeoutMu.Lock()
 	defer w.watchingForPendingTimeoutMu.Unlock()
 	delete(w.watchingForPendingTimeout, jobUUID)
+}
+
+// isSidecarInitContainer reports whether the named init container is a native
+// sidecar (has RestartPolicy set to Always). These containers run alongside
+// main containers and should not be treated as gating init containers.
+func isSidecarInitContainer(pod *corev1.Pod, name string) bool {
+	for _, c := range pod.Spec.InitContainers {
+		if c.Name == name {
+			return c.RestartPolicy != nil && *c.RestartPolicy == corev1.ContainerRestartPolicyAlways
+		}
+	}
+	return false
 }
 
 // All container-\d containers will have the agent installed as their PID 1.
