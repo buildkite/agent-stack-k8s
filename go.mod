@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/Khan/genqlient v0.8.1
 	github.com/alecthomas/kong v1.15.0
-	github.com/buildkite/agent/v3 v3.123.0
+	github.com/buildkite/agent/v3 v3.123.1
 	github.com/buildkite/go-buildkite/v3 v3.13.0
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/stacksapi v1.0.1
@@ -31,7 +31,7 @@ require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260209202127-80ab13bee0bf.1 // indirect
 	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/iam v1.7.0 // indirect
-	cloud.google.com/go/kms v1.27.0 // indirect
+	cloud.google.com/go/kms v1.28.0 // indirect
 	cloud.google.com/go/longrunning v0.9.0 // indirect
 	connectrpc.com/connect v1.19.1 // indirect
 	github.com/DataDog/datadog-agent/pkg/template v0.77.2 // indirect
@@ -66,7 +66,7 @@ require (
 	cloud.google.com/go/auth v0.20.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
-	drjosh.dev/zzglob v0.4.2 // indirect
+	drjosh.dev/zzglob v0.4.3 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.21.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.12.0 // indirect
