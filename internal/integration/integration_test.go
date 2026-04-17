@@ -127,6 +127,48 @@ func TestDefaultResourceClass(t *testing.T) {
 	tc.AssertLogsContain(build, "✅ CPU limit is correctly set to ~250m (from default resource class)")
 }
 
+func TestPodResourceClass(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "pod-resource-class.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+
+	sv, err := tc.Kubernetes.Discovery().ServerVersion()
+	require.NoError(t, err)
+	minor, err := strconv.Atoi(strings.TrimRight(sv.Minor, "+"))
+	require.NoError(t, err)
+	if minor < 34 {
+		t.Skipf("Requires Kubernetes 1.34+ with PodLevelResources (cluster is %s.%s)", sv.Major, sv.Minor)
+	}
+
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+
+	testCfg := cfg
+	testCfg.ResourceClasses = map[string]*config.ResourceClass{
+		"pod-res": {
+			PodResource: &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("500m"),
+					corev1.ResourceMemory: resource.MustParse("256Mi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("512Mi"),
+				},
+			},
+		},
+	}
+
+	tc.StartController(ctx, testCfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+	tc.AssertLogsContain(build, "✅ Pod-level memory limit is correctly set to ~512MB")
+	tc.AssertLogsContain(build, "✅ Pod-level CPU limit is correctly set to ~1000m")
+}
+
 func TestPodTemplate(t *testing.T) {
 	tc := testcase{
 		T:       t,
