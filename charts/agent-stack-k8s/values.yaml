@@ -1,5 +1,7 @@
 agentToken: ""
 
+agentStackSecret: ""
+
 nodeSelector: {}
 tolerations: []
 
