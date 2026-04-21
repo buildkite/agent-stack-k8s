@@ -12,6 +12,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/version"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/go-logr/logr"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -20,6 +21,7 @@ import (
 	"github.com/mattn/go-isatty"
 	"k8s.io/client-go/kubernetes"
 	restconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+	klog "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager/signals"
 )
 
@@ -147,6 +149,7 @@ func runController(cfg *config.Config) error {
 	}
 
 	logger := slog.New(handler)
+	klog.SetLogger(logr.FromSlogHandler(handler))
 	logger.Debug("configuration loaded", "config", cfg)
 
 	clientConfig := restconfig.GetConfigOrDie()
