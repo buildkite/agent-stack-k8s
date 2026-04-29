@@ -64,6 +64,7 @@ type Config struct {
 	JobActiveDeadlineSeconds             int
 	AdditionalRedactedVars               []string
 	WorkspaceVolume                      *corev1.Volume
+	WorkspaceMountSubPathExpr            string
 	AgentConfig                          *config.AgentConfig
 	DefaultCheckoutParams                *config.CheckoutParams
 	DefaultCommandParams                 *config.CommandParams
@@ -365,7 +366,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	// Volume mounts shared among most containers: the workspace volume, and
 	// any others supplied with ExtraVolumeMounts.
-	volumeMounts := []corev1.VolumeMount{{Name: workspaceVolume.Name, MountPath: "/workspace"}}
+	volumeMounts := []corev1.VolumeMount{w.workspaceVolumeMount(workspaceVolume.Name)}
 	if inputs.k8sPlugin != nil {
 		volumeMounts = append(volumeMounts, inputs.k8sPlugin.ExtraVolumeMounts...)
 	}
@@ -729,7 +730,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// Init containers run before the agent, so we can acquire and fail the job
 	// if an init container stays in ImagePullBackOff for too long.
 	if !w.cfg.SkipImageCheckContainers {
-		imageCheckInitContainers := makeImageCheckContainers(w, preflightImageChecks, workspaceVolume.Name)
+		imageCheckInitContainers := makeImageCheckContainers(w, preflightImageChecks, workspaceVolume.Name, w.cfg.WorkspaceMountSubPathExpr)
 		initContainers = append(initContainers, imageCheckInitContainers...)
 	}
 
@@ -921,6 +922,16 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *co
 	return &patchedSpec, nil
 }
 
+// workspaceVolumeMount returns the standard /workspace VolumeMount with
+// the configured SubPathExpr applied.
+func (w *worker) workspaceVolumeMount(volumeName string) corev1.VolumeMount {
+	return corev1.VolumeMount{
+		Name:        volumeName,
+		MountPath:   "/workspace",
+		SubPathExpr: w.cfg.WorkspaceMountSubPathExpr,
+	}
+}
+
 func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspaceVolume *corev1.Volume) corev1.Container {
 	podUser, podGroup := int64(0), int64(0)
 	if podSpec.SecurityContext != nil {
@@ -1000,10 +1011,7 @@ fi
 		Command:         []string{"/bin/sh"},
 		Args:            []string{"-cefx", containerArgs.String()},
 		SecurityContext: securityContext,
-		VolumeMounts: []corev1.VolumeMount{{
-			Name:      workspaceVolume.Name,
-			MountPath: "/workspace",
-		}},
+		VolumeMounts:    []corev1.VolumeMount{w.workspaceVolumeMount(workspaceVolume.Name)},
 	}
 }
 

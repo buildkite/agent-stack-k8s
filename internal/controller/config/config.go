@@ -95,6 +95,10 @@ type Config struct {
 	// an EmptyDir volume is created for it.
 	WorkspaceVolume *corev1.Volume `json:"workspace-volume" validate:"omitempty"`
 
+	// WorkspaceMountSubPathExpr, when set, is applied as `subPathExpr` to
+	// every /workspace VolumeMount the controller creates.
+	WorkspaceMountSubPathExpr string `json:"workspace-mount-sub-path-expr" validate:"omitempty"`
+
 	AgentConfig            *AgentConfig    `json:"agent-config"             validate:"omitempty"`
 	DefaultCheckoutParams  *CheckoutParams `json:"default-checkout-params"  validate:"omitempty"`
 	DefaultCommandParams   *CommandParams  `json:"default-command-params"   validate:"omitempty"`
