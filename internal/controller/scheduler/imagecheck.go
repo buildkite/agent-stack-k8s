@@ -175,6 +175,7 @@ func makeImageCheckContainers(
 	w *worker,
 	preflightImageChecks preflightImageCheckMap,
 	workspaceVolumeName string,
+	workspaceMountSubPathExpr string,
 ) []corev1.Container {
 	// Use default resource limits for pre-flight image check containers, if not provided
 	imageCheckContainerCPULimit, err := resource.ParseQuantity(w.cfg.ImageCheckContainerCPULimit)
@@ -210,8 +211,9 @@ func makeImageCheckContainers(
 			Command: []string{"/workspace/tini-static"},
 			Args:    []string{"--version"},
 			VolumeMounts: []corev1.VolumeMount{{
-				Name:      workspaceVolumeName,
-				MountPath: "/workspace",
+				Name:        workspaceVolumeName,
+				MountPath:   "/workspace",
+				SubPathExpr: workspaceMountSubPathExpr,
 			}},
 			// Apply container resource requests to imagecheck containers
 			Resources: corev1.ResourceRequirements{

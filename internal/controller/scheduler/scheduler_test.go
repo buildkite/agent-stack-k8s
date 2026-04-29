@@ -595,6 +595,94 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+func TestBuildWorkspaceMountSubPathExpr(t *testing.T) {
+	t.Parallel()
+
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+	}
+	sjob := &api.AgentScheduledJob{}
+	worker := New(
+		slog.Default(),
+		nil,
+		nil,
+		Config{
+			Namespace:                 "buildkite",
+			Image:                     "buildkite/agent:latest",
+			AgentTokenSecretName:      "bkcq_1234567890",
+			WorkspaceMountSubPathExpr: "$(POD_NAME)",
+		},
+	)
+	inputs, err := worker.ParseJob(job, sjob)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	const wantMountPath = "/workspace"
+	const wantSubPathExpr = "$(POD_NAME)"
+
+	checkWorkspaceMount := func(t *testing.T, label, containerName string, mounts []corev1.VolumeMount) {
+		t.Helper()
+		var found bool
+		for _, m := range mounts {
+			if m.MountPath != wantMountPath {
+				continue
+			}
+			found = true
+			if m.SubPathExpr != wantSubPathExpr {
+				t.Errorf("%s container %q: workspace mount SubPathExpr = %q, want %q",
+					label, containerName, m.SubPathExpr, wantSubPathExpr)
+			}
+		}
+		if !found {
+			t.Errorf("%s container %q: no /workspace mount found", label, containerName)
+		}
+	}
+
+	for _, c := range kjob.Spec.Template.Spec.Containers {
+		checkWorkspaceMount(t, "container", c.Name, c.VolumeMounts)
+	}
+	for _, c := range kjob.Spec.Template.Spec.InitContainers {
+		checkWorkspaceMount(t, "initContainer", c.Name, c.VolumeMounts)
+	}
+}
+
+// TestBuildWorkspaceMountSubPathExprDefault verifies the previous behavior
+// (no SubPathExpr) is preserved when the new field is unset.
+func TestBuildWorkspaceMountSubPathExprDefault(t *testing.T) {
+	t.Parallel()
+
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+	}
+	sjob := &api.AgentScheduledJob{}
+	worker := New(slog.Default(), nil, nil, Config{
+		Image: "buildkite/agent:latest",
+	})
+	inputs, err := worker.ParseJob(job, sjob)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	checkNoSubPath := func(t *testing.T, label, containerName string, mounts []corev1.VolumeMount) {
+		t.Helper()
+		for _, m := range mounts {
+			if m.MountPath == "/workspace" && m.SubPathExpr != "" {
+				t.Errorf("%s container %q: workspace mount SubPathExpr = %q, want empty",
+					label, containerName, m.SubPathExpr)
+			}
+		}
+	}
+	for _, c := range kjob.Spec.Template.Spec.Containers {
+		checkNoSubPath(t, "container", c.Name, c.VolumeMounts)
+	}
+	for _, c := range kjob.Spec.Template.Spec.InitContainers {
+		checkNoSubPath(t, "initContainer", c.Name, c.VolumeMounts)
+	}
+}
+
 func TestBuildSkipCheckout(t *testing.T) {
 	t.Parallel()
 

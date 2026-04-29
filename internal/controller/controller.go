@@ -179,6 +179,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		DefaultTerminationGracePeriodSeconds: cfg.DefaultTerminationGracePeriodSeconds,
 		AdditionalRedactedVars:               cfg.AdditionalRedactedVars,
 		WorkspaceVolume:                      cfg.WorkspaceVolume,
+		WorkspaceMountSubPathExpr:            cfg.WorkspaceMountSubPathExpr,
 		AgentConfig:                          cfg.AgentConfig,
 		DefaultCheckoutParams:                cfg.DefaultCheckoutParams,
 		DefaultCommandParams:                 cfg.DefaultCommandParams,
