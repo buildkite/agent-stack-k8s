@@ -49,6 +49,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		DefaultImagePullPolicy:               "Never",
 		DefaultImageCheckPullPolicy:          "IfNotPresent",
 		EnableQueuePause:                     true,
+		EnableCompletionWatcher:              true,
 		WorkQueueLimit:                       2_000_000,
 		ImageCheckContainerCPULimit:          "201m",
 		ImageCheckContainerMemoryLimit:       "129Mi",

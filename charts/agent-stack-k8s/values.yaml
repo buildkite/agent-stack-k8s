@@ -8,6 +8,7 @@ tolerations: []
 config:
   prometheus-port: 9216
   reservation-expiry-seconds: 900
+  enable-completion-watcher: true
 
 resources:
   requests:
