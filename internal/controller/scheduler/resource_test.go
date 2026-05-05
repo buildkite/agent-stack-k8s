@@ -3,11 +3,11 @@ package scheduler
 import (
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -142,19 +142,33 @@ func TestApplyResourceClass(t *testing.T) {
 			err := w.applyResourceClass(podSpec, tt.tags)
 
 			if tt.wantErr != "" {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), tt.wantErr)
+				if err == nil {
+					t.Fatalf("w.applyResourceClass(podSpec, tt.tags) error = %v, want non-nil error", err)
+				}
+				if got, want := err.Error(), tt.wantErr; !strings.Contains(got, want) {
+					t.Errorf("err.Error() = %q, want containing %q", got, want)
+				}
 				return
 			}
 
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("w.applyResourceClass(podSpec, tt.tags) error = %v, want nil", err)
+			}
 
 			if tt.wantResources == nil {
-				assert.Empty(t, podSpec.Containers[0].Resources.Requests)
-				assert.Empty(t, podSpec.Containers[0].Resources.Limits)
+				if got := len(podSpec.Containers[0].Resources.Requests); got != 0 {
+					t.Errorf("len(podSpec.Containers[0].Resources.Requests) = %v, want 0", got)
+				}
+				if got := len(podSpec.Containers[0].Resources.Limits); got != 0 {
+					t.Errorf("len(podSpec.Containers[0].Resources.Limits) = %v, want 0", got)
+				}
 			} else {
-				assert.Equal(t, tt.wantResources.Requests, podSpec.Containers[0].Resources.Requests)
-				assert.Equal(t, tt.wantResources.Limits, podSpec.Containers[0].Resources.Limits)
+				if diff := cmp.Diff(podSpec.Containers[0].Resources.Requests, tt.wantResources.Requests); diff != "" {
+					t.Errorf("podSpec.Containers[0].Resources.Requests diff (-got +want):\n%s", diff)
+				}
+				if diff := cmp.Diff(podSpec.Containers[0].Resources.Limits, tt.wantResources.Limits); diff != "" {
+					t.Errorf("podSpec.Containers[0].Resources.Limits diff (-got +want):\n%s", diff)
+				}
 			}
 		})
 	}

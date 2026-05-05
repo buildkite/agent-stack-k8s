@@ -33,7 +33,7 @@ test *FLAGS:
     {{FLAGS}} \
     ./...
 
-lint *FLAGS: gomod
+lint *FLAGS: gomod assertzapper
   golangci-lint run {{FLAGS}}
 
 generate:
@@ -57,6 +57,21 @@ gomod:
     echo "  go mod tidy"
     echo "and make a commit."
 
+    exit 1
+  fi
+
+assertzapper:
+  #!/usr/bin/env sh
+  set -euf
+
+  if ! lint_out="$(go tool assertzapper ./...)" ; then
+    echo ^^^ +++
+    echo "assertzapper found uses of an assert library:"
+    echo ""
+    echo "${lint_out}"
+    echo "Run"
+    echo "  go tool assertzapper -fix ./..."
+    echo "then refine any changes it makes, and make a commit."
     exit 1
   fi
 
