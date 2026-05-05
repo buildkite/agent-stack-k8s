@@ -51,27 +51,27 @@ type Config struct {
 	PodSpecPatch                         *corev1.PodSpec `json:"pod-spec-patch"                           validate:"omitempty"`
 
 	// Controller settings
-	JobCreationConcurrency int           `json:"job-creation-concurrency" validate:"omitempty"`
-	AgentTokenSecret       string        `json:"agent-token-secret"       validate:"required"`
-	Image                  string        `json:"image"                    validate:"required"`
-	MaxInFlight            int           `json:"max-in-flight"            validate:"min=0"`
-	Tags                   []string      `json:"tags"`
-	Queue                  string        `json:"queue"`
-	PrometheusPort         uint16        `json:"prometheus-port"          validate:"omitempty"`
-	ProfilerAddress        string        `json:"profiler-address"         validate:"omitempty,hostname_port"`
-	PollInterval           time.Duration `json:"poll-interval"`
-	HTTPTimeout            time.Duration `json:"http-timeout"             validate:"omitempty"`
-	PaginationPageSize     int           `json:"pagination-page-size"     validate:"min=1,max=1000"`
-	PaginationDepthLimit   int           `json:"pagination-depth-limit"   validate:"min=1,max=20"`
-	QueryResetInterval     time.Duration `json:"query-reset-interval"     validate:"omitempty"`
-	EnableQueuePause       bool          `json:"enable-queue-pause"       validate:"omitempty"`
-	WorkQueueLimit         int           `json:"work-queue-limit"         validate:"omitempty"`
+	JobCreationConcurrency  int           `json:"job-creation-concurrency"  validate:"omitempty"`
+	AgentTokenSecret        string        `json:"agent-token-secret"        validate:"required"`
+	Image                   string        `json:"image"                     validate:"required"`
+	MaxInFlight             int           `json:"max-in-flight"             validate:"min=0"`
+	Tags                    []string      `json:"tags"`
+	Queue                   string        `json:"queue"`
+	PrometheusPort          uint16        `json:"prometheus-port"           validate:"omitempty"`
+	ProfilerAddress         string        `json:"profiler-address"          validate:"omitempty,hostname_port"`
+	PollInterval            time.Duration `json:"poll-interval"`
+	HTTPTimeout             time.Duration `json:"http-timeout"              validate:"omitempty"`
+	PaginationPageSize      int           `json:"pagination-page-size"      validate:"min=1,max=1000"`
+	PaginationDepthLimit    int           `json:"pagination-depth-limit"    validate:"min=1,max=20"`
+	QueryResetInterval      time.Duration `json:"query-reset-interval"      validate:"omitempty"`
+	EnableQueuePause        bool          `json:"enable-queue-pause"        validate:"omitempty"`
+	WorkQueueLimit          int           `json:"work-queue-limit"          validate:"omitempty"`
+	EnableCompletionWatcher bool          `json:"enable-completion-watcher" validate:"omitempty"`
 	// ReservationExpirySeconds controls how long (in seconds) a job reservation
 	// is held before it expires. If the job is not started within this time,
 	// Buildkite will make it available for reservation again.
 	// Defaults to 900 (15 minutes) if not set. Maximum is 3600 (1 hour).
 	ReservationExpirySeconds int `json:"reservation-expiry-seconds" validate:"omitempty,min=0,max=3600"`
-	// Agent endpoint is set in agent-config.
 
 	// ID is an optional unique identifier for the controller instance.
 	// It is used as both a Kubernetes label (buildkite.com/controller-id) to filter

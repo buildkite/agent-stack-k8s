@@ -22,6 +22,8 @@ import (
 	"github.com/buildkite/stacksapi"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -230,14 +232,16 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 	// But it does bring a trade-off of more likely reservation expiration.
 	reserver := reserver.New(logger.With("component", "reserver"), agentClient, limiter, cfg.ReservationExpirySeconds)
 
-	// PodCompletionWatcher watches k8s for pods where the agent has terminated,
-	// in order to clean up the pod. This is necessary for cleaning up unmanaged
-	// containers added via podSpecPatch, and also provides backward compatibility
-	// with legacy sidecars from older controller versions (pre-KEP-753).
-	completions := scheduler.NewPodCompletionWatcher(logger.With("component", "completions"), k8sClient, cfg.DefaultTerminationGracePeriodSeconds)
-	if err := completions.RegisterInformer(ctx, informerFactory); err != nil {
-		logger.Error("failed to register completions informer", "error", err)
-		return
+	if cfg.EnableCompletionWatcher {
+		// PodCompletionWatcher watches k8s for pods where the agent has terminated,
+		// in order to clean up the pod. This is necessary for cleaning up unmanaged
+		// containers added via podSpecPatch, and also provides backward compatibility
+		// with legacy sidecars from older controller versions (pre-KEP-753).
+		completions := scheduler.NewPodCompletionWatcher(logger.With("component", "completions"), k8sClient, cfg.DefaultTerminationGracePeriodSeconds)
+		if err := completions.RegisterInformer(ctx, informerFactory); err != nil {
+			logger.Error("failed to register completions informer", "error", err)
+			return
+		}
 	}
 
 	// JobWatcher watches for jobs in bad conditions to clean up:
@@ -336,7 +340,95 @@ func NewInformerFactory(
 		informers.WithTweakListOptions(func(opt *metav1.ListOptions) {
 			opt.LabelSelector = labels.NewSelector().Add(requirements...).String()
 		}),
+		informers.WithTransform(informerTransform),
 	), nil
+}
+
+// informerTransform strips unused fields from objects prior to caching.
+// Per the informer docs, this needs to be fast and idempotent.
+func informerTransform(obj any) (any, error) {
+	switch obj := obj.(type) {
+	case *corev1.Pod:
+		// Pod metadata we care about:
+		// - Name
+		// - Labels
+		// Pod metadata we don't care about:
+		obj.DeletionTimestamp = nil
+		obj.DeletionGracePeriodSeconds = nil
+		obj.Annotations = nil
+		obj.OwnerReferences = nil
+		obj.Finalizers = nil
+		obj.ManagedFields = nil
+
+		// Once created, we don't look at the pod spec ever again
+		obj.Spec = corev1.PodSpec{}
+
+		// Pod status fields we care about include:
+		// - Phase
+		// - ContainerStatuses
+		// Various pod status fields we don't care about:
+		obj.Status.NominatedNodeName = ""
+		obj.Status.HostIP = ""
+		obj.Status.HostIPs = nil
+		obj.Status.PodIP = ""
+		obj.Status.PodIPs = nil
+		obj.Status.QOSClass = ""
+		obj.Status.EphemeralContainerStatuses = nil
+		obj.Status.Resize = ""
+		obj.Status.ResourceClaimStatuses = nil
+		obj.Status.ExtendedResourceClaimStatus = nil
+		obj.Status.AllocatedResources = nil
+		obj.Status.Resources = nil
+		return obj, nil
+
+	case *batchv1.Job:
+		// Job metadata we care about:
+		// - Name
+		// - Labels
+		// Job metadata we don't care about:
+		obj.DeletionTimestamp = nil
+		obj.DeletionGracePeriodSeconds = nil
+		obj.Annotations = nil
+		obj.OwnerReferences = nil
+		obj.Finalizers = nil
+		obj.ManagedFields = nil
+
+		// Job spec fields we might care about after creation:
+		// - ActiveDeadlineSeconds
+		// - TTLSecondsAfterFinished
+
+		// Job spec fields we don't care about after creation:
+		obj.Spec.Parallelism = nil
+		obj.Spec.Completions = nil
+		obj.Spec.PodFailurePolicy = nil
+		obj.Spec.SuccessPolicy = nil
+		obj.Spec.BackoffLimit = nil
+		obj.Spec.BackoffLimitPerIndex = nil
+		obj.Spec.MaxFailedIndexes = nil
+		obj.Spec.Selector = nil
+		obj.Spec.ManualSelector = nil
+		obj.Spec.Template = corev1.PodTemplateSpec{}
+		obj.Spec.CompletionMode = nil
+		obj.Spec.Suspend = nil
+		obj.Spec.PodReplacementPolicy = nil
+		obj.Spec.ManagedBy = nil
+
+		// Job status fields we (might) care about:
+		// - Conditions
+		// - StartTime
+		// - CompletionTime
+		// - Active
+		// - Succeeded
+		// - Failed
+		// - Terminating
+		// - UncountedTerminatedPods
+		// - Ready
+		// Status fields we don't care about:
+		obj.Status.CompletedIndexes = ""
+		obj.Status.FailedIndexes = nil
+		return obj, nil
+	}
+	return obj, nil
 }
 
 // fetchAgentToken fetches the agent token from the agent token secret.

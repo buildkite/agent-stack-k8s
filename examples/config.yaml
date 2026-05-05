@@ -20,6 +20,7 @@ prometheus-port: 9216
 default-image-pull-policy: Never
 default-image-check-pull-policy: IfNotPresent
 enable-queue-pause: true
+enable-completion-watcher: true
 pagination-page-size: 1000
 pagination-depth-limit: 5
 query-reset-interval: 10s

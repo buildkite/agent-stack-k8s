@@ -262,7 +262,7 @@
           "type": "string",
           "default": "buildkite-",
           "title": "The prefix to use when creating Kubernetes job names",
-          "examples": ["kubekite-","buildkube-"]
+          "examples": ["kubekite-", "buildkube-"]
         },
         "job-active-deadline-seconds": {
           "type": "integer",
@@ -347,6 +347,12 @@
           "default": false,
           "title": "Allow controller to pause processing the jobs when queue is paused on Buildkite",
           "examples": [false]
+        },
+        "enable-completion-watcher": {
+          "type": "boolean",
+          "default": true,
+          "title": "Runs an extra loop that checks for and terminates pods that are still running but with a terminated agent container",
+          "examples": [false, true]
         },
         "prometheus-port": {
           "type": "integer",

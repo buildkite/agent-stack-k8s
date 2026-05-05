@@ -54,6 +54,7 @@ type CLI struct {
 	PaginationDepthLimit     *int           `kong:"help='Sets the maximum number of pages when retrieving Buildkite Jobs to be Scheduled. Increasing this value will increase the number of requests made to the Buildkite API and number of Jobs to be scheduled on the Kubernetes Cluster (default: 2)'"`
 	QueryResetInterval       *time.Duration `kong:"help='Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query (default: 10s)'"`
 	EnableQueuePause         *bool          `kong:"help='Allow controller to pause processing the jobs when queue is paused on Buildkite'"`
+	EnableCompletionWatcher  *bool          `kong:"help='Runs an extra loop that checks for and terminates pods that are still running but with a terminated agent container (default: true)'"`
 	WorkQueueLimit           *int           `kong:"help='Sets the maximum number of Jobs the controller will hold in the work queue (default: 1000000)'"`
 	ReservationExpirySeconds *int           `kong:"help='Number of seconds until a job reservation expires. If the job is not started within this time, Buildkite will make it available for reservation again (default: 900, max: 3600)'"`
 
@@ -159,6 +160,7 @@ func newConfigWithDefaults() *config.Config {
 		PaginationDepthLimit:                 2,
 		QueryResetInterval:                   10 * time.Second,
 		WorkQueueLimit:                       1000000,
+		EnableCompletionWatcher:              true,
 		ImageCheckContainerCPULimit:          "200m",
 		ImageCheckContainerMemoryLimit:       "128Mi",
 		LogFormat:                            "logfmt",
@@ -232,9 +234,9 @@ func convertDurations(m map[string]any) {
 		"query-reset-interval":             {},
 		"image-pull-backoff-grace-period":  {},
 		"job-cancel-checker-poll-interval": {},
-		"empty-job-grace-period":                {},
-		"pod-pending-timeout":                   {},
-		"container-start-timeout":              {},
+		"empty-job-grace-period":           {},
+		"pod-pending-timeout":              {},
+		"container-start-timeout":          {},
 	}
 
 	for key, value := range m {

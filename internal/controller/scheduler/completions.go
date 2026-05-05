@@ -112,6 +112,16 @@ func (w *completionsWatcher) OnUpdate(old any, new any) {
 // Always), this cleanup is redundant but harmless as Kubernetes already handles
 // their termination automatically.
 func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *corev1.Pod) {
+	// Ignore completed (succeeded or failed) and unknown status pods.
+	// Most of the time, the remaining logic applies to "Running" pods.
+	// ("Pending" is dubious... one or more of the containers haven't started,
+	// but the agent has run and terminated? still, it seems theoretically
+	// possible.)
+	switch pod.Status.Phase {
+	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
+		return
+	}
+	// Ignore pods where the agent hasn't terminated.
 	terminated := getAgentTermination(pod)
 	if terminated == nil {
 		return
