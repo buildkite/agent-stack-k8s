@@ -377,6 +377,12 @@
         "workspaceVolume": {
           "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
         },
+        "workspace-mount-sub-path-expr": {
+          "type": "string",
+          "default": "",
+          "title": "When set, applied as `subPathExpr` to every /workspace VolumeMount the controller creates, so a shared workspace volume can be sliced into per-pod subdirectories. Typically `$(POD_NAME)`, with POD_NAME supplied via downward API.",
+          "examples": ["", "$(POD_NAME)"]
+        },
         "agent-config": {
           "type": "object",
           "default": null,
