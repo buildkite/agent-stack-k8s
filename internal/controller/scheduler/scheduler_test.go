@@ -1854,3 +1854,50 @@ func TestBuildSafeToEvictPluginMetadataOverride(t *testing.T) {
 	assert.Equal(t, "true", kjob.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"])
 	assert.Equal(t, "true", kjob.Spec.Template.Annotations["cluster-autoscaler.kubernetes.io/safe-to-evict"])
 }
+
+func TestBuildPodTemplateAnnotation(t *testing.T) {
+	t.Parallel()
+
+	pluginsYAML := `- github.com/buildkite-plugins/kubernetes-buildkite-plugin:
+    podTemplate: my-pod-template`
+
+	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
+	require.NoError(t, err)
+
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+		Env:     map[string]string{"BUILDKITE_PLUGINS": string(pluginsJSON)},
+	}
+	sjob := &api.AgentScheduledJob{}
+	worker := New(slog.Default(), nil, nil, Config{
+		Image: "buildkite/agent:latest",
+	})
+	inputs, err := worker.ParseJob(job, sjob)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	require.Equal(t, "my-pod-template", kjob.Annotations[config.PodTemplateAnnotation])
+	require.Equal(t, "my-pod-template", kjob.Spec.Template.Annotations[config.PodTemplateAnnotation])
+}
+
+func TestBuildNoPodTemplateAnnotationWhenAbsent(t *testing.T) {
+	t.Parallel()
+
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+	}
+	sjob := &api.AgentScheduledJob{}
+	worker := New(slog.Default(), nil, nil, Config{
+		Image: "buildkite/agent:latest",
+	})
+	inputs, err := worker.ParseJob(job, sjob)
+	require.NoError(t, err)
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	require.NoError(t, err)
+
+	require.Empty(t, kjob.Annotations[config.PodTemplateAnnotation])
+	require.Empty(t, kjob.Spec.Template.Annotations[config.PodTemplateAnnotation])
+}

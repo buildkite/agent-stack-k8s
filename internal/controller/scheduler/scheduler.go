@@ -340,6 +340,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	}
 	kjob.Annotations[config.PriorityAnnotation] = strconv.Itoa(inputs.priority)
 
+	if inputs.k8sPlugin != nil && inputs.k8sPlugin.PodSpec == nil && inputs.k8sPlugin.PodTemplate != "" {
+		kjob.Annotations[config.PodTemplateAnnotation] = inputs.k8sPlugin.PodTemplate
+	}
+
 	kjob.Spec.Template.Labels = kjob.Labels
 	kjob.Spec.Template.Annotations = kjob.Annotations
 	kjob.Spec.BackoffLimit = ptr.To[int32](0)

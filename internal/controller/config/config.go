@@ -19,6 +19,7 @@ const (
 	JobURLAnnotation                      = "buildkite.com/job-url"
 	PriorityAnnotation                    = "buildkite.com/job-priority"
 	PipelineSlugAnnotation                = "buildkite.com/pipeline-slug"
+	PodTemplateAnnotation                 = "buildkite.com/pod-template-name"
 	DefaultNamespace                      = "default"
 	DefaultImagePullBackOffGracePeriod    = 30 * time.Second
 	DefaultJobCancelCheckerPollInterval   = 5 * time.Second
