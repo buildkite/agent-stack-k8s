@@ -15,8 +15,6 @@ import (
 	agentversion "github.com/buildkite/agent/v3/version"
 	"github.com/buildkite/roko"
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -137,9 +135,13 @@ func TestPodResourceClass(t *testing.T) {
 	ctx := context.Background()
 
 	sv, err := tc.Kubernetes.Discovery().ServerVersion()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("tc.Kubernetes.Discovery().ServerVersion() error = %v, want nil", err)
+	}
 	minor, err := strconv.Atoi(strings.TrimRight(sv.Minor, "+"))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("strconv.Atoi(%q) error = %v, want nil", strings.TrimRight(sv.Minor, "+"), err)
+	}
 	if minor < 34 {
 		t.Skipf("Requires Kubernetes 1.34+ with PodLevelResources (cluster is %s.%s)", sv.Major, sv.Minor)
 	}
@@ -292,7 +294,9 @@ func TestPodSpecPatchRejectsPatchingAgentContainerCommand(t *testing.T) {
 
 	tc.AssertFail(ctx, build)
 	fm := tc.FailureMessage(tc.FirstCommandJobID(build))
-	assert.Contains(t, fm, scheduler.ErrNoCommandModification.Error(), "expected failure message to mention command modification")
+	if got, want := fm, scheduler.ErrNoCommandModification.Error(); !strings.Contains(got, want) {
+		t.Errorf("expected failure message to mention command modification")
+	}
 }
 
 func TestPodSpecPatchInController(t *testing.T) {
@@ -390,9 +394,15 @@ func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 	logs := tc.FetchLogs(build)
-	assert.Contains(t, logs, "Redaction should work in the checkout container")
-	assert.Contains(t, logs, "Redaction should work in the command container:")
-	assert.NotContains(t, logs, "white pepper and 10 others")
+	if got, want := logs, "Redaction should work in the checkout container"; !strings.Contains(got, want) {
+		t.Errorf("tc.FetchLogs(build) = %q, want containing %q", got, want)
+	}
+	if got, want := logs, "Redaction should work in the command container:"; !strings.Contains(got, want) {
+		t.Errorf("tc.FetchLogs(build) = %q, want containing %q", got, want)
+	}
+	if got, want := logs, "white pepper and 10 others"; strings.Contains(got, want) {
+		t.Errorf("tc.FetchLogs(build) = %q, want containing %q", got, want)
+	}
 }
 
 func TestChown(t *testing.T) {
@@ -422,7 +432,9 @@ func TestSSHRepoClone(t *testing.T) {
 	_, err := tc.Kubernetes.CoreV1().
 		Secrets(cfg.Namespace).
 		Get(ctx, "integration-test-ssh-key", metav1.GetOptions{})
-	require.NoError(t, err, "agent-stack-k8s secret must exist")
+	if err != nil {
+		t.Fatalf("agent-stack-k8s secret must exist")
+	}
 
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
@@ -628,7 +640,9 @@ func TestInvalidPodSpec(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
 	fm := tc.FailureMessage(jobID)
-	assert.Contains(t, fm, `is invalid: spec.template.spec.containers[0].volumeMounts[0].name: Not found: "this-doesnt-exist"`)
+	if got, want := fm, `is invalid: spec.template.spec.containers[0].volumeMounts[0].name: Not found: "this-doesnt-exist"`; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
 }
 
 func TestInvalidPodJSON(t *testing.T) {
@@ -645,7 +659,9 @@ func TestInvalidPodJSON(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
 	fm := tc.FailureMessage(jobID)
-	assert.Contains(t, fm, "failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.podSpec.containers.env.value of type string")
+	if got, want := fm, "failed parsing Kubernetes plugin: json: cannot unmarshal number into Go struct field EnvVar.podSpec.containers.env.value of type string"; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
 }
 
 func TestMissingServiceAccount(t *testing.T) {
@@ -662,7 +678,9 @@ func TestMissingServiceAccount(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
 	fm := tc.FailureMessage(jobID)
-	assert.Contains(t, fm, "error looking up service account")
+	if got, want := fm, "error looking up service account"; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
 }
 
 func TestEnvVariables(t *testing.T) {
@@ -694,9 +712,15 @@ func TestImagePullBackOffFailed(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
 	fm := tc.FailureMessage(jobID)
-	assert.Contains(t, fm, "The following containers could not be created or their images could not be pulled:\n")
-	assert.Contains(t, fm, `"buildkite/non-existant-image:latest"`)
-	assert.Regexp(t, regexp.MustCompile("ErrImagePull|ImagePullBackOff"), fm)
+	if got, want := fm, "The following containers could not be created or their images could not be pulled:\n"; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
+	if got, want := fm, `"buildkite/non-existant-image:latest"`; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
+	if got, want := fm, regexp.MustCompile("ErrImagePull|ImagePullBackOff"); !want.MatchString(got) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want string matching %v", jobID, got, want)
+	}
 
 	// The second job should run just fine, so load all the logs for the build and make sure it did
 	tc.AssertLogsContain(build, "other job has run")
@@ -716,8 +740,12 @@ func TestCreateContainerConfigErrorFailed(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
 	fm := tc.FailureMessage(jobID)
-	assert.Contains(t, fm, "The following containers could not be created or their images could not be pulled:\n")
-	assert.Contains(t, fm, "CreateContainerConfigError")
+	if got, want := fm, "The following containers could not be created or their images could not be pulled:\n"; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
+	if got, want := fm, "CreateContainerConfigError"; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
 }
 
 func TestPodPendingTimeoutFailed(t *testing.T) {
@@ -738,8 +766,12 @@ func TestPodPendingTimeoutFailed(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
 	fm := tc.FailureMessage(jobID)
-	assert.Contains(t, fm, "The pod has been in Pending state for")
-	assert.Contains(t, fm, "without starting.")
+	if got, want := fm, "The pod has been in Pending state for"; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
+	if got, want := fm, "without starting."; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
 }
 
 func TestPullPolicyNeverMissingImage(t *testing.T) {
@@ -756,9 +788,15 @@ func TestPullPolicyNeverMissingImage(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
 	fm := tc.FailureMessage(jobID)
-	assert.Contains(t, fm, "The following containers could not be created or their images could not be pulled:\n")
-	assert.Contains(t, fm, `"buildkite/agent-extreme:never"`)
-	assert.Contains(t, fm, "ErrImageNeverPull")
+	if got, want := fm, "The following containers could not be created or their images could not be pulled:\n"; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
+	if got, want := fm, `"buildkite/agent-extreme:never"`; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
+	if got, want := fm, "ErrImageNeverPull"; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
 }
 
 func TestBrokenInitContainer(t *testing.T) {
@@ -775,8 +813,12 @@ func TestBrokenInitContainer(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
 	fm := tc.FailureMessage(jobID)
-	assert.Contains(t, fm, "The following init containers failed:")
-	assert.Contains(t, fm, "well this isn't going to work")
+	if got, want := fm, "The following init containers failed:"; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
+	if got, want := fm, "well this isn't going to work"; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
 }
 
 func TestInvalidImageRefFormat(t *testing.T) {
@@ -793,7 +835,9 @@ func TestInvalidImageRefFormat(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	jobID := tc.FirstCommandJobID(build)
 	fm := tc.FailureMessage(jobID)
-	assert.Contains(t, fm, `invalid reference format "buildkite/agent:latest plus some extra junk" for container "container-0"`)
+	if got, want := fm, `invalid reference format "buildkite/agent:latest plus some extra junk" for container "container-0"`; !strings.Contains(got, want) {
+		t.Errorf("tc.FailureMessage(%q) = %q, want containing %q", jobID, got, want)
+	}
 }
 
 func TestArtifactsUploadFailedJobs(t *testing.T) {
@@ -824,9 +868,15 @@ func TestInterposerBuildkite(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 	logs := tc.FetchLogs(build)
-	assert.Contains(t, logs, "Hello World!")
-	assert.Contains(t, logs, "Goodbye World!")
-	assert.NotContains(t, logs, "Hello World! echo Goodbye World!")
+	if got, want := logs, "Hello World!"; !strings.Contains(got, want) {
+		t.Errorf("tc.FetchLogs(build) = %q, want containing %q", got, want)
+	}
+	if got, want := logs, "Goodbye World!"; !strings.Contains(got, want) {
+		t.Errorf("tc.FetchLogs(build) = %q, want containing %q", got, want)
+	}
+	if got, want := logs, "Hello World! echo Goodbye World!"; strings.Contains(got, want) {
+		t.Errorf("tc.FetchLogs(build) = %q, want containing %q", got, want)
+	}
 
 }
 
@@ -843,8 +893,12 @@ func TestInterposerVector(t *testing.T) {
 	build := tc.TriggerBuild(ctx, pipelineID)
 	tc.AssertSuccess(ctx, build)
 	logs := tc.FetchLogs(build)
-	assert.Contains(t, logs, "Hello World!")
-	assert.Contains(t, logs, "Goodbye World!")
+	if got, want := logs, "Hello World!"; !strings.Contains(got, want) {
+		t.Errorf("tc.FetchLogs(build) = %q, want containing %q", got, want)
+	}
+	if got, want := logs, "Goodbye World!"; !strings.Contains(got, want) {
+		t.Errorf("tc.FetchLogs(build) = %q, want containing %q", got, want)
+	}
 }
 
 func TestCancelCheckerDeletePod(t *testing.T) {
@@ -1077,7 +1131,9 @@ func TestCompletionsWatcherCleansUpSidecars(t *testing.T) {
 
 		return fmt.Errorf("job %s not yet in terminal state, conditions: %v", jobName, k8sJob.Status.Conditions)
 	})
-	require.NoError(t, err, "K8s Job should reach terminal state after completionsWatcher cleanup")
+	if err != nil {
+		t.Fatalf("K8s Job should reach terminal state after completionsWatcher cleanup")
+	}
 }
 
 // TestContainerStartTimeout verifies that the agent fails the job when not all
@@ -1107,8 +1163,12 @@ func TestContainerStartTimeout(t *testing.T) {
 	tc.AssertFail(ctx, build)
 	elapsed := time.Since(startTime)
 
-	assert.GreaterOrEqual(t, elapsed, 20*time.Second, "expected job to take at least 20s (30s timeout minus scheduling slack)")
-	assert.Less(t, elapsed, 3*time.Minute, "expected job to fail within 3 minutes")
+	if elapsed < 20*time.Second {
+		t.Error("expected job to take at least 20s (30s timeout minus scheduling slack)")
+	}
+	if elapsed >= 3*time.Minute {
+		t.Error("expected job to fail within 3 minutes")
+	}
 
 	tc.AssertLogsContain(build, "timed out waiting 30s for all containers to connect")
 }

@@ -10,6 +10,14 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 )
 
+type invalidTagError struct {
+	Tag string
+}
+
+func (e invalidTagError) Error() string {
+	return fmt.Sprintf("invalid agent tag: %q", e.Tag)
+}
+
 // TagMapFromTags converts a slice of strings of the form `k=v` to a map where the
 // key is `k` and the value is `v`. If any element of the slice does not
 // have that form, it will not be inserted into the map and instead generate
@@ -20,7 +28,7 @@ func TagMapFromTags(tags []string) (map[string]string, []error) {
 	for _, tag := range tags {
 		k, v, has := strings.Cut(tag, "=")
 		if !has {
-			errs = append(errs, fmt.Errorf("invalid agent tag: %q", tag))
+			errs = append(errs, invalidTagError{tag})
 			continue
 		}
 		m[k] = v
