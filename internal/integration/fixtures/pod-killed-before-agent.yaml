@@ -1,0 +1,16 @@
+steps:
+  - label: ":skull:"
+    command: "echo this should not run"
+    agents:
+      queue: "{{.queue}}"
+    plugins:
+      - kubernetes:
+          podSpec:
+            initContainers:
+              - name: slowpoke
+                image: buildkite/agent:latest
+                command:
+                  - "/bin/sh"
+                args:
+                  - "-c"
+                  - "sleep 30"

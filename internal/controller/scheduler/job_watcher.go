@@ -154,42 +154,73 @@ func (w *jobWatcher) runChecks(ctx context.Context, kjob *batchv1.Job) {
 
 	if model.JobFinished(kjob) {
 		w.removeFromStalling(jobUUID)
-		w.checkFinishedWithoutPod(ctx, log, kjob)
+		w.checkFinished(ctx, log, jobUUID, kjob)
 	} else {
 		w.checkStalledWithoutPod(log, jobUUID, kjob)
 	}
 }
 
-func (w *jobWatcher) checkFinishedWithoutPod(ctx context.Context, log *slog.Logger, kjob *batchv1.Job) {
-	log.Debug("Checking job for finishing without a pod")
+// checkFinished inspects a finished K8s Job and, when needed, fails the
+// corresponding Buildkite job to release its reservation.
+func (w *jobWatcher) checkFinished(ctx context.Context, log *slog.Logger, jobUUID uuid.UUID, kjob *batchv1.Job) {
+	log.Debug("Checking finished job")
 
-	// If the job is finished, there should be one finished pod.
-	if kjob.Status.Failed+kjob.Status.Succeeded > 0 {
-		// All's well with the world.
+	// Successful: the agent ran and reported job state to BK itself.
+	if kjob.Status.Succeeded > 0 {
 		return
 	}
 
-	jobWatcherFinishedWithoutPodCounter.Inc()
-
-	// Check if job has failed with reason DeadlineExceeded
+	// Pods were terminated due to ActiveDeadlineSeconds being set on the
+	// k8s Job. completionsWatcher (or cleanupStalledJob) sets that to clean
+	// up after the agent has already reported job state to BK.
 	for _, cond := range kjob.Status.Conditions {
-		switch cond.Reason {
-		case batchv1.JobReasonDeadlineExceeded:
-			// Job event has reason of DeadlineExceeded
-			if kjob.Spec.ActiveDeadlineSeconds != nil {
-				// Pods have been terminated due to activeDeadlineSeconds being configured
-				// No need to run failJob()
-				return
-			}
+		if cond.Reason == batchv1.JobReasonDeadlineExceeded && kjob.Spec.ActiveDeadlineSeconds != nil {
+			return
 		}
 	}
 
-	// Because no pod has been created, the agent hasn't started.
-	// We can acquire the Buildkite job and fail it ourselves.
+	// A pod was created and failed. If BK still has the job in Reserved state,
+	// the agent never acquired it - fail the BK job ourselves
+	// to release the reservation immediately rather than waiting for the BK
+	// reservation TTL (~15 min).
+	if kjob.Status.Failed > 0 {
+		w.failBeforeAgentAcquire(ctx, log, jobUUID, kjob)
+		return
+	}
+
+	// No pod was ever created.
+	jobWatcherFinishedWithoutPodCounter.Inc()
 	log.Info("The Kubernetes job ended without starting a pod. Failing the corresponding Buildkite job")
 	message := "The Kubernetes job ended without starting a pod.\n"
 	message += w.fetchEvents(ctx, log, kjob)
 	w.failJob(ctx, log, kjob, message)
+}
+
+// failBeforeAgentAcquire is called when a k8s Job has finished with a failed
+// pod. If BK still has the job in Reserved state, the agent
+// never acquired it - so we fail the BK job to release the reservation.
+func (w *jobWatcher) failBeforeAgentAcquire(ctx context.Context, log *slog.Logger, jobUUID uuid.UUID, kjob *batchv1.Job) {
+	state, _, err := w.agentClient.GetJobState(ctx, jobUUID.String())
+	if err != nil {
+		log.Warn("Failed to fetch BK job state; skipping pre-agent failure check", "error", err)
+		return
+	}
+
+	if state.State != api.JobStateReserved {
+		// Only act when the job is still in the Reserved state. This stack
+		// reserved it; the agent never got far enough to acquire. Any other
+		// state means either the agent took it (Running, Finished etc.) or
+		// the reservation was already released (Scheduled), in which case
+		// BK is the source of truth and we shouldn't interfere.
+		return
+	}
+
+	jobWatcherFailedBeforeAgentAcquireCounter.Inc()
+	log.Info("Kubernetes pod failed before the buildkite-agent acquired the Buildkite job. Failing the BK job to release the reservation.", "bk_job_state", string(state.State))
+	message := "The Kubernetes pod failed before the buildkite-agent acquired this Buildkite job. The pod was likely killed by Kubernetes (eviction, OOM, node failure) or terminated externally before the agent could start.\n"
+	message += w.fetchEvents(ctx, log, kjob)
+	w.failJob(ctx, log, kjob, message)
+	w.ignoreJob(jobUUID)
 }
 
 func (w *jobWatcher) checkStalledWithoutPod(log *slog.Logger, jobUUID uuid.UUID, kjob *batchv1.Job) {
