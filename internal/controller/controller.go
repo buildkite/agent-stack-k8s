@@ -361,8 +361,47 @@ func informerTransform(obj any) (any, error) {
 		obj.Finalizers = nil
 		obj.ManagedFields = nil
 
-		// Once created, we don't look at the pod spec ever again
-		obj.Spec = corev1.PodSpec{}
+		// Pod spec fields we care about (after creation) include:
+		// - InitContainers[...].RestartPolicy
+		// - (maybe) TerminationGracePeriodSeconds
+		// - (maybe) ActiveDeadlineSeconds
+		// Various pod spec fields we don't care about (after creation):
+		obj.Spec.Volumes = nil
+		obj.Spec.Containers = nil
+		obj.Spec.EphemeralContainers = nil
+		obj.Spec.RestartPolicy = ""
+		obj.Spec.DNSPolicy = ""
+		obj.Spec.NodeSelector = nil
+		obj.Spec.ServiceAccountName = ""
+		obj.Spec.DeprecatedServiceAccount = ""
+		obj.Spec.AutomountServiceAccountToken = nil
+		obj.Spec.NodeName = ""
+		obj.Spec.ShareProcessNamespace = nil
+		obj.Spec.SecurityContext = nil
+		obj.Spec.ImagePullSecrets = nil
+		obj.Spec.Hostname = ""
+		obj.Spec.Subdomain = ""
+		obj.Spec.Affinity = nil
+		obj.Spec.SchedulerName = ""
+		obj.Spec.Tolerations = nil
+		obj.Spec.HostAliases = nil
+		obj.Spec.PriorityClassName = ""
+		obj.Spec.Priority = nil
+		obj.Spec.DNSConfig = nil
+		obj.Spec.ReadinessGates = nil
+		obj.Spec.RuntimeClassName = nil
+		obj.Spec.EnableServiceLinks = nil
+		obj.Spec.PreemptionPolicy = nil
+		obj.Spec.Overhead = nil
+		obj.Spec.TopologySpreadConstraints = nil
+		obj.Spec.SetHostnameAsFQDN = nil
+		obj.Spec.OS = nil
+		obj.Spec.HostUsers = nil
+		obj.Spec.SchedulingGates = nil
+		obj.Spec.ResourceClaims = nil
+		obj.Spec.Resources = nil
+		obj.Spec.HostnameOverride = nil
+		obj.Spec.WorkloadRef = nil
 
 		// Pod status fields we care about include:
 		// - Phase
