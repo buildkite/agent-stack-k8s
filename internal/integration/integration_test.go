@@ -913,6 +913,67 @@ func TestCancelCheckerDeletePod(t *testing.T) {
 	}
 }
 
+// TestPodKilledBeforeAgentReleasesBKJob exercises the jobWatcher path that
+// fails the corresponding Buildkite job when a K8s pod fails before the
+// buildkite-agent gets a chance to acquire it (e.g. OOM, eviction, external
+// `kubectl delete pod`). Without this, the BK job would sit in `reserved`
+// state until the reservation TTL (~15 min) expires.
+func TestPodKilledBeforeAgentReleasesBKJob(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "pod-killed-before-agent.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+
+	job := build.Jobs.Edges[0].Node.(*api.JobJobTypeCommand)
+	jobName := cfg.JobPrefix + job.Uuid
+	opts := metav1.ListOptions{
+		LabelSelector: fields.OneTermEqualSelector("batch.kubernetes.io/job-name", jobName).String(),
+	}
+
+	// Wait for the pod to exist (init container will be sleeping).
+	var pods *corev1.PodList
+	if err := roko.NewRetrier(
+		roko.WithMaxAttempts(10),
+		roko.WithStrategy(roko.Exponential(2*time.Second, 0)),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		got, err := tc.Kubernetes.CoreV1().Pods(cfg.Namespace).List(ctx, opts)
+		if err != nil {
+			return err
+		}
+		if len(got.Items) == 0 {
+			return fmt.Errorf("found no pod, waiting for pod start")
+		}
+		pods = got
+		return nil
+	}); err != nil {
+		t.Fatalf("waiting for pod to exist: %v", err)
+	}
+
+	// Force-delete the pod with grace=0 to simulate an external kill before
+	// the agent container has a chance to start.
+	gracePeriod := int64(0)
+	for _, p := range pods.Items {
+		if err := tc.Kubernetes.CoreV1().Pods(cfg.Namespace).Delete(ctx, p.Name, metav1.DeleteOptions{
+			GracePeriodSeconds: &gracePeriod,
+		}); err != nil {
+			t.Fatalf("deleting pod %q: %v", p.Name, err)
+		}
+	}
+
+	tc.AssertFail(ctx, build)
+	jobID := tc.FirstCommandJobID(build)
+	fm := tc.FailureMessage(jobID)
+	if want := "pod failed before the buildkite-agent acquired"; !strings.Contains(fm, want) {
+		t.Errorf("FailureMessage = %q, want substring %q", fm, want)
+	}
+}
+
 func hasJobPod(tc testcase, ctx context.Context, opts metav1.ListOptions) (bool, error) {
 	pods, err := tc.Kubernetes.CoreV1().Pods(cfg.Namespace).List(ctx, opts)
 	if err != nil {
