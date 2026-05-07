@@ -318,6 +318,12 @@
           "title": "Duration after starting a pod that the controller will wait before considering cancelling a job due to ImagePullBackOff (e.g. when the podSpec specifies container images that cannot be pulled). Must be a Go duration string",
           "examples": ["60s"]
         },
+        "pod-pending-timeout": {
+          "type": "string",
+          "default": "15m",
+          "title": "Duration after a pod enters Pending state that the controller will wait before failing the corresponding Buildkite job and forcefully deleting the pod. Must be a Go duration string",
+          "examples": ["5m", "10m", "15m"]
+        },
         "k8s-client-rate-limiter-qps": {
           "type": "integer",
           "default": 10,
