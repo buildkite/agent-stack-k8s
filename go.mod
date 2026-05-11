@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/Khan/genqlient v0.8.1
 	github.com/alecthomas/kong v1.15.0
-	github.com/buildkite/agent/v3 v3.125.0
+	github.com/buildkite/agent/v3 v3.126.0
 	github.com/buildkite/go-buildkite/v3 v3.13.0
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/stacksapi v1.0.2
@@ -28,27 +28,27 @@ require (
 )
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260209202127-80ab13bee0bf.1 // indirect
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1 // indirect
 	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/iam v1.7.0 // indirect
-	cloud.google.com/go/kms v1.28.0 // indirect
+	cloud.google.com/go/kms v1.30.0 // indirect
 	cloud.google.com/go/longrunning v0.9.0 // indirect
-	connectrpc.com/connect v1.19.1 // indirect
+	connectrpc.com/connect v1.19.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/template v0.77.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/trace/log v0.77.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/trace/otel v0.77.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/trace/stats v0.77.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/trace/traceutil v0.77.2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.10 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.13 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.19 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.17 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.20 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.24 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.15 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.23 // indirect
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 // indirect
 	github.com/buildkite/zstash v0.8.0 // indirect
-	github.com/klauspost/compress v1.18.5 // indirect
+	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/linkdata/deadlock v0.5.5 // indirect
 	github.com/minio/simdjson-go v0.4.5 // indirect
@@ -99,10 +99,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.297.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.300.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/kms v1.50.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/kms v1.51.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.17 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.21 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1 // indirect
@@ -148,8 +148,8 @@ require (
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.14 // indirect
-	github.com/googleapis/gax-go/v2 v2.21.0 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.15 // indirect
+	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
 	github.com/gowebpki/jcs v1.0.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
@@ -239,9 +239,9 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
-	google.golang.org/api v0.275.0 // indirect
+	google.golang.org/api v0.278.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260406210006-6f92a3bedf2d // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260406210006-6f92a3bedf2d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260427160629-7cedc36a6bc4 // indirect
 	google.golang.org/grpc v1.80.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/DataDog/dd-trace-go.v1 v1.74.8 // indirect
