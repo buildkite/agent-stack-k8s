@@ -34,6 +34,7 @@ require (
 	cloud.google.com/go/kms v1.28.0 // indirect
 	cloud.google.com/go/longrunning v0.9.0 // indirect
 	connectrpc.com/connect v1.19.1 // indirect
+	drjosh.dev/assertzapper v0.3.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/template v0.77.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/trace/log v0.77.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/trace/otel v0.77.2 // indirect
@@ -196,7 +197,7 @@ require (
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.3 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tinylib/msgp v1.6.3 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
@@ -256,4 +257,7 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 )
 
-tool gotest.tools/gotestsum
+tool (
+	drjosh.dev/assertzapper
+	gotest.tools/gotestsum
+)

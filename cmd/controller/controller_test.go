@@ -2,14 +2,13 @@ package controller_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/cmd/controller"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -171,7 +170,9 @@ func TestReadAndParseConfig(t *testing.T) {
 	cleanTestEnv(t)
 
 	actual, err := controller.BuildConfigFromArgs([]string{"--config=../../examples/config.yaml"})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("controller.BuildConfigFromArgs([]string{\"--config=../../examples/config.yaml\"}) error = %v, want nil", err)
+	}
 
 	if diff := cmp.Diff(*actual, expected); diff != "" {
 		t.Errorf("parsed config diff (-got +want):\n%s", diff)
@@ -211,8 +212,12 @@ default-resource-class-name: small
 			configFile := createTempConfigFile(t, tt.configYAML)
 
 			_, err := controller.BuildConfigFromArgs([]string{"--config=" + configFile})
-			require.Error(t, err)
-			require.Contains(t, err.Error(), tt.wantErr)
+			if err == nil {
+				t.Fatalf("controller.BuildConfigFromArgs([]string{\"--config=\" + configFile}) error = %v, want non-nil error", err)
+			}
+			if got, want := err.Error(), tt.wantErr; !strings.Contains(got, want) {
+				t.Fatalf("err.Error() = %q, want containing %q", got, want)
+			}
 		})
 	}
 }
@@ -231,13 +236,25 @@ func TestConfigPrecedence(t *testing.T) {
 		cleanTestEnv(t)
 
 		cfg, err := buildConfig(t, []string{}, "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", "", err)
+		}
 
-		assert.Equal(t, 25, cfg.MaxInFlight)
-		assert.Equal(t, "default", cfg.Namespace)
-		assert.Equal(t, 10*time.Minute, cfg.JobTTL)
-		assert.Equal(t, 15*time.Minute, cfg.PodPendingTimeout)
-		assert.False(t, cfg.Debug)
+		if got, want := cfg.MaxInFlight, 25; got != want {
+			t.Errorf("cfg.MaxInFlight = %d, want %d", got, want)
+		}
+		if got, want := cfg.Namespace, "default"; got != want {
+			t.Errorf("cfg.Namespace = %q, want %q", got, want)
+		}
+		if got, want := cfg.JobTTL, 10*time.Minute; got != want {
+			t.Errorf("cfg.JobTTL = %d, want %d", got, want)
+		}
+		if got, want := cfg.PodPendingTimeout, 15*time.Minute; got != want {
+			t.Errorf("cfg.PodPendingTimeout = %d, want %d", got, want)
+		}
+		if got := cfg.Debug; got {
+			t.Errorf("cfg.Debug = %t, want false", got)
+		}
 	})
 
 	t.Run("config file overrides defaults", func(t *testing.T) {
@@ -249,11 +266,19 @@ debug: true
 `)
 
 		cfg, err := buildConfig(t, []string{}, configFile)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", configFile, err)
+		}
 
-		assert.Equal(t, 100, cfg.MaxInFlight)
-		assert.Equal(t, "from-file", cfg.Namespace)
-		assert.True(t, cfg.Debug)
+		if got, want := cfg.MaxInFlight, 100; got != want {
+			t.Errorf("cfg.MaxInFlight = %d, want %d", got, want)
+		}
+		if got, want := cfg.Namespace, "from-file"; got != want {
+			t.Errorf("cfg.Namespace = %q, want %q", got, want)
+		}
+		if got := cfg.Debug; !got {
+			t.Errorf("cfg.Debug = %t, want true", got)
+		}
 	})
 
 	t.Run("config file can set zero value", func(t *testing.T) {
@@ -261,9 +286,13 @@ debug: true
 		configFile := createTempConfigFile(t, `max-in-flight: 0`)
 
 		cfg, err := buildConfig(t, []string{}, configFile)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", configFile, err)
+		}
 
-		assert.Equal(t, 0, cfg.MaxInFlight)
+		if got, want := cfg.MaxInFlight, 0; got != want {
+			t.Errorf("cfg.MaxInFlight = %d, want %d", got, want)
+		}
 	})
 
 	t.Run("config file can set false", func(t *testing.T) {
@@ -271,9 +300,13 @@ debug: true
 		configFile := createTempConfigFile(t, `debug: false`)
 
 		cfg, err := buildConfig(t, []string{}, configFile)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", configFile, err)
+		}
 
-		assert.False(t, cfg.Debug)
+		if got := cfg.Debug; got {
+			t.Errorf("cfg.Debug = %t, want false", got)
+		}
 	})
 
 	t.Run("env var overrides config file", func(t *testing.T) {
@@ -286,10 +319,16 @@ namespace: from-file
 		t.Setenv("NAMESPACE", "from-env")
 
 		cfg, err := buildConfig(t, []string{}, configFile)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", configFile, err)
+		}
 
-		assert.Equal(t, 50, cfg.MaxInFlight)
-		assert.Equal(t, "from-env", cfg.Namespace)
+		if got, want := cfg.MaxInFlight, 50; got != want {
+			t.Errorf("cfg.MaxInFlight = %d, want %d", got, want)
+		}
+		if got, want := cfg.Namespace, "from-env"; got != want {
+			t.Errorf("cfg.Namespace = %q, want %q", got, want)
+		}
 	})
 
 	t.Run("env var can override config file with zero", func(t *testing.T) {
@@ -298,9 +337,13 @@ namespace: from-file
 		t.Setenv("MAX_IN_FLIGHT", "0")
 
 		cfg, err := buildConfig(t, []string{}, configFile)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", configFile, err)
+		}
 
-		assert.Equal(t, 0, cfg.MaxInFlight)
+		if got, want := cfg.MaxInFlight, 0; got != want {
+			t.Errorf("cfg.MaxInFlight = %d, want %d", got, want)
+		}
 	})
 
 	t.Run("env var can override config file with false", func(t *testing.T) {
@@ -309,9 +352,13 @@ namespace: from-file
 		t.Setenv("DEBUG", "false")
 
 		cfg, err := buildConfig(t, []string{}, configFile)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", configFile, err)
+		}
 
-		assert.False(t, cfg.Debug)
+		if got := cfg.Debug; got {
+			t.Errorf("cfg.Debug = %t, want false", got)
+		}
 	})
 
 	t.Run("CLI overrides env var", func(t *testing.T) {
@@ -323,10 +370,16 @@ namespace: from-file
 			"--max-in-flight=200",
 			"--namespace=from-cli",
 		}, "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{\n\t\"--max-in-flight=200\",\n\t\"--namespace=from-cli\",\n}, %q) error = %v, want nil", "", err)
+		}
 
-		assert.Equal(t, 200, cfg.MaxInFlight)
-		assert.Equal(t, "from-cli", cfg.Namespace)
+		if got, want := cfg.MaxInFlight, 200; got != want {
+			t.Errorf("cfg.MaxInFlight = %d, want %d", got, want)
+		}
+		if got, want := cfg.Namespace, "from-cli"; got != want {
+			t.Errorf("cfg.Namespace = %q, want %q", got, want)
+		}
 	})
 
 	t.Run("CLI can override env var with zero", func(t *testing.T) {
@@ -334,9 +387,13 @@ namespace: from-file
 		t.Setenv("MAX_IN_FLIGHT", "50")
 
 		cfg, err := buildConfig(t, []string{"--max-in-flight=0"}, "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{\"--max-in-flight=0\"}, %q) error = %v, want nil", "", err)
+		}
 
-		assert.Equal(t, 0, cfg.MaxInFlight)
+		if got, want := cfg.MaxInFlight, 0; got != want {
+			t.Errorf("cfg.MaxInFlight = %d, want %d", got, want)
+		}
 	})
 
 	t.Run("CLI can override env var with false", func(t *testing.T) {
@@ -344,9 +401,13 @@ namespace: from-file
 		t.Setenv("DEBUG", "true")
 
 		cfg, err := buildConfig(t, []string{"--debug=false"}, "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{\"--debug=false\"}, %q) error = %v, want nil", "", err)
+		}
 
-		assert.False(t, cfg.Debug)
+		if got := cfg.Debug; got {
+			t.Errorf("cfg.Debug = %t, want false", got)
+		}
 	})
 
 	t.Run("full precedence chain", func(t *testing.T) {
@@ -360,14 +421,22 @@ job-ttl: 5m
 		t.Setenv("JOB_TTL", "15m")
 
 		cfg, err := buildConfig(t, []string{"--namespace=from-cli"}, configFile)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{\"--namespace=from-cli\"}, %q) error = %v, want nil", configFile, err)
+		}
 
 		// max-in-flight: only in file
-		assert.Equal(t, 100, cfg.MaxInFlight)
+		if got, want := cfg.MaxInFlight, 100; got != want {
+			t.Errorf("cfg.MaxInFlight = %d, want %d", got, want)
+		}
 		// namespace: file -> env -> cli (cli wins)
-		assert.Equal(t, "from-cli", cfg.Namespace)
+		if got, want := cfg.Namespace, "from-cli"; got != want {
+			t.Errorf("cfg.Namespace = %q, want %q", got, want)
+		}
 		// job-ttl: file -> env (env wins)
-		assert.Equal(t, 15*time.Minute, cfg.JobTTL)
+		if got, want := cfg.JobTTL, 15*time.Minute; got != want {
+			t.Errorf("cfg.JobTTL = %d, want %d", got, want)
+		}
 	})
 
 	t.Run("duration fields work correctly", func(t *testing.T) {
@@ -378,10 +447,16 @@ poll-interval: 5s
 `)
 
 		cfg, err := buildConfig(t, []string{}, configFile)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", configFile, err)
+		}
 
-		assert.Equal(t, 30*time.Minute, cfg.JobTTL)
-		assert.Equal(t, 5*time.Second, cfg.PollInterval)
+		if got, want := cfg.JobTTL, 30*time.Minute; got != want {
+			t.Errorf("cfg.JobTTL = %d, want %d", got, want)
+		}
+		if got, want := cfg.PollInterval, 5*time.Second; got != want {
+			t.Errorf("cfg.PollInterval = %d, want %d", got, want)
+		}
 	})
 
 	t.Run("config file with unknown field is rejected", func(t *testing.T) {
@@ -392,17 +467,25 @@ unknown-field: some-value
 `)
 
 		_, err := buildConfig(t, []string{}, configFile)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "unknown-field")
+		if err == nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want non-nil error", configFile, err)
+		}
+		if got, want := err.Error(), "unknown-field"; !strings.Contains(got, want) {
+			t.Errorf("err.Error() = %q, want containing %q", got, want)
+		}
 	})
 
 	t.Run("ID settable via CLI flag", func(t *testing.T) {
 		cleanTestEnv(t)
 
 		cfg, err := buildConfig(t, []string{"--id=my-controller"}, "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{\"--id=my-controller\"}, %q) error = %v, want nil", "", err)
+		}
 
-		assert.Equal(t, "my-controller", cfg.ID)
+		if got, want := cfg.ID, "my-controller"; got != want {
+			t.Errorf("cfg.ID = %q, want %q", got, want)
+		}
 	})
 
 	t.Run("CLI can override config file tags with empty", func(t *testing.T) {
@@ -414,19 +497,27 @@ tags:
 `)
 
 		cfg, err := buildConfig(t, []string{"--tags="}, configFile)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{\"--tags=\"}, %q) error = %v, want nil", configFile, err)
+		}
 
 		// CLI explicitly set tags to empty, should override config file
-		assert.Empty(t, cfg.Tags)
+		if got := len(cfg.Tags); got != 0 {
+			t.Errorf("len(cfg.Tags) = %v, want 0", got)
+		}
 	})
 
 	t.Run("reservation-expiry-seconds default is zero (use server default)", func(t *testing.T) {
 		cleanTestEnv(t)
 
 		cfg, err := buildConfig(t, []string{}, "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", "", err)
+		}
 
-		assert.Equal(t, 0, cfg.ReservationExpirySeconds)
+		if got, want := cfg.ReservationExpirySeconds, 0; got != want {
+			t.Errorf("cfg.ReservationExpirySeconds = %d, want %d", got, want)
+		}
 	})
 
 	t.Run("reservation-expiry-seconds settable via config file", func(t *testing.T) {
@@ -434,18 +525,26 @@ tags:
 		configFile := createTempConfigFile(t, `reservation-expiry-seconds: 1800`)
 
 		cfg, err := buildConfig(t, []string{}, configFile)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", configFile, err)
+		}
 
-		assert.Equal(t, 1800, cfg.ReservationExpirySeconds)
+		if got, want := cfg.ReservationExpirySeconds, 1800; got != want {
+			t.Errorf("cfg.ReservationExpirySeconds = %d, want %d", got, want)
+		}
 	})
 
 	t.Run("reservation-expiry-seconds settable via CLI flag", func(t *testing.T) {
 		cleanTestEnv(t)
 
 		cfg, err := buildConfig(t, []string{"--reservation-expiry-seconds=900"}, "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{\"--reservation-expiry-seconds=900\"}, %q) error = %v, want nil", "", err)
+		}
 
-		assert.Equal(t, 900, cfg.ReservationExpirySeconds)
+		if got, want := cfg.ReservationExpirySeconds, 900; got != want {
+			t.Errorf("cfg.ReservationExpirySeconds = %d, want %d", got, want)
+		}
 	})
 
 	t.Run("reservation-expiry-seconds CLI overrides config file", func(t *testing.T) {
@@ -453,9 +552,13 @@ tags:
 		configFile := createTempConfigFile(t, `reservation-expiry-seconds: 600`)
 
 		cfg, err := buildConfig(t, []string{"--reservation-expiry-seconds=1800"}, configFile)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{\"--reservation-expiry-seconds=1800\"}, %q) error = %v, want nil", configFile, err)
+		}
 
-		assert.Equal(t, 1800, cfg.ReservationExpirySeconds)
+		if got, want := cfg.ReservationExpirySeconds, 1800; got != want {
+			t.Errorf("cfg.ReservationExpirySeconds = %d, want %d", got, want)
+		}
 	})
 
 	t.Run("reservation-expiry-seconds settable via env var", func(t *testing.T) {
@@ -463,9 +566,13 @@ tags:
 		t.Setenv("RESERVATION_EXPIRY_SECONDS", "3600")
 
 		cfg, err := buildConfig(t, []string{}, "")
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", "", err)
+		}
 
-		assert.Equal(t, 3600, cfg.ReservationExpirySeconds)
+		if got, want := cfg.ReservationExpirySeconds, 3600; got != want {
+			t.Errorf("cfg.ReservationExpirySeconds = %d, want %d", got, want)
+		}
 	})
 
 	t.Run("reservation-expiry-seconds exceeding max is rejected", func(t *testing.T) {
@@ -473,7 +580,9 @@ tags:
 		configFile := createTempConfigFile(t, `reservation-expiry-seconds: 3601`)
 
 		_, err := buildConfig(t, []string{}, configFile)
-		require.Error(t, err)
+		if err == nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want non-nil error", configFile, err)
+		}
 	})
 }
 

@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -18,7 +16,6 @@ func TestPodHasExceededPendingTimeout(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	w := &podWatcher{podPendingTimeout: 5 * time.Minute}
-	require.NotNil(t, w)
 
 	now := time.Now()
 
@@ -155,8 +152,16 @@ func TestIsSidecarInitContainer(t *testing.T) {
 		},
 	}
 
-	assert.False(t, isSidecarInitContainer(pod, "checkout"))
-	assert.True(t, isSidecarInitContainer(pod, "sidecar-0"))
-	assert.False(t, isSidecarInitContainer(pod, "imagecheck-0"))
-	assert.False(t, isSidecarInitContainer(pod, "nonexistent"))
+	if got := isSidecarInitContainer(pod, "checkout"); got {
+		t.Errorf("isSidecarInitContainer(pod, \"checkout\") = %t, want false", got)
+	}
+	if got := isSidecarInitContainer(pod, "sidecar-0"); !got {
+		t.Errorf("isSidecarInitContainer(pod, \"sidecar-0\") = %t, want true", got)
+	}
+	if got := isSidecarInitContainer(pod, "imagecheck-0"); got {
+		t.Errorf("isSidecarInitContainer(pod, \"imagecheck-0\") = %t, want false", got)
+	}
+	if got := isSidecarInitContainer(pod, "nonexistent"); got {
+		t.Errorf("isSidecarInitContainer(pod, \"nonexistent\") = %t, want false", got)
+	}
 }

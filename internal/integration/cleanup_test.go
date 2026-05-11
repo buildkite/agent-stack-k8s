@@ -10,8 +10,6 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
 	"github.com/buildkite/roko"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestCleanupOrphanedPipelines(t *testing.T) {
@@ -23,7 +21,9 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 	graphqlClient := api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint)
 
 	pipelines, err := api.SearchPipelines(ctx, graphqlClient, getOrgSlug(t), "test-", 100)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("api.SearchPipelines(ctx, graphqlClient, %q, %q, %d) error = %v, want nil", getOrgSlug(t), "test-", 100, err)
+	}
 
 	numPipelines := len(pipelines.Organization.Pipelines.Edges)
 	t.Logf("found %d pipelines to delete", numPipelines)
@@ -45,7 +45,9 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 				[]api.BuildStates{api.BuildStatesRunning},
 				100,
 			)
-			require.NoError(t, err)
+			if err != nil {
+				t.Fatalf("api.GetBuilds(ctx, graphqlClient, %q, []api.BuildStates{api.BuildStatesRunning}, %d) error = %v, want nil", fmt.Sprintf("%s/%s", tc.Org, pipeline.Node.Name), 100, err)
+			}
 
 			for _, build := range builds.Pipeline.Builds.Edges {
 				_, err = api.BuildCancel(
@@ -53,7 +55,9 @@ func TestCleanupOrphanedPipelines(t *testing.T) {
 					graphqlClient,
 					api.BuildCancelInput{Id: build.Node.Id},
 				)
-				assert.NoError(t, err)
+				if err != nil {
+					t.Errorf("api.BuildCancel(ctx, graphqlClient, api.BuildCancelInput{Id: build.Node.Id}) error = %v, want nil", err)
+				}
 			}
 
 			tc.deletePipeline(ctx)

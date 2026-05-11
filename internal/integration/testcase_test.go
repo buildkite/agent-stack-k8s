@@ -25,8 +25,6 @@ import (
 	"github.com/buildkite/go-buildkite/v3/buildkite"
 	"github.com/buildkite/roko"
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -95,14 +93,20 @@ func (t testcase) Init() testcase {
 	t.Logger = slog.Default().With("test", t.Name())
 
 	clientConfig, err := restconfig.GetConfig()
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("restconfig.GetConfig() error = %v, want nil", err)
+	}
 
 	clientset, err := kubernetes.NewForConfig(clientConfig)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("kubernetes.NewForConfig(clientConfig) error = %v, want nil", err)
+	}
 	t.Kubernetes = clientset
 
 	client, err := buildkite.NewOpts(buildkite.WithTokenAuth(cfg.BuildkiteToken))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("buildkite.NewOpts(buildkite.WithTokenAuth(cfg.BuildkiteToken)) error = %v, want nil", err)
+	}
 	t.Buildkite = client
 
 	agentTokenIdentity := t.getAgentTokenIdentity()
@@ -143,7 +147,7 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 	})
 	if err != nil {
 		t.Errorf("Unable to create cluster queue %s: %v", queueName, err)
-		require.NoError(t, err)
+		t.Fatalf("t.Buildkite.ClusterQueues.Create(%q, %q, &buildkite.ClusterQueueCreate{Key: &%q}) error = %v, want nil", t.Org, t.ClusterUUID, queueName, err)
 	}
 
 	EnsureCleanup(t.T, func() {
@@ -172,14 +176,18 @@ func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName strin
 	t.Helper()
 
 	tpl, err := template.ParseFS(fixtures, fmt.Sprintf("fixtures/%s", t.Fixture))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("template.ParseFS(fixtures, %q) error = %v, want nil", fmt.Sprintf("fixtures/%s", t.Fixture), err)
+	}
 
 	var steps bytes.Buffer
 	tmplInput := map[string]string{
 		"queue": queueName,
 	}
 	maps.Copy(tmplInput, custom)
-	require.NoError(t, tpl.Execute(&steps, tmplInput))
+	if err := tpl.Execute(&steps, tmplInput); err != nil {
+		t.Fatalf("tpl.Execute(&steps, tmplInput) error = %v, want nil", err)
+	}
 	pipeline, _, err := t.Buildkite.Pipelines.Create(t.Org, &buildkite.CreatePipeline{
 		Name:       t.PipelineName,
 		Repository: t.Repo,
@@ -189,7 +197,9 @@ func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName strin
 		Configuration: steps.String(),
 		ClusterID:     t.ClusterUUID,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("t.Buildkite.Pipelines.Create(%q, &buildkite.CreatePipeline{\n\tName:\t\tt.PipelineName,\n\tRepository:\tt.Repo,\n\tProviderSettings: &buildkite.GitHubSettings{\n\t\tTriggerMode: ptr.To(\"none\"),\n\t},\n\tConfiguration:\tsteps.String(),\n\tClusterID:\tt.ClusterUUID,\n}) error = %v, want nil", t.Org, err)
+	}
 	EnsureCleanup(t.T, func() {
 		if !t.preserveEphemeralObjects() {
 			t.deletePipeline(ctx)
@@ -247,7 +257,9 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineGraphQLID string) ap
 		Branch:     branch,
 		Message:    t.Name(),
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("api.BuildCreate(ctx, t.GraphQL, api.BuildCreateInput{\n\tAuthor: api.BuildAuthorInput{\n\t\tEmail:\tauthorEmail,\n\t\tName:\tauthorName,\n\t},\n\tPipelineID:\tpipelineGraphQLID,\n\tCommit:\t\t\"HEAD\",\n\tBranch:\t\tbranch,\n\tMessage:\tt.Name(),\n}) error = %v, want nil", err)
+	}
 	EnsureCleanup(t.T, func() {
 		if _, err := api.BuildCancel(ctx, t.GraphQL, api.BuildCancelInput{
 			Id: createBuild.BuildCreate.Build.Id,
@@ -259,10 +271,14 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineGraphQLID string) ap
 		}
 	})
 	build := createBuild.BuildCreate.Build
-	require.GreaterOrEqual(t, len(build.Jobs.Edges), 1)
+	if got, wantAtLeast := len(build.Jobs.Edges), 1; got < wantAtLeast {
+		t.Fatalf("len(build.Jobs.Edges) = %d, want >= %d)", got, wantAtLeast)
+	}
 	node := build.Jobs.Edges[0].Node
 	_, ok := node.(*api.JobJobTypeCommand)
-	require.True(t, ok)
+	if got := ok; !got {
+		t.Fatalf("node.(*api.JobJobTypeCommand) = %t, want true", got)
+	}
 
 	t.Logf("Triggered build: https://buildkite.com/buildkite-kubernetes-stack/%s/builds/%d", t.PipelineName, build.Number)
 
@@ -271,14 +287,18 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineGraphQLID string) ap
 
 func (t testcase) AssertSuccess(ctx context.Context, build api.Build) {
 	t.Helper()
-	require.Equal(t, api.BuildStatesPassed, t.waitForBuild(ctx, build))
+	if got, want := t.waitForBuild(ctx, build), api.BuildStatesPassed; got != want {
+		t.Fatalf("t.waitForBuild(ctx, build) = %q, want %q", got, want)
+	}
 }
 
 func (t testcase) FetchLogs(build api.Build) string {
 	t.Helper()
 
 	client, err := buildkite.NewOpts(buildkite.WithTokenAuth(cfg.BuildkiteToken))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("buildkite.NewOpts(buildkite.WithTokenAuth(cfg.BuildkiteToken)) error = %v, want nil", err)
+	}
 	t.Buildkite = client
 
 	if !t.hasWaitedForLogs {
@@ -289,7 +309,8 @@ func (t testcase) FetchLogs(build api.Build) string {
 	var logs strings.Builder
 	for _, edge := range build.Jobs.Edges {
 		job, wasJob := edge.Node.(*api.JobJobTypeCommand)
-		if !assert.True(t, wasJob) {
+		if !wasJob {
+			t.Errorf("edge.Node type = %T, want %T", edge.Node, job)
 			continue
 		}
 
@@ -299,12 +320,20 @@ func (t testcase) FetchLogs(build api.Build) string {
 			strconv.Itoa(build.Number),
 			job.Uuid,
 		)
-		if !assert.NoError(t, err) || !assert.NotNil(t, jobLog.Content) {
+		if err != nil {
+			t.Errorf("client.Jobs.GetJobLog(%q, %q, %q, %q) error = %v, want nil", t.Org, t.PipelineName, strconv.Itoa(build.Number), job.Uuid, err)
+		}
+		if got := jobLog.Content; got == nil {
+			t.Errorf("jobLog.Content = %v, want non-nil value", got)
+		}
+		if err != nil || jobLog.Content == nil {
 			continue
 		}
 
 		_, err = logs.WriteString(*jobLog.Content)
-		assert.NoError(t, err)
+		if err != nil {
+			t.Errorf("logs.WriteString(%q) error = %v, want nil", *jobLog.Content, err)
+		}
 	}
 
 	return logs.String()
@@ -313,13 +342,17 @@ func (t testcase) FetchLogs(build api.Build) string {
 func (t testcase) AssertLogsContain(build api.Build, content string) {
 	t.Helper()
 
-	assert.Contains(t, t.FetchLogs(build), content)
+	if got, want := t.FetchLogs(build), content; !strings.Contains(got, want) {
+		t.Errorf("t.FetchLogs(build) = %q, want containing %q", got, want)
+	}
 }
 
 func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 	t.Helper()
 	client, err := buildkite.NewOpts(buildkite.WithTokenAuth(cfg.BuildkiteToken))
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("buildkite.NewOpts(buildkite.WithTokenAuth(cfg.BuildkiteToken)) error = %v, want nil", err)
+	}
 	t.Buildkite = client
 
 	artifacts, _, err := client.Artifacts.ListByBuild(
@@ -328,25 +361,33 @@ func (t testcase) AssertArtifactsContain(build api.Build, expected ...string) {
 		strconv.Itoa(build.Number),
 		nil,
 	)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("client.Artifacts.ListByBuild(%q, %q, %q, %v) error = %v, want nil", t.Org, t.PipelineName, strconv.Itoa(build.Number), nil, err)
+	}
 
 	filenames := make([]string, 0, len(artifacts))
 	for _, filename := range artifacts {
 		filenames = append(filenames, *filename.Filename)
 	}
 	for _, e := range expected {
-		assert.True(t, slices.Contains(filenames, e), "expected %v to contain %v", filenames, e)
+		if got := slices.Contains(filenames, e); !got {
+			t.Errorf("expected %v to contain %v", filenames, e)
+		}
 	}
 }
 
 func (t testcase) AssertFail(ctx context.Context, build api.Build) {
 	t.Helper()
-	assert.Equal(t, api.BuildStatesFailed, t.waitForBuild(ctx, build))
+	if got, want := t.waitForBuild(ctx, build), api.BuildStatesFailed; got != want {
+		t.Errorf("t.waitForBuild(ctx, build) = %q, want %q", got, want)
+	}
 }
 
 func (t testcase) AssertCancelled(ctx context.Context, build api.Build) {
 	t.Helper()
-	assert.Equal(t, api.BuildStatesCanceled, t.waitForBuild(ctx, build))
+	if got, want := t.waitForBuild(ctx, build), api.BuildStatesCanceled; got != want {
+		t.Errorf("t.waitForBuild(ctx, build) = %q, want %q", got, want)
+	}
 }
 
 func (t testcase) FirstCommandJobID(build api.Build) string {
@@ -400,7 +441,9 @@ func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildSt
 
 	for {
 		getBuild, err := api.GetBuild(ctx, t.GraphQL, build.Uuid)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("api.GetBuild(ctx, t.GraphQL, %q) error = %v, want nil", build.Uuid, err)
+		}
 		switch getBuild.Build.State {
 		case api.BuildStatesPassed,
 			api.BuildStatesFailed,
@@ -422,15 +465,21 @@ func (t testcase) AssertHostAlias(ctx context.Context, alias string, host string
 	t.Helper()
 
 	tagReq, err := labels.NewRequirement("tag.buildkite.com/queue", selection.Equals, []string{t.QueueName()})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("labels.NewRequirement(%q, %q, []string{t.QueueName()}) error = %v, want nil", "tag.buildkite.com/queue", selection.Equals, err)
+	}
 
 	selector := labels.NewSelector().Add(*tagReq)
 
 	jobs, err := t.Kubernetes.BatchV1().
 		Jobs(cfg.Namespace).
 		List(ctx, v1.ListOptions{LabelSelector: selector.String()})
-	require.NoError(t, err)
-	require.Len(t, jobs.Items, 1)
+	if err != nil {
+		t.Fatalf("t.Kubernetes.BatchV1().\n\tJobs(cfg.Namespace).\n\tList(ctx, v1.ListOptions{LabelSelector: selector.String()}) error = %v, want nil", err)
+	}
+	if got, want := len(jobs.Items), 1; got != want {
+		t.Fatalf("len(jobs.Items) = %d, want %d", got, want)
+	}
 
 	for _, hostAlias := range jobs.Items[0].Spec.Template.Spec.HostAliases {
 		if hostAlias.IP == host {
@@ -440,7 +489,7 @@ func (t testcase) AssertHostAlias(ctx context.Context, alias string, host string
 		}
 	}
 
-	assert.Fail(t, "host alias not found")
+	t.Error("host alias not found")
 }
 
 func ignorableError(err error) bool {
@@ -463,7 +512,9 @@ func (t testcase) getAgentTokenIdentity() *agentApi.AgentTokenIdentity {
 	ctx := context.Background()
 
 	token, err := fetchAgentToken(ctx, t.Logger, t.Kubernetes, cfg.Namespace, cfg.AgentTokenSecret)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("fetchAgentToken(ctx, t.Logger, t.Kubernetes, %q, %q) error = %v, want nil", cfg.Namespace, cfg.AgentTokenSecret, err)
+	}
 
 	agentEndpoint := ""
 	if cfg.AgentConfig != nil && cfg.AgentConfig.Endpoint != nil {
@@ -473,10 +524,14 @@ func (t testcase) getAgentTokenIdentity() *agentApi.AgentTokenIdentity {
 		Token:    token,
 		Endpoint: agentEndpoint,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("agentApi.NewAgentTokenClient(agentApi.AgentTokenClientOpts{\n\tToken:\t\ttoken,\n\tEndpoint:\tagentEndpoint,\n}) error = %v, want nil", err)
+	}
 
 	result, _, err := client.GetTokenIdentity(context.Background())
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatalf("client.GetTokenIdentity(context.Background()) error = %v, want nil", err)
+	}
 
 	return result
 }
