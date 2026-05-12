@@ -29,5 +29,8 @@ A clear and concise description of what you expected to happen.
 # Include relevant logs if applicable
 ```
 
+## Affiliation (optional)
+If you're comfortable sharing, let us know your company or organisation — it helps us prioritise and may accelerate a response.
+
 ## Additional context
 Add any other context about the problem here.
