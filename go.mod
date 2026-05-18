@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/Khan/genqlient v0.8.1
 	github.com/alecthomas/kong v1.15.0
-	github.com/buildkite/agent/v3 v3.126.0
+	github.com/buildkite/agent/v3 v3.127.0
 	github.com/buildkite/go-buildkite/v3 v3.13.0
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/stacksapi v1.0.2
@@ -31,7 +31,7 @@ require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20260415201107-50325440f8f2.1 // indirect
 	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/iam v1.7.0 // indirect
-	cloud.google.com/go/kms v1.30.0 // indirect
+	cloud.google.com/go/kms v1.31.0 // indirect
 	cloud.google.com/go/longrunning v0.9.0 // indirect
 	connectrpc.com/connect v1.19.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/template v0.77.2 // indirect
@@ -40,12 +40,12 @@ require (
 	github.com/DataDog/datadog-agent/pkg/trace/stats v0.77.2 // indirect
 	github.com/DataDog/datadog-agent/pkg/trace/traceutil v0.77.2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.10 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.17 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.20 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.18 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.1.21 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.24 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.15 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.101.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.11 // indirect
 	github.com/buildkite/zstash v0.8.0 // indirect
 	github.com/klauspost/compress v1.18.6 // indirect
@@ -99,7 +99,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.300.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.301.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.23 // indirect
 	github.com/aws/aws-sdk-go-v2/service/kms v1.51.1 // indirect
@@ -227,15 +227,15 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
-	golang.org/x/crypto v0.50.0 // indirect
+	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/exp v0.0.0-20260312153236-7ab1446f8b90 // indirect
 	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/net v0.53.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/term v0.42.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
