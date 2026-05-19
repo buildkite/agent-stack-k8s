@@ -28,6 +28,7 @@ type AgentConfig struct {
 	TraceContextEncoding      *string  `json:"trace-context-encoding,omitempty"`       // BUILDKITE_TRACE_CONTEXT_ENCODING
 	DisableWarningsFor              []string       `json:"disable-warnings-for,omitempty"`               // BUILDKITE_AGENT_DISABLE_WARNINGS_FOR
 	DebugSigning                    *bool          `json:"debug-signing,omitempty"`                      // BUILDKITE_AGENT_DEBUG_SIGNING
+	GitSkipFetchExistingCommits     *bool          `json:"git-skip-fetch-existing-commits,omitempty"`    // BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS
 	ContainerStartTimeout *time.Duration `json:"container-start-timeout,omitempty"` // BUILDKITE_KUBERNETES_CONTAINER_START_TIMEOUT
 
 	// Applies differently depending on the container
@@ -105,6 +106,7 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	setEnvOpt(ctr, "BUILDKITE_TRACE_CONTEXT_ENCODING", a.TraceContextEncoding)
 	setEnvCommaSep(ctr, "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", a.DisableWarningsFor)
 	setEnvBoolOpt(ctr, "BUILDKITE_AGENT_DEBUG_SIGNING", a.DebugSigning)
+	setEnvBoolOpt(ctr, "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", a.GitSkipFetchExistingCommits)
 	setEnvDurationOpt(ctr, "BUILDKITE_KUBERNETES_CONTAINER_START_TIMEOUT", a.ContainerStartTimeout)
 
 	a.applyHooksVolumeTo(ctr)
