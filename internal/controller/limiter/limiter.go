@@ -171,7 +171,7 @@ func (l *Limiter) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob)
 
 	// Sort by priority, preserving existing ordering between jobs with equal
 	// priority.
-	slices.SortStableFunc(jobs, func(a, b *api.AgentScheduledJob) int {
+	slices.SortStableFunc(l.queue, func(a, b *api.AgentScheduledJob) int {
 		// Higher number = higher priority.
 		// See https://buildkite.com/docs/pipelines/configure/workflows/managing-priorities
 		return cmp.Compare(b.Priority, a.Priority)
