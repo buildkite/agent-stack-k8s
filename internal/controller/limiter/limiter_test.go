@@ -16,8 +16,7 @@ import (
 func TestLimiter(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx, cancel := context.WithCancel(t.Context())
 
 	fakeSched := model.NewFakeScheduler(1, nil)
 	limiter := limiter.New(ctx, slog.Default(), fakeSched, 1, 1, -1)
@@ -52,8 +51,7 @@ func TestLimiter(t *testing.T) {
 func TestLimiter_SchedulerErrors(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, cancel := context.WithCancel(t.Context())
 
 	fakeSched := model.NewFakeScheduler(0, errors.New("invalid"))
 	limiter := limiter.New(ctx, slog.Default(), fakeSched, 1, 1, -1)

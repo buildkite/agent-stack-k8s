@@ -14,10 +14,11 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
+	"log/slog"
+
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/cache"
-	"log/slog"
 )
 
 // Limiter manages a queue of jobs. While there are jobs available and less
@@ -90,14 +91,18 @@ func New(ctx context.Context, logger *slog.Logger, scheduler model.JobHandler, m
 			l.tokenBucket <- struct{}{}
 		}
 	}
-	// Rather than calling gauge.Set, get the number of tokens during scrape.
-	// Provide a callback for tokensAvailableGauge.
-	tokensAvailableFunc = func() int { return len(l.tokenBucket) }
-	workQueueLengthFunc = func() int {
-		l.queueMu.Lock()
-		defer l.queueMu.Unlock()
-		return len(l.queue)
-	}
+	func() {
+		metricCallbackMu.Lock()
+		defer metricCallbackMu.Unlock()
+		// Rather than calling gauge.Set, get the number of tokens during scrape.
+		// Provide callbacks for tokens_available and work_queue_length gauges.
+		tokensAvailableFunc = func() int { return len(l.tokenBucket) }
+		workQueueLengthFunc = func() int {
+			l.queueMu.Lock()
+			defer l.queueMu.Unlock()
+			return len(l.queue)
+		}
+	}()
 
 	l.workerWG.Add(concurrency)
 	for range concurrency {
@@ -171,7 +176,7 @@ func (l *Limiter) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob)
 
 	// Sort by priority, preserving existing ordering between jobs with equal
 	// priority.
-	slices.SortStableFunc(jobs, func(a, b *api.AgentScheduledJob) int {
+	slices.SortStableFunc(l.queue, func(a, b *api.AgentScheduledJob) int {
 		// Higher number = higher priority.
 		// See https://buildkite.com/docs/pipelines/configure/workflows/managing-priorities
 		return cmp.Compare(b.Priority, a.Priority)
