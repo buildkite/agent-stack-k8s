@@ -1,12 +1,10 @@
 package limiter_test
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
-	"math/rand"
-	"slices"
+	"math/rand/v2"
 	"sync"
 	"testing"
 	"time"
@@ -16,38 +14,6 @@ import (
 
 	"github.com/google/uuid"
 )
-
-// Sorting the parameter slice never reorders the destination slice, at any
-// capacity. Pins the Go-semantics premise behind the limiter fix.
-func TestSortingSrcDoesNotReorderDst(t *testing.T) {
-	check := func(t *testing.T, dstCap int) {
-		t.Helper()
-
-		dst := make([]*api.AgentScheduledJob, 2, dstCap)
-		dst[0] = &api.AgentScheduledJob{ID: "dst-A", Priority: 10}
-		dst[1] = &api.AgentScheduledJob{ID: "dst-B", Priority: 20}
-
-		src := []*api.AgentScheduledJob{
-			{ID: "src-X", Priority: 1},
-			{ID: "src-Y", Priority: 99},
-			{ID: "src-Z", Priority: 50},
-		}
-
-		dst = append(dst, src...)
-		slices.SortStableFunc(src, func(a, b *api.AgentScheduledJob) int {
-			return cmp.Compare(b.Priority, a.Priority)
-		})
-
-		gotDst := []int{dst[0].Priority, dst[1].Priority, dst[2].Priority, dst[3].Priority, dst[4].Priority}
-		wantDst := []int{10, 20, 1, 99, 50}
-		if !slices.Equal(gotDst, wantDst) {
-			t.Errorf("dst = %v, want %v", gotDst, wantDst)
-		}
-	}
-
-	t.Run("sufficient_capacity", func(t *testing.T) { check(t, 10) })
-	t.Run("forced_realloc", func(t *testing.T) { check(t, 2) })
-}
 
 type drainOrderHandler struct {
 	out chan *api.AgentScheduledJob
@@ -62,8 +28,7 @@ func (d *drainOrderHandler) Handle(_ context.Context, job *api.AgentScheduledJob
 func TestHandleMany_SortsBatchByPriority(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	const n = 10
 	rec := &drainOrderHandler{out: make(chan *api.AgentScheduledJob, n)}
@@ -104,8 +69,7 @@ func TestHandleMany_SortsBatchByPriority(t *testing.T) {
 func TestHandleMany_SortsAcrossBatches(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	const lowN = 200
 	rec := &drainOrderHandler{out: make(chan *api.AgentScheduledJob, lowN+1)}
@@ -135,8 +99,7 @@ func TestHandleMany_SortsAcrossBatches(t *testing.T) {
 func TestHandleMany_WorkQueueLimitDropsByPriority(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	const (
 		lowN     = 100
@@ -185,8 +148,7 @@ func TestHandleMany_WorkQueueLimitDropsByPriority(t *testing.T) {
 // Concurrent HandleMany callers + multiple workers must not race or lose
 // jobs. Run with -race.
 func TestHandleMany_ConcurrentProducersRaceFree(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	const (
 		producers    = 16
@@ -199,17 +161,14 @@ func TestHandleMany_ConcurrentProducersRaceFree(t *testing.T) {
 	lim := limiter.New(ctx, slog.Default(), rec, totalJobs, 8, totalJobs)
 
 	var wg sync.WaitGroup
-	for p := range producers {
-		wg.Add(1)
-		go func(pid int) {
-			defer wg.Done()
-			r := rand.New(rand.NewSource(int64(pid)))
+	for pid := range producers {
+		wg.Go(func() {
 			for b := range batchesEach {
 				batch := make([]*api.AgentScheduledJob, 0, jobsPerBatch)
 				for j := range jobsPerBatch {
 					batch = append(batch, &api.AgentScheduledJob{
 						ID:       fmt.Sprintf("p%d-b%d-j%d", pid, b, j),
-						Priority: r.Intn(6),
+						Priority: rand.N(6),
 					})
 				}
 				if err := lim.HandleMany(ctx, batch); err != nil {
@@ -217,7 +176,7 @@ func TestHandleMany_ConcurrentProducersRaceFree(t *testing.T) {
 					return
 				}
 			}
-		}(p)
+		})
 	}
 	wg.Wait()
 

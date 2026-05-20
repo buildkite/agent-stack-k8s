@@ -1,6 +1,8 @@
 package limiter
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -11,7 +13,11 @@ const (
 )
 
 var (
-	// Overridden by New to return len(tokenBucket).
+	// These callbacks are overriden by New.
+	// The mutex is required to prevent data races during parallelised
+	// tests. Note, though, that calling New multiple times in parallel
+	// still makes the metrics totally unreliable.
+	metricCallbackMu    sync.RWMutex
 	tokensAvailableFunc = func() int { return 0 }
 	workQueueLengthFunc = func() int { return 0 }
 )
@@ -28,13 +34,21 @@ var (
 		Subsystem: promSubsystem,
 		Name:      "tokens_available",
 		Help:      "Limiter tokens currently available",
-	}, func() float64 { return float64(tokensAvailableFunc()) })
+	}, func() float64 {
+		metricCallbackMu.RLock()
+		defer metricCallbackMu.RUnlock()
+		return float64(tokensAvailableFunc())
+	})
 	_ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
 		Namespace: promNamespace,
 		Subsystem: promSubsystem,
 		Name:      "work_queue_length",
 		Help:      "Amount of enqueued work in the limiter",
-	}, func() float64 { return float64(workQueueLengthFunc()) })
+	}, func() float64 {
+		metricCallbackMu.RLock()
+		defer metricCallbackMu.RUnlock()
+		return float64(workQueueLengthFunc())
+	})
 
 	tokenWaitDurationHistogram = promauto.NewHistogram(prometheus.HistogramOpts{
 		Namespace:                    promNamespace,
