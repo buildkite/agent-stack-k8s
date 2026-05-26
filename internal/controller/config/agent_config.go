@@ -20,16 +20,16 @@ type AgentConfig struct {
 	NoHTTP2  *bool   `json:"no-http2,omitempty"` // BUILDKITE_NO_HTTP2
 
 	// Only applies to agents within the pod
-	Experiments               []string `json:"experiment,omitempty"`                   // BUILDKITE_AGENT_EXPERIMENT
-	Shell                     *string  `json:"shell,omitempty"`                        // BUILDKITE_SHELL
-	NoColor                   *bool    `json:"no-color,omitempty"`                     // BUILDKITE_AGENT_NO_COLOR
-	StrictSingleHooks         *bool    `json:"strict-single-hooks,omitempty"`          // BUILDKITE_STRICT_SINGLE_HOOKS
-	NoMultipartArtifactUpload *bool    `json:"no-multipart-artifact-upload,omitempty"` // BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD
-	TraceContextEncoding      *string  `json:"trace-context-encoding,omitempty"`       // BUILDKITE_TRACE_CONTEXT_ENCODING
-	DisableWarningsFor              []string       `json:"disable-warnings-for,omitempty"`               // BUILDKITE_AGENT_DISABLE_WARNINGS_FOR
-	DebugSigning                    *bool          `json:"debug-signing,omitempty"`                      // BUILDKITE_AGENT_DEBUG_SIGNING
-	GitSkipFetchExistingCommits     *bool          `json:"git-skip-fetch-existing-commits,omitempty"`    // BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS
-	ContainerStartTimeout *time.Duration `json:"container-start-timeout,omitempty"` // BUILDKITE_KUBERNETES_CONTAINER_START_TIMEOUT
+	Experiments                 []string       `json:"experiment,omitempty"`                      // BUILDKITE_AGENT_EXPERIMENT
+	Shell                       *string        `json:"shell,omitempty"`                           // BUILDKITE_SHELL
+	NoColor                     *bool          `json:"no-color,omitempty"`                        // BUILDKITE_AGENT_NO_COLOR
+	StrictSingleHooks           *bool          `json:"strict-single-hooks,omitempty"`             // BUILDKITE_STRICT_SINGLE_HOOKS
+	NoMultipartArtifactUpload   *bool          `json:"no-multipart-artifact-upload,omitempty"`    // BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD
+	TraceContextEncoding        *string        `json:"trace-context-encoding,omitempty"`          // BUILDKITE_TRACE_CONTEXT_ENCODING
+	DisableWarningsFor          []string       `json:"disable-warnings-for,omitempty"`            // BUILDKITE_AGENT_DISABLE_WARNINGS_FOR
+	DebugSigning                *bool          `json:"debug-signing,omitempty"`                   // BUILDKITE_AGENT_DEBUG_SIGNING
+	GitSkipFetchExistingCommits *bool          `json:"git-skip-fetch-existing-commits,omitempty"` // BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS
+	ContainerStartTimeout       *time.Duration `json:"container-start-timeout,omitempty"`         // BUILDKITE_KUBERNETES_CONTAINER_START_TIMEOUT
 
 	// Applies differently depending on the container
 	//                                                          // agent start                    / bootstrap
@@ -132,7 +132,7 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	// up to the user to set it to the path of a key file supplied in their
 	// container.
 	if a.SigningJWKSVolume != nil {
-		dir := normaliseJWKSFile(a.SigningJWKSVolume, &a.SigningJWKSFile, "/buildkite/signing-jwks", "key")
+		dir := normaliseJWKSFile(&a.SigningJWKSFile, "/buildkite/signing-jwks", "key")
 		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
 			Name:      a.SigningJWKSVolume.Name,
 			MountPath: dir,
@@ -146,7 +146,7 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	// the user set VerificationJWKSFile, it's up to the user to set it to the
 	// path of a key file supplied in their container.
 	if a.VerificationJWKSVolume != nil {
-		dir := normaliseJWKSFile(a.VerificationJWKSVolume, &a.VerificationJWKSFile, "/buildkite/verification-jwks", "key")
+		dir := normaliseJWKSFile(&a.VerificationJWKSFile, "/buildkite/verification-jwks", "key")
 		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
 			Name:      a.VerificationJWKSVolume.Name,
 			MountPath: dir,
@@ -176,7 +176,7 @@ func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {
 	if a.SigningJWKSVolume == nil {
 		return
 	}
-	dir := normaliseJWKSFile(a.SigningJWKSVolume, &a.SigningJWKSFile, "/buildkite/signing-jwks", "key")
+	dir := normaliseJWKSFile(&a.SigningJWKSFile, "/buildkite/signing-jwks", "key")
 	ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
 		Name:      a.SigningJWKSVolume.Name,
 		MountPath: dir,
@@ -232,7 +232,7 @@ func (a *AgentConfig) applyPluginsVolumeTo(ctr *corev1.Container) {
 // default directory.
 // If the field points to a string containing an absolute path, return its
 // directory.
-func normaliseJWKSFile(volume *corev1.Volume, jwksFileField **string, defaultDir, defaultFile string) string {
+func normaliseJWKSFile(jwksFileField **string, defaultDir, defaultFile string) string {
 	if *jwksFileField == nil {
 		*jwksFileField = ptr.To(defaultFile)
 	}
