@@ -46,16 +46,23 @@ type AgentConfig struct {
 	SigningJWKSVolume *corev1.Volume `json:"signingJWKSVolume,omitempty"`
 
 	// Hooks and plugins can be supplied with a volume source.
-	HooksPath     *string        `json:"hooks-path,omitempty"` // BUILDKITE_HOOKS_PATH
-	HooksVolume   *corev1.Volume `json:"hooksVolume,omitempty"`
-	PluginsPath   *string        `json:"plugins-path,omitempty"` // BUILDKITE_PLUGINS_PATH
-	PluginsVolume *corev1.Volume `json:"pluginsVolume,omitempty"`
+	HooksPath            *string          `json:"hooks-path,omitempty"` // BUILDKITE_HOOKS_PATH
+	HooksVolume          *corev1.Volume   `json:"hooksVolume,omitempty"`
+	AdditionalHooksPaths []string         `json:"additional-hooks-paths,omitempty"` // BUILDKITE_ADDITIONAL_HOOKS_PATHS
+	AdditionalHooks      []AdditionalHook `json:"additional-hooks,omitempty"`
+	PluginsPath          *string          `json:"plugins-path,omitempty"` // BUILDKITE_PLUGINS_PATH
+	PluginsVolume        *corev1.Volume   `json:"pluginsVolume,omitempty"`
 
 	// Applies only to the "buildkite-agent start" container.
 	// Keys can be supplied with a volume.
 	VerificationJWKSFile        *string        `json:"verification-jwks-file,omitempty"`        // BUILDKITE_AGENT_VERIFICATION_JWKS_FILE
 	VerificationFailureBehavior *string        `json:"verification-failure-behavior,omitempty"` // BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR
 	VerificationJWKSVolume      *corev1.Volume `json:"verificationJWKSVolume,omitempty"`
+}
+
+type AdditionalHook struct {
+	Path   string         `json:"path,omitempty"`
+	Volume *corev1.Volume `json:"volume,omitempty"`
 }
 
 func (a *AgentConfig) ControllerOptions() []agentcore.ControllerOption {
@@ -79,6 +86,11 @@ func (a *AgentConfig) ApplyVolumesTo(podSpec *corev1.PodSpec) {
 	}
 	if a.HooksVolume != nil {
 		podSpec.Volumes = append(podSpec.Volumes, *a.HooksVolume)
+	}
+	for _, h := range a.AdditionalHooks {
+		if h.Volume != nil {
+			podSpec.Volumes = append(podSpec.Volumes, *h.Volume)
+		}
 	}
 	if a.PluginsVolume != nil {
 		podSpec.Volumes = append(podSpec.Volumes, *a.PluginsVolume)
@@ -111,6 +123,8 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 
 	a.applyHooksVolumeTo(ctr)
 	setEnvOpt(ctr, "BUILDKITE_HOOKS_PATH", a.HooksPath)
+	a.applyAdditionalHooksVolumesTo(ctr)
+	setEnvCommaSep(ctr, "BUILDKITE_ADDITIONAL_HOOKS_PATHS", a.additionalHooksPaths())
 
 	a.applyPluginsVolumeTo(ctr)
 	setEnvOpt(ctr, "BUILDKITE_PLUGINS_PATH", a.PluginsPath)
@@ -169,6 +183,7 @@ func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {
 		return
 	}
 	a.applyHooksVolumeTo(ctr)
+	a.applyAdditionalHooksVolumesTo(ctr)
 	a.applyPluginsVolumeTo(ctr)
 	// Signing happens either with "pipeline upload" or "tool sign", so the
 	// signing side of any key needs to be attached to the command container,
@@ -188,6 +203,7 @@ func (a *AgentConfig) ApplyToCheckout(ctr *corev1.Container) {
 		return
 	}
 	a.applyHooksVolumeTo(ctr)
+	a.applyAdditionalHooksVolumesTo(ctr)
 	a.applyPluginsVolumeTo(ctr)
 }
 
@@ -202,6 +218,35 @@ func (a *AgentConfig) applyHooksVolumeTo(ctr *corev1.Container) {
 		Name:      a.HooksVolume.Name,
 		MountPath: *a.HooksPath,
 	})
+}
+
+func (a *AgentConfig) additionalHooksPaths() []string {
+	if a == nil {
+		return nil
+	}
+	paths := []string{}
+	paths = append(paths, a.AdditionalHooksPaths...)
+	for _, h := range a.AdditionalHooks {
+		if h.Path != "" {
+			paths = append(paths, h.Path)
+		}
+	}
+	return paths
+}
+
+func (a *AgentConfig) applyAdditionalHooksVolumesTo(ctr *corev1.Container) {
+	if a == nil || ctr == nil {
+		return
+	}
+	for _, h := range a.AdditionalHooks {
+		if h.Volume == nil || h.Path == "" {
+			continue
+		}
+		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
+			Name:      h.Volume.Name,
+			MountPath: h.Path,
+		})
+	}
 }
 
 func (a *AgentConfig) applyPluginsVolumeTo(ctr *corev1.Container) {
