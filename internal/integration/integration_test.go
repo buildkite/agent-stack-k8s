@@ -1044,6 +1044,52 @@ func TestHooksAndPlugins(t *testing.T) {
 	}
 }
 
+func TestAdditionalHooks(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "additional-hooks.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+	cfg := cfg
+	cfg.AgentConfig = &config.AgentConfig{
+		AdditionalHooks: []config.AdditionalHook{
+			{
+				Path: "/buildkite/additional-hooks",
+				Volume: &corev1.Volume{
+					Name: "additional-hooks",
+					VolumeSource: corev1.VolumeSource{
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: "integration-tests-fixture-additional-hooks",
+							},
+							DefaultMode: ptr.To[int32](0o755),
+						},
+					},
+				},
+			},
+		},
+	}
+	tc.StartController(ctx, cfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+
+	logs := tc.FetchLogs(build)
+	t.Logf("tc.FetchLogs(build) = %s", logs)
+	for _, hook := range []string{"environment", "pre-checkout", "post-checkout", "pre-command", "post-command"} {
+		want := fmt.Sprintf("Hello from the additional %s hook", hook)
+		if !strings.Contains(logs, want) {
+			t.Errorf("Logs did not contain %q", want)
+		}
+		unwanted := fmt.Sprintf("Hello from the %s hook", hook)
+		if strings.Contains(logs, unwanted) {
+			t.Errorf("Logs contained %q, which should only come from the standard hooks fixture", unwanted)
+		}
+	}
+}
+
 func TestSkipCheckoutContainer(t *testing.T) {
 	tc := testcase{
 		T:       t,

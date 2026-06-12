@@ -1,0 +1,5 @@
+agents:
+  queue: "{{.queue}}"
+steps:
+  - label: ":fishing_pole_and_fish: Additional Hooks"
+    command: echo 'Hello from the additional hooks command!'
