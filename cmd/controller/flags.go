@@ -280,6 +280,10 @@ func validateConfig(cfg *config.Config) error {
 		return err
 	}
 
+	if err := validateAgentConfig(cfg.AgentConfig); err != nil {
+		return err
+	}
+
 	if cfg.PodSpecPatch != nil {
 		if err := validatePodSpecPatch(cfg.PodSpecPatch, cfg.AllowPodSpecPatchUnsafeCmdMod); err != nil {
 			return fmt.Errorf("invalid pod spec patch: %w", err)
@@ -300,6 +304,25 @@ func validateConfig(cfg *config.Config) error {
 		}
 		if _, exists := cfg.ResourceClasses[cfg.DefaultResourceClassName]; !exists {
 			return fmt.Errorf("default-resource-class-name %q not found in resource-classes", cfg.DefaultResourceClassName)
+		}
+	}
+
+	return nil
+}
+
+func validateAgentConfig(agentConfig *config.AgentConfig) error {
+	if agentConfig == nil {
+		return nil
+	}
+
+	for i, h := range agentConfig.AdditionalHooks {
+		switch {
+		case h.Path == "":
+			return fmt.Errorf("agent-config.additional-hooks[%d].path is required", i)
+		case h.Volume == nil:
+			return fmt.Errorf("agent-config.additional-hooks[%d].volume is required", i)
+		case h.Volume.Name == "":
+			return fmt.Errorf("agent-config.additional-hooks[%d].volume.name is required", i)
 		}
 	}
 

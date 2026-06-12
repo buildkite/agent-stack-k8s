@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"slices"
 	"strings"
 	"testing"
 
@@ -1555,6 +1554,147 @@ func TestImagePullPolicies(t *testing.T) {
 	}
 }
 
+func TestAdditionalHooksOptions(t *testing.T) {
+	additionalHooksVolume := &corev1.Volume{
+		Name: "additional-hooks",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	}
+
+	tests := []struct {
+		name                     string
+		agentConfig              *config.AgentConfig
+		wantAdditionalHooksEnv   string
+		wantPodVolumes           []string
+		wantNotPodVolumes        []string
+		wantAdditionalHookMounts map[string]string
+	}{
+		{
+			name:                   "sets additional hooks env when only image-baked paths are configured",
+			agentConfig:            &config.AgentConfig{AdditionalHooksPaths: []string{"/image/hooks", "/image/more-hooks"}},
+			wantAdditionalHooksEnv: "/image/hooks,/image/more-hooks",
+			wantNotPodVolumes: []string{
+				additionalHooksVolume.Name,
+			},
+		},
+		{
+			name: "mounts volume-backed additional hooks and adds their path to the env",
+			agentConfig: &config.AgentConfig{
+				AdditionalHooks: []config.AdditionalHook{
+					{
+						Path:   "/buildkite/additional-hooks",
+						Volume: additionalHooksVolume,
+					},
+				},
+			},
+			wantAdditionalHooksEnv: "/buildkite/additional-hooks",
+			wantPodVolumes:         []string{additionalHooksVolume.Name},
+			wantAdditionalHookMounts: map[string]string{
+				additionalHooksVolume.Name: "/buildkite/additional-hooks",
+			},
+		},
+		{
+			name: "combines image-baked and volume-backed additional hook paths",
+			agentConfig: &config.AgentConfig{
+				AdditionalHooksPaths: []string{"/image/hooks"},
+				AdditionalHooks: []config.AdditionalHook{
+					{
+						Path:   "/buildkite/additional-hooks",
+						Volume: additionalHooksVolume,
+					},
+				},
+			},
+			wantAdditionalHooksEnv: "/image/hooks,/buildkite/additional-hooks",
+			wantPodVolumes:         []string{additionalHooksVolume.Name},
+			wantAdditionalHookMounts: map[string]string{
+				additionalHooksVolume.Name: "/buildkite/additional-hooks",
+			},
+		},
+		{
+			name:              "does not set additional hook config when agent config is nil",
+			agentConfig:       nil,
+			wantNotPodVolumes: []string{additionalHooksVolume.Name},
+		},
+		{
+			name:              "does not set additional hook config when agent config is empty",
+			agentConfig:       &config.AgentConfig{},
+			wantNotPodVolumes: []string{additionalHooksVolume.Name},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			worker := New(
+				slog.Default(),
+				nil,
+				nil,
+				Config{
+					Namespace:            "buildkite",
+					AgentTokenSecretName: "bkcq_1234567890",
+					Image:                "buildkite/agent:latest",
+					AgentConfig:          test.agentConfig,
+				},
+			)
+			kjob, err := worker.Build(
+				&corev1.PodSpec{},
+				false,
+				buildInputs{
+					uuid:            "1234",
+					command:         "echo shell",
+					agentQueryRules: []string{"queue=kubernetes"},
+				},
+			)
+			require.NoError(t, err)
+
+			// Check pod volumes.
+			podSpec := kjob.Spec.Template.Spec
+			for _, wantName := range test.wantPodVolumes {
+				if !hasVolumeNamed(podSpec.Volumes, wantName) {
+					t.Errorf("podSpec.Volumes = %v, is missing volume named %q", podSpec.Volumes, wantName)
+				}
+			}
+			for _, wantNotName := range test.wantNotPodVolumes {
+				if hasVolumeNamed(podSpec.Volumes, wantNotName) {
+					t.Errorf("podSpec.Volumes = %v, has unwanted volume named %q", podSpec.Volumes, wantNotName)
+				}
+			}
+
+			// Check agent env.
+			agent := findContainer(t, podSpec.Containers, "agent")
+			env := findEnv(t, agent.Env, "BUILDKITE_ADDITIONAL_HOOKS_PATHS")
+			if test.wantAdditionalHooksEnv == "" {
+				if env != nil {
+					t.Errorf("agent.Env = %v, has unwanted BUILDKITE_ADDITIONAL_HOOKS_PATHS env var", agent.Env)
+				}
+			} else if env == nil || env.Value != test.wantAdditionalHooksEnv {
+				t.Errorf("agent.Env[BUILDKITE_ADDITIONAL_HOOKS_PATHS] = %v, want %q", env, test.wantAdditionalHooksEnv)
+			}
+
+			// Check container mounts.
+			containers := []corev1.Container{
+				agent,
+				findContainer(t, podSpec.Containers, "checkout"),
+				findContainer(t, podSpec.Containers, "container-0"),
+			}
+			for _, ctr := range containers {
+				for _, wantNotName := range test.wantNotPodVolumes {
+					if hasMountNamed(ctr.VolumeMounts, wantNotName) {
+						t.Errorf("%s.VolumeMounts = %v, has unwanted mount %q", ctr.Name, ctr.VolumeMounts, wantNotName)
+					}
+				}
+				for wantName, wantPath := range test.wantAdditionalHookMounts {
+					if !hasMountAt(ctr.VolumeMounts, wantName, wantPath) {
+						t.Errorf("%s.VolumeMounts = %v, missing mount %q at %q", ctr.Name, ctr.VolumeMounts, wantName, wantPath)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestPipelineSigningOptions(t *testing.T) {
 	verificationVol := &corev1.Volume{Name: "verification-key-volume"}
 	signingVol := &corev1.Volume{Name: "signing-key-volume"}
@@ -1698,18 +1838,12 @@ func TestPipelineSigningOptions(t *testing.T) {
 			// Check volumes on the pod
 			podSpec := kjob.Spec.Template.Spec
 			for _, wantName := range test.wantPodVolumes {
-				volNameEql := func(v corev1.Volume) bool {
-					return v.Name == wantName
-				}
-				if !slices.ContainsFunc(podSpec.Volumes, volNameEql) {
+				if !hasVolumeNamed(podSpec.Volumes, wantName) {
 					t.Errorf("podSpec.Volumes = %v, is missing volume named %q", podSpec.Volumes, wantName)
 				}
 			}
 			for _, wantNotName := range test.wantNotPodVolumes {
-				volNameEql := func(v corev1.Volume) bool {
-					return v.Name == wantNotName
-				}
-				if slices.ContainsFunc(podSpec.Volumes, volNameEql) {
+				if hasVolumeNamed(podSpec.Volumes, wantNotName) {
 					t.Errorf("podSpec.Volumes = %v, has unwanted volume named %q", podSpec.Volumes, wantNotName)
 				}
 			}
@@ -1736,10 +1870,7 @@ func TestPipelineSigningOptions(t *testing.T) {
 
 			// Check agent container mounts
 			for _, wantName := range test.wantAgentMounts {
-				mountNameEql := func(v corev1.VolumeMount) bool {
-					return v.Name == wantName
-				}
-				if !slices.ContainsFunc(agent.VolumeMounts, mountNameEql) {
+				if !hasMountNamed(agent.VolumeMounts, wantName) {
 					t.Errorf("agent.VolumeMounts = %v, missing volume mount %q", agent.VolumeMounts, wantName)
 				}
 			}
@@ -1747,10 +1878,7 @@ func TestPipelineSigningOptions(t *testing.T) {
 			// Check command container mounts
 			command := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
 			for _, wantName := range test.wantCommandMounts {
-				mountNameEql := func(v corev1.VolumeMount) bool {
-					return v.Name == wantName
-				}
-				if !slices.ContainsFunc(command.VolumeMounts, mountNameEql) {
+				if !hasMountNamed(command.VolumeMounts, wantName) {
 					t.Errorf("command.VolumeMounts = %v, missing volume mount %q", command.VolumeMounts, wantName)
 				}
 			}
@@ -1781,6 +1909,33 @@ func findEnv(t *testing.T, envs []corev1.EnvVar, name string) *corev1.EnvVar {
 	}
 
 	return nil
+}
+
+func hasVolumeNamed(volumes []corev1.Volume, name string) bool {
+	for _, volume := range volumes {
+		if volume.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMountNamed(mounts []corev1.VolumeMount, name string) bool {
+	for _, mount := range mounts {
+		if mount.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMountAt(mounts []corev1.VolumeMount, name, path string) bool {
+	for _, mount := range mounts {
+		if mount.Name == name && mount.MountPath == path {
+			return true
+		}
+	}
+	return false
 }
 
 func TestBuildSafeToEvictDefault(t *testing.T) {

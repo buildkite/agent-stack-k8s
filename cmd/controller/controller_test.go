@@ -89,7 +89,24 @@ func TestReadAndParseConfig(t *testing.T) {
 			},
 		},
 		AgentConfig: &config.AgentConfig{
-			Endpoint: ptr("http://agent.buildkite.localhost/v3"),
+			Endpoint:             ptr("http://agent.buildkite.localhost/v3"),
+			AdditionalHooksPaths: []string{"/buildkite/baked-in-hooks"},
+			AdditionalHooks: []config.AdditionalHook{
+				{
+					Path: "/buildkite/extra-hooks",
+					Volume: &corev1.Volume{
+						Name: "extra-hooks",
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "extra-hooks",
+								},
+								DefaultMode: ptr[int32](493),
+							},
+						},
+					},
+				},
+			},
 		},
 		DefaultCommandParams: &config.CommandParams{
 			Interposer: config.InterposerVector,
@@ -202,6 +219,57 @@ resource-classes:
 default-resource-class-name: small
 `,
 			wantErr: `default-resource-class-name "small" specified but no resource-classes defined`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cleanTestEnv(t)
+			configFile := createTempConfigFile(t, tt.configYAML)
+
+			_, err := controller.BuildConfigFromArgs([]string{"--config=" + configFile})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+func TestParseAndValidateConfig_AdditionalHooksValidation(t *testing.T) {
+	tests := []struct {
+		name       string
+		configYAML string
+		wantErr    string
+	}{
+		{
+			name: "missing path",
+			configYAML: `
+agent-config:
+  additional-hooks:
+    - volume:
+        name: additional-hooks
+        emptyDir: {}
+`,
+			wantErr: `agent-config.additional-hooks[0].path is required`,
+		},
+		{
+			name: "missing volume",
+			configYAML: `
+agent-config:
+  additional-hooks:
+    - path: /buildkite/additional-hooks
+`,
+			wantErr: `agent-config.additional-hooks[0].volume is required`,
+		},
+		{
+			name: "missing volume name",
+			configYAML: `
+agent-config:
+  additional-hooks:
+    - path: /buildkite/additional-hooks
+      volume:
+        emptyDir: {}
+`,
+			wantErr: `agent-config.additional-hooks[0].volume.name is required`,
 		},
 	}
 
