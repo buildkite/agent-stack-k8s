@@ -454,6 +454,36 @@
             "hooks-path": {
               "type": "string"
             },
+            "additional-hooks-paths": {
+              "type": "array",
+              "default": [],
+              "title": "Additional hook directories already present in agent and bootstrap containers",
+              "items": {
+                "type": "string"
+              },
+              "examples": [
+                ["/buildkite/baked-in-hooks"],
+                ["/opt/buildkite/hooks", "/usr/local/share/buildkite/hooks"]
+              ]
+            },
+            "additional-hooks": {
+              "type": "array",
+              "default": [],
+              "title": "Additional hook directories to mount into agent, checkout, and command containers",
+              "items": {
+                "type": "object",
+                "required": ["path", "volume"],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "volume": {
+                    "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
+                  }
+                }
+              }
+            },
             "plugins-path": {
               "type": "string"
             },

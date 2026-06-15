@@ -1,0 +1,12 @@
+# This configmap is used by TestAdditionalHooks.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: integration-tests-fixture-additional-hooks
+  namespace: buildkite-k8s-integration-test
+data:
+  environment: echo 'Hello from the additional environment hook'
+  pre-checkout: echo 'Hello from the additional pre-checkout hook'
+  post-checkout: echo 'Hello from the additional post-checkout hook'
+  pre-command: echo 'Hello from the additional pre-command hook'
+  post-command: echo 'Hello from the additional post-command hook'

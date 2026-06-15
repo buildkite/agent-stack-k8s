@@ -65,6 +65,15 @@ agent-config:
   # Setting a custom Agent REST API endpoint is usually only useful if you have
   # a different instance of Buildkite itself available to run.
   endpoint: http://agent.buildkite.localhost/v3
+  additional-hooks-paths:
+    - /buildkite/baked-in-hooks
+  additional-hooks:
+    - path: /buildkite/extra-hooks
+      volume:
+        name: extra-hooks
+        configMap:
+          defaultMode: 493
+          name: extra-hooks
 
 # Applies to the checkout container in all spawned pods
 default-checkout-params:

@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -280,6 +281,10 @@ func validateConfig(cfg *config.Config) error {
 		return err
 	}
 
+	if err := validateAgentConfig(cfg.AgentConfig); err != nil {
+		return err
+	}
+
 	if cfg.PodSpecPatch != nil {
 		if err := validatePodSpecPatch(cfg.PodSpecPatch, cfg.AllowPodSpecPatchUnsafeCmdMod); err != nil {
 			return fmt.Errorf("invalid pod spec patch: %w", err)
@@ -304,6 +309,28 @@ func validateConfig(cfg *config.Config) error {
 	}
 
 	return nil
+}
+
+func validateAgentConfig(agentConfig *config.AgentConfig) error {
+	if agentConfig == nil {
+		return nil
+	}
+
+	var errs []error
+	for i, h := range agentConfig.AdditionalHooks {
+		if h.Path == "" {
+			errs = append(errs, fmt.Errorf("agent-config.additional-hooks[%d].path is required", i))
+		}
+		if h.Volume == nil {
+			errs = append(errs, fmt.Errorf("agent-config.additional-hooks[%d].volume is required", i))
+			continue
+		}
+		if h.Volume.Name == "" {
+			errs = append(errs, fmt.Errorf("agent-config.additional-hooks[%d].volume.name is required", i))
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 func validatePodSpecPatch(podSpec *corev1.PodSpec, allowCmdMod bool) error {
