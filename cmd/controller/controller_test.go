@@ -238,7 +238,7 @@ func TestParseAndValidateConfig_AdditionalHooksValidation(t *testing.T) {
 	tests := []struct {
 		name       string
 		configYAML string
-		wantErr    string
+		wantErrs   []string
 	}{
 		{
 			name: "missing path",
@@ -249,7 +249,7 @@ agent-config:
         name: additional-hooks
         emptyDir: {}
 `,
-			wantErr: `agent-config.additional-hooks[0].path is required`,
+			wantErrs: []string{`agent-config.additional-hooks[0].path is required`},
 		},
 		{
 			name: "missing volume",
@@ -258,7 +258,7 @@ agent-config:
   additional-hooks:
     - path: /buildkite/additional-hooks
 `,
-			wantErr: `agent-config.additional-hooks[0].volume is required`,
+			wantErrs: []string{`agent-config.additional-hooks[0].volume is required`},
 		},
 		{
 			name: "missing volume name",
@@ -269,7 +269,26 @@ agent-config:
       volume:
         emptyDir: {}
 `,
-			wantErr: `agent-config.additional-hooks[0].volume.name is required`,
+			wantErrs: []string{`agent-config.additional-hooks[0].volume.name is required`},
+		},
+		{
+			name: "multiple validation failures",
+			configYAML: `
+agent-config:
+  additional-hooks:
+    - volume:
+        emptyDir: {}
+    - path: /buildkite/additional-hooks
+    - volume:
+        name: additional-hooks
+        emptyDir: {}
+`,
+			wantErrs: []string{
+				`agent-config.additional-hooks[0].path is required`,
+				`agent-config.additional-hooks[0].volume.name is required`,
+				`agent-config.additional-hooks[1].volume is required`,
+				`agent-config.additional-hooks[2].path is required`,
+			},
 		},
 	}
 
@@ -280,7 +299,9 @@ agent-config:
 
 			_, err := controller.BuildConfigFromArgs([]string{"--config=" + configFile})
 			require.Error(t, err)
-			require.Contains(t, err.Error(), tt.wantErr)
+			for _, wantErr := range tt.wantErrs {
+				require.Contains(t, err.Error(), wantErr)
+			}
 		})
 	}
 }

@@ -3,6 +3,7 @@ package controller
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -315,18 +316,21 @@ func validateAgentConfig(agentConfig *config.AgentConfig) error {
 		return nil
 	}
 
+	var errs []error
 	for i, h := range agentConfig.AdditionalHooks {
-		switch {
-		case h.Path == "":
-			return fmt.Errorf("agent-config.additional-hooks[%d].path is required", i)
-		case h.Volume == nil:
-			return fmt.Errorf("agent-config.additional-hooks[%d].volume is required", i)
-		case h.Volume.Name == "":
-			return fmt.Errorf("agent-config.additional-hooks[%d].volume.name is required", i)
+		if h.Path == "" {
+			errs = append(errs, fmt.Errorf("agent-config.additional-hooks[%d].path is required", i))
+		}
+		if h.Volume == nil {
+			errs = append(errs, fmt.Errorf("agent-config.additional-hooks[%d].volume is required", i))
+			continue
+		}
+		if h.Volume.Name == "" {
+			errs = append(errs, fmt.Errorf("agent-config.additional-hooks[%d].volume.name is required", i))
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 func validatePodSpecPatch(podSpec *corev1.PodSpec, allowCmdMod bool) error {
