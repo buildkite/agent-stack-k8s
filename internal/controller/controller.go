@@ -401,7 +401,6 @@ func informerTransform(obj any) (any, error) {
 		obj.Spec.ResourceClaims = nil
 		obj.Spec.Resources = nil
 		obj.Spec.HostnameOverride = nil
-		obj.Spec.WorkloadRef = nil
 
 		// Pod status fields we care about include:
 		// - Phase
