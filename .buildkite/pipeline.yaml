@@ -21,25 +21,16 @@ steps:
     key: tidy
     image: public.ecr.aws/docker/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     command: .buildkite/steps/tidy.sh
-    plugins:
-      - kubernetes:
-          podTemplate: go-with-cache
 
   - label: ":go::lint-roller: lint"
     key: lint
     image: golangci/golangci-lint:v2.12.2-alpine@sha256:91b27804074a0bacea298707f016911e60cf0cdbc6c7bf5ccacb5f0606d18d60
     command: golangci-lint run -v ./...
-    plugins:
-      - kubernetes:
-          podTemplate: go-with-cache
 
   - label: ":golang::robot_face: check code generation"
     key: check-code-generation
     image: public.ecr.aws/docker/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     command: .buildkite/steps/check-code-generation.sh
-    plugins:
-      - kubernetes:
-          podTemplate: go-with-cache
 
   - label: ":helm: lint chart"
     key: helm-lint
@@ -62,7 +53,6 @@ steps:
     command: .buildkite/steps/tests.sh
     plugins:
       - kubernetes:
-          podTemplate: go-with-cache
           podSpecPatch:
             serviceAccountName: integration-tests
       - test-collector:
@@ -78,9 +68,6 @@ steps:
       REGISTRY_USERNAME: ghcr_username
     image: public.ecr.aws/docker/library/golang:1.26.4@sha256:792443b89f65105abba56b9bd5e97f680a80074ac62fc844a584212f8c8102c3
     command: .buildkite/steps/build-and-push-controller.sh
-    plugins:
-      - kubernetes:
-          podTemplate: go-with-cache
 
   # On feature branches, don't wait for tests. We may want to deploy
   # to a test cluster to debug the feature branch.
@@ -141,6 +128,5 @@ steps:
     command: .buildkite/steps/release.sh
     plugins:
       - kubernetes:
-          podTemplate: go-with-cache
           checkout:
             fetchFlags: -v --tags
