@@ -171,3 +171,7 @@ steps:
       - .buildkite/steps/release.sh
       - buildkite-agent cache save --names go_mod
       - buildkite-agent cache save --names go_build
+    plugins:
+      - kubernetes:
+          checkout:
+            fetchFlags: -v --tags
