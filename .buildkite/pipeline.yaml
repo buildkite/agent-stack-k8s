@@ -27,18 +27,20 @@ steps:
     env: *go-cache-env
     image: public.ecr.aws/docker/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     command:
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache restore --names go_mod)
+      - . .buildkite/steps/assume-role.sh
+      - buildkite-agent cache restore --names go_mod
       - .buildkite/steps/tidy.sh
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache save --names go_mod)
+      - buildkite-agent cache save --names go_mod
 
   - label: ":go::lint-roller: lint"
     key: lint
     env: *go-cache-env
     image: golangci/golangci-lint:v2.12.2-alpine@sha256:91b27804074a0bacea298707f016911e60cf0cdbc6c7bf5ccacb5f0606d18d60
     command:
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache restore)
+      - . .buildkite/steps/assume-role.sh
+      - buildkite-agent cache restore
       - golangci-lint run -v ./...
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache save)
+      - buildkite-agent cache save
 
 
   - label: ":golang::robot_face: check code generation"
@@ -46,9 +48,10 @@ steps:
     env: *go-cache-env
     image: public.ecr.aws/docker/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
     command:
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache restore --names go_mod --names go_build)
+      - . .buildkite/steps/assume-role.sh
+      - buildkite-agent cache restore --names go_mod --names go_build
       - .buildkite/steps/check-code-generation.sh
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache save --names go_mod --names go_build)
+      - buildkite-agent cache save --names go_mod --names go_build
 
 
   - label: ":helm: lint chart"
@@ -71,9 +74,10 @@ steps:
       BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
     image: public.ecr.aws/docker/library/golang:1.26.4@sha256:792443b89f65105abba56b9bd5e97f680a80074ac62fc844a584212f8c8102c3
     command:
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache restore --names go_mod --names go_build)
+      - . .buildkite/steps/assume-role.sh
+      - buildkite-agent cache restore --names go_mod --names go_build
       - .buildkite/steps/tests.sh
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache save --names go_mod --names go_build)
+      - buildkite-agent cache save --names go_mod --names go_build
     plugins:
       - kubernetes:
           podSpecPatch:
@@ -92,9 +96,10 @@ steps:
       REGISTRY_USERNAME: ghcr_username
     image: public.ecr.aws/docker/library/golang:1.26.4@sha256:792443b89f65105abba56b9bd5e97f680a80074ac62fc844a584212f8c8102c3
     command:
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache restore --names go_mod --names go_build)
+      - . .buildkite/steps/assume-role.sh
+      - buildkite-agent cache restore --names go_mod --names go_build
       - .buildkite/steps/build-and-push-controller.sh
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache save --names go_mod --names go_build)
+      - buildkite-agent cache save --names go_mod --names go_build
 
   # On feature branches, don't wait for tests. We may want to deploy
   # to a test cluster to debug the feature branch.
@@ -154,9 +159,10 @@ steps:
       GITHUB_TOKEN: github_release_token
     image: public.ecr.aws/docker/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14 # Note goreleaser shells out to go!
     command:
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache restore --names go_mod --names go_build)
+      - . .buildkite/steps/assume-role.sh
+      - buildkite-agent cache restore --names go_mod --names go_build
       - .buildkite/steps/release.sh
-      - (. .buildkite/steps/assume-role.sh; buildkite-agent cache save --names go_mod --names go_build)
+      - buildkite-agent cache save --names go_mod --names go_build
     plugins:
       - kubernetes:
           checkout:

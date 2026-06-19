@@ -2,9 +2,6 @@
 
 set -Eeufo pipefail
 
-echo --- Installing packages
-apt-get update && apt-get install -y --no-install-recommends awscli jq
-
 echo --- Installing ko
 KO_VERSION="0.13.0"
 OS="$(go env GOOS)"

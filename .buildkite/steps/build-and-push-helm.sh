@@ -3,7 +3,7 @@
 set -eufo pipefail
 
 echo --- :hammer: Installing tools
-apk add --update-cache --no-progress aws-cli git helm jq skopeo yq
+apk add --update-cache --no-progress git helm skopeo yq
 
 echo --- :git::docker: determining version and tags
 source .buildkite/steps/repo_info.sh
