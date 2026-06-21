@@ -4,6 +4,7 @@ caches:
       - agent: os
       - {agent: arch, fallbackLimit: true}
       - checksum: go.sum
+      - env: BENCH_NONCE
     target_paths:
       - /root/.cache/go-build
   - name: go_mod
@@ -11,6 +12,7 @@ caches:
       - agent: os
       - {agent: arch, fallbackLimit: true}
       - checksum: go.sum
+      - env: BENCH_NONCE
     target_paths:
       - /root/.cache/go-mod
   - name: golangci_lint
@@ -18,5 +20,6 @@ caches:
       - agent: os
       - {agent: arch, fallbackLimit: true}
       - checksum: .golangci.yaml
+      - env: BENCH_NONCE
     target_paths:
       - /root/.cache/golangci-lint
