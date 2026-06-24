@@ -3,14 +3,14 @@ caches:
     cache_key:
       - agent: os
       - {agent: arch, fallbackLimit: true}
-      - checksum: go.sum
+      - checksum: go.mod
     target_paths:
       - /root/.cache/go-build
   - name: go_mod
     cache_key:
       - agent: os
       - {agent: arch, fallbackLimit: true}
-      - checksum: go.sum
+      - checksum: go.mod
     target_paths:
       - /root/.cache/go-mod
   - name: golangci_lint
