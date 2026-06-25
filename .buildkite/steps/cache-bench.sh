@@ -73,9 +73,10 @@ record () { # experiment tool target conc part bytes seconds  (mb_per_s computed
 }
 
 timed () { # dest_path -- cmd...   -> prints elapsed seconds
+  # busybox `date` has no %N, so use bash 5's $EPOCHREALTIME (sec.microsec).
   local dest="$1"; shift; [ "$1" = "--" ] && shift
   rm -f "$dest"
-  local start end; start=$(date +%s.%N); "$@"; end=$(date +%s.%N)
+  local start end; start=$EPOCHREALTIME; "$@"; end=$EPOCHREALTIME
   awk "BEGIN{printf \"%.3f\", $end-$start}"
 }
 
@@ -84,11 +85,19 @@ echo "+++ :one: Experiment 1 — tmpfs vs EBS"
 
 run_agent_restore () { # tmpdir label  (reads transfer_speed metric)
   rm -rf /root/.cache/go-mod                  # force a real re-download
-  local log; log=$(mktemp)
+  local log start end elapsed sp
+  echo ">>> BENCHMARK-MARKER exp1-agent target=$2"
+  log=$(mktemp)
+  start=$EPOCHREALTIME
   TMPDIR="$1" buildkite-agent cache restore --name go_mod 2>&1 | tee "$log"
-  local sp; sp=$(grep -oE 'transfer_speed=[0-9.]+' "$log" | cut -d= -f2 | sed -n 1p || true)
-  echo "exp1-agent,agent,$2,,,${OBJ_BYTES},,${sp}" >> "$RESULTS_CSV"   # MB/s from agent metric
-  echo "[exp1-agent] agent -> $2: ${sp} MB/s"
+  end=$EPOCHREALTIME
+  # The nested agent streams its logs straight to the job, so $log is usually
+  # empty; the precise transfer_speed is harvested from the job log separately.
+  # Fall back to a wall-clock figure (download+extract) so the row isn't blank.
+  sp=$(grep -oE 'transfer_speed=[0-9.]+' "$log" | cut -d= -f2 | sed -n 1p || true)
+  [ -z "$sp" ] && sp=$(awk "BEGIN{printf \"%.2f\", ${OBJ_BYTES}/1000000/(${end}-${start})}")
+  echo "exp1-agent,agent,$2,,,${OBJ_BYTES},$(awk "BEGIN{printf \"%.3f\",${end}-${start}}"),${sp}" >> "$RESULTS_CSV"
+  echo "[exp1-agent] agent -> $2: ${sp} MB/s (wallclock incl. extract)"
 }
 run_agent_restore "$EBS_DIR"   ebs
 run_agent_restore "$TMPFS_DIR" tmpfs
@@ -105,11 +114,16 @@ echo "+++ :two: Experiment 2 — concurrency/part_size sweep"
 sweep_restore () { # conc part
   export BUILDKITE_AGENT_CACHE_STORE_URL="s3://$BUCKET?concurrency=$1&part_size_mb=$2"
   rm -rf /root/.cache/go-mod
-  local log; log=$(mktemp)
+  local log start end sp
+  echo ">>> BENCHMARK-MARKER exp2-sweep concurrency=$1 part_size_mb=$2"
+  log=$(mktemp)
+  start=$EPOCHREALTIME
   TMPDIR="$EBS_DIR" buildkite-agent cache restore --name go_mod 2>&1 | tee "$log"
-  local sp; sp=$(grep -oE 'transfer_speed=[0-9.]+' "$log" | cut -d= -f2 | sed -n 1p || true)
-  echo "exp2-sweep,agent,ebs,$1,$2,${OBJ_BYTES},,${sp}" >> "$RESULTS_CSV"
-  echo "[exp2-sweep] c=$1 p=$2: ${sp} MB/s"
+  end=$EPOCHREALTIME
+  sp=$(grep -oE 'transfer_speed=[0-9.]+' "$log" | cut -d= -f2 | sed -n 1p || true)
+  [ -z "$sp" ] && sp=$(awk "BEGIN{printf \"%.2f\", ${OBJ_BYTES}/1000000/(${end}-${start})}")
+  echo "exp2-sweep,agent,ebs,$1,$2,${OBJ_BYTES},$(awk "BEGIN{printf \"%.3f\",${end}-${start}}"),${sp}" >> "$RESULTS_CSV"
+  echo "[exp2-sweep] c=$1 p=$2: ${sp} MB/s (wallclock incl. extract)"
 }
 sweep_restore 5 5                                   # baseline (current defaults)
 for c in 8 16 32; do for p in 16 32 64; do sweep_restore "$c" "$p"; done; done
