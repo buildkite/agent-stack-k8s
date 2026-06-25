@@ -76,7 +76,9 @@ timed () { # dest_path -- cmd...   -> prints elapsed seconds
   # busybox `date` has no %N, so use bash 5's $EPOCHREALTIME (sec.microsec).
   local dest="$1"; shift; [ "$1" = "--" ] && shift
   rm -f "$dest"
-  local start end; start=$EPOCHREALTIME; "$@"; end=$EPOCHREALTIME
+  # Send the timed command's own output to the job log (fd2) so the command
+  # substitution only captures the elapsed seconds printed by awk below.
+  local start end; start=$EPOCHREALTIME; "$@" 1>&2; end=$EPOCHREALTIME
   awk "BEGIN{printf \"%.3f\", $end-$start}"
 }
 
