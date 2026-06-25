@@ -32,8 +32,16 @@ s5cmd version; aws --version
 
 echo "--- :earth_asia: region + target object"
 BUCKET=buildkite-agent-stack-k8s-cache
-AWS_REGION="$(aws s3api get-bucket-location --bucket "$BUCKET" --query 'LocationConstraint' --output text)"
-[ "$AWS_REGION" = "None" ] && AWS_REGION=us-east-1
+# The OIDC role isn't granted s3:GetBucketLocation, so resolve region from EC2
+# IMDS (best-effort) and fall back to us-east-1 (node DNS is *.ec2.internal).
+AWS_REGION="${AWS_REGION:-}"
+if [ -z "$AWS_REGION" ]; then
+  IMDS_TOKEN="$(curl -sf -X PUT 'http://169.254.169.254/latest/api/token' \
+    -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' 2>/dev/null || true)"
+  AWS_REGION="$(curl -sf -H "X-aws-ec2-metadata-token: ${IMDS_TOKEN}" \
+    'http://169.254.169.254/latest/meta-data/placement/region' 2>/dev/null || true)"
+fi
+[ -z "$AWS_REGION" ] && AWS_REGION=us-east-1
 export AWS_REGION AWS_DEFAULT_REGION="$AWS_REGION"
 
 read -r OBJ_KEY OBJ_BYTES < <(s5cmd ls "s3://$BUCKET/*" | sort -k3 -n | tail -1 | awk '{print $4" "$3}')
