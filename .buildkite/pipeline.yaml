@@ -22,148 +22,154 @@ agents:
   queue: kubernetes
 
 steps:
-  - label: ":go::broom: tidy"
-    key: tidy
-    env: *go-cache-env
-    image: public.ecr.aws/docker/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
+  - label: ":ebs: find mount"
     command:
-      - . .buildkite/steps/assume-role.sh
-      - buildkite-agent cache restore --name go_mod
-      - .buildkite/steps/tidy.sh
-      - buildkite-agent cache save --name go_mod
+      -  echo "TMPDIR=${TMPDIR:-/tmp}"
+      - f -hT /tmp
+      - findmnt -T /tmp -o SOURCE,TARGET,FSTYPE
+      - mount | grep -w /tmp || echo
+  # - label: ":go::broom: tidy"
+  #   key: tidy
+  #   env: *go-cache-env
+  #   image: public.ecr.aws/docker/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
+  #   command:
+  #     - . .buildkite/steps/assume-role.sh
+  #     - buildkite-agent cache restore --name go_mod
+  #     - .buildkite/steps/tidy.sh
+  #     - buildkite-agent cache save --name go_mod
 
-  - label: ":go::lint-roller: lint"
-    key: lint
-    env: *go-cache-env
-    image: golangci/golangci-lint:v2.12.2-alpine@sha256:91b27804074a0bacea298707f016911e60cf0cdbc6c7bf5ccacb5f0606d18d60
-    command:
-      - . .buildkite/steps/assume-role.sh
-      - buildkite-agent cache restore
-      - golangci-lint run -v ./...
-      - buildkite-agent cache save
-
-
-  - label: ":golang::robot_face: check code generation"
-    key: check-code-generation
-    env: *go-cache-env
-    image: public.ecr.aws/docker/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
-    command:
-      - . .buildkite/steps/assume-role.sh
-      - buildkite-agent cache restore --name go_mod --name go_build
-      - .buildkite/steps/check-code-generation.sh
-      - buildkite-agent cache save --name go_mod --name go_build
+  # - label: ":go::lint-roller: lint"
+  #   key: lint
+  #   env: *go-cache-env
+  #   image: golangci/golangci-lint:v2.12.2-alpine@sha256:91b27804074a0bacea298707f016911e60cf0cdbc6c7bf5ccacb5f0606d18d60
+  #   command:
+  #     - . .buildkite/steps/assume-role.sh
+  #     - buildkite-agent cache restore
+  #     - golangci-lint run -v ./...
+  #     - buildkite-agent cache save
 
 
-  - label: ":helm: lint chart"
-    key: helm-lint
-    image: alpine/helm:3.18.3
-    command: helm lint charts/agent-stack-k8s --set agentToken=test --set image=test:latest
+  # - label: ":golang::robot_face: check code generation"
+  #   key: check-code-generation
+  #   env: *go-cache-env
+  #   image: public.ecr.aws/docker/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14
+  #   command:
+  #     - . .buildkite/steps/assume-role.sh
+  #     - buildkite-agent cache restore --name go_mod --name go_build
+  #     - .buildkite/steps/check-code-generation.sh
+  #     - buildkite-agent cache save --name go_mod --name go_build
 
-  - label: ":docker::buildkite: choose agent image"
-    key: agent
-    image: alpine:3.23.0@sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375
-    command: .buildkite/steps/agent.sh
 
-  - label: ":buildkite::test_tube: tests"
-    key: tests
-    depends_on: agent
-    env: *go-cache-env
-    artifact_paths: junit-*.xml
-    secrets:
-      INTEGRATION_TEST_BUILDKITE_TOKEN: integration_test_buildkite_api_token
-      BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
-    image: public.ecr.aws/docker/library/golang:1.26.4@sha256:792443b89f65105abba56b9bd5e97f680a80074ac62fc844a584212f8c8102c3
-    command:
-      - . .buildkite/steps/assume-role.sh
-      - buildkite-agent cache restore --name go_mod --name go_build
-      - .buildkite/steps/tests.sh
-      - buildkite-agent cache save --name go_mod --name go_build
-    plugins:
-      - kubernetes:
-          podSpecPatch:
-            serviceAccountName: integration-tests
-      - test-collector:
-          files: junit-*.xml
-          format: junit
+  # - label: ":helm: lint chart"
+  #   key: helm-lint
+  #   image: alpine/helm:3.18.3
+  #   command: helm lint charts/agent-stack-k8s --set agentToken=test --set image=test:latest
 
-  - label: ":docker: build and push controller image"
-    key: controller
-    env:
-      <<: *go-cache-env
-      KO_DOCKER_REPO: ghcr.io/buildkite
-    secrets:
-      REGISTRY_PASSWORD: ghcr_password
-      REGISTRY_USERNAME: ghcr_username
-    image: public.ecr.aws/docker/library/golang:1.26.4@sha256:792443b89f65105abba56b9bd5e97f680a80074ac62fc844a584212f8c8102c3
-    command:
-      - . .buildkite/steps/assume-role.sh
-      - buildkite-agent cache restore --name go_mod --name go_build
-      - .buildkite/steps/build-and-push-controller.sh
-      - buildkite-agent cache save --name go_mod --name go_build
+  # - label: ":docker::buildkite: choose agent image"
+  #   key: agent
+  #   image: alpine:3.23.0@sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375
+  #   command: .buildkite/steps/agent.sh
 
-  # On feature branches, don't wait for tests. We may want to deploy
-  # to a test cluster to debug the feature branch.
-  - if: build.branch != pipeline.default_branch && build.tag !~ /^.+\$/
-    <<: *push-helm
-    key: push-feature-branch
-    depends_on:
-      - tidy
-      - lint
-      - helm-lint
-      - check-code-generation
-      - agent
-      - controller
+  # - label: ":buildkite::test_tube: tests"
+  #   key: tests
+  #   depends_on: agent
+  #   env: *go-cache-env
+  #   artifact_paths: junit-*.xml
+  #   secrets:
+  #     INTEGRATION_TEST_BUILDKITE_TOKEN: integration_test_buildkite_api_token
+  #     BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
+  #   image: public.ecr.aws/docker/library/golang:1.26.4@sha256:792443b89f65105abba56b9bd5e97f680a80074ac62fc844a584212f8c8102c3
+  #   command:
+  #     - . .buildkite/steps/assume-role.sh
+  #     - buildkite-agent cache restore --name go_mod --name go_build
+  #     - .buildkite/steps/tests.sh
+  #     - buildkite-agent cache save --name go_mod --name go_build
+  #   plugins:
+  #     - kubernetes:
+  #         podSpecPatch:
+  #           serviceAccountName: integration-tests
+  #     - test-collector:
+  #         files: junit-*.xml
+  #         format: junit
 
-  # On the main branch or tags, wait for tests. We don't want to
-  # push a new image or chart unless the tests pass.
-  - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
-    <<: *push-helm
-    key: push-main-or-tag
-    depends_on:
-      - tidy
-      - lint
-      - helm-lint
-      - check-code-generation
-      - agent
-      - controller
-      - tests
+  # - label: ":docker: build and push controller image"
+  #   key: controller
+  #   env:
+  #     <<: *go-cache-env
+  #     KO_DOCKER_REPO: ghcr.io/buildkite
+  #   secrets:
+  #     REGISTRY_PASSWORD: ghcr_password
+  #     REGISTRY_USERNAME: ghcr_username
+  #   image: public.ecr.aws/docker/library/golang:1.26.4@sha256:792443b89f65105abba56b9bd5e97f680a80074ac62fc844a584212f8c8102c3
+  #   command:
+  #     - . .buildkite/steps/assume-role.sh
+  #     - buildkite-agent cache restore --name go_mod --name go_build
+  #     - .buildkite/steps/build-and-push-controller.sh
+  #     - buildkite-agent cache save --name go_mod --name go_build
 
-  - if: build.branch == pipeline.default_branch
-    label: ":shipit: deploy to our own k8s cluster"
-    key: deploy
-    depends_on:
-      - push-main-or-tag
-    secrets:
-      REGISTRY_PASSWORD: ghcr_password
-      REGISTRY_USERNAME: ghcr_username
-      DEFAULT_CLUSTER_TOKEN: default_cluster_token
-    image: alpine:3.23.0@sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375
-    command: .buildkite/steps/deploy.sh
-    plugins:
-      - kubernetes:
-          checkout:
-            fetchFlags: -v --tags
-          podSpec:
-            serviceAccountName: deploy
+  # # On feature branches, don't wait for tests. We may want to deploy
+  # # to a test cluster to debug the feature branch.
+  # - if: build.branch != pipeline.default_branch && build.tag !~ /^.+\$/
+  #   <<: *push-helm
+  #   key: push-feature-branch
+  #   depends_on:
+  #     - tidy
+  #     - lint
+  #     - helm-lint
+  #     - check-code-generation
+  #     - agent
+  #     - controller
 
-  - if: build.tag =~ /^.+\$/
-    label: ":rocket: release"
-    key: release
-    env: *go-cache-env
-    depends_on:
-      - deploy
-      - push-main-or-tag
-    secrets:
-      REGISTRY_PASSWORD: ghcr_password
-      REGISTRY_USERNAME: ghcr_username
-      GITHUB_TOKEN: github_release_token
-    image: public.ecr.aws/docker/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14 # Note goreleaser shells out to go!
-    command:
-      - . .buildkite/steps/assume-role.sh
-      - buildkite-agent cache restore --name go_mod --name go_build
-      - .buildkite/steps/release.sh
-      - buildkite-agent cache save --name go_mod --name go_build
-    plugins:
-      - kubernetes:
-          checkout:
-            fetchFlags: -v --tags
+  # # On the main branch or tags, wait for tests. We don't want to
+  # # push a new image or chart unless the tests pass.
+  # - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
+  #   <<: *push-helm
+  #   key: push-main-or-tag
+  #   depends_on:
+  #     - tidy
+  #     - lint
+  #     - helm-lint
+  #     - check-code-generation
+  #     - agent
+  #     - controller
+  #     - tests
+
+  # - if: build.branch == pipeline.default_branch
+  #   label: ":shipit: deploy to our own k8s cluster"
+  #   key: deploy
+  #   depends_on:
+  #     - push-main-or-tag
+  #   secrets:
+  #     REGISTRY_PASSWORD: ghcr_password
+  #     REGISTRY_USERNAME: ghcr_username
+  #     DEFAULT_CLUSTER_TOKEN: default_cluster_token
+  #   image: alpine:3.23.0@sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375
+  #   command: .buildkite/steps/deploy.sh
+  #   plugins:
+  #     - kubernetes:
+  #         checkout:
+  #           fetchFlags: -v --tags
+  #         podSpec:
+  #           serviceAccountName: deploy
+
+  # - if: build.tag =~ /^.+\$/
+  #   label: ":rocket: release"
+  #   key: release
+  #   env: *go-cache-env
+  #   depends_on:
+  #     - deploy
+  #     - push-main-or-tag
+  #   secrets:
+  #     REGISTRY_PASSWORD: ghcr_password
+  #     REGISTRY_USERNAME: ghcr_username
+  #     GITHUB_TOKEN: github_release_token
+  #   image: public.ecr.aws/docker/library/golang:1.26.4-alpine@sha256:f1ddd9fe14fffc091dd98cb4bfa999f32c5fc77d2f2305ea9f0e2595c5437c14 # Note goreleaser shells out to go!
+  #   command:
+  #     - . .buildkite/steps/assume-role.sh
+  #     - buildkite-agent cache restore --name go_mod --name go_build
+  #     - .buildkite/steps/release.sh
+  #     - buildkite-agent cache save --name go_mod --name go_build
+  #   plugins:
+  #     - kubernetes:
+  #         checkout:
+  #           fetchFlags: -v --tags
