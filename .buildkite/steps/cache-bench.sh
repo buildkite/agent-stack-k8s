@@ -44,9 +44,27 @@ fi
 [ -z "$AWS_REGION" ] && AWS_REGION=us-east-1
 export AWS_REGION AWS_DEFAULT_REGION="$AWS_REGION"
 
-read -r OBJ_KEY OBJ_BYTES < <(s5cmd ls "s3://$BUCKET/*" | sort -k3 -n | tail -1 | awk '{print $4" "$3}')
+# The OIDC role grants GetObject/PutObject on the bucket's keys, but NOT
+# ListBucket/GetBucketLocation. We therefore cannot enumerate the bucket to find
+# the real cache archive's key for the raw-tool (s5cmd / aws cp) legs.
+#
+# Resolution: the SDK legs use the REAL agent restore (`go_mod`, ~406 MB,
+# content-addressed key handled internally by the agent). The raw-tool legs use
+# a synthetic, same-size payload we upload once. Same bucket, same region, same
+# object size -> a fair transfer-bandwidth comparison (content is irrelevant; S3
+# transfers raw bytes with no on-the-wire compression).
+PAYLOAD_MB=406
+OBJ_BYTES=$((PAYLOAD_MB * 1000 * 1000))
+OBJ_KEY="benchmark/cache-bench-payload-${BUILDKITE_JOB_ID:-local}"
 OBJ="s3://$BUCKET/$OBJ_KEY"
-echo "Target object: $OBJ ($OBJ_BYTES bytes), region=$AWS_REGION"
+echo "Region=$AWS_REGION. Building ${PAYLOAD_MB}MB synthetic payload and uploading to $OBJ"
+head -c "$OBJ_BYTES" /dev/urandom > "$EBS_DIR/payload"
+aws s3 cp "$EBS_DIR/payload" "$OBJ"
+rm -f "$EBS_DIR/payload"
+echo "Synthetic raw-tool object: $OBJ ($OBJ_BYTES bytes)"
+
+cleanup () { aws s3 rm "$OBJ" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
 
 record () { # experiment tool target conc part bytes seconds  (mb_per_s computed)
   local mbps; mbps=$(awk "BEGIN{printf \"%.2f\", $6/1000000/$7}")
@@ -112,7 +130,8 @@ echo "--- :bar_chart: render results"
 {
   echo "# A-1412 cache transfer benchmark results"
   echo
-  echo "- Object: \`$OBJ\` ($OBJ_BYTES bytes)"
+  echo "- SDK legs (\`agent\`): real \`go_mod\` cache archive (~${PAYLOAD_MB} MB, content-addressed)."
+  echo "- Raw-tool legs (\`s5cmd\`/\`awscli\`): synthetic \`$OBJ\` ($OBJ_BYTES bytes) — role lacks ListBucket, so a same-size payload is used."
   echo "- Region: $AWS_REGION | Node: $(hostname)"
   echo "- Instance: m7a.xlarge | Root vol: gp3 250GiB / 125 MB/s / 3000 IOPS"
   echo
