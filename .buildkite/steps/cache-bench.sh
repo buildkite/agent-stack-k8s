@@ -86,7 +86,7 @@ run_agent_restore () { # tmpdir label  (reads transfer_speed metric)
   rm -rf /root/.cache/go-mod                  # force a real re-download
   local log; log=$(mktemp)
   TMPDIR="$1" buildkite-agent cache restore --name go_mod 2>&1 | tee "$log"
-  local sp; sp=$(grep -oE 'transfer_speed=[0-9.]+' "$log" | head -1 | cut -d= -f2)
+  local sp; sp=$(grep -oE 'transfer_speed=[0-9.]+' "$log" | cut -d= -f2 | sed -n 1p || true)
   echo "exp1-agent,agent,$2,,,${OBJ_BYTES},,${sp}" >> "$RESULTS_CSV"   # MB/s from agent metric
   echo "[exp1-agent] agent -> $2: ${sp} MB/s"
 }
@@ -107,7 +107,7 @@ sweep_restore () { # conc part
   rm -rf /root/.cache/go-mod
   local log; log=$(mktemp)
   TMPDIR="$EBS_DIR" buildkite-agent cache restore --name go_mod 2>&1 | tee "$log"
-  local sp; sp=$(grep -oE 'transfer_speed=[0-9.]+' "$log" | head -1 | cut -d= -f2)
+  local sp; sp=$(grep -oE 'transfer_speed=[0-9.]+' "$log" | cut -d= -f2 | sed -n 1p || true)
   echo "exp2-sweep,agent,ebs,$1,$2,${OBJ_BYTES},,${sp}" >> "$RESULTS_CSV"
   echo "[exp2-sweep] c=$1 p=$2: ${sp} MB/s"
 }
