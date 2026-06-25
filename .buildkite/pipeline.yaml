@@ -25,7 +25,7 @@ steps:
   - label: ":ebs: find mount"
     command:
       -  echo "TMPDIR=${TMPDIR:-/tmp}"
-      - f -hT /tmp
+      - df -hT /tmp
       - findmnt -T /tmp -o SOURCE,TARGET,FSTYPE
       - mount | grep -w /tmp || echo
   # - label: ":go::broom: tidy"
