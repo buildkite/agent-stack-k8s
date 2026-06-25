@@ -61,16 +61,25 @@ OBJ_BYTES=$((PAYLOAD_MB * 1000 * 1000))    # 2,000,000,000 bytes (~1.86 GiB)
 
 # Fast, incompressible bytes via an AES-CTR keystream over /dev/zero. This keeps
 # the agent's zstd archive from shrinking (so the transfer really is ~2 GB) and
-# is far faster than reading /dev/urandom.
-gen_blob () { openssl enc -aes-256-ctr -pass pass:a1412bench -nosalt -in /dev/zero 2>/dev/null | head -c "$OBJ_BYTES"; }
+# is far faster than reading /dev/urandom. Runs in a subshell with pipefail off
+# so openssl's expected SIGPIPE (when head closes) isn't treated as an error.
+gen_blob () { ( set +o pipefail; openssl enc -aes-256-ctr -pass pass:a1412bench -nosalt -in /dev/zero 2>/dev/null | head -c "$OBJ_BYTES" ); }
 
 # Raw-tool target: a 2 GB synthetic object (role can't ListBucket to find the
 # real archive). Same bucket/region/size -> fair transfer comparison.
 OBJ_KEY="benchmark/cache-bench-2gb-${BUILDKITE_JOB_ID:-local}"
 OBJ="s3://$BUCKET/$OBJ_KEY"
-echo "Uploading 2GB synthetic object -> $OBJ"
+echo "Generating 2GB synthetic payload"
 gen_blob > "$EBS_DIR/payload"
-aws s3 cp "$EBS_DIR/payload" "$OBJ"
+ls -l "$EBS_DIR/payload"
+free -m 2>/dev/null || true
+echo "Uploading 2GB synthetic object -> $OBJ"
+# --only-show-errors: suppress the \r progress meter that otherwise hides the
+# real error message in the captured log.
+if ! aws s3 cp --only-show-errors "$EBS_DIR/payload" "$OBJ"; then
+  echo "^^^ aws s3 cp failed; retrying once with s5cmd"
+  s5cmd cp "$EBS_DIR/payload" "$OBJ"
+fi
 rm -f "$EBS_DIR/payload"
 cleanup () { aws s3 rm "$OBJ" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
