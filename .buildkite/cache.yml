@@ -20,3 +20,12 @@ caches:
       - checksum: .golangci.yaml
     target_paths:
       - /root/.cache/golangci-lint
+  # A-1412 benchmark: a large (~2 GB) incompressible cache entry used only by
+  # .buildkite/steps/cache-bench.sh to measure transfer throughput on a big object.
+  - name: bench_big
+    cache_key:
+      - agent: os
+      - {agent: arch, fallbackLimit: true}
+      - checksum: go.mod
+    target_paths:
+      - /root/.cache/bench-big

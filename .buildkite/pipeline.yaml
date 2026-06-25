@@ -1,7 +1,7 @@
 agents:
   queue: kubernetes
 steps:
-  - label: ":stopwatch: cache transfer benchmark"
+  - label: ":stopwatch: cache transfer benchmark (2GB, mem-capped)"
     key: cache-bench
     env:
       BUILDKITE_AGENT_CACHE_STORE_URL: s3://buildkite-agent-stack-k8s-cache
@@ -18,11 +18,11 @@ steps:
           podSpecPatch:
             containers:
               - name: container-0
-                # ~all 4 vCPUs of the m7a.xlarge -> pod owns the node (no noisy neighbours)
+                # ~all 4 vCPUs of the m7a.xlarge -> pod owns the node (no noisy neighbours).
+                # Memory is CAPPED (limit==request) so the OS page cache cannot hold the
+                # whole 2 GB object -> measured throughput reflects real disk/network, not RAM.
+                # NB: high concurrency x large part_size needs concurrency*part_size of RAM
+                # (e.g. c32/p64 ~ 2 GB of SDK buffers); such configs may hit this cap.
                 resources:
-                  requests: { cpu: "3500m", memory: "6Gi" }
-                volumeMounts:
-                  - { name: bench-tmpfs, mountPath: /mnt/tmpfs }
-            volumes:
-              - name: bench-tmpfs
-                emptyDir: { medium: Memory, sizeLimit: 2Gi }
+                  requests: { cpu: "3500m", memory: "4Gi" }
+                  limits: { memory: "4Gi" }
