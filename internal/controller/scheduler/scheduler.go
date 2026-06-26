@@ -81,6 +81,7 @@ type Config struct {
 	ImageCheckContainerMemoryLimit       string
 	ResourceClasses                      map[string]*config.ResourceClass
 	DefaultResourceClassName             string
+	DrainOnSigterm                       bool
 }
 
 func New(logger *slog.Logger, client kubernetes.Interface, agentClient *api.AgentClient, cfg Config) *worker {
@@ -668,6 +669,16 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				Value: strconv.Itoa(signalGracePeriod),
 			},
 		)
+	}
+
+	// When drain-on-sigterm is enabled, inject the env var that tells the agent
+	// to finish the current job before disconnecting on SIGTERM rather than
+	// cancelling it. This is a no-op unless the agent version supports it.
+	if w.cfg.DrainOnSigterm {
+		agentContainer.Env = append(agentContainer.Env, corev1.EnvVar{
+			Name:  "BUILDKITE_KUBERNETES_DRAIN_ON_SIGTERM",
+			Value: "true",
+		})
 	}
 
 	// Append some agent config and checkout config to the agent container.

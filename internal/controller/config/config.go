@@ -68,6 +68,7 @@ type Config struct {
 	EnableQueuePause        bool          `json:"enable-queue-pause"        validate:"omitempty"`
 	WorkQueueLimit          int           `json:"work-queue-limit"          validate:"omitempty"`
 	EnableCompletionWatcher bool          `json:"enable-completion-watcher" validate:"omitempty"`
+	DrainOnSigterm          bool          `json:"drain-on-sigterm"          validate:"omitempty"`
 	// ReservationExpirySeconds controls how long (in seconds) a job reservation
 	// is held before it expires. If the job is not started within this time,
 	// Buildkite will make it available for reservation again.

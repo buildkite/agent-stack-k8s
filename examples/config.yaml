@@ -21,6 +21,11 @@ default-image-pull-policy: Never
 default-image-check-pull-policy: IfNotPresent
 enable-queue-pause: true
 enable-completion-watcher: true
+# When true, injects BUILDKITE_KUBERNETES_DRAIN_ON_SIGTERM into the agent
+# container so the agent finishes the current job before disconnecting on
+# SIGTERM instead of cancelling it. Requires a Buildkite agent version that
+# supports this env var. Default false.
+drain-on-sigterm: true
 pagination-page-size: 1000
 pagination-depth-limit: 5
 query-reset-interval: 10s

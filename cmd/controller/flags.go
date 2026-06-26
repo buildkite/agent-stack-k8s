@@ -56,6 +56,7 @@ type CLI struct {
 	QueryResetInterval       *time.Duration `kong:"help='Controls the interval between pagination cursor resets. Increasing this value will increase the number of jobs to be scheduled but also delay picking up any jobs that were missed from the start of the query (default: 10s)'"`
 	EnableQueuePause         *bool          `kong:"help='Allow controller to pause processing the jobs when queue is paused on Buildkite'"`
 	EnableCompletionWatcher  *bool          `kong:"help='Runs an extra loop that checks for and terminates pods that are still running but with a terminated agent container (default: true)'"`
+	DrainOnSigterm           *bool          `kong:"help='When true, injects BUILDKITE_KUBERNETES_DRAIN_ON_SIGTERM into the agent container so the agent finishes the current job before disconnecting on SIGTERM instead of cancelling it. Requires a Buildkite agent version that supports this env var. Default false.'"`
 	WorkQueueLimit           *int           `kong:"help='Sets the maximum number of Jobs the controller will hold in the work queue (default: 1000000)'"`
 	ReservationExpirySeconds *int           `kong:"help='Number of seconds until a job reservation expires. If the job is not started within this time, Buildkite will make it available for reservation again (default: 900, max: 3600)'"`
 

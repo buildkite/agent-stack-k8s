@@ -1886,6 +1886,68 @@ func TestPipelineSigningOptions(t *testing.T) {
 	}
 }
 
+func TestDrainOnSigterm(t *testing.T) {
+	tests := []struct {
+		name           string
+		drainOnSigterm bool
+		wantEnv        bool
+	}{
+		{
+			name:           "disabled by default",
+			drainOnSigterm: false,
+			wantEnv:        false,
+		},
+		{
+			name:           "enabled",
+			drainOnSigterm: true,
+			wantEnv:        true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			worker := New(
+				slog.Default(),
+				nil,
+				nil,
+				Config{
+					Namespace:            "buildkite",
+					AgentTokenSecretName: "bkcq_1234567890",
+					Image:                "buildkite/agent:latest",
+					DrainOnSigterm:       test.drainOnSigterm,
+				},
+			)
+			kjob, err := worker.Build(
+				&corev1.PodSpec{},
+				false,
+				buildInputs{
+					uuid:            "1234",
+					command:         "echo shell",
+					agentQueryRules: []string{"queue=bernetes"},
+				},
+			)
+			if err != nil {
+				t.Fatalf("worker.Build() error = %v", err)
+			}
+
+			agent := findContainer(t, kjob.Spec.Template.Spec.Containers, "agent")
+			env := findEnv(t, agent.Env, "BUILDKITE_KUBERNETES_DRAIN_ON_SIGTERM")
+			if test.wantEnv {
+				if env == nil {
+					t.Fatalf("agent.Env = %v, missing env var %q", agent.Env, "BUILDKITE_KUBERNETES_DRAIN_ON_SIGTERM")
+				}
+				if env.Value != "true" {
+					t.Errorf("agent.Env[%q] = %q, want %q", "BUILDKITE_KUBERNETES_DRAIN_ON_SIGTERM", env.Value, "true")
+				}
+			} else if env != nil {
+				t.Errorf("agent.Env = %v, has unwanted env var %v", agent.Env, env)
+			}
+		})
+	}
+}
+
 func findContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {
 	t.Helper()
 
