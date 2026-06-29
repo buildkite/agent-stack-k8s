@@ -395,6 +395,33 @@ func (t testcase) FailureMessage(jobID string) string {
 	return stackErrorEvents[0]
 }
 
+// NotificationMessages returns the messages from all JobEventStackNotification
+// events for the job. The controller emits these (e.g. when a container's image
+// pull fails while an agent already owns the job) so the reason is visible in
+// the build UI without the controller failing the job itself.
+func (t testcase) NotificationMessages(jobID string) []string {
+	t.Helper()
+
+	time.Sleep(1 * time.Second) // Wait for job events to be available (quicker than logs)
+	jobEvents, err := api.GetJobEvents(t.Context(), t.GraphQL, jobID)
+	if err != nil {
+		t.Fatalf("failed to get job events: %v", err)
+	}
+
+	cj, ok := jobEvents.Job.(*api.GetJobEventsJobJobTypeCommand)
+	if !ok {
+		t.Fatalf("unexpected job type: %T", jobEvents.Job)
+	}
+
+	var messages []string
+	for _, edge := range cj.Events.Edges {
+		if event, ok := edge.Node.(*api.GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification); ok {
+			messages = append(messages, event.Message)
+		}
+	}
+	return messages
+}
+
 func (t testcase) waitForBuild(ctx context.Context, build api.Build) api.BuildStates {
 	t.Helper()
 

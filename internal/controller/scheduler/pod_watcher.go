@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -49,6 +50,13 @@ type podWatcher struct {
 	// ErrImageNeverPull, etc)
 	watchingForImageFailureMu sync.Mutex
 	watchingForImageFailure   map[uuid.UUID]*corev1.Pod
+
+	// Jobs we've already sent an image-pull-failure stack notification for.
+	// When an agent already owns the job we can't fail it ourselves, so we
+	// surface the reason as a notification instead - but only once, to avoid
+	// repeating it on every informer re-sync while the agent times out.
+	imageFailureNotifiedMu sync.Mutex
+	imageFailureNotified   map[uuid.UUID]struct{}
 
 	// Pods being watched for exceeding the pending timeout
 	watchingForPendingTimeoutMu sync.Mutex
@@ -105,6 +113,7 @@ func NewPodWatcher(logger *slog.Logger, k8s kubernetes.Interface, agentClient *a
 		podPendingTimeout:           podPendingTimeout,
 		ignoredJobs:                 make(map[uuid.UUID]struct{}),
 		watchingForImageFailure:     make(map[uuid.UUID]*corev1.Pod),
+		imageFailureNotified:        make(map[uuid.UUID]struct{}),
 		watchingForPendingTimeout:   make(map[uuid.UUID]*corev1.Pod),
 	}
 	pw.batchBkJobChecker = NewBatchBuildkiteJobChecker(logger, agentClient, k8s, jobCancelCheckerInterval)
@@ -456,6 +465,27 @@ func (w *podWatcher) formatImagePullFailureMessage(statuses []corev1.ContainerSt
 	return "The following containers could not be created or their images could not be pulled:\n\n" + tw.Render()
 }
 
+// formatImagePullFailureNotification produces a compact, single-line summary of
+// image pull failures for a stack notification. Notifications have a small
+// length limit (the full table goes to the job log via FailJob instead), so
+// this keeps to "container: Reason (message)" per failing container.
+func formatImagePullFailureNotification(statuses []corev1.ContainerStatus) string {
+	slices.SortFunc(statuses, func(a, b corev1.ContainerStatus) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+
+	parts := make([]string, 0, len(statuses))
+	for _, status := range statuses {
+		waiting := status.State.Waiting
+		part := fmt.Sprintf("%s: %s", status.Name, waiting.Reason)
+		if waiting.Message != "" {
+			part += " (" + waiting.Message + ")"
+		}
+		parts = append(parts, part)
+	}
+	return "Image pull failure; the job will fail once the agent times out. " + strings.Join(parts, "; ")
+}
+
 func (w *podWatcher) stopCheckingBuildkiteJob(jobUUID uuid.UUID) {
 	w.batchBkJobChecker.StopCheckingJob(jobUUID)
 }
@@ -736,8 +766,16 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *slog.Logger, 
 		w.ignoreJob(jobUUID)
 
 	case api.JobStateAccepted, api.JobStateAssigned, api.JobStateRunning:
-		// An agent is already doing something with the job. Let it fail.
-		log.Debug("Job is the responsibility of an agent")
+		// An agent is already doing something with the job, so we let it fail
+		// rather than acquiring it ourselves. But the agent can't see why a
+		// sibling container won't start - it only reports a generic
+		// container-start timeout. Surface the image pull failure as a stack
+		// notification so the reason shows up in the build UI. Send it once
+		// per job to avoid repeating on every re-sync.
+		log.Debug("Job is the responsibility of an agent; surfacing image pull failure as a notification")
+		if w.markImageFailureNotified(jobUUID) {
+			w.agentClient.CreateStackNotification(ctx, jobUUID.String(), formatImagePullFailureNotification(statuses))
+		}
 
 	case api.JobStateCanceling, api.JobStateCanceled, api.JobStateFinished, api.JobStateSkipped:
 		// If the job is in one of these states, we can neither acquire nor
@@ -781,8 +819,27 @@ func (w *podWatcher) watchForImageFailure(jobUUID uuid.UUID, pod *corev1.Pod) {
 
 func (w *podWatcher) stopWatchingForImageFailure(jobUUID uuid.UUID) {
 	w.watchingForImageFailureMu.Lock()
-	defer w.watchingForImageFailureMu.Unlock()
 	delete(w.watchingForImageFailure, jobUUID)
+	w.watchingForImageFailureMu.Unlock()
+
+	// Once we stop watching (pod gone or terminal), forget that we notified so
+	// a retried pod for the same job can notify again.
+	w.imageFailureNotifiedMu.Lock()
+	delete(w.imageFailureNotified, jobUUID)
+	w.imageFailureNotifiedMu.Unlock()
+}
+
+// markImageFailureNotified records that an image-failure notification has been
+// sent for the job. It returns true the first time (caller should send), false
+// on subsequent calls.
+func (w *podWatcher) markImageFailureNotified(jobUUID uuid.UUID) bool {
+	w.imageFailureNotifiedMu.Lock()
+	defer w.imageFailureNotifiedMu.Unlock()
+	if _, done := w.imageFailureNotified[jobUUID]; done {
+		return false
+	}
+	w.imageFailureNotified[jobUUID] = struct{}{}
+	return true
 }
 
 func (w *podWatcher) watchForPendingTimeout(jobUUID uuid.UUID, pod *corev1.Pod) {

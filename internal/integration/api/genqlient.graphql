@@ -67,6 +67,9 @@ query GetJobEvents($jobId: ID!) {
             ... on JobEventStackError {
               errorDetail
             }
+            ... on JobEventStackNotification {
+              message
+            }
           }
         }
       }

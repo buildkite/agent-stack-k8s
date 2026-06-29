@@ -1390,6 +1390,8 @@ type GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJ
 	Type JobEventType `json:"type"`
 	// The time when the event occurred
 	Timestamp time.Time `json:"timestamp"`
+	// Message from the stack notification
+	Message string `json:"message"`
 }
 
 // GetTypename returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification.Typename, and is useful for accessing the field via an interface.
@@ -1410,6 +1412,11 @@ func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeN
 // GetTimestamp returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification.Timestamp, and is useful for accessing the field via an interface.
 func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification) GetTimestamp() time.Time {
 	return v.Timestamp
+}
+
+// GetMessage returns GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification.Message, and is useful for accessing the field via an interface.
+func (v *GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventStackNotification) GetMessage() string {
+	return v.Message
 }
 
 // GetJobEventsJobJobTypeCommandEventsJobEventConnectionEdgesJobEventEdgeNodeJobEventTimedOut includes the requested fields of the GraphQL type JobEventTimedOut.
@@ -2217,6 +2224,9 @@ query GetJobEvents ($jobId: ID!) {
 						timestamp
 						... on JobEventStackError {
 							errorDetail
+						}
+						... on JobEventStackNotification {
+							message
 						}
 					}
 				}
