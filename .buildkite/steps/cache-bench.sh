@@ -44,6 +44,12 @@ set -eufo pipefail
 # come from the prior memory-capped round (builds #3811-3813, ~123 MB/s cold).
 
 REPEATS="${REPEATS:-3}"
+# Per-experiment gates (so a re-run can target just the experiment that failed).
+RUN_EXP1="${RUN_EXP1:-true}"
+RUN_EXP2="${RUN_EXP2:-true}"
+RUN_EXP3="${RUN_EXP3:-true}"
+GO_MOD_FILES=na
+GO_MOD_BYTES=0
 
 EBS_DIR=/tmp/bench            # container overlay on the gp3 root volume -> "EBS"
 TMPFS_DIR=/root/tmpfs         # emptyDir{medium: Memory} from pipeline.yaml -> "RAM"
@@ -141,18 +147,6 @@ csv () { # exp rep phase tool target conc part bytes wall dl_stage get_only extr
 stage_ts () { sed 's/\x1b\[[0-9;]*m//g' "$1" | grep -m1 -F "$2" | awk '{print $1}'; }
 delta () { awk -v a="$1" -v b="$2" 'BEGIN{ if (a!="" && b!="") printf "%.3f", b-a }'; }
 
-# Raw-tool synthetic object (role can't ListBucket to find the real archive).
-OBJ_KEY="benchmark/cache-bench-def-${BUILDKITE_JOB_ID:-local}"
-OBJ="s3://$BUCKET/$OBJ_KEY"
-echo "--- :package: generate + upload 2GB synthetic raw object -> $OBJ"
-gen_blob > "$EBS_DIR/payload"
-ls -l "$EBS_DIR/payload"
-if ! aws s3 cp --only-show-errors "$EBS_DIR/payload" "$OBJ"; then
-  echo "^^^ aws s3 cp failed; retrying once with s5cmd"; s5cmd cp "$EBS_DIR/payload" "$OBJ"
-fi
-cleanup () { aws s3 rm "$OBJ" >/dev/null 2>&1 || true; }
-trap cleanup EXIT
-
 timed () { # dest_path -- cmd...   -> prints elapsed seconds (cmd output -> fd2)
   local dest="$1"; shift; [ "$1" = "--" ] && shift
   rm -f "$dest"
@@ -160,15 +154,29 @@ timed () { # dest_path -- cmd...   -> prints elapsed seconds (cmd output -> fd2)
   awk "BEGIN{printf \"%.3f\", $end-$start}"
 }
 
-# Seed + save the synthetic agent cache entries (EBS-target and tmpfs-target).
-for name in bench_big bench_big_tmpfs; do
-  d=$(target_dir "$name"); mkdir -p "$d"
-  echo "Seeding + saving $name -> $d"
-  cp "$EBS_DIR/payload" "$d/blob"
-  buildkite-agent cache save --name "$name" || echo "(save no-op / already exists)"
-  rm -rf "$d"
-done
-rm -f "$EBS_DIR/payload"
+# Raw-tool synthetic object (role can't ListBucket to find the real archive).
+# Only needed for the synthetic-blob experiments (1 & 2).
+OBJ_KEY="benchmark/cache-bench-def-${BUILDKITE_JOB_ID:-local}"
+OBJ="s3://$BUCKET/$OBJ_KEY"
+cleanup () { aws s3 rm "$OBJ" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+if [ "$RUN_EXP1" = true ] || [ "$RUN_EXP2" = true ]; then
+  echo "--- :package: generate + upload 2GB synthetic raw object -> $OBJ"
+  gen_blob > "$EBS_DIR/payload"
+  ls -l "$EBS_DIR/payload"
+  if ! aws s3 cp --only-show-errors "$EBS_DIR/payload" "$OBJ"; then
+    echo "^^^ aws s3 cp failed; retrying once with s5cmd"; s5cmd cp "$EBS_DIR/payload" "$OBJ"
+  fi
+  # Seed + save the synthetic agent cache entries (EBS-target and tmpfs-target).
+  for name in bench_big bench_big_tmpfs; do
+    d=$(target_dir "$name"); mkdir -p "$d"
+    echo "Seeding + saving $name -> $d"
+    cp "$EBS_DIR/payload" "$d/blob"
+    buildkite-agent cache save --name "$name" || echo "(save no-op / already exists)"
+    rm -rf "$d"
+  done
+  rm -f "$EBS_DIR/payload"
+fi
 
 # Core agent-restore measurement with stage decomposition.
 # Sets BUILDKITE_AGENT_CACHE_STORE_URL per config, clears target, runs restore,
@@ -236,6 +244,7 @@ raw_leg () { # exp rep tool target dir conc part cmd...
 }
 
 # ---------------------------------------------------------------------------
+if [ "$RUN_EXP1" = true ]; then
 echo "+++ :one: Experiment 1 — CEILING: agent vs s5cmd vs aws, tmpfs AND EBS (synthetic 2GB)"
 for rep in $(seq 1 "$REPEATS"); do
   # agent default to each target
@@ -249,8 +258,10 @@ for rep in $(seq 1 "$REPEATS"); do
   raw_leg exp1-ceiling "$rep" s5cmd-tuned   ebs   "$EBS_DIR"   "16" "32" s5cmd cp -c 16 -p 32 "$OBJ" "$EBS_DIR/o"
   raw_leg exp1-ceiling "$rep" awscli        ebs   "$EBS_DIR"   ""   ""   aws s3 cp --only-show-errors "$OBJ" "$EBS_DIR/o"
 done
+fi
 
 # ---------------------------------------------------------------------------
+if [ "$RUN_EXP2" = true ]; then
 echo "+++ :two: Experiment 2 — SETTINGS SWEEP (synthetic 2GB, tmpfs): GET-only vs wall"
 for rep in $(seq 1 "$REPEATS"); do
   agent_restore exp2-sweep "$rep" bench_big_tmpfs "$TMPFS_DIR" 5 5 "$OBJ_BYTES"     # explicit default c5/p5
@@ -258,26 +269,28 @@ for rep in $(seq 1 "$REPEATS"); do
     agent_restore exp2-sweep "$rep" bench_big_tmpfs "$TMPFS_DIR" "$c" "$p" "$OBJ_BYTES"
   done; done
 done
+fi
 
 # Free synthetic tmpfs/EBS cache dirs before the (larger, many-file) go_mod work.
 rm -rf /root/tmpfs/bench-big /root/.cache/bench-big
 
 # ---------------------------------------------------------------------------
+if [ "$RUN_EXP3" = true ]; then
 echo "+++ :three: Experiment 3 — REAL go_mod cache: download_s vs extract_s (EBS vs tmpfs)"
-echo "--- populate the real go_mod cache target (/root/.cache/go-mod)"
+echo "--- populate the go_mod module cache (/root/.cache/go-mod) via go mod download + build"
 export BUILDKITE_AGENT_CACHE_STORE_URL="s3://$BUCKET"
+# The production go_mod cache entry is a miss in this benchmark registry, so we
+# recreate the genuine many-file go module cache deterministically: 'go mod
+# download all' fetches + extracts module sources, and 'go build ./...' forces
+# extraction of every dependency's source tree (the tens-of-thousands-of-files
+# shape the ticket is about). Build/vet errors are irrelevant — we only want the
+# module cache populated.
 rm -rf /root/.cache/go-mod; mkdir -p /root/.cache/go-mod
-# 3a — restore the REAL production go_mod entry (the actual ticket workload).
-agent_restore exp3-real-ebs 1 go_mod "$EBS_DIR" "" "" "$OBJ_BYTES" || true
-GO_MOD_FILES=$(find /root/.cache/go-mod -type f 2>/dev/null | wc -l | tr -d ' ')
-echo "go_mod target now has $GO_MOD_FILES files after restore"
-if [ "${GO_MOD_FILES:-0}" -lt 1000 ]; then
-  echo "real go_mod restore was thin (miss?); topping up with 'go mod download' to recreate the many-file shape"
-  export GOMODCACHE=/root/.cache/go-mod GOFLAGS=-mod=mod
-  go mod download all 2>&1 | tail -5 || go mod download 2>&1 | tail -5 || true
-  GO_MOD_FILES=$(find /root/.cache/go-mod -type f 2>/dev/null | wc -l | tr -d ' ')
-  echo "go_mod target now has $GO_MOD_FILES files after top-up"
-fi
+export GOMODCACHE=/root/.cache/go-mod GOFLAGS=-mod=mod
+go mod download all 2>&1 | tail -3 || true
+go build ./... 2>&1 | tail -3 || true
+mkdir -p /root/.cache/go-mod
+GO_MOD_FILES=$( (find /root/.cache/go-mod -type f 2>/dev/null || true) | wc -l | tr -d ' ')
 GO_MOD_BYTES=$(du -sk /root/.cache/go-mod 2>/dev/null | awk '{printf "%d", $1*1024}' || echo 0)
 echo "go_mod content: ${GO_MOD_FILES} files, ${GO_MOD_BYTES} bytes"
 
@@ -295,6 +308,7 @@ for rep in $(seq 1 "$REPEATS"); do
   agent_restore exp3-real-ebs   "$rep" go_mod_bench       "$EBS_DIR"   "" "" "$GO_MOD_BYTES"
   agent_restore exp3-real-tmpfs "$rep" go_mod_bench_tmpfs "$TMPFS_DIR" "" "" "$GO_MOD_BYTES"
 done
+fi
 
 echo "--- :bar_chart: render results"
 {
