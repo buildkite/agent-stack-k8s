@@ -30,7 +30,12 @@ steps:
                   requests: { cpu: "3500m", memory: "2Gi" }
                 volumeMounts:
                   - name: bench-tmpfs
-                    mountPath: /mnt/tmpfs
+                    # Mounted INSIDE /root: buildkite-agent's `cache save` archives
+                    # paths relative to a chroot of /root and refuses to archive
+                    # anything outside it (a mount at /mnt/tmpfs fails the save with
+                    # "cannot be archived from outside of chroot (/root)"). It's still
+                    # a RAM-backed tmpfs, so the disk is still removed from the path.
+                    mountPath: /root/tmpfs
             volumes:
               - name: bench-tmpfs
                 emptyDir:

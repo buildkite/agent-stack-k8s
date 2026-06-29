@@ -29,7 +29,9 @@ set -eufo pipefail
 #   3. Compression proxy (zstd): tmpfs vs EBS.
 
 EBS_DIR=/tmp/bench            # container overlay on the gp3 root volume -> "EBS"
-TMPFS_DIR=/mnt/tmpfs          # emptyDir{medium: Memory} from pipeline.yaml -> "RAM"
+TMPFS_DIR=/root/tmpfs         # emptyDir{medium: Memory} from pipeline.yaml -> "RAM"
+                              # (mounted inside /root so `cache save` can archive it;
+                              #  the agent refuses to archive paths outside chroot /root)
 mkdir -p "$EBS_DIR" "$TMPFS_DIR"
 RESULTS_CSV=cache-bench-results.csv
 RESULTS_MD=cache-bench-results.md
@@ -87,7 +89,7 @@ OBJ_BYTES=$((PAYLOAD_MB * 1000 * 1000))    # 2,000,000,000 bytes (~1.86 GiB)
 gen_blob () { ( set +o pipefail; openssl enc -aes-256-ctr -pass pass:a1412bench -nosalt -in /dev/zero 2>/dev/null | head -c "$OBJ_BYTES" ); }
 
 # Cache target dir for each cache name (must match .buildkite/cache.yml).
-target_dir () { case "$1" in bench_big) echo /root/.cache/bench-big;; bench_big_tmpfs) echo /mnt/tmpfs/bench-big;; esac; }
+target_dir () { case "$1" in bench_big) echo /root/.cache/bench-big;; bench_big_tmpfs) echo /root/tmpfs/bench-big;; esac; }
 
 record () { # experiment phase tool target conc part bytes wall_s download_mbps overall_mbps note
   echo "$1,$2,$3,$4,$5,$6,$7,$8,$9,${10},${11}" >> "$RESULTS_CSV"
@@ -190,7 +192,7 @@ agent_restore exp2-overall restore bench_big      "$EBS_DIR"   16 32
 # ---------------------------------------------------------------------------
 echo "+++ :three: Experiment 3 — compression proxy (zstd -T0, agent uses zstd internally)"
 # Free the cache target dirs first so tmpfs has room for the zstd scratch files.
-rm -rf /mnt/tmpfs/bench-big /root/.cache/bench-big
+rm -rf /root/tmpfs/bench-big /root/.cache/bench-big
 # Regenerate the blob on each medium, compress then decompress, timing each.
 # Incompressible data -> ratio ~1.0, so this is the CPU+IO cost of (de)compression.
 # rm the input between steps to keep the tmpfs peak ~4 GB.

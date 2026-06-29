@@ -38,4 +38,4 @@ caches:
       - {agent: arch, fallbackLimit: true}
       - checksum: go.mod
     target_paths:
-      - /mnt/tmpfs/bench-big
+      - /root/tmpfs/bench-big
