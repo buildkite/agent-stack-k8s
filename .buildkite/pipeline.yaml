@@ -1,7 +1,7 @@
 agents:
   queue: kubernetes
 steps:
-  - label: ":stopwatch: cache transfer benchmark (2GB, mem-capped)"
+  - label: ":stopwatch: cache transfer benchmark (2GB, tmpfs vs EBS, (de)compression)"
     key: cache-bench
     env:
       BUILDKITE_AGENT_CACHE_STORE_URL: s3://buildkite-agent-stack-k8s-cache
@@ -19,10 +19,22 @@ steps:
             containers:
               - name: container-0
                 # ~all 4 vCPUs of the m7a.xlarge -> pod owns the node (no noisy neighbours).
-                # Memory is CAPPED (limit==request) so the OS page cache cannot hold the
-                # whole 2 GB object -> measured throughput reflects real disk/network, not RAM.
-                # NB: high concurrency x large part_size needs concurrency*part_size of RAM
-                # (e.g. c32/p64 ~ 2 GB of SDK buffers); such configs may hit this cap.
+                # NB: NO memory *limit* here (unlike the EBS/mem-capped run). This experiment
+                # deliberately uses a RAM-backed tmpfs target to remove the disk as the
+                # bottleneck and find the download-path ceiling. A tmpfs is charged against
+                # the cgroup, so a memory limit would just OOM the test (the ~1.86 GiB object
+                # + concurrency*part_size of SDK buffers + the temp download archive must all
+                # fit). The 16 GB node has ample headroom; cache-bench.sh additionally skips
+                # any sweep config whose buffers wouldn't fit.
                 resources:
-                  requests: { cpu: "3500m", memory: "4Gi" }
-                  limits: { memory: "4Gi" }
+                  requests: { cpu: "3500m", memory: "2Gi" }
+                volumeMounts:
+                  - name: bench-tmpfs
+                    mountPath: /mnt/tmpfs
+            volumes:
+              - name: bench-tmpfs
+                emptyDir:
+                  medium: Memory
+                  # Holds the ~2 GB tmpfs cache target + its temp download archive
+                  # (up to ~4 GB in flight during a restore). 10Gi leaves headroom.
+                  sizeLimit: 10Gi

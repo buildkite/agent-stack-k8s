@@ -22,6 +22,9 @@ caches:
       - /root/.cache/golangci-lint
   # A-1412 benchmark: a large (~2 GB) incompressible cache entry used only by
   # .buildkite/steps/cache-bench.sh to measure transfer throughput on a big object.
+  # bench_big extracts to the gp3 EBS root volume; bench_big_tmpfs extracts to a
+  # RAM-backed tmpfs so we can compare end-to-end (download + decompress + write)
+  # throughput with the disk removed from the path.
   - name: bench_big
     cache_key:
       - agent: os
@@ -29,3 +32,10 @@ caches:
       - checksum: go.mod
     target_paths:
       - /root/.cache/bench-big
+  - name: bench_big_tmpfs
+    cache_key:
+      - agent: os
+      - {agent: arch, fallbackLimit: true}
+      - checksum: go.mod
+    target_paths:
+      - /mnt/tmpfs/bench-big
