@@ -1,7 +1,7 @@
 agents:
   queue: kubernetes
 steps:
-  - label: ":stopwatch: cache transfer benchmark (2GB, tmpfs vs EBS, (de)compression)"
+  - label: ":stopwatch: cache transfer benchmark (DEFINITIVE: ceiling + sweep + real go_mod decomposition)"
     key: cache-bench
     env:
       BUILDKITE_AGENT_CACHE_STORE_URL: s3://buildkite-agent-stack-k8s-cache

@@ -39,3 +39,23 @@ caches:
       - checksum: go.mod
     target_paths:
       - /root/tmpfs/bench-big
+  # A-1412 real-workload decomposition: a copy of the real go_mod cache (many
+  # small files) restored to EBS vs tmpfs, to split download_s vs extract_s.
+  # The leading literal key part keeps these entries distinct from the real
+  # `go_mod` entry so seeding them can never clobber production cache.
+  - name: go_mod_bench
+    cache_key:
+      - a1412-gomod-bench-v1
+      - agent: os
+      - {agent: arch, fallbackLimit: true}
+      - checksum: go.mod
+    target_paths:
+      - /root/.cache/go-mod-bench
+  - name: go_mod_bench_tmpfs
+    cache_key:
+      - a1412-gomod-bench-tmpfs-v1
+      - agent: os
+      - {agent: arch, fallbackLimit: true}
+      - checksum: go.mod
+    target_paths:
+      - /root/tmpfs/go-mod-bench
