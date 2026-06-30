@@ -702,6 +702,50 @@ func TestImagePullBackOffFailed(t *testing.T) {
 	tc.AssertLogsContain(build, "other job has run")
 }
 
+// TestImagePullBackOffRunningSurfacesNotification reproduces SUP-6708: when a
+// command container's image can't be pulled but the failure only manifests
+// after the pod is Running, the controller can't fail the job itself because an
+// agent already owns it. Without surfacing, the build shows only the agent's
+// generic "timed out waiting ... for all containers to connect". The pod
+// watcher instead emits the ImagePullBackOff reason as a stack notification.
+//
+// The Running scenario is forced by skipping the imagecheck preflight, so the
+// bad image isn't caught while the pod is Pending. (When it is caught while
+// Pending, the reason is reported via FailureMessage - see
+// TestImagePullBackOffFailed.)
+func TestImagePullBackOffRunningSurfacesNotification(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "image-pull-back-off-running.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := context.Background()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+
+	containerStartTimeout := 60 * time.Second
+	testCfg := cfg
+	// Skip the imagecheck so the bad image isn't caught while Pending; the
+	// agent acquires the job and the pull fails while the pod is Running.
+	testCfg.SkipImageCheckContainers = true
+	// Detect the image failure well before the agent's container-start timeout,
+	// so the notification is sent while the job is still the agent's.
+	testCfg.ImagePullBackOffGracePeriod = 5 * time.Second
+	testCfg.AgentConfig = &config.AgentConfig{
+		ContainerStartTimeout: &containerStartTimeout,
+	}
+
+	tc.StartController(ctx, testCfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertFail(ctx, build)
+
+	jobID := tc.FirstCommandJobID(build)
+	messages := strings.Join(tc.NotificationMessages(jobID), "\n")
+	assert.Regexp(t, regexp.MustCompile("ErrImagePull|ImagePullBackOff"), messages,
+		"expected the image pull failure reason to be surfaced as a stack notification, got: %q", messages)
+	assert.Contains(t, messages, "container-0")
+}
+
 func TestCreateContainerConfigErrorFailed(t *testing.T) {
 	tc := testcase{
 		T:       t,

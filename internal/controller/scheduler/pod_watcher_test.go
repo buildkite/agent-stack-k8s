@@ -160,3 +160,90 @@ func TestIsSidecarInitContainer(t *testing.T) {
 	assert.False(t, isSidecarInitContainer(pod, "imagecheck-0"))
 	assert.False(t, isSidecarInitContainer(pod, "nonexistent"))
 }
+
+func TestFormatImagePullFailureNotification(t *testing.T) {
+	t.Parallel()
+
+	waiting := func(name, reason, message string) corev1.ContainerStatus {
+		return corev1.ContainerStatus{
+			Name: name,
+			State: corev1.ContainerState{
+				Waiting: &corev1.ContainerStateWaiting{Reason: reason, Message: message},
+			},
+		}
+	}
+
+	tests := []struct {
+		name     string
+		statuses []corev1.ContainerStatus
+		want     string
+	}{
+		{
+			name:     "single container with message",
+			statuses: []corev1.ContainerStatus{waiting("container-0", "ImagePullBackOff", `Back-off pulling image "nope:latest"`)},
+			want:     "Image pull failure; the job will fail once the agent times out. container-0: ImagePullBackOff (Back-off pulling image \"nope:latest\")",
+		},
+		{
+			name:     "reason without message",
+			statuses: []corev1.ContainerStatus{waiting("container-0", "ErrImageNeverPull", "")},
+			want:     "Image pull failure; the job will fail once the agent times out. container-0: ErrImageNeverPull",
+		},
+		{
+			name: "multiple containers sorted by name",
+			statuses: []corev1.ContainerStatus{
+				waiting("container-1", "ErrImagePull", "pull failed"),
+				waiting("container-0", "ImagePullBackOff", "backing off"),
+			},
+			want: "Image pull failure; the job will fail once the agent times out. container-0: ImagePullBackOff (backing off); container-1: ErrImagePull (pull failed)",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, formatImagePullFailureNotification(tt.statuses))
+		})
+	}
+}
+
+// TestPodHasFailingImages_RunningPod confirms the detection logic itself works
+// on a Running pod whose command container is in ImagePullBackOff (the scenario
+// in SUP-6708). A failure here would mean Option A's notification can never
+// fire, since failForImageFailure is only reached when this returns non-empty.
+func TestPodHasFailingImages_RunningPod(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	w := &podWatcher{imagePullBackOffGracePeriod: 30 * time.Second}
+
+	newRunningPod := func(startedAgo time.Duration) *corev1.Pod {
+		start := metav1.NewTime(time.Now().Add(-startedAgo))
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-pod", Namespace: "default"},
+			Status: corev1.PodStatus{
+				Phase:     corev1.PodRunning,
+				StartTime: &start,
+				ContainerStatuses: []corev1.ContainerStatus{{
+					Name: "container-0",
+					State: corev1.ContainerState{
+						Waiting: &corev1.ContainerStateWaiting{
+							Reason:  "ImagePullBackOff",
+							Message: `Back-off pulling image "nope:latest"`,
+						},
+					},
+				}},
+			},
+		}
+	}
+
+	// Within the grace period: not failing yet.
+	got := w.podHasFailingImages(logger, newRunningPod(5*time.Second))
+	assert.Empty(t, got, "should respect grace period")
+
+	// Past the grace period: the command container's ImagePullBackOff is detected.
+	got = w.podHasFailingImages(logger, newRunningPod(time.Minute))
+	require.Len(t, got, 1)
+	assert.Equal(t, "container-0", got[0].Name)
+	assert.Equal(t, "ImagePullBackOff", got[0].State.Waiting.Reason)
+}
