@@ -3,6 +3,7 @@ caches:
     cache_key:
       - agent: os
       - {agent: arch, fallbackLimit: true}
+      - env: BUILDKITE_STEP_KEY
       - env: BUILDKITE_BRANCH
       - env: BUILDKITE_COMMIT
     target_paths:
