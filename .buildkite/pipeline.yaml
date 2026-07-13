@@ -29,6 +29,7 @@ steps:
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod
+      - 'echo "--- :broom: Tidy"'
       - .buildkite/steps/tidy.sh
       - buildkite-agent cache save --name go_mod
 
@@ -39,6 +40,7 @@ steps:
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore
+      - 'echo "--- :lint-roller: Lint"'
       - golangci-lint run -v ./...
       - buildkite-agent cache save
 
@@ -50,6 +52,7 @@ steps:
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build
+      - 'echo "--- :robot_face: Check code generation"'
       - .buildkite/steps/check-code-generation.sh
       - buildkite-agent cache save --name go_mod --name go_build
 
@@ -76,6 +79,7 @@ steps:
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build
+      - 'echo "--- :test_tube: Tests"'
       - .buildkite/steps/tests.sh
       - buildkite-agent cache save --name go_mod --name go_build
     plugins:
@@ -98,6 +102,7 @@ steps:
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build
+      - 'echo "--- :docker: Build and push controller image"'
       - .buildkite/steps/build-and-push-controller.sh
       - buildkite-agent cache save --name go_mod --name go_build
 
@@ -161,6 +166,7 @@ steps:
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build
+      - 'echo "--- :rocket: Release"'
       - .buildkite/steps/release.sh
       - buildkite-agent cache save --name go_mod --name go_build
     plugins:
