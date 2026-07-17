@@ -3,7 +3,9 @@ caches:
     cache_key:
       - agent: os
       - {agent: arch, fallbackLimit: true}
-      - checksum: go.mod
+      - env: BUILDKITE_STEP_KEY
+      - env: BUILDKITE_BRANCH
+      - env: BUILDKITE_COMMIT
     target_paths:
       - /root/.cache/go-build
   - name: go_mod
@@ -17,6 +19,7 @@ caches:
     cache_key:
       - agent: os
       - {agent: arch, fallbackLimit: true}
-      - checksum: .golangci.yaml
+      - env: BUILDKITE_BRANCH
+      - env: BUILDKITE_COMMIT
     target_paths:
       - /root/.cache/golangci-lint
