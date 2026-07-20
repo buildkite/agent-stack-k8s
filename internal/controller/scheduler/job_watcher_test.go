@@ -220,13 +220,13 @@ func TestCleanupStalledJob(t *testing.T) {
 		}
 	})
 
-	t.Run("still patches ActiveDeadlineSeconds when failJob fails", func(t *testing.T) {
+	t.Run("still patches ActiveDeadlineSeconds when failJob fails but recheck confirms reserved", func(t *testing.T) {
 		t.Parallel()
 		ctx := context.Background()
 		server := api.NewFakeAgentServer()
 		defer server.Close()
 
-		// State is reserved (so GetJobState guard passes), but FinishJob returns 404
+		// State is reserved (so both initial and recheck pass), but FinishJob returns 404
 		server.JobStates = map[string]string{testJobUUID: "reserved"}
 		server.FinishJobStatusCode = 404
 		server.FinishJobError = "not found"
@@ -244,9 +244,7 @@ func TestCleanupStalledJob(t *testing.T) {
 			t.Errorf("len(FinishJobCalls) = %d, want 1", got)
 		}
 
-		// Should STILL set ActiveDeadlineSeconds — GetJobState already confirmed
-		// no agent is running, so the pod is safe to clean up regardless of
-		// whether failJob succeeded.
+		// Recheck confirmed still reserved, so ActiveDeadlineSeconds should be set.
 		updated, err := k8sClient.BatchV1().Jobs("default").Get(ctx, kjob.Name, metav1.GetOptions{})
 		if err != nil {
 			t.Fatalf("Get job: %v", err)
@@ -256,6 +254,45 @@ func TestCleanupStalledJob(t *testing.T) {
 		}
 		if got := *updated.Spec.ActiveDeadlineSeconds; got != 1 {
 			t.Errorf("ActiveDeadlineSeconds = %d, want 1", got)
+		}
+	})
+
+	t.Run("aborts cleanup when agent acquires job between state check and failJob", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.Background()
+		server := api.NewFakeAgentServer()
+		defer server.Close()
+
+		// Initial state check returns "reserved", but by the time we recheck
+		// after failJob fails, the agent has acquired the job ("running").
+		// We simulate this by having the server change state after FinishJob is called.
+		server.JobStates = map[string]string{testJobUUID: "reserved"}
+		server.FinishJobStatusCode = 404
+		server.FinishJobError = "not found"
+		server.OnFinishJob = func(jobUUID string) {
+			server.JobStates[testJobUUID] = "running"
+		}
+		w, k8sClient := newTestJobWatcher(t, server)
+
+		kjob := newTestK8sJob(testJobUUID)
+		if _, err := k8sClient.BatchV1().Jobs("default").Create(ctx, kjob, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("Create job: %v", err)
+		}
+
+		w.cleanupStalledJob(ctx, kjob)
+
+		// FinishJob was called (and failed)
+		if got := len(server.FinishJobCalls); got != 1 {
+			t.Errorf("len(FinishJobCalls) = %d, want 1", got)
+		}
+
+		// Recheck saw "running" — should NOT have set ActiveDeadlineSeconds
+		updated, err := k8sClient.BatchV1().Jobs("default").Get(ctx, kjob.Name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("Get job: %v", err)
+		}
+		if updated.Spec.ActiveDeadlineSeconds != nil {
+			t.Errorf("ActiveDeadlineSeconds = %d, want nil (agent acquired job during cleanup)", *updated.Spec.ActiveDeadlineSeconds)
 		}
 	})
 }

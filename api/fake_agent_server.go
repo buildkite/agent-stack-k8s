@@ -59,6 +59,11 @@ type FakeAgentServer struct {
 	// Default is 200.
 	FinishJobStatusCode int
 
+	// OnFinishJob is an optional callback invoked after recording a FinishJob
+	// call but before sending the response. Useful for simulating state changes
+	// that happen between API calls (e.g., an agent acquiring a job).
+	OnFinishJob func(jobUUID string)
+
 	// FinishJobError configures an error message to return for FinishJob.
 	FinishJobError string
 }
@@ -260,6 +265,9 @@ func (f *FakeAgentServer) handleFinishJob(w http.ResponseWriter, r *http.Request
 
 	f.mu.Lock()
 	f.FinishJobCalls = append(f.FinishJobCalls, jobUUID)
+	if f.OnFinishJob != nil {
+		f.OnFinishJob(jobUUID)
+	}
 	f.mu.Unlock()
 
 	if f.FinishJobError != "" {

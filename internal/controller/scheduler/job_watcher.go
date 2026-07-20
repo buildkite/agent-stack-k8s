@@ -410,7 +410,20 @@ func (w *jobWatcher) cleanupStalledJob(ctx context.Context, kjob *batchv1.Job) {
 	message := fmt.Sprintf("The Kubernetes job spent %s without starting a pod.\n", stallDuration)
 	message += w.fetchEvents(ctx, log, kjob)
 	if err := w.failJob(ctx, log, kjob, message); err != nil {
-		log.Warn("Failed to fail Buildkite job; proceeding with cleanup anyway since GetJobState confirmed no agent is running", "error", err)
+		// failJob failed — possibly a transient error, or the agent acquired
+		// the job in the narrow window since our last state check. Re-check
+		// before applying the destructive ActiveDeadlineSeconds patch.
+		recheck, _, recheckErr := w.agentClient.GetJobState(ctx, jobUUID.String())
+		if recheckErr != nil {
+			log.Warn("Failed to re-fetch BK job state after failJob error; aborting cleanup to avoid killing a potentially running job", "failJobError", err, "recheckError", recheckErr)
+			return
+		}
+		if recheck.State != api.JobStateReserved && recheck.State != api.JobStateScheduled {
+			log.Warn("Aborting stalled job cleanup: BK job state changed during cleanup", "failJobError", err, "bk_job_state", string(recheck.State))
+			jobWatcherStalledCleanupSkippedCounter.Inc()
+			return
+		}
+		log.Warn("Failed to fail BK job; proceeding with cleanup since job is still in pre-agent state", "error", err, "bk_job_state", string(recheck.State))
 	}
 
 	// Use ActiveDeadlineSeconds to fail the job, which makes k8s delete the job
