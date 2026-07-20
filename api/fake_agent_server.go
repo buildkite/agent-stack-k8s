@@ -205,9 +205,9 @@ func (f *FakeAgentServer) handleGetJobStates(w http.ResponseWriter, r *http.Requ
 
 	f.mu.Lock()
 	f.GetJobStateCalls = append(f.GetJobStateCalls, req.JobUUIDs)
-	f.mu.Unlock()
 
 	if f.GetJobStatesError != "" {
+		f.mu.Unlock()
 		var buf bytes.Buffer
 		if err := json.NewEncoder(&buf).Encode(map[string]string{
 			"message": f.GetJobStatesError,
@@ -229,6 +229,7 @@ func (f *FakeAgentServer) handleGetJobStates(w http.ResponseWriter, r *http.Requ
 			states[id] = s
 		}
 	}
+	f.mu.Unlock()
 
 	resp := struct {
 		States map[string]string `json:"states"`

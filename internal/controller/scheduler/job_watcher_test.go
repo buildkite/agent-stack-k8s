@@ -59,10 +59,10 @@ func newTestK8sJob(jobUUID string) *batchv1.Job {
 }
 
 func TestCleanupStalledJob(t *testing.T) {
-	t.Parallel()
+
 
 	t.Run("skips cleanup when BK job is running", func(t *testing.T) {
-		t.Parallel()
+	
 		ctx := context.Background()
 		server := api.NewFakeAgentServer()
 		defer server.Close()
@@ -94,7 +94,7 @@ func TestCleanupStalledJob(t *testing.T) {
 	})
 
 	t.Run("skips cleanup when BK job is accepted", func(t *testing.T) {
-		t.Parallel()
+	
 		ctx := context.Background()
 		server := api.NewFakeAgentServer()
 		defer server.Close()
@@ -123,7 +123,7 @@ func TestCleanupStalledJob(t *testing.T) {
 	})
 
 	t.Run("proceeds with cleanup when BK job is reserved", func(t *testing.T) {
-		t.Parallel()
+	
 		ctx := context.Background()
 		server := api.NewFakeAgentServer()
 		defer server.Close()
@@ -159,7 +159,7 @@ func TestCleanupStalledJob(t *testing.T) {
 	})
 
 	t.Run("proceeds with cleanup when BK job is scheduled", func(t *testing.T) {
-		t.Parallel()
+	
 		ctx := context.Background()
 		server := api.NewFakeAgentServer()
 		defer server.Close()
@@ -191,7 +191,7 @@ func TestCleanupStalledJob(t *testing.T) {
 	})
 
 	t.Run("skips cleanup when GetJobState fails", func(t *testing.T) {
-		t.Parallel()
+	
 		ctx := context.Background()
 		server := api.NewFakeAgentServer()
 		defer server.Close()
@@ -221,7 +221,7 @@ func TestCleanupStalledJob(t *testing.T) {
 	})
 
 	t.Run("still patches ActiveDeadlineSeconds when failJob fails but recheck confirms reserved", func(t *testing.T) {
-		t.Parallel()
+	
 		ctx := context.Background()
 		server := api.NewFakeAgentServer()
 		defer server.Close()
@@ -258,7 +258,7 @@ func TestCleanupStalledJob(t *testing.T) {
 	})
 
 	t.Run("aborts cleanup when agent acquires job between state check and failJob", func(t *testing.T) {
-		t.Parallel()
+	
 		ctx := context.Background()
 		server := api.NewFakeAgentServer()
 		defer server.Close()
