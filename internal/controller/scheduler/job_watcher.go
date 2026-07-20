@@ -193,7 +193,7 @@ func (w *jobWatcher) checkFinished(ctx context.Context, log *slog.Logger, jobUUI
 	log.Info("The Kubernetes job ended without starting a pod. Failing the corresponding Buildkite job")
 	message := "The Kubernetes job ended without starting a pod.\n"
 	message += w.fetchEvents(ctx, log, kjob)
-	w.failJob(ctx, log, kjob, message)
+	_ = w.failJob(ctx, log, kjob, message)
 }
 
 // failBeforeAgentAcquire is called when a k8s Job has finished with a failed
@@ -219,7 +219,7 @@ func (w *jobWatcher) failBeforeAgentAcquire(ctx context.Context, log *slog.Logge
 	log.Info("Kubernetes pod failed before the buildkite-agent acquired the Buildkite job. Failing the BK job to release the reservation.", "bk_job_state", string(state.State))
 	message := "The Kubernetes pod failed before the buildkite-agent acquired this Buildkite job. The pod was likely killed by Kubernetes (eviction, OOM, node failure) or terminated externally before the agent could start.\n"
 	message += w.fetchEvents(ctx, log, kjob)
-	w.failJob(ctx, log, kjob, message)
+	_ = w.failJob(ctx, log, kjob, message)
 	w.ignoreJob(jobUUID)
 }
 
@@ -392,7 +392,7 @@ func (w *jobWatcher) cleanupStalledJob(ctx context.Context, kjob *batchv1.Job) {
 
 	state, _, err := w.agentClient.GetJobState(ctx, jobUUID.String())
 	if err != nil {
-		log.Warn("Failed to fetch Buildkite job state; skipping stalled job cleanup to avoid killing a potentially running job", "error", err)
+		log.Warn("Failed to fetch BK job state; skipping stalled job cleanup to avoid killing a potentially running job", "error", err)
 		return
 	}
 

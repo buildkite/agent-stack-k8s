@@ -76,7 +76,7 @@ func NewFakeAgentServer() *FakeAgentServer {
 	mux.HandleFunc("/stacks/register", fake.handleRegisterStack)
 	mux.HandleFunc("/stacks/test-stack/scheduled-jobs/batch-reserve", fake.handleReserveJobs)
 	mux.HandleFunc("/stacks/test-stack/notifications", fake.handleNotifications)
-	mux.HandleFunc("POST /stacks/test-stack/jobs/get-states", fake.handleGetJobStates)
+	mux.HandleFunc("/stacks/test-stack/jobs/get-states", fake.handleGetJobStates)
 	mux.HandleFunc("/stacks/test-stack/jobs/", fake.handleFinishJob)
 
 	fake.server = httptest.NewServer(mux)
@@ -184,6 +184,11 @@ func (f *FakeAgentServer) handleReserveJobs(w http.ResponseWriter, r *http.Reque
 }
 
 func (f *FakeAgentServer) handleGetJobStates(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var req struct {
 		StackKey string   `json:"stack_key"`
 		JobUUIDs []string `json:"job_uuids"`
