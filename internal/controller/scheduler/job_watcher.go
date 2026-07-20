@@ -399,7 +399,20 @@ func (w *jobWatcher) cleanupStalledJob(ctx context.Context, kjob *batchv1.Job) {
 	// Only proceed if the job is still in a pre-agent state.
 	// If the agent has already acquired the job (Running, Accepted, etc.),
 	// the "stalled without pod" signal was a false positive from a stale cache.
-	if state.State != api.JobStateReserved && state.State != api.JobStateScheduled {
+	//
+	// Unlike failBeforeAgentAcquire (which only acts on Reserved, because a
+	// Scheduled state there means BK reclaimed the reservation after a pod
+	// failure), this path handles the no-pod-ever case: the k8s Job exists
+	// but never created a pod. If the BK job reverted to Scheduled, there
+	// is still a zombie k8s Job consuming a slot that should be cleaned up.
+
+	// An empty state means the job UUID was not found in the API response
+	// (deleted, expired, or garbage-collected). Proceed with cleanup —
+	// an orphaned k8s Job whose BK job is gone is exactly what this
+	// cleanup should reap.
+	if state.State == "" {
+		log.Warn("BK job state is empty (job may have been deleted/expired); proceeding with cleanup")
+	} else if state.State != api.JobStateReserved && state.State != api.JobStateScheduled {
 		log.Info("Skipping stalled job cleanup: Buildkite job is no longer in a pre-agent state (informer cache was likely stale)", "bk_job_state", string(state.State))
 		jobWatcherStalledCleanupSkippedCounter.Inc()
 		return
@@ -418,7 +431,7 @@ func (w *jobWatcher) cleanupStalledJob(ctx context.Context, kjob *batchv1.Job) {
 			log.Warn("Failed to re-fetch BK job state after failJob error; aborting cleanup to avoid killing a potentially running job", "failJobError", err, "recheckError", recheckErr)
 			return
 		}
-		if recheck.State != api.JobStateReserved && recheck.State != api.JobStateScheduled {
+		if recheck.State != "" && recheck.State != api.JobStateReserved && recheck.State != api.JobStateScheduled {
 			log.Warn("Aborting stalled job cleanup: BK job state changed during cleanup", "failJobError", err, "bk_job_state", string(recheck.State))
 			jobWatcherStalledCleanupSkippedCounter.Inc()
 			return

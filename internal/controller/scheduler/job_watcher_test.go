@@ -295,4 +295,114 @@ func TestCleanupStalledJob(t *testing.T) {
 			t.Errorf("ActiveDeadlineSeconds = %d, want nil (agent acquired job during cleanup)", *updated.Spec.ActiveDeadlineSeconds)
 		}
 	})
+
+	t.Run("proceeds with cleanup when BK job state is empty (job deleted/expired)", func(t *testing.T) {
+		ctx := context.Background()
+		server := api.NewFakeAgentServer()
+		defer server.Close()
+
+		// JobStates is empty — the test UUID is absent, so GetJobState returns ""
+		server.JobStates = map[string]string{}
+		w, k8sClient := newTestJobWatcher(t, server)
+
+		kjob := newTestK8sJob(testJobUUID)
+		if _, err := k8sClient.BatchV1().Jobs("default").Create(ctx, kjob, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("Create job: %v", err)
+		}
+
+		w.cleanupStalledJob(ctx, kjob)
+
+		// Should have called FinishJob (even though it will likely fail on BK side)
+		if got := len(server.FinishJobCalls); got != 1 {
+			t.Errorf("len(FinishJobCalls) = %d, want 1", got)
+		}
+
+		// Should have set ActiveDeadlineSeconds = 1
+		updated, err := k8sClient.BatchV1().Jobs("default").Get(ctx, kjob.Name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("Get job: %v", err)
+		}
+		if updated.Spec.ActiveDeadlineSeconds == nil {
+			t.Fatal("ActiveDeadlineSeconds = nil, want 1")
+		}
+		if got := *updated.Spec.ActiveDeadlineSeconds; got != 1 {
+			t.Errorf("ActiveDeadlineSeconds = %d, want 1", got)
+		}
+	})
+
+	t.Run("aborts cleanup when recheck after failJob error also fails", func(t *testing.T) {
+		ctx := context.Background()
+		server := api.NewFakeAgentServer()
+		defer server.Close()
+
+		server.JobStates = map[string]string{testJobUUID: "reserved"}
+		server.FinishJobStatusCode = 404
+		server.FinishJobError = "not found"
+		// After FinishJob is called, make GetJobStates also fail
+		server.OnFinishJob = func(jobUUID string) {
+			server.GetJobStatesError = "internal error"
+			server.GetJobStatesStatusCode = 500
+		}
+		w, k8sClient := newTestJobWatcher(t, server)
+
+		kjob := newTestK8sJob(testJobUUID)
+		if _, err := k8sClient.BatchV1().Jobs("default").Create(ctx, kjob, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("Create job: %v", err)
+		}
+
+		w.cleanupStalledJob(ctx, kjob)
+
+		// FinishJob was called (and failed)
+		if got := len(server.FinishJobCalls); got != 1 {
+			t.Errorf("len(FinishJobCalls) = %d, want 1", got)
+		}
+
+		// Recheck also failed — should NOT have set ActiveDeadlineSeconds
+		updated, err := k8sClient.BatchV1().Jobs("default").Get(ctx, kjob.Name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("Get job: %v", err)
+		}
+		if updated.Spec.ActiveDeadlineSeconds != nil {
+			t.Errorf("ActiveDeadlineSeconds = %d, want nil (recheck failed, should abort)", *updated.Spec.ActiveDeadlineSeconds)
+		}
+	})
+
+	t.Run("proceeds with cleanup when recheck returns empty state after failJob error", func(t *testing.T) {
+		ctx := context.Background()
+		server := api.NewFakeAgentServer()
+		defer server.Close()
+
+		server.JobStates = map[string]string{testJobUUID: "reserved"}
+		server.FinishJobStatusCode = 404
+		server.FinishJobError = "not found"
+		// After FinishJob is called, the BK job disappears from the API
+		server.OnFinishJob = func(jobUUID string) {
+			delete(server.JobStates, testJobUUID)
+		}
+		w, k8sClient := newTestJobWatcher(t, server)
+
+		kjob := newTestK8sJob(testJobUUID)
+		if _, err := k8sClient.BatchV1().Jobs("default").Create(ctx, kjob, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("Create job: %v", err)
+		}
+
+		w.cleanupStalledJob(ctx, kjob)
+
+		// FinishJob was called (and failed)
+		if got := len(server.FinishJobCalls); got != 1 {
+			t.Errorf("len(FinishJobCalls) = %d, want 1", got)
+		}
+
+		// Recheck returned empty — should still proceed with ActiveDeadlineSeconds
+		updated, err := k8sClient.BatchV1().Jobs("default").Get(ctx, kjob.Name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("Get job: %v", err)
+		}
+		if updated.Spec.ActiveDeadlineSeconds == nil {
+			t.Fatal("ActiveDeadlineSeconds = nil, want 1")
+		}
+		if got := *updated.Spec.ActiveDeadlineSeconds; got != 1 {
+			t.Errorf("ActiveDeadlineSeconds = %d, want 1", got)
+		}
+	})
 }
