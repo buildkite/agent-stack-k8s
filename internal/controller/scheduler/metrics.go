@@ -109,6 +109,12 @@ var (
 		Name:      "jobs_stalled_without_pod_total",
 		Help:      "Count of jobs that ran for too long without a pod",
 	})
+	jobWatcherStalledCleanupSkippedCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "stalled_cleanup_skipped_total",
+		Help:      "Count of stalled job cleanups skipped because the Buildkite job was no longer in a pre-agent state",
+	})
 
 	jobWatcherBuildkiteJobFailsCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,
