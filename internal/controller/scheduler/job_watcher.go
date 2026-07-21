@@ -393,6 +393,8 @@ func (w *jobWatcher) cleanupStalledJob(ctx context.Context, kjob *batchv1.Job) {
 	state, _, err := w.agentClient.GetJobState(ctx, jobUUID.String())
 	if err != nil {
 		log.Warn("Failed to fetch BK job state; skipping stalled job cleanup to avoid killing a potentially running job", "error", err)
+		// Unignore so the stall-detection loop can retry on the next cycle.
+		w.unignoreJob(jobUUID)
 		return
 	}
 
@@ -429,6 +431,8 @@ func (w *jobWatcher) cleanupStalledJob(ctx context.Context, kjob *batchv1.Job) {
 		recheck, _, recheckErr := w.agentClient.GetJobState(ctx, jobUUID.String())
 		if recheckErr != nil {
 			log.Warn("Failed to re-fetch BK job state after failJob error; aborting cleanup to avoid killing a potentially running job", "failJobError", err, "recheckError", recheckErr)
+			// Unignore so the stall-detection loop can retry on the next cycle.
+			w.unignoreJob(jobUUID)
 			return
 		}
 		if recheck.State != "" && recheck.State != api.JobStateReserved && recheck.State != api.JobStateScheduled {

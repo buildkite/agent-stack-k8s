@@ -9,6 +9,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/google/uuid"
 
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -254,6 +255,64 @@ func TestCleanupStalledJob(t *testing.T) {
 		}
 		if got := *updated.Spec.ActiveDeadlineSeconds; got != 1 {
 			t.Errorf("ActiveDeadlineSeconds = %d, want 1", got)
+		}
+	})
+
+	t.Run("unignores job when GetJobState fails so retry is possible", func(t *testing.T) {
+
+		ctx := context.Background()
+		server := api.NewFakeAgentServer()
+		defer server.Close()
+
+		server.GetJobStatesStatusCode = 500
+		server.GetJobStatesError = "internal error"
+		w, k8sClient := newTestJobWatcher(t, server)
+
+		kjob := newTestK8sJob(testJobUUID)
+		if _, err := k8sClient.BatchV1().Jobs("default").Create(ctx, kjob, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("Create job: %v", err)
+		}
+
+		jobUUID := uuid.MustParse(testJobUUID)
+		w.ignoreJob(jobUUID) // simulate what stalledJobChecker does before calling cleanupStalledJob
+
+		w.cleanupStalledJob(ctx, kjob)
+
+		// Job should be unignored so it can be retried
+		if w.isIgnored(jobUUID) {
+			t.Error("job is still ignored after GetJobState failure; should have been unignored for retry")
+		}
+	})
+
+	t.Run("unignores job when recheck GetJobState fails so retry is possible", func(t *testing.T) {
+
+		ctx := context.Background()
+		server := api.NewFakeAgentServer()
+		defer server.Close()
+
+		// Initial state check succeeds (reserved), failJob fails, recheck fails
+		server.JobStates = map[string]string{testJobUUID: "reserved"}
+		server.FinishJobStatusCode = 404
+		server.FinishJobError = "not found"
+		server.OnFinishJob = func(jobUUID string) {
+			server.GetJobStatesError = "internal error"
+			server.GetJobStatesStatusCode = 500
+		}
+		w, k8sClient := newTestJobWatcher(t, server)
+
+		kjob := newTestK8sJob(testJobUUID)
+		if _, err := k8sClient.BatchV1().Jobs("default").Create(ctx, kjob, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("Create job: %v", err)
+		}
+
+		jobUUID := uuid.MustParse(testJobUUID)
+		w.ignoreJob(jobUUID)
+
+		w.cleanupStalledJob(ctx, kjob)
+
+		// Job should be unignored so it can be retried
+		if w.isIgnored(jobUUID) {
+			t.Error("job is still ignored after recheck GetJobState failure; should have been unignored for retry")
 		}
 	})
 
