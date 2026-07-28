@@ -14,6 +14,29 @@ import (
 	"log/slog"
 )
 
+// cancelTargetKind says what the checker should delete once it learns a
+// Buildkite job was cancelled.
+type cancelTargetKind int
+
+const (
+	// cancelTargetPod deletes the pod. Scheduler sets BackoffLimit=0 on the
+	// k8s Job, so removing its pod also terminates the Job.
+	cancelTargetPod cancelTargetKind = iota
+
+	// cancelTargetJob deletes the k8s Job itself. Needed when no pod exists to
+	// delete, which is the steady state for a Job held suspended by an
+	// admission controller such as Kueue: registration used to be driven purely
+	// by pod events, so those Jobs were never checked at all and only ran once
+	// something else admitted them.
+	cancelTargetJob
+)
+
+// cancelTarget is the object the checker deletes for one Buildkite job.
+type cancelTarget struct {
+	kind cancelTargetKind
+	meta metav1.ObjectMeta
+}
+
 // BatchBuildkiteJobChecker monitors Buildkite jobs for cancellation state changes.
 // Unlike the old legacy BuildkiteJobChecker, this checker check all pending jobs together,
 // relying on the new Stack API.
@@ -25,9 +48,9 @@ type BatchBuildkiteJobChecker struct {
 	// The job cancel checkers query the job state every so often.
 	jobCancelCheckerInterval time.Duration
 
-	// Store jobs that we will check against.
+	// Store jobs that we will check against, and what to delete for each.
 	checkingJobsMu sync.Mutex
-	checkingJobs   map[uuid.UUID]metav1.ObjectMeta
+	checkingJobs   map[uuid.UUID]cancelTarget
 }
 
 // NewBatchBuildkiteJobChecker creates a new Batch Buildkite job checker.
@@ -37,13 +60,15 @@ func NewBatchBuildkiteJobChecker(
 	k8s kubernetes.Interface,
 	interval time.Duration,
 ) *BatchBuildkiteJobChecker {
-	return &BatchBuildkiteJobChecker{
+	c := &BatchBuildkiteJobChecker{
 		logger:                   logger,
 		agentClient:              agentClient,
 		k8s:                      k8s,
 		jobCancelCheckerInterval: interval,
-		checkingJobs:             make(map[uuid.UUID]metav1.ObjectMeta),
+		checkingJobs:             make(map[uuid.UUID]cancelTarget),
 	}
+	jobCancelCheckerGaugeFunc = c.GetActiveCheckCount
+	return c
 }
 
 // StartChecking starts a gorouting loop to periodically check job states for all jobs that it manages.
@@ -75,14 +100,14 @@ func (c *BatchBuildkiteJobChecker) checkJobStates(ctx context.Context) {
 		return
 	}
 
-	// Create slices for job UUIDs and corresponding pod metadata
+	// Create slices for job UUIDs and corresponding deletion targets
 	jobUUIDs := make([]string, 0, len(c.checkingJobs))
-	jobToPodMeta := make(map[string]metav1.ObjectMeta, len(c.checkingJobs))
+	jobToTarget := make(map[string]cancelTarget, len(c.checkingJobs))
 
-	for jobUUID, podMeta := range c.checkingJobs {
+	for jobUUID, target := range c.checkingJobs {
 		jobUUIDStr := jobUUID.String()
 		jobUUIDs = append(jobUUIDs, jobUUIDStr)
-		jobToPodMeta[jobUUIDStr] = podMeta
+		jobToTarget[jobUUIDStr] = target
 	}
 	c.checkingJobsMu.Unlock() // Release the lock as soon as possible.
 
@@ -115,19 +140,35 @@ func (c *BatchBuildkiteJobChecker) checkJobStates(ctx context.Context) {
 	// Process results from all batches
 	for jobStates := range jobStatesCh {
 		for jobUUIDStr, jobState := range jobStates {
-			podMeta := jobToPodMeta[jobUUIDStr]
+			target := jobToTarget[jobUUIDStr]
 			// Concurrently handle cancelled jobs.
 			// This is at the mercy of k8s API rate limit and buildkite stack API rate limit.
 			// If either rate limit were breached, it will result in delay in resource release.
-			go c.handleJobState(ctx, jobUUIDStr, jobState, podMeta)
+			go c.handleJobState(ctx, jobUUIDStr, jobState, target)
 		}
 	}
 }
 
-func (c *BatchBuildkiteJobChecker) AddJob(jobUUID uuid.UUID, podMeta metav1.ObjectMeta) {
+// AddPod registers a Buildkite job whose pod exists and is pending. A pod is
+// the preferred deletion target, so this always replaces any Job registration.
+func (c *BatchBuildkiteJobChecker) AddPod(jobUUID uuid.UUID, podMeta metav1.ObjectMeta) {
 	c.checkingJobsMu.Lock()
 	defer c.checkingJobsMu.Unlock()
-	c.checkingJobs[jobUUID] = podMeta
+	c.checkingJobs[jobUUID] = cancelTarget{kind: cancelTargetPod, meta: podMeta}
+}
+
+// AddK8sJob registers a Buildkite job whose k8s Job exists but has no pod yet.
+//
+// This never downgrades an existing pod registration: pod events and Job events
+// arrive independently, so a stale Job event must not replace a pod target that
+// a later pod event installed.
+func (c *BatchBuildkiteJobChecker) AddK8sJob(jobUUID uuid.UUID, jobMeta metav1.ObjectMeta) {
+	c.checkingJobsMu.Lock()
+	defer c.checkingJobsMu.Unlock()
+	if existing, ok := c.checkingJobs[jobUUID]; ok && existing.kind == cancelTargetPod {
+		return
+	}
+	c.checkingJobs[jobUUID] = cancelTarget{kind: cancelTargetJob, meta: jobMeta}
 }
 
 func (c *BatchBuildkiteJobChecker) StopCheckingJob(jobUUID uuid.UUID) {
@@ -136,14 +177,22 @@ func (c *BatchBuildkiteJobChecker) StopCheckingJob(jobUUID uuid.UUID) {
 	delete(c.checkingJobs, jobUUID)
 }
 
-func (c *BatchBuildkiteJobChecker) handleJobState(ctx context.Context, jobUUIDStr string, jobState api.JobState, podMeta metav1.ObjectMeta) {
+func (c *BatchBuildkiteJobChecker) handleJobState(ctx context.Context, jobUUIDStr string, jobState api.JobState, target cancelTarget) {
 	log := c.logger.With("job_uuid", jobUUIDStr, "job_state", string(jobState))
 
 	switch jobState {
 	case api.JobStateCanceled, api.JobStateCanceling:
-		log.Info("Deleting pending pod for cancelled job")
-		if err := forcefullyDeletePod(ctx, log, c.k8s, &podMeta, "job_cancelled"); err != nil {
-			log.Error("Failed to delete pod for cancelled job", "error", err)
+		var err error
+		switch target.kind {
+		case cancelTargetPod:
+			log.Info("Deleting pending pod for cancelled job")
+			err = forcefullyDeletePod(ctx, log, c.k8s, &target.meta, "job_cancelled")
+		case cancelTargetJob:
+			log.Info("Deleting podless k8s job for cancelled job")
+			err = forcefullyDeleteJob(ctx, log, c.k8s, &target.meta, "job_cancelled")
+		}
+		if err != nil {
+			log.Error("Failed to delete resource for cancelled job", "error", err)
 			return
 		}
 		// Remove the job from checking list after successful deletion
@@ -161,6 +210,14 @@ func (c *BatchBuildkiteJobChecker) handleJobState(ctx context.Context, jobUUIDSt
 		jobUUID, _ := uuid.Parse(jobUUIDStr)
 		c.StopCheckingJob(jobUUID)
 	}
+}
+
+// targetFor returns the registered deletion target for a Buildkite job.
+func (c *BatchBuildkiteJobChecker) targetFor(jobUUID uuid.UUID) (cancelTarget, bool) {
+	c.checkingJobsMu.Lock()
+	defer c.checkingJobsMu.Unlock()
+	target, ok := c.checkingJobs[jobUUID]
+	return target, ok
 }
 
 // GetActiveCheckCount returns the number of jobs currently being checked.
