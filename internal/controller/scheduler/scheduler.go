@@ -333,6 +333,8 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	kjob.Annotations[config.BuildRepoAnnotation] = buildRepo
 	pipelineSlug := inputs.envMap["BUILDKITE_PIPELINE_SLUG"]
 	kjob.Annotations[config.PipelineSlugAnnotation] = pipelineSlug
+	stepKey := inputs.envMap["BUILDKITE_STEP_KEY"]
+	kjob.Annotations[config.StepKeyAnnotation] = stepKey
 	jobURL, err := w.jobURL(inputs.uuid, buildURL)
 	if err != nil {
 		w.logger.Warn("could not parse BuildURL when annotating with JobURL", "buildURL", buildURL)
