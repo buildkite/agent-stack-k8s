@@ -645,6 +645,48 @@ func TestBuild(t *testing.T) {
 	}
 }
 
+func TestBuildStepKeyAnnotationCannotBeOverriddenByPlugin(t *testing.T) {
+	t.Parallel()
+
+	pluginsYAML := `- github.com/buildkite-plugins/kubernetes-buildkite-plugin:
+    metadata:
+      annotations:
+        buildkite.com/step-key: forged-step`
+
+	pluginsJSON, err := yaml.YAMLToJSONStrict([]byte(pluginsYAML))
+	if err != nil {
+		t.Fatalf("yaml.YAMLToJSONStrict([]byte(pluginsYAML)) error = %v, want nil", err)
+	}
+
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+		Env: map[string]string{
+			"BUILDKITE_PLUGINS":  string(pluginsJSON),
+			"BUILDKITE_STEP_KEY": "trusted-step",
+		},
+	}
+	worker := New(slog.Default(), nil, nil, Config{
+		Image: "buildkite/agent:latest",
+	})
+	inputs, err := worker.ParseJob(job, &api.AgentScheduledJob{})
+	if err != nil {
+		t.Fatalf("worker.ParseJob(job, sjob) error = %v, want nil", err)
+	}
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	if err != nil {
+		t.Fatalf("worker.Build(&corev1.PodSpec{}, %t, inputs) error = %v, want nil", false, err)
+	}
+
+	const annotation = "buildkite.com/step-key"
+	if got, want := kjob.Annotations[annotation], "trusted-step"; got != want {
+		t.Errorf("kjob.Annotations[%q] = %q, want %q", annotation, got, want)
+	}
+	if got, want := kjob.Spec.Template.Annotations[annotation], "trusted-step"; got != want {
+		t.Errorf("kjob.Spec.Template.Annotations[%q] = %q, want %q", annotation, got, want)
+	}
+}
+
 func TestBuildWorkspaceMountSubPathExpr(t *testing.T) {
 	t.Parallel()
 
