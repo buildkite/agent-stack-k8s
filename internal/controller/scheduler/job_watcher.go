@@ -42,6 +42,11 @@ type jobWatcher struct {
 
 	agentClient *api.AgentClient
 
+	// Shared with podWatcher. A k8s Job held suspended by an admission
+	// controller never produces a pod, so pod events alone never register it
+	// for cancellation checks.
+	bkJobChecker *BatchBuildkiteJobChecker
+
 	// Tracks stalling jobs (jobs that have yet to create pods).
 	stallingJobsMu sync.Mutex
 	stallingJobs   map[uuid.UUID]*batchv1.Job
@@ -59,12 +64,13 @@ type jobWatcher struct {
 }
 
 // NewJobWatcher creates a JobWatcher.
-func NewJobWatcher(logger *slog.Logger, k8sClient kubernetes.Interface, agentClient *api.AgentClient, cfg *config.Config) *jobWatcher {
+func NewJobWatcher(logger *slog.Logger, k8sClient kubernetes.Interface, agentClient *api.AgentClient, cfg *config.Config, bkJobChecker *BatchBuildkiteJobChecker) *jobWatcher {
 	w := &jobWatcher{
 		logger:       logger,
 		k8s:          k8sClient,
 		agentClient:  agentClient,
 		cfg:          cfg,
+		bkJobChecker: bkJobChecker,
 		stallingJobs: make(map[uuid.UUID]*batchv1.Job),
 		ignoredJobs:  make(map[uuid.UUID]struct{}),
 	}
@@ -132,6 +138,7 @@ func (w *jobWatcher) OnDelete(prev any) {
 	}
 
 	w.removeFromStalling(jobUUID)
+	w.stopCheckingBuildkiteJob(jobUUID)
 
 	// The job is gone, so we can stop ignoring it (if it comes back).
 	w.unignoreJob(jobUUID)
@@ -154,10 +161,34 @@ func (w *jobWatcher) runChecks(ctx context.Context, kjob *batchv1.Job) {
 
 	if model.JobFinished(kjob) {
 		w.removeFromStalling(jobUUID)
+		w.stopCheckingBuildkiteJob(jobUUID)
 		w.checkFinished(ctx, log, jobUUID, kjob)
-	} else {
-		w.checkStalledWithoutPod(log, jobUUID, kjob)
+		return
 	}
+
+	// Register for cancellation checks while there is no pod. podWatcher only
+	// sees jobs once a pod exists, so without this a Job suspended by an
+	// admission controller is never checked: cancelling the build does nothing,
+	// and the job still runs whenever it is eventually admitted.
+	if !hasPod(kjob) {
+		w.addToBuildkiteJobChecker(jobUUID, kjob)
+	}
+
+	w.checkStalledWithoutPod(log, jobUUID, kjob)
+}
+
+func (w *jobWatcher) addToBuildkiteJobChecker(jobUUID uuid.UUID, kjob *batchv1.Job) {
+	if w.bkJobChecker == nil {
+		return
+	}
+	w.bkJobChecker.AddK8sJob(jobUUID, kjob.ObjectMeta)
+}
+
+func (w *jobWatcher) stopCheckingBuildkiteJob(jobUUID uuid.UUID) {
+	if w.bkJobChecker == nil {
+		return
+	}
+	w.bkJobChecker.StopCheckingJob(jobUUID)
 }
 
 // checkFinished inspects a finished K8s Job and, when needed, fails the

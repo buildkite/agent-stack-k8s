@@ -245,14 +245,32 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		}
 	}
 
+	// The Buildkite job cancel checker is shared by both watchers. jobWatcher
+	// registers k8s Jobs that have no pod, podWatcher registers pending pods,
+	// and both use the same poll loop against the Buildkite API. Sharing it
+	// keeps one registration per Buildkite job, so a job cannot be checked
+	// twice or deleted by two paths at once.
+	jobCancelCheckerInterval := cfg.JobCancelCheckerPollInterval
+	if jobCancelCheckerInterval <= 0 {
+		jobCancelCheckerInterval = config.DefaultJobCancelCheckerPollInterval
+	}
+	bkJobChecker := scheduler.NewBatchBuildkiteJobChecker(
+		logger.With("component", "buildkiteJobChecker"),
+		agentClient,
+		k8sClient,
+		jobCancelCheckerInterval,
+	)
+
 	// JobWatcher watches for jobs in bad conditions to clean up:
 	// * Jobs that fail without ever creating a pod
 	// * Jobs that stall forever without ever creating a pod
+	// * Jobs with no pod whose Buildkite job has been cancelled
 	jobWatcher := scheduler.NewJobWatcher(
 		logger.With("component", "jobWatcher"),
 		k8sClient,
 		agentClient,
 		cfg,
+		bkJobChecker,
 	)
 	if err := jobWatcher.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Error("failed to register jobWatcher informer", "error", err)
@@ -268,12 +286,13 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		k8sClient,
 		agentClient,
 		cfg,
+		bkJobChecker,
 	)
 	if err := podWatcher.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Error("failed to register podWatcher informer", "error", err)
 		return
 	}
-	podWatcher.StartBuildkiteJobChecker(ctx)
+	bkJobChecker.StartChecking(ctx)
 
 	select {
 	case <-ctx.Done():

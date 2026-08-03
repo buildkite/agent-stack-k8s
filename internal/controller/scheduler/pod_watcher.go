@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/tools/cache"
+	"k8s.io/utils/ptr"
 )
 
 type podWatcher struct {
@@ -90,15 +91,11 @@ type podWatcher struct {
 //   - If a pod is pending, every so often Buildkite will be checked to see if
 //     the corresponding job has been cancelled so that the pod can be evicted
 //     early.
-func NewPodWatcher(logger *slog.Logger, k8s kubernetes.Interface, agentClient *api.AgentClient, cfg *config.Config) *podWatcher {
+func NewPodWatcher(logger *slog.Logger, k8s kubernetes.Interface, agentClient *api.AgentClient, cfg *config.Config, bkJobChecker *BatchBuildkiteJobChecker) *podWatcher {
 	imagePullBackOffGracePeriod := cfg.ImagePullBackOffGracePeriod
 	podPendingTimeout := cfg.PodPendingTimeout
 	if imagePullBackOffGracePeriod <= 0 {
 		imagePullBackOffGracePeriod = config.DefaultImagePullBackOffGracePeriod
-	}
-	jobCancelCheckerInterval := cfg.JobCancelCheckerPollInterval
-	if jobCancelCheckerInterval <= 0 {
-		jobCancelCheckerInterval = config.DefaultJobCancelCheckerPollInterval
 	}
 	if podPendingTimeout <= 0 {
 		podPendingTimeout = config.DefaultPodPendingTimeout
@@ -116,14 +113,11 @@ func NewPodWatcher(logger *slog.Logger, k8s kubernetes.Interface, agentClient *a
 		imageFailureNotified:        make(map[uuid.UUID]struct{}),
 		watchingForPendingTimeout:   make(map[uuid.UUID]*corev1.Pod),
 	}
-	pw.batchBkJobChecker = NewBatchBuildkiteJobChecker(logger, agentClient, k8s, jobCancelCheckerInterval)
+	pw.batchBkJobChecker = bkJobChecker
 	podWatcherIgnoredJobsGaugeFunc = func() int {
 		pw.ignoredJobsMu.RLock()
 		defer pw.ignoredJobsMu.RUnlock()
 		return len(pw.ignoredJobs)
-	}
-	jobCancelCheckerGaugeFunc = func() int {
-		return pw.batchBkJobChecker.GetActiveCheckCount()
 	}
 	watchingForImageFailureGaugeFunc = func() int {
 		pw.watchingForImageFailureMu.Lock()
@@ -168,11 +162,6 @@ func (w *podWatcher) OnDelete(previousState any) {
 
 	// The pod is gone, so we can stop ignoring it (if it comes back).
 	w.unignoreJob(jobUUID)
-}
-
-// Start batch buildkite job checker, no-op when stack api is off.
-func (w *podWatcher) StartBuildkiteJobChecker(ctx context.Context) {
-	w.batchBkJobChecker.StartChecking(ctx)
 }
 
 func (w *podWatcher) OnAdd(currentState any, _ bool) {
@@ -242,7 +231,7 @@ func (w *podWatcher) runChecks(ctx context.Context, pod *corev1.Pod) {
 	case corev1.PodPending:
 		w.watchForImageFailure(jobUUID, pod)
 		w.watchForPendingTimeout(jobUUID, pod)
-		w.batchBkJobChecker.AddJob(jobUUID, pod.ObjectMeta)
+		w.batchBkJobChecker.AddPod(jobUUID, pod.ObjectMeta)
 
 	case corev1.PodRunning:
 		w.watchForImageFailure(jobUUID, pod)
@@ -512,6 +501,34 @@ func forcefullyDeletePod(
 		return err
 	}
 	forcefullyDeletedPodCounter.WithLabelValues(reason).Inc()
+
+	return nil
+}
+
+// forcefullyDeleteJob deletes a k8s Job and, with Background propagation, any
+// pods it owns. Used when a Buildkite job is cancelled before its k8s Job ever
+// produced a pod, so there is nothing for forcefullyDeletePod to act on.
+func forcefullyDeleteJob(
+	ctx context.Context,
+	log *slog.Logger,
+	k8s kubernetes.Interface,
+	jobMetadata *metav1.ObjectMeta,
+	reason string,
+) error {
+	deleteOptions := metav1.DeleteOptions{
+		GracePeriodSeconds: new(int64), // zero value
+		// Without this the pods are orphaned rather than removed, which is the
+		// opposite of the intent: the point is to stop the job consuming
+		// cluster resources.
+		PropagationPolicy: ptr.To(metav1.DeletePropagationBackground),
+	}
+
+	if err := k8s.BatchV1().Jobs(jobMetadata.Namespace).Delete(ctx, jobMetadata.Name, deleteOptions); err != nil {
+		log.Error("Couldn't forcefully delete job", "error", err)
+		forcefulJobDeletionErrorsCounter.WithLabelValues(reason, string(kerrors.ReasonForError(err))).Inc()
+		return err
+	}
+	forcefullyDeletedJobCounter.WithLabelValues(reason).Inc()
 
 	return nil
 }

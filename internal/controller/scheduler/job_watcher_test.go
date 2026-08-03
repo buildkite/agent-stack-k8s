@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -23,6 +24,12 @@ import (
 const testJobUUID = "019f719c-0000-0000-0000-000000000000"
 
 func newTestJobWatcher(t *testing.T, fakeServer *api.FakeAgentServer) (*jobWatcher, *fake.Clientset) {
+	t.Helper()
+	w, k8sClient, _ := newTestJobWatcherWithChecker(t, fakeServer)
+	return w, k8sClient
+}
+
+func newTestJobWatcherWithChecker(t *testing.T, fakeServer *api.FakeAgentServer) (*jobWatcher, *fake.Clientset, *BatchBuildkiteJobChecker) {
 	t.Helper()
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -39,12 +46,14 @@ func newTestJobWatcher(t *testing.T, fakeServer *api.FakeAgentServer) (*jobWatch
 
 	k8sClient := fake.NewSimpleClientset()
 
+	checker := NewBatchBuildkiteJobChecker(logger, agentClient, k8sClient, time.Second)
+
 	w := NewJobWatcher(logger, k8sClient, agentClient, &config.Config{
 		Namespace:           "default",
 		EmptyJobGracePeriod: 30 * time.Second,
-	})
+	}, checker)
 
-	return w, k8sClient
+	return w, k8sClient, checker
 }
 
 func newTestK8sJob(jobUUID string) *batchv1.Job {
@@ -323,5 +332,95 @@ func TestCleanupStalledJobs_ReplacementAddedDuringCheck(t *testing.T) {
 	}
 	if w.isIgnored(jobUUID) {
 		t.Error("isIgnored = true, want false")
+	}
+}
+
+// A k8s Job that has no pod must still be registered for Buildkite cancellation
+// checks. Before this, registration happened only on pod events, so a Job held
+// suspended by an admission controller such as Kueue was never checked at all:
+// cancelling the build did nothing, and the job ran in full whenever it was
+// later admitted.
+func TestPodlessJobIsRegisteredForCancelChecks(t *testing.T) {
+	t.Parallel()
+
+	fakeServer := api.NewFakeAgentServer()
+	defer fakeServer.Close()
+
+	w, _, checker := newTestJobWatcherWithChecker(t, fakeServer)
+
+	kjob := newTestK8sJob(testJobUUID)
+	kjob.Spec.Suspend = ptr.To(true)
+
+	w.runChecks(context.Background(), kjob)
+
+	if got := checker.GetActiveCheckCount(); got != 1 {
+		t.Fatalf("checker.GetActiveCheckCount() = %d, want 1", got)
+	}
+
+	jobUUID := uuid.MustParse(testJobUUID)
+	target, ok := checker.targetFor(jobUUID)
+	if !ok {
+		t.Fatalf("checker has no target for %s", testJobUUID)
+	}
+	if target.kind != cancelTargetJob {
+		t.Errorf("target.kind = %v, want cancelTargetJob", target.kind)
+	}
+	if target.meta.Name != kjob.Name {
+		t.Errorf("target.meta.Name = %q, want %q", target.meta.Name, kjob.Name)
+	}
+}
+
+// Once a pod exists it is the better thing to delete, and a later Job event
+// must not downgrade the registration back to the Job.
+func TestPodTargetIsNotDowngradedByJobEvent(t *testing.T) {
+	t.Parallel()
+
+	fakeServer := api.NewFakeAgentServer()
+	defer fakeServer.Close()
+
+	w, _, checker := newTestJobWatcherWithChecker(t, fakeServer)
+
+	jobUUID := uuid.MustParse(testJobUUID)
+	checker.AddPod(jobUUID, metav1.ObjectMeta{Name: "the-pod", Namespace: "default"})
+
+	kjob := newTestK8sJob(testJobUUID)
+	w.runChecks(context.Background(), kjob)
+
+	target, ok := checker.targetFor(jobUUID)
+	if !ok {
+		t.Fatalf("checker has no target for %s", testJobUUID)
+	}
+	if target.kind != cancelTargetPod {
+		t.Errorf("target.kind = %v, want cancelTargetPod", target.kind)
+	}
+	if target.meta.Name != "the-pod" {
+		t.Errorf("target.meta.Name = %q, want %q", target.meta.Name, "the-pod")
+	}
+}
+
+// A finished Job must be deregistered, so the checker does not keep polling
+// Buildkite for jobs that are already over.
+func TestFinishedJobIsDeregistered(t *testing.T) {
+	t.Parallel()
+
+	fakeServer := api.NewFakeAgentServer()
+	defer fakeServer.Close()
+
+	w, _, checker := newTestJobWatcherWithChecker(t, fakeServer)
+
+	jobUUID := uuid.MustParse(testJobUUID)
+	checker.AddK8sJob(jobUUID, metav1.ObjectMeta{Name: "the-job", Namespace: "default"})
+
+	kjob := newTestK8sJob(testJobUUID)
+	kjob.Status.Succeeded = 1
+	kjob.Status.Conditions = []batchv1.JobCondition{{
+		Type:   batchv1.JobComplete,
+		Status: corev1.ConditionTrue,
+	}}
+
+	w.runChecks(context.Background(), kjob)
+
+	if got := checker.GetActiveCheckCount(); got != 0 {
+		t.Errorf("checker.GetActiveCheckCount() = %d, want 0", got)
 	}
 }

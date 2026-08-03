@@ -244,4 +244,19 @@ var (
 		Name:      "pods_forceful_deletion_errors_total",
 		Help:      "Count of failures to delete pod forcefully by podWatcher",
 	}, []string{"delete_reason", "error_reason"})
+
+	// Deleting a k8s Job directly, rather than its pod, happens when the
+	// Buildkite job was cancelled while the Job had no pod to delete.
+	forcefullyDeletedJobCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "jobs_forcefully_deleted_total",
+		Help:      "Count of forceful k8s job deletions for cancelled Buildkite jobs",
+	}, []string{"delete_reason"})
+	forcefulJobDeletionErrorsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+		Namespace: promNamespace,
+		Subsystem: "job_watcher",
+		Name:      "jobs_forceful_deletion_errors_total",
+		Help:      "Count of failures to forcefully delete a k8s job",
+	}, []string{"delete_reason", "error_reason"})
 )
