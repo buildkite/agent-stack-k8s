@@ -1,7 +1,6 @@
 package deduper_test
 
 import (
-	"context"
 	"log/slog"
 	"testing"
 
@@ -14,8 +13,7 @@ import (
 func TestDeduper_SkipsDuplicateJobs(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	fakeSched := model.NewFakeScheduler(0, nil)
 	dd := deduper.New(slog.Default(), fakeSched)

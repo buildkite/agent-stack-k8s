@@ -24,7 +24,7 @@ func (f *fakeHandler) Pause(pause bool) {}
 func TestReserver_ChunksJobsInto1000(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create fake server
 	server := api.NewFakeAgentServer()
@@ -76,7 +76,7 @@ func TestReserver_ChunksJobsInto1000(t *testing.T) {
 func TestReserver_PassesReservationExpirySeconds(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	server := api.NewFakeAgentServer()
 	defer server.Close()

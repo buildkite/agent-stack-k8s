@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/utils/ptr"
 )
 
 func TestWalkingSkeleton(t *testing.T) {
@@ -29,7 +28,7 @@ func TestWalkingSkeleton(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -43,7 +42,7 @@ func TestUbuntuAgentImage(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	testCfg := cfg
@@ -61,7 +60,7 @@ func TestResourceClass(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	// Configure resource classes for the test
@@ -98,7 +97,7 @@ func TestDefaultResourceClass(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	testCfg := cfg
@@ -132,7 +131,7 @@ func TestPodResourceClass(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sv, err := tc.Kubernetes.Discovery().ServerVersion()
 	if err != nil {
@@ -178,7 +177,7 @@ func TestPodTemplate(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -198,7 +197,7 @@ func TestDefaultQueue(t *testing.T) {
 		GraphQL:     api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 		CustomQueue: "default",
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	// Note: this shouldn't interfere with the stack running the tests, because
 	// the stack uses the "kubernetes" queue.
 	// We provide a custom tag to ensure this run of the test controller picks
@@ -227,7 +226,7 @@ func TestExplicitDefaultQueue(t *testing.T) {
 		GraphQL:     api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 		CustomQueue: "default",
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipeline := tc.createPipelineWithCleanup(ctx, "default", map[string]string{
 		// You may wonder what this pseudoQueue is.
 		// Since in this particular test case, the queue is static, without extra tag, we will be effectively limiting
@@ -251,7 +250,7 @@ func TestPodSpecPatchInStep(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -268,7 +267,7 @@ func TestPodSpecPatchAllowsPatchingCommandContainerCommands(t *testing.T) {
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	tc.StartController(ctx, cfg)
@@ -286,7 +285,7 @@ func TestPodSpecPatchRejectsPatchingAgentContainerCommand(t *testing.T) {
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	tc.StartController(ctx, cfg)
@@ -306,7 +305,7 @@ func TestPodSpecPatchInController(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	cfg := cfg
 	cfg.PodSpecPatch = &corev1.PodSpec{
@@ -337,7 +336,7 @@ func TestPodSpecPatchWithoutContainers(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	cfg := cfg
 	cfg.PodSpecPatch = &corev1.PodSpec{
@@ -365,7 +364,7 @@ func TestControllerPicksUpJobsWithSubsetOfAgentTags(t *testing.T) {
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	cfg := cfg
@@ -384,7 +383,7 @@ func TestControllerSetsAdditionalRedactedVars(t *testing.T) {
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	cfg := cfg
@@ -412,7 +411,7 @@ func TestChown(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -428,7 +427,7 @@ func TestSSHRepoClone(t *testing.T) {
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := tc.Kubernetes.CoreV1().
 		Secrets(cfg.Namespace).
 		Get(ctx, "integration-test-ssh-key", metav1.GetOptions{})
@@ -450,7 +449,7 @@ func TestPluginCloneFailsTests(t *testing.T) {
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
@@ -466,7 +465,7 @@ func TestMaxInFlightLimited(t *testing.T) {
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	cfg := cfg
@@ -514,7 +513,7 @@ func TestMaxInFlightUnlimited(t *testing.T) {
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	cfg := cfg
@@ -576,7 +575,7 @@ func TestSidecars(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -591,7 +590,7 @@ func TestExtraVolumeMounts(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -605,7 +604,7 @@ func TestExtraVolumeMountsCommandContainers(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -619,7 +618,7 @@ func TestExtraVolumeMountsSidecars(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -633,7 +632,7 @@ func TestInvalidPodSpec(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -652,7 +651,7 @@ func TestInvalidPodJSON(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -671,7 +670,7 @@ func TestMissingServiceAccount(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -690,7 +689,7 @@ func TestEnvVariables(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -705,7 +704,7 @@ func TestImagePullBackOffFailed(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -744,7 +743,7 @@ func TestImagePullBackOffRunningSurfacesNotification(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	containerStartTimeout := 60 * time.Second
@@ -780,7 +779,7 @@ func TestCreateContainerConfigErrorFailed(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -802,7 +801,7 @@ func TestPodPendingTimeoutFailed(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	testCfg := cfg
@@ -828,7 +827,7 @@ func TestPullPolicyNeverMissingImage(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -853,7 +852,7 @@ func TestBrokenInitContainer(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -875,7 +874,7 @@ func TestInvalidImageRefFormat(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -894,7 +893,7 @@ func TestArtifactsUploadFailedJobs(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -909,7 +908,7 @@ func TestInterposerBuildkite(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -934,7 +933,7 @@ func TestInterposerVector(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -955,7 +954,7 @@ func TestCancelCheckerDeletePod(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -1026,7 +1025,7 @@ func TestPodKilledBeforeAgentReleasesBKJob(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -1090,7 +1089,7 @@ func TestJobActiveDeadlineSeconds(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -1104,7 +1103,7 @@ func TestHooksAndPlugins(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	cfg := cfg
 	cfg.AgentConfig = &config.AgentConfig{
@@ -1115,7 +1114,7 @@ func TestHooksAndPlugins(t *testing.T) {
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: "integration-tests-fixture-hooks",
 					},
-					DefaultMode: ptr.To[int32](0o755),
+					DefaultMode: new(int32(0o755)),
 				},
 			},
 		},
@@ -1152,7 +1151,7 @@ func TestAdditionalHooks(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	cfg := cfg
 	cfg.AgentConfig = &config.AgentConfig{
@@ -1166,7 +1165,7 @@ func TestAdditionalHooks(t *testing.T) {
 							LocalObjectReference: corev1.LocalObjectReference{
 								Name: "integration-tests-fixture-additional-hooks",
 							},
-							DefaultMode: ptr.To[int32](0o755),
+							DefaultMode: new(int32(0o755)),
 						},
 					},
 				},
@@ -1198,7 +1197,7 @@ func TestSkipCheckoutContainer(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -1213,7 +1212,7 @@ func TestImageAttribute(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 	tc.StartController(ctx, cfg)
 	build := tc.TriggerBuild(ctx, pipelineID)
@@ -1241,7 +1240,7 @@ func TestCompletionsWatcherCleansUpSidecars(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	// Use a short termination grace period so the test runs faster.
@@ -1302,7 +1301,7 @@ func TestContainerStartTimeout(t *testing.T) {
 		Repo:    repoHTTP,
 		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
 	}.Init()
-	ctx := context.Background()
+	ctx := t.Context()
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	timeout := 30 * time.Second

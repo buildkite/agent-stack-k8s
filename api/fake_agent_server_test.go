@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"context"
 	"log/slog"
 	"testing"
 
@@ -11,7 +10,7 @@ import (
 )
 
 func TestFakeAgentServer_DefaultBehavior(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create fake server
 	server := api.NewFakeAgentServer()
@@ -47,7 +46,7 @@ func TestFakeAgentServer_DefaultBehavior(t *testing.T) {
 }
 
 func TestFakeAgentServer_RecordsCalls(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	server := api.NewFakeAgentServer()
 	defer server.Close()
@@ -82,7 +81,7 @@ func TestFakeAgentServer_RecordsCalls(t *testing.T) {
 }
 
 func TestFakeAgentServer_CustomError(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	server := api.NewFakeAgentServer()
 	defer server.Close()
@@ -111,7 +110,7 @@ func TestFakeAgentServer_CustomError(t *testing.T) {
 }
 
 func TestFakeAgentServer_CustomResult(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	server := api.NewFakeAgentServer()
 	defer server.Close()

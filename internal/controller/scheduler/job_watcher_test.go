@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"context"
 	"errors"
 	"log/slog"
 	"os"
@@ -18,7 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
-	"k8s.io/utils/ptr"
 )
 
 const testJobUUID = "019f719c-0000-0000-0000-000000000000"
@@ -31,7 +29,7 @@ func newTestJobWatcher(t *testing.T, fakeServer *api.FakeAgentServer) (*jobWatch
 
 func newTestJobWatcherWithChecker(t *testing.T, fakeServer *api.FakeAgentServer) (*jobWatcher, *fake.Clientset, *BatchBuildkiteJobChecker) {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	agentClient, err := api.NewAgentClient(ctx, api.AgentClientOpts{
@@ -214,7 +212,7 @@ func TestCleanupStalledJobs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
+			ctx := t.Context()
 			server := api.NewFakeAgentServer()
 			defer server.Close()
 
@@ -241,7 +239,7 @@ func TestCleanupStalledJobs(t *testing.T) {
 					live.Status.Active = 1
 				}
 				if tt.liveTerminating {
-					live.Status.Terminating = ptr.To[int32](1)
+					live.Status.Terminating = new(int32(1))
 				}
 				if tt.jobReplaced {
 					live.UID = "replacement-uid"
@@ -295,7 +293,7 @@ func TestCleanupStalledJobs(t *testing.T) {
 // UID). The skip must not remove the replacement's entry, or a genuinely
 // stalled replacement would never be checked again.
 func TestCleanupStalledJobs_ReplacementAddedDuringCheck(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	server := api.NewFakeAgentServer()
 	defer server.Close()
 	server.JobStates = map[string]string{testJobUUID: "scheduled"}
@@ -349,9 +347,9 @@ func TestPodlessJobIsRegisteredForCancelChecks(t *testing.T) {
 	w, _, checker := newTestJobWatcherWithChecker(t, fakeServer)
 
 	kjob := newTestK8sJob(testJobUUID)
-	kjob.Spec.Suspend = ptr.To(true)
+	kjob.Spec.Suspend = new(true)
 
-	w.runChecks(context.Background(), kjob)
+	w.runChecks(t.Context(), kjob)
 
 	if got := checker.GetActiveCheckCount(); got != 1 {
 		t.Fatalf("checker.GetActiveCheckCount() = %d, want 1", got)
@@ -384,7 +382,7 @@ func TestPodTargetIsNotDowngradedByJobEvent(t *testing.T) {
 	checker.AddPod(jobUUID, metav1.ObjectMeta{Name: "the-pod", Namespace: "default"})
 
 	kjob := newTestK8sJob(testJobUUID)
-	w.runChecks(context.Background(), kjob)
+	w.runChecks(t.Context(), kjob)
 
 	target, ok := checker.targetFor(jobUUID)
 	if !ok {
@@ -418,7 +416,7 @@ func TestFinishedJobIsDeregistered(t *testing.T) {
 		Status: corev1.ConditionTrue,
 	}}
 
-	w.runChecks(context.Background(), kjob)
+	w.runChecks(t.Context(), kjob)
 
 	if got := checker.GetActiveCheckCount(); got != 0 {
 		t.Errorf("checker.GetActiveCheckCount() = %d, want 0", got)

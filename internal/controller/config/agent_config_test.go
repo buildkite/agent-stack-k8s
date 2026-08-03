@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/utils/ptr"
 )
 
 func envValue(ctr *corev1.Container, name string) (string, bool) {
@@ -18,9 +17,9 @@ func envValue(ctr *corev1.Container, name string) (string, bool) {
 
 func TestApplyToAgentStart_Tracing(t *testing.T) {
 	agentConfig := &AgentConfig{
-		TracingBackend:              ptr.To("opentelemetry"),
-		TracingServiceName:          ptr.To("my-service"),
-		TracingPropagateTraceparent: ptr.To(true),
+		TracingBackend:              new("opentelemetry"),
+		TracingServiceName:          new("my-service"),
+		TracingPropagateTraceparent: new(true),
 	}
 
 	ctr := &corev1.Container{}
