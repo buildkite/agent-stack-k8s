@@ -8,7 +8,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 )
 
 func TestPodHasExceededPendingTimeout(t *testing.T) {
@@ -144,7 +143,7 @@ func TestIsSidecarInitContainer(t *testing.T) {
 				{Name: "checkout"},
 				{
 					Name:          "sidecar-0",
-					RestartPolicy: ptr.To(corev1.ContainerRestartPolicyAlways),
+					RestartPolicy: new(corev1.ContainerRestartPolicyAlways),
 				},
 				{Name: "imagecheck-0"},
 			},

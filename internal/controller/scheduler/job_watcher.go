@@ -26,7 +26,6 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/ptr"
 )
 
 // jobWatcher watches k8s jobs for failure to start a pod. The corresponding
@@ -559,7 +558,7 @@ func (w *jobWatcher) cleanupStalledJob(ctx context.Context, kjob *batchv1.Job) {
 		// activeDeadlineSeconds applies from the start of the job. But the
 		// job is only cleaned up though TTLSecondsAfterFinished, which is way
 		// in the future.
-		job.Spec.ActiveDeadlineSeconds = ptr.To[int64](1)
+		job.Spec.ActiveDeadlineSeconds = new(int64(1))
 		_, err = w.k8s.BatchV1().Jobs(kjob.Namespace).Update(ctx, job, metav1.UpdateOptions{})
 		return err
 	}); err != nil {

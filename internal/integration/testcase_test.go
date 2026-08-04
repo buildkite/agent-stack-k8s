@@ -153,11 +153,11 @@ func (t testcase) createClusterQueueWithCleanup() *buildkite.ClusterQueue {
 		if t.preserveEphemeralObjects() {
 			return
 		}
-
+		ctx := context.WithoutCancel(t.Context()) // By the time we get here, t.Context() is already cancelled, so detach.
 		if err := roko.NewRetrier(
 			roko.WithMaxAttempts(5),
 			roko.WithStrategy(roko.Constant(5*time.Second)),
-		).DoWithContext(context.Background(), func(r *roko.Retrier) error {
+		).DoWithContext(ctx, func(r *roko.Retrier) error {
 			// There is a small chance that we are deleting queue too soon before queue realize agent has disconnected.
 			_, err := t.Buildkite.ClusterQueues.Delete(t.Org, t.ClusterUUID, *queue.ID)
 			return err
@@ -197,11 +197,11 @@ func (t testcase) createPipelineWithCleanup(ctx context.Context, queueName strin
 		ClusterID:     t.ClusterUUID,
 	})
 	if err != nil {
-		t.Fatalf("t.Buildkite.Pipelines.Create(%q, &buildkite.CreatePipeline{\n\tName:\t\tt.PipelineName,\n\tRepository:\tt.Repo,\n\tProviderSettings: &buildkite.GitHubSettings{\n\t\tTriggerMode: ptr.To(\"none\"),\n\t},\n\tConfiguration:\tsteps.String(),\n\tClusterID:\tt.ClusterUUID,\n}) error = %v, want nil", t.Org, err)
+		t.Fatalf("t.Buildkite.Pipelines.Create(%q, &buildkite.CreatePipeline{\n\tName:\t\tt.PipelineName,\n\tRepository:\tt.Repo,\n\tProviderSettings: &buildkite.GitHubSettings{\n\t\tTriggerMode: new(\"none\"),\n\t},\n\tConfiguration:\tsteps.String(),\n\tClusterID:\tt.ClusterUUID,\n}) error = %v, want nil", t.Org, err)
 	}
 	EnsureCleanup(t.T, func() {
 		if !t.preserveEphemeralObjects() {
-			t.deletePipeline(ctx)
+			t.deletePipeline(context.WithoutCancel(ctx)) // By this point, t.Context() is already cancelled, so detach.
 		}
 	})
 
@@ -260,6 +260,7 @@ func (t testcase) TriggerBuild(ctx context.Context, pipelineGraphQLID string) ap
 		t.Fatalf("api.BuildCreate(ctx, t.GraphQL, api.BuildCreateInput{\n\tAuthor: api.BuildAuthorInput{\n\t\tEmail:\tauthorEmail,\n\t\tName:\tauthorName,\n\t},\n\tPipelineID:\tpipelineGraphQLID,\n\tCommit:\t\t\"HEAD\",\n\tBranch:\t\tbranch,\n\tMessage:\tt.Name(),\n}) error = %v, want nil", err)
 	}
 	EnsureCleanup(t.T, func() {
+		ctx := context.WithoutCancel(ctx) // By this point, t.Context() is already cancelled, so detach.
 		if _, err := api.BuildCancel(ctx, t.GraphQL, api.BuildCancelInput{
 			Id: createBuild.BuildCreate.Build.Id,
 		}); err != nil {
@@ -535,7 +536,7 @@ func ignorableError(err error) bool {
 
 func (t testcase) getAgentTokenIdentity() *agentApi.AgentTokenIdentity {
 	t.Helper()
-	ctx := context.Background()
+	ctx := t.Context()
 
 	token, err := fetchAgentToken(ctx, t.Logger, t.Kubernetes, cfg.Namespace, cfg.AgentTokenSecret)
 	if err != nil {
@@ -554,9 +555,9 @@ func (t testcase) getAgentTokenIdentity() *agentApi.AgentTokenIdentity {
 		t.Fatalf("agentApi.NewAgentTokenClient(agentApi.AgentTokenClientOpts{\n\tToken:\t\ttoken,\n\tEndpoint:\tagentEndpoint,\n}) error = %v, want nil", err)
 	}
 
-	result, _, err := client.GetTokenIdentity(context.Background())
+	result, _, err := client.GetTokenIdentity(t.Context())
 	if err != nil {
-		t.Fatalf("client.GetTokenIdentity(context.Background()) error = %v, want nil", err)
+		t.Fatalf("client.GetTokenIdentity(t.Context()) error = %v, want nil", err)
 	}
 
 	return result

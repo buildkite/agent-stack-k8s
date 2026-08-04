@@ -33,7 +33,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/yaml"
 )
 
@@ -350,7 +349,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	kjob.Spec.Template.Labels = kjob.Labels
 	kjob.Spec.Template.Annotations = kjob.Annotations
-	kjob.Spec.BackoffLimit = ptr.To[int32](0)
+	kjob.Spec.BackoffLimit = new(int32(0))
 
 	if podSpec.TerminationGracePeriodSeconds == nil {
 		podSpec.TerminationGracePeriodSeconds = new(int64(w.cfg.DefaultTerminationGracePeriodSeconds))
@@ -515,7 +514,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			maps.Copy(kjob.Spec.Template.Annotations, sidecarAnnotation)
 
 			// Per https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/
-			c.RestartPolicy = ptr.To(corev1.ContainerRestartPolicyAlways)
+			c.RestartPolicy = new(corev1.ContainerRestartPolicyAlways)
 			podSpec.InitContainers = append(podSpec.InitContainers, c)
 
 			sidecarCounterCount += 1
@@ -960,8 +959,8 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 	case podUser != 0 && podGroup != 0:
 		// The init container needs to be run as root to create the user and give it ownership to the workspace directory
 		securityContext = &corev1.SecurityContext{
-			RunAsUser:    ptr.To[int64](0),
-			RunAsGroup:   ptr.To[int64](0),
+			RunAsUser:    new(int64(0)),
+			RunAsGroup:   new(int64(0)),
 			RunAsNonRoot: new(false),
 		}
 
@@ -970,8 +969,8 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 	case podUser != 0 && podGroup == 0:
 		//The init container needs to be run as root to create the user and give it ownership to the workspace directory
 		securityContext = &corev1.SecurityContext{
-			RunAsUser:    ptr.To[int64](0),
-			RunAsGroup:   ptr.To[int64](0),
+			RunAsUser:    new(int64(0)),
+			RunAsGroup:   new(int64(0)),
 			RunAsNonRoot: new(false),
 		}
 
@@ -1133,8 +1132,8 @@ func (w *worker) createCheckoutContainer(
 	case podUser != 0:
 		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
 		checkoutContainer.SecurityContext = &corev1.SecurityContext{
-			RunAsUser:    ptr.To[int64](0),
-			RunAsGroup:   ptr.To[int64](0),
+			RunAsUser:    new(int64(0)),
+			RunAsGroup:   new(int64(0)),
 			RunAsNonRoot: new(false),
 		}
 

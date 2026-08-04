@@ -27,7 +27,7 @@ func TestNotificationBatcher_SendsBatchesPeriodically(t *testing.T) {
 
 	nb := newNotificationBatcher("test-stack", client, slog.Default())
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	if err := nb.start(ctx); err != nil {
@@ -75,7 +75,7 @@ func TestNotificationBatcher_ChunksBatchesBySize(t *testing.T) {
 
 	nb := newNotificationBatcher("test-stack", client, slog.Default())
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	if err := nb.start(ctx); err != nil {
