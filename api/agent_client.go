@@ -333,12 +333,16 @@ func (c *AgentClient) DeregisterStack(ctx context.Context) error {
 	return err
 }
 
-func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail string) error {
+// FailJob marks the job as finished with exit status -1, recording
+// errorDetail in the job log and signalReason (e.g. "stack_error") as the
+// job's machine-readable signal reason.
+func (c *AgentClient) FailJob(ctx context.Context, jobUUID string, errorDetail string, signalReason string) error {
 	req := stacksapi.FinishJobRequest{
-		StackKey:   c.stack.Key,
-		JobUUID:    jobUUID,
-		ExitStatus: -1,
-		Detail:     errorDetail,
+		StackKey:     c.stack.Key,
+		JobUUID:      jobUUID,
+		ExitStatus:   -1,
+		Detail:       errorDetail,
+		SignalReason: signalReason,
 	}
 
 	_, err := c.stacksAPIClient.FinishJob(ctx, req)

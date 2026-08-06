@@ -26,7 +26,6 @@ func failForK8sObject(ctx context.Context, logger *slog.Logger, obj metav1.Objec
 		"name", obj.GetName(),
 	)
 
-	// Matching tags are required order to connect the temporary agent.
 	labels := obj.GetLabels()
 	jobUUID := labels[config.UUIDLabel]
 	if jobUUID == "" {
@@ -34,5 +33,5 @@ func failForK8sObject(ctx context.Context, logger *slog.Logger, obj metav1.Objec
 		return errors.New("missing UUID label")
 	}
 
-	return agentClient.FailJob(ctx, jobUUID, failureInfo.Message)
+	return agentClient.FailJob(ctx, jobUUID, failureInfo.Message, failureInfo.Reason)
 }

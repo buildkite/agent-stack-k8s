@@ -753,7 +753,10 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *slog.Logger, 
 		message := w.formatImagePullFailureMessage(statuses)
 		failureInfo := FailureInfo{
 			Message: message,
-			// Do we have a better status code to report here?
+			// Image-pull failures are infrastructure provisioning failures,
+			// so report them with the same signal reason as other stack
+			// errors.
+			Reason: agent.SignalReasonStackError,
 		}
 		if err := failForK8sObject(ctx, log, pod, failureInfo, w.agentClient); err != nil {
 			podWatcherBuildkiteJobFailErrorsCounter.Inc()
