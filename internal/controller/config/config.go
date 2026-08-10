@@ -98,7 +98,9 @@ type Config struct {
 	WorkspaceVolume *corev1.Volume `json:"workspace-volume" validate:"omitempty"`
 
 	// WorkspaceMountSubPathExpr, when set, is applied as `subPathExpr` to
-	// every /workspace VolumeMount the controller creates.
+	// every /workspace VolumeMount the controller creates. When a final
+	// /workspace mount expands POD_NAME, the scheduler supplies it from the
+	// pod's metadata.name unless the container already defines it.
 	WorkspaceMountSubPathExpr string `json:"workspace-mount-sub-path-expr" validate:"omitempty"`
 
 	AgentConfig            *AgentConfig    `json:"agent-config"             validate:"omitempty"`

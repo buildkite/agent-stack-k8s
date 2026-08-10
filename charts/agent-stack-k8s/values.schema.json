@@ -386,7 +386,7 @@
         "workspace-mount-sub-path-expr": {
           "type": "string",
           "default": "",
-          "title": "When set, applied as `subPathExpr` to every /workspace VolumeMount the controller creates, so a shared workspace volume can be sliced into per-pod subdirectories. Typically `$(POD_NAME)`, with POD_NAME supplied via downward API.",
+          "title": "When set, applied as `subPathExpr` to every /workspace VolumeMount the controller creates, so a shared workspace volume can be sliced into per-pod subdirectories. Typically `$(POD_NAME)`; the controller supplies POD_NAME from metadata.name via the downward API unless the container already defines it.",
           "examples": ["", "$(POD_NAME)"]
         },
         "agent-config": {
