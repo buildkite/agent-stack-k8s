@@ -761,6 +761,104 @@ func TestBuildWorkspaceMountSubPathExpr(t *testing.T) {
 	}
 }
 
+func TestBuildWorkspaceMountSubPathExprAfterPodSpecPatches(t *testing.T) {
+	t.Parallel()
+
+	worker := New(slog.Default(), nil, nil, Config{
+		Image:                     "buildkite/agent:latest",
+		WorkspaceMountSubPathExpr: "$(POD_NAME)",
+		SkipImageCheckContainers:  true,
+		PodSpecPatch: &corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name:         "controller-patched",
+				Image:        "alpine:latest",
+				VolumeMounts: workspaceVolumeMounts("$(POD_NAME)"),
+				Env: []corev1.EnvVar{{
+					Name:  "POD_NAME",
+					Value: "controller-value",
+				}},
+			}},
+		},
+	})
+
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, buildInputs{
+		uuid:    "abc",
+		command: "echo hello world",
+		k8sPlugin: &KubernetesPlugin{
+			PodSpecPatch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:         DefaultCommandContainerName,
+						VolumeMounts: workspaceVolumeMounts("static"),
+					},
+					{
+						Name: "controller-patched",
+						Env: []corev1.EnvVar{{
+							Name:  "POD_NAME",
+							Value: "plugin-value",
+						}},
+					},
+					{
+						Name:         "plugin-patched",
+						Image:        "busybox:latest",
+						VolumeMounts: workspaceVolumeMounts("$(POD_NAME)"),
+						EnvFrom: []corev1.EnvFromSource{{
+							ConfigMapRef: &corev1.ConfigMapEnvSource{
+								LocalObjectReference: corev1.LocalObjectReference{Name: "pod-config"},
+							},
+						}},
+					},
+					{
+						Name:  "other-mount-path",
+						Image: "busybox:latest",
+						VolumeMounts: []corev1.VolumeMount{{
+							Name:        "workspace",
+							MountPath:   "/other",
+							SubPathExpr: "$(POD_NAME)",
+						}},
+					},
+				},
+				InitContainers: []corev1.Container{{
+					Name:         "plugin-patched-init",
+					Image:        "busybox:latest",
+					VolumeMounts: workspaceVolumeMounts("pods/$(POD_NAME)"),
+				}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("worker.Build() error = %v, want nil", err)
+	}
+
+	controllerPatched := findContainer(t, kjob.Spec.Template.Spec.Containers, "controller-patched")
+	wantPodName := &corev1.EnvVar{Name: "POD_NAME", Value: "plugin-value"}
+	if diff := cmp.Diff(findEnv(t, controllerPatched.Env, "POD_NAME"), wantPodName); diff != "" {
+		t.Errorf("controller-patched POD_NAME diff (-got +want):\n%s", diff)
+	}
+	if got, want := countEnv(controllerPatched.Env, "POD_NAME"), 1; got != want {
+		t.Errorf("controller-patched POD_NAME env count = %d, want %d", got, want)
+	}
+
+	pluginPatched := findContainer(t, kjob.Spec.Template.Spec.Containers, "plugin-patched")
+	assertEnvFieldPath(t, pluginPatched, "POD_NAME", "metadata.name")
+	if got, want := len(pluginPatched.EnvFrom), 1; got != want {
+		t.Errorf("plugin-patched EnvFrom count = %d, want %d", got, want)
+	}
+
+	pluginPatchedInit := findContainer(t, kjob.Spec.Template.Spec.InitContainers, "plugin-patched-init")
+	assertEnvFieldPath(t, pluginPatchedInit, "POD_NAME", "metadata.name")
+
+	otherMountPath := findContainer(t, kjob.Spec.Template.Spec.Containers, "other-mount-path")
+	if got := findEnv(t, otherMountPath.Env, "POD_NAME"); got != nil {
+		t.Errorf("other-mount-path POD_NAME = %v, want nil", got)
+	}
+
+	defaultCommand := findContainer(t, kjob.Spec.Template.Spec.Containers, DefaultCommandContainerName)
+	if got := findEnv(t, defaultCommand.Env, "POD_NAME"); got != nil {
+		t.Errorf("default command POD_NAME = %v, want nil after plugin replaced SubPathExpr", got)
+	}
+}
+
 func TestSubPathExprExpandsPodName(t *testing.T) {
 	t.Parallel()
 
@@ -2124,6 +2222,14 @@ func countEnv(envs []corev1.EnvVar, name string) int {
 		}
 	}
 	return count
+}
+
+func workspaceVolumeMounts(subPathExpr string) []corev1.VolumeMount {
+	return []corev1.VolumeMount{{
+		Name:        "workspace",
+		MountPath:   "/workspace",
+		SubPathExpr: subPathExpr,
+	}}
 }
 
 func hasVolumeNamed(volumes []corev1.Volume, name string) bool {
