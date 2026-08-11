@@ -501,13 +501,13 @@ func TestTagEnv(t *testing.T) {
 func assertEnvFieldPath(t *testing.T, container corev1.Container, envVarName, fieldPath string) {
 	t.Helper()
 
+	if got, want := countEnv(container.Env, envVarName), 1; got != want {
+		t.Errorf("%s env count = %d, want %d", envVarName, got, want)
+		if got == 0 {
+			return
+		}
+	}
 	env := findEnv(t, container.Env, envVarName)
-	if got := env; got == nil {
-		t.Errorf("findEnv(t, container.Env, %q) = %v, want non-nil value", envVarName, got)
-	}
-	if env == nil {
-		return
-	}
 	if got, want := env.Value, ""; got != want {
 		t.Errorf("env.Value = %q, want %q", got, want)
 	}
@@ -519,7 +519,7 @@ func assertEnvFieldPath(t *testing.T, container corev1.Container, envVarName, fi
 		t.Errorf("env.ValueFrom.FieldRef = %v, want non-nil value", got)
 		return
 	}
-	if got, want := fieldPath, env.ValueFrom.FieldRef.FieldPath; got != want {
+	if got, want := env.ValueFrom.FieldRef.FieldPath, fieldPath; got != want {
 		t.Errorf("fieldPath = %q, want %q", got, want)
 	}
 }
@@ -710,37 +710,54 @@ func TestBuildWorkspaceMountSubPathExpr(t *testing.T) {
 	if err != nil {
 		t.Fatalf("worker.ParseJob(job, sjob) error = %v, want nil", err)
 	}
-	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	inputs.k8sPlugin = &KubernetesPlugin{
+		Sidecars: []corev1.Container{{
+			Name:  "custom-sidecar",
+			Image: "busybox:latest",
+		}},
+	}
+	kjob, err := worker.Build(&corev1.PodSpec{
+		Containers: []corev1.Container{{
+			Name:  "custom-command",
+			Image: "alpine:latest",
+		}},
+	}, false, inputs)
 	if err != nil {
-		t.Fatalf("worker.Build(&corev1.PodSpec{}, %t, inputs) error = %v, want nil", false, err)
+		t.Fatalf("worker.Build(podSpec, %t, inputs) error = %v, want nil", false, err)
 	}
 
 	const wantMountPath = "/workspace"
 	const wantSubPathExpr = "$(POD_NAME)"
 
-	checkWorkspaceMount := func(t *testing.T, label, containerName string, mounts []corev1.VolumeMount) {
+	checkWorkspaceMount := func(t *testing.T, label string, container corev1.Container) {
 		t.Helper()
 		var found bool
-		for _, m := range mounts {
+		for _, m := range container.VolumeMounts {
 			if m.MountPath != wantMountPath {
 				continue
 			}
 			found = true
 			if m.SubPathExpr != wantSubPathExpr {
 				t.Errorf("%s container %q: workspace mount SubPathExpr = %q, want %q",
-					label, containerName, m.SubPathExpr, wantSubPathExpr)
+					label, container.Name, m.SubPathExpr, wantSubPathExpr)
 			}
 		}
 		if !found {
-			t.Errorf("%s container %q: no /workspace mount found", label, containerName)
+			t.Errorf("%s container %q: no /workspace mount found", label, container.Name)
 		}
+		assertEnvFieldPath(t, container, "POD_NAME", "metadata.name")
 	}
 
 	for _, c := range kjob.Spec.Template.Spec.Containers {
-		checkWorkspaceMount(t, "container", c.Name, c.VolumeMounts)
+		checkWorkspaceMount(t, "container", c)
 	}
+	var foundImageCheck bool
 	for _, c := range kjob.Spec.Template.Spec.InitContainers {
-		checkWorkspaceMount(t, "initContainer", c.Name, c.VolumeMounts)
+		checkWorkspaceMount(t, "initContainer", c)
+		foundImageCheck = foundImageCheck || strings.HasPrefix(c.Name, ImageCheckContainerNamePrefix)
+	}
+	if !foundImageCheck {
+		t.Error("kjob.Spec.Template.Spec.InitContainers has no image-check container")
 	}
 }
 
@@ -2097,6 +2114,16 @@ func findEnv(t *testing.T, envs []corev1.EnvVar, name string) *corev1.EnvVar {
 	}
 
 	return nil
+}
+
+func countEnv(envs []corev1.EnvVar, name string) int {
+	var count int
+	for _, env := range envs {
+		if env.Name == name {
+			count++
+		}
+	}
+	return count
 }
 
 func hasVolumeNamed(volumes []corev1.Volume, name string) bool {
