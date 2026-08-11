@@ -744,6 +744,41 @@ func TestBuildWorkspaceMountSubPathExpr(t *testing.T) {
 	}
 }
 
+func TestSubPathExprExpandsPodName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		expr string
+		want bool
+	}{
+		{name: "whole expression", expr: "$(POD_NAME)", want: true},
+		{name: "embedded expression", expr: "pods/$(POD_NAME)/workspace", want: true},
+		{name: "after another reference", expr: "$(OTHER)/$(POD_NAME)", want: true},
+		{name: "odd dollar run", expr: "$$$(POD_NAME)", want: true},
+		{name: "backslash is not an escape", expr: `\$(POD_NAME)`, want: true},
+		{name: "after non-ASCII rune", expr: "$£$(POD_NAME)", want: true},
+		{name: "empty", expr: "", want: false},
+		{name: "static", expr: "workspace", want: false},
+		{name: "other reference", expr: "$(OTHER)", want: false},
+		{name: "escaped reference", expr: "$$(POD_NAME)", want: false},
+		{name: "shell reference", expr: "${POD_NAME}", want: false},
+		{name: "bare reference", expr: "$POD_NAME", want: false},
+		{name: "unterminated reference", expr: "$(POD_NAME", want: false},
+		{name: "nested reference", expr: "$($(POD_NAME))", want: false},
+		{name: "different name prefix", expr: "$(POD_NAME_SUFFIX)", want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := subPathExprExpandsPodName(test.expr); got != test.want {
+				t.Errorf("subPathExprExpandsPodName(%q) = %t, want %t", test.expr, got, test.want)
+			}
+		})
+	}
+}
+
 // TestBuildWorkspaceMountSubPathExprDefault verifies the previous behavior
 // (no SubPathExpr) is preserved when the new field is unset.
 func TestBuildWorkspaceMountSubPathExprDefault(t *testing.T) {
