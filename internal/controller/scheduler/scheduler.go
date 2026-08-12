@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
@@ -789,6 +790,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// Dedupe VolumeMounts for both InitContainers and Containers
 	podSpec.InitContainers = config.PrepareVolumeMounts(podSpec.InitContainers)
 	podSpec.Containers = config.PrepareVolumeMounts(podSpec.Containers)
+	// Inspect mounts only after patches and deduplication so the environment
+	// matches the mount that will reach Kubernetes.
+	addPodNameEnvForWorkspaceMounts(podSpec.InitContainers)
+	addPodNameEnvForWorkspaceMounts(podSpec.Containers)
 
 	kjob.Spec.Template.Spec = *podSpec
 
@@ -927,6 +932,76 @@ func PatchPodSpec(original *corev1.PodSpec, patch *corev1.PodSpec, cmdParams *co
 	}
 
 	return &patchedSpec, nil
+}
+
+func addPodNameEnvForWorkspaceMounts(containers []corev1.Container) {
+	for i := range containers {
+		container := &containers[i]
+		if slices.ContainsFunc(container.Env, func(env corev1.EnvVar) bool {
+			return env.Name == "POD_NAME"
+		}) {
+			continue
+		}
+
+		for _, mount := range container.VolumeMounts {
+			if mount.MountPath != "/workspace" || !subPathExprExpandsPodName(mount.SubPathExpr) {
+				continue
+			}
+			container.Env = append(container.Env, corev1.EnvVar{
+				Name: "POD_NAME",
+				ValueFrom: &corev1.EnvVarSource{
+					FieldRef: &corev1.ObjectFieldSelector{
+						FieldPath: "metadata.name",
+					},
+				},
+			})
+			break
+		}
+	}
+}
+
+// subPathExprExpandsPodName reports whether Kubernetes will interpret part of
+// expr as a POD_NAME reference.
+func subPathExprExpandsPodName(expr string) bool {
+	for cursor := 0; cursor < len(expr); {
+		reference, next := readSubPathExprToken(expr, cursor)
+		if reference == "POD_NAME" {
+			return true
+		}
+		cursor = next
+	}
+	return false
+}
+
+// readSubPathExprToken returns the variable name at cursor, if any, and the
+// next byte to inspect. Kubernetes treats $$ as an escaped dollar; backslashes
+// have no special meaning during expansion. Parsing mirrors kubelet's
+// SubPathExpr expansion semantics:
+// https://github.com/kubernetes/kubernetes/blob/0f29094e5b73085e3802ecc1298ecae13866bfe6/pkg/kubelet/container/helpers.go#L245-L261
+// https://github.com/kubernetes/kubernetes/blob/0f29094e5b73085e3802ecc1298ecae13866bfe6/third_party/forked/golang/expansion/expand.go#L39-L103
+func readSubPathExprToken(expr string, cursor int) (string, int) {
+	if expr[cursor] != '$' {
+		return "", cursor + 1
+	}
+	if cursor+1 >= len(expr) {
+		return "", len(expr)
+	}
+
+	switch expr[cursor+1] {
+	case '$':
+		return "", cursor + 2
+	case '(':
+		referenceStart := cursor + 2
+		referenceLength := strings.IndexByte(expr[referenceStart:], ')')
+		if referenceLength < 0 {
+			return "", len(expr)
+		}
+		referenceEnd := referenceStart + referenceLength
+		return expr[referenceStart:referenceEnd], referenceEnd + 1
+	default:
+		_, size := utf8.DecodeRuneInString(expr[cursor+1:])
+		return "", cursor + 1 + size
+	}
 }
 
 // workspaceVolumeMount returns the standard /workspace VolumeMount with

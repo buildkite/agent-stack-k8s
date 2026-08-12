@@ -501,13 +501,13 @@ func TestTagEnv(t *testing.T) {
 func assertEnvFieldPath(t *testing.T, container corev1.Container, envVarName, fieldPath string) {
 	t.Helper()
 
+	if got, want := countEnv(container.Env, envVarName), 1; got != want {
+		t.Errorf("%s env count = %d, want %d", envVarName, got, want)
+		if got == 0 {
+			return
+		}
+	}
 	env := findEnv(t, container.Env, envVarName)
-	if got := env; got == nil {
-		t.Errorf("findEnv(t, container.Env, %q) = %v, want non-nil value", envVarName, got)
-	}
-	if env == nil {
-		return
-	}
 	if got, want := env.Value, ""; got != want {
 		t.Errorf("env.Value = %q, want %q", got, want)
 	}
@@ -519,7 +519,7 @@ func assertEnvFieldPath(t *testing.T, container corev1.Container, envVarName, fi
 		t.Errorf("env.ValueFrom.FieldRef = %v, want non-nil value", got)
 		return
 	}
-	if got, want := fieldPath, env.ValueFrom.FieldRef.FieldPath; got != want {
+	if got, want := env.ValueFrom.FieldRef.FieldPath, fieldPath; got != want {
 		t.Errorf("fieldPath = %q, want %q", got, want)
 	}
 }
@@ -710,37 +710,187 @@ func TestBuildWorkspaceMountSubPathExpr(t *testing.T) {
 	if err != nil {
 		t.Fatalf("worker.ParseJob(job, sjob) error = %v, want nil", err)
 	}
-	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	inputs.k8sPlugin = &KubernetesPlugin{
+		Sidecars: []corev1.Container{{
+			Name:  "custom-sidecar",
+			Image: "busybox:latest",
+		}},
+	}
+	kjob, err := worker.Build(&corev1.PodSpec{
+		Containers: []corev1.Container{{
+			Name:  "custom-command",
+			Image: "alpine:latest",
+		}},
+	}, false, inputs)
 	if err != nil {
-		t.Fatalf("worker.Build(&corev1.PodSpec{}, %t, inputs) error = %v, want nil", false, err)
+		t.Fatalf("worker.Build(podSpec, %t, inputs) error = %v, want nil", false, err)
 	}
 
 	const wantMountPath = "/workspace"
 	const wantSubPathExpr = "$(POD_NAME)"
 
-	checkWorkspaceMount := func(t *testing.T, label, containerName string, mounts []corev1.VolumeMount) {
+	checkWorkspaceMount := func(t *testing.T, label string, container corev1.Container) {
 		t.Helper()
 		var found bool
-		for _, m := range mounts {
+		for _, m := range container.VolumeMounts {
 			if m.MountPath != wantMountPath {
 				continue
 			}
 			found = true
 			if m.SubPathExpr != wantSubPathExpr {
 				t.Errorf("%s container %q: workspace mount SubPathExpr = %q, want %q",
-					label, containerName, m.SubPathExpr, wantSubPathExpr)
+					label, container.Name, m.SubPathExpr, wantSubPathExpr)
 			}
 		}
 		if !found {
-			t.Errorf("%s container %q: no /workspace mount found", label, containerName)
+			t.Errorf("%s container %q: no /workspace mount found", label, container.Name)
 		}
+		assertEnvFieldPath(t, container, "POD_NAME", "metadata.name")
 	}
 
 	for _, c := range kjob.Spec.Template.Spec.Containers {
-		checkWorkspaceMount(t, "container", c.Name, c.VolumeMounts)
+		checkWorkspaceMount(t, "container", c)
 	}
+	var foundImageCheck bool
 	for _, c := range kjob.Spec.Template.Spec.InitContainers {
-		checkWorkspaceMount(t, "initContainer", c.Name, c.VolumeMounts)
+		checkWorkspaceMount(t, "initContainer", c)
+		foundImageCheck = foundImageCheck || strings.HasPrefix(c.Name, ImageCheckContainerNamePrefix)
+	}
+	if !foundImageCheck {
+		t.Error("kjob.Spec.Template.Spec.InitContainers has no image-check container")
+	}
+}
+
+func TestBuildWorkspaceMountSubPathExprAfterPodSpecPatches(t *testing.T) {
+	t.Parallel()
+
+	worker := New(slog.Default(), nil, nil, Config{
+		Image:                     "buildkite/agent:latest",
+		WorkspaceMountSubPathExpr: "$(POD_NAME)",
+		SkipImageCheckContainers:  true,
+		PodSpecPatch: &corev1.PodSpec{
+			Containers: []corev1.Container{{
+				Name:         "controller-patched",
+				Image:        "alpine:latest",
+				VolumeMounts: workspaceVolumeMounts("$(POD_NAME)"),
+				Env: []corev1.EnvVar{{
+					Name:  "POD_NAME",
+					Value: "controller-value",
+				}},
+			}},
+		},
+	})
+
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, buildInputs{
+		uuid:    "abc",
+		command: "echo hello world",
+		k8sPlugin: &KubernetesPlugin{
+			PodSpecPatch: &corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:         DefaultCommandContainerName,
+						VolumeMounts: workspaceVolumeMounts("static"),
+					},
+					{
+						Name: "controller-patched",
+						Env: []corev1.EnvVar{{
+							Name:  "POD_NAME",
+							Value: "plugin-value",
+						}},
+					},
+					{
+						Name:         "plugin-patched",
+						Image:        "busybox:latest",
+						VolumeMounts: workspaceVolumeMounts("$(POD_NAME)"),
+						EnvFrom: []corev1.EnvFromSource{{
+							ConfigMapRef: &corev1.ConfigMapEnvSource{
+								LocalObjectReference: corev1.LocalObjectReference{Name: "pod-config"},
+							},
+						}},
+					},
+					{
+						Name:  "other-mount-path",
+						Image: "busybox:latest",
+						VolumeMounts: []corev1.VolumeMount{{
+							Name:        "workspace",
+							MountPath:   "/other",
+							SubPathExpr: "$(POD_NAME)",
+						}},
+					},
+				},
+				InitContainers: []corev1.Container{{
+					Name:         "plugin-patched-init",
+					Image:        "busybox:latest",
+					VolumeMounts: workspaceVolumeMounts("pods/$(POD_NAME)"),
+				}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("worker.Build() error = %v, want nil", err)
+	}
+
+	controllerPatched := findContainer(t, kjob.Spec.Template.Spec.Containers, "controller-patched")
+	wantPodName := &corev1.EnvVar{Name: "POD_NAME", Value: "plugin-value"}
+	if diff := cmp.Diff(findEnv(t, controllerPatched.Env, "POD_NAME"), wantPodName); diff != "" {
+		t.Errorf("controller-patched POD_NAME diff (-got +want):\n%s", diff)
+	}
+	if got, want := countEnv(controllerPatched.Env, "POD_NAME"), 1; got != want {
+		t.Errorf("controller-patched POD_NAME env count = %d, want %d", got, want)
+	}
+
+	pluginPatched := findContainer(t, kjob.Spec.Template.Spec.Containers, "plugin-patched")
+	assertEnvFieldPath(t, pluginPatched, "POD_NAME", "metadata.name")
+	if got, want := len(pluginPatched.EnvFrom), 1; got != want {
+		t.Errorf("plugin-patched EnvFrom count = %d, want %d", got, want)
+	}
+
+	pluginPatchedInit := findContainer(t, kjob.Spec.Template.Spec.InitContainers, "plugin-patched-init")
+	assertEnvFieldPath(t, pluginPatchedInit, "POD_NAME", "metadata.name")
+
+	otherMountPath := findContainer(t, kjob.Spec.Template.Spec.Containers, "other-mount-path")
+	if got := findEnv(t, otherMountPath.Env, "POD_NAME"); got != nil {
+		t.Errorf("other-mount-path POD_NAME = %v, want nil", got)
+	}
+
+	defaultCommand := findContainer(t, kjob.Spec.Template.Spec.Containers, DefaultCommandContainerName)
+	if got := findEnv(t, defaultCommand.Env, "POD_NAME"); got != nil {
+		t.Errorf("default command POD_NAME = %v, want nil after plugin replaced SubPathExpr", got)
+	}
+}
+
+func TestSubPathExprExpandsPodName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		expr string
+		want bool
+	}{
+		{name: "whole expression", expr: "$(POD_NAME)", want: true},
+		{name: "embedded expression", expr: "pods/$(POD_NAME)/workspace", want: true},
+		{name: "after another reference", expr: "$(OTHER)/$(POD_NAME)", want: true},
+		{name: "odd dollar run", expr: "$$$(POD_NAME)", want: true},
+		{name: "backslash is not an escape", expr: `\$(POD_NAME)`, want: true},
+		{name: "after non-ASCII rune", expr: "$£$(POD_NAME)", want: true},
+		{name: "empty", expr: "", want: false},
+		{name: "static", expr: "workspace", want: false},
+		{name: "other reference", expr: "$(OTHER)", want: false},
+		{name: "escaped reference", expr: "$$(POD_NAME)", want: false},
+		{name: "shell reference", expr: "${POD_NAME}", want: false},
+		{name: "bare reference", expr: "$POD_NAME", want: false},
+		{name: "unterminated reference", expr: "$(POD_NAME", want: false},
+		{name: "nested reference", expr: "$($(POD_NAME))", want: false},
+		{name: "different name prefix", expr: "$(POD_NAME_SUFFIX)", want: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := subPathExprExpandsPodName(test.expr); got != test.want {
+				t.Errorf("subPathExprExpandsPodName(%q) = %t, want %t", test.expr, got, test.want)
+			}
+		})
 	}
 }
 
@@ -2062,6 +2212,24 @@ func findEnv(t *testing.T, envs []corev1.EnvVar, name string) *corev1.EnvVar {
 	}
 
 	return nil
+}
+
+func countEnv(envs []corev1.EnvVar, name string) int {
+	var count int
+	for _, env := range envs {
+		if env.Name == name {
+			count++
+		}
+	}
+	return count
+}
+
+func workspaceVolumeMounts(subPathExpr string) []corev1.VolumeMount {
+	return []corev1.VolumeMount{{
+		Name:        "workspace",
+		MountPath:   "/workspace",
+		SubPathExpr: subPathExpr,
+	}}
 }
 
 func hasVolumeNamed(volumes []corev1.Volume, name string) bool {

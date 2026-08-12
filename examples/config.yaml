@@ -60,6 +60,10 @@ workspace-volume:
           requests:
             storage: 1Gi
 
+# For workspace volumes shared between pods, mount each pod's workspace in its
+# own directory. The controller supplies POD_NAME via the downward API.
+# workspace-mount-sub-path-expr: "$(POD_NAME)"
+
 # Applies to all agents
 agent-config:
   # Setting a custom Agent REST API endpoint is usually only useful if you have
