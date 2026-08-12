@@ -5,7 +5,7 @@ go 1.26.5
 require (
 	github.com/Khan/genqlient v0.8.1
 	github.com/alecthomas/kong v1.16.0
-	github.com/buildkite/agent/v3 v3.136.2
+	github.com/buildkite/agent/v3 v3.137.0
 	github.com/buildkite/go-buildkite/v3 v3.13.0
 	github.com/buildkite/roko v1.4.0
 	github.com/buildkite/stacksapi v1.0.2
@@ -39,12 +39,12 @@ require (
 	github.com/DataDog/datadog-agent/pkg/trace/stats v0.82.0 // indirect
 	github.com/DataDog/datadog-agent/pkg/trace/traceutil v0.82.0 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.16 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.40 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.10 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.22.41 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager v0.3.11 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.36 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.28 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.36 // indirect
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.106.5 // indirect
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.107.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.5.4 // indirect
 	github.com/go-openapi/swag/cmdutils v0.28.0 // indirect
 	github.com/go-openapi/swag/conv v0.28.0 // indirect
@@ -57,7 +57,7 @@ require (
 	github.com/go-openapi/swag/stringutils v0.28.0 // indirect
 	github.com/go-openapi/swag/typeutils v0.28.0 // indirect
 	github.com/go-openapi/swag/yamlutils v0.28.0 // indirect
-	github.com/klauspost/compress v1.19.1 // indirect
+	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.4.0 // indirect
 	github.com/lestrrat-go/dsig v1.3.0 // indirect
 	github.com/lestrrat-go/dsig-secp256k1 v1.0.0 // indirect
@@ -73,10 +73,10 @@ require (
 	github.com/wolfeidau/quickzip v1.0.3 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.158.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.70.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.20.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.20.0 // indirect
-	go.opentelemetry.io/otel/log v0.20.0 // indirect
-	go.opentelemetry.io/otel/sdk/log v0.20.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.21.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.21.0 // indirect
+	go.opentelemetry.io/otel/log v0.21.0 // indirect
+	go.opentelemetry.io/otel/sdk/log v0.21.0 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	google.golang.org/genproto v0.0.0-20260803160001-6ac0973c030d // indirect
@@ -116,7 +116,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.35 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.35 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.35 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.319.1 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.320.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.15 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.35 // indirect
 	github.com/aws/aws-sdk-go-v2/service/kms v1.55.4 // indirect
