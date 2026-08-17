@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/Khan/genqlient v0.8.1
-	github.com/alecthomas/kong v1.16.0
+	github.com/alecthomas/kong v1.16.1
 	github.com/buildkite/agent/v3 v3.137.0
 	github.com/buildkite/go-buildkite/v3 v3.13.0
 	github.com/buildkite/roko v1.4.0
