@@ -1,13 +1,119 @@
 package api_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"log/slog"
+	"net/http"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/stacksapi"
 	"github.com/google/go-cmp/cmp"
 )
+
+func TestFakeAgentServer_IssuesJobAcquisitionTokens(t *testing.T) {
+	ctx := t.Context()
+	server := api.NewFakeAgentServer()
+	defer server.Close()
+
+	expiresAt := time.Now().Add(5 * time.Minute).UTC().Truncate(time.Second)
+	server.JobAcquisitionTokenResponse = &api.IssueJobAcquisitionTokensResponse{
+		JobAcquisitionTokens: []api.IssuedJobAcquisitionToken{{
+			JobUUID:             "job-1",
+			JobAcquisitionToken: "jat-1",
+			ExpiresAt:           expiresAt,
+		}},
+		NotIssued: []string{"job-2"},
+	}
+
+	client, err := api.NewAgentClient(ctx, api.AgentClientOpts{
+		Token:    "fake-token",
+		Endpoint: server.URL(),
+		StackID:  "test-stack",
+		Logger:   slog.Default(),
+	})
+	if err != nil {
+		t.Fatalf("NewAgentClient() error = %v", err)
+	}
+
+	got, _, err := client.IssueJobAcquisitionTokens(ctx, []string{"job-1", "job-2"})
+	if err != nil {
+		t.Fatalf("IssueJobAcquisitionTokens() error = %v", err)
+	}
+	if diff := cmp.Diff(got, server.JobAcquisitionTokenResponse); diff != "" {
+		t.Errorf("IssueJobAcquisitionTokens() diff (-got +want):\n%s", diff)
+	}
+	if diff := cmp.Diff(server.JobAcquisitionTokenCalls, [][]string{{"job-1", "job-2"}}); diff != "" {
+		t.Errorf("server.JobAcquisitionTokenCalls diff (-got +want):\n%s", diff)
+	}
+	if got := server.JobAcquisitionTokenStatusCode; got != http.StatusCreated {
+		t.Errorf("JobAcquisitionTokenStatusCode = %d, want %d", got, http.StatusCreated)
+	}
+}
+
+func TestIssueJobAcquisitionTokensDoesNotLogTokenPayload(t *testing.T) {
+	ctx := t.Context()
+	server := api.NewFakeAgentServer()
+	defer server.Close()
+	server.JobAcquisitionTokenResponse = &api.IssueJobAcquisitionTokensResponse{
+		JobAcquisitionTokens: []api.IssuedJobAcquisitionToken{{
+			JobUUID:             "job-1",
+			JobAcquisitionToken: "jat-secret",
+		}},
+	}
+
+	var logs bytes.Buffer
+	client, err := api.NewAgentClient(ctx, api.AgentClientOpts{
+		Token:           "cluster-secret",
+		Endpoint:        server.URL(),
+		StackID:         "test-stack",
+		Logger:          slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
+		LogHTTPPayloads: true,
+	})
+	if err != nil {
+		t.Fatalf("NewAgentClient() error = %v", err)
+	}
+	if _, _, err := client.IssueJobAcquisitionTokens(ctx, []string{"job-1"}); err != nil {
+		t.Fatalf("IssueJobAcquisitionTokens() error = %v", err)
+	}
+	if strings.Contains(logs.String(), "jat-secret") {
+		t.Errorf("HTTP logs contain JAT: %s", logs.String())
+	}
+	if strings.Contains(logs.String(), "cluster-secret") {
+		t.Errorf("HTTP logs contain cluster token: %s", logs.String())
+	}
+}
+
+func TestIssueJobAcquisitionTokensRejectsMoreThan1000Jobs(t *testing.T) {
+	ctx := t.Context()
+	server := api.NewFakeAgentServer()
+	defer server.Close()
+	client, err := api.NewAgentClient(ctx, api.AgentClientOpts{
+		Token: "fake-token", Endpoint: server.URL(), StackID: "test-stack", Logger: slog.Default(),
+	})
+	if err != nil {
+		t.Fatalf("NewAgentClient() error = %v", err)
+	}
+	if _, _, err := client.IssueJobAcquisitionTokens(ctx, make([]string, 1001)); err == nil {
+		t.Fatal("IssueJobAcquisitionTokens() error = nil, want non-nil")
+	}
+	if got := len(server.JobAcquisitionTokenCalls); got != 0 {
+		t.Errorf("issuance calls = %d, want 0", got)
+	}
+}
+
+func TestAgentScheduledJobDoesNotSerializeJobAcquisitionToken(t *testing.T) {
+	b, err := json.Marshal(api.AgentScheduledJob{ID: "job-1", JobAcquisitionToken: "jat-secret"})
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if strings.Contains(string(b), "jat-secret") {
+		t.Errorf("serialized AgentScheduledJob contains JAT: %s", b)
+	}
+}
 
 func TestFakeAgentServer_DefaultBehavior(t *testing.T) {
 	ctx := t.Context()

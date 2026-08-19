@@ -9,6 +9,7 @@ config:
   prometheus-port: 9216
   reservation-expiry-seconds: 900
   enable-completion-watcher: true
+  enable-job-acquisition-tokens: false
   pod-pending-timeout: 15m
 
 resources:

@@ -36,6 +36,11 @@ type FakeAgentServer struct {
 	// ReserveError configures an error message to return.
 	ReserveError string
 
+	JobAcquisitionTokenCalls      [][]string
+	JobAcquisitionTokenResponse   *IssueJobAcquisitionTokensResponse
+	JobAcquisitionTokenStatusCode int
+	JobAcquisitionTokenError      string
+
 	// NotificationCalls records all notification batches sent to the server.
 	NotificationCalls [][]stacksapi.StackNotification
 
@@ -64,20 +69,51 @@ type FakeAgentServer struct {
 // Use server.URL() to get the endpoint for creating a real AgentClient.
 func NewFakeAgentServer() *FakeAgentServer {
 	fake := &FakeAgentServer{
-		ReserveStatusCode:      http.StatusOK,
-		GetJobStatesStatusCode: http.StatusOK,
-		FinishJobStatusCode:    http.StatusOK,
+		ReserveStatusCode:             http.StatusOK,
+		JobAcquisitionTokenStatusCode: http.StatusCreated,
+		GetJobStatesStatusCode:        http.StatusOK,
+		FinishJobStatusCode:           http.StatusOK,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stacks/register", fake.handleRegisterStack)
 	mux.HandleFunc("/stacks/test-stack/scheduled-jobs/batch-reserve", fake.handleReserveJobs)
+	mux.HandleFunc("/stacks/test-stack/job-acquisition-tokens", fake.handleIssueJobAcquisitionTokens)
 	mux.HandleFunc("/stacks/test-stack/notifications", fake.handleNotifications)
 	mux.HandleFunc("/stacks/test-stack/jobs/get-states", fake.handleGetJobStates)
 	mux.HandleFunc("/stacks/test-stack/jobs/", fake.handleFinishJob)
 
 	fake.server = httptest.NewServer(mux)
 	return fake
+}
+
+func (f *FakeAgentServer) handleIssueJobAcquisitionTokens(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req IssueJobAcquisitionTokensRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	f.mu.Lock()
+	f.JobAcquisitionTokenCalls = append(f.JobAcquisitionTokenCalls, req.JobUUIDs)
+	f.mu.Unlock()
+	if f.JobAcquisitionTokenError != "" {
+		writeJSONResponse(w, f.JobAcquisitionTokenStatusCode, map[string]string{"message": f.JobAcquisitionTokenError})
+		return
+	}
+	resp := f.JobAcquisitionTokenResponse
+	if resp == nil {
+		resp = &IssueJobAcquisitionTokensResponse{}
+		for _, id := range req.JobUUIDs {
+			resp.JobAcquisitionTokens = append(resp.JobAcquisitionTokens, IssuedJobAcquisitionToken{
+				JobUUID: id, JobAcquisitionToken: JobAcquisitionToken("jat-" + id),
+			})
+		}
+	}
+	writeJSONResponse(w, f.JobAcquisitionTokenStatusCode, resp)
 }
 
 // URL returns the base URL of the fake server.

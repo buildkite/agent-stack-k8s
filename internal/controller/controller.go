@@ -15,7 +15,9 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/deduper"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/jatissuer"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/limiter"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/monitor"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/reserver"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
@@ -148,7 +150,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 
 	// **************************************************************************
 	// ***                        JOB FLOW                                    ***
-	// ***       Monitor -> Reserver -> Limiter -> Deduper -> Scheduler       ***
+	// ***  Monitor -> Reserver -> Limiter -> JAT issuer -> Deduper -> Scheduler  ***
 	// **************************************************************************
 	//
 	// Monitor polls Buildkite for jobs. It passes them to Limiter.
@@ -175,6 +177,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		ID:                                   cfg.ID,
 		Image:                                cfg.Image,
 		AgentTokenSecretName:                 cfg.AgentTokenSecret,
+		EnableJobAcquisitionTokens:           cfg.EnableJobAcquisitionTokens,
 		JobTTL:                               cfg.JobTTL,
 		JobPrefix:                            cfg.JobPrefix,
 		JobActiveDeadlineSeconds:             cfg.JobActiveDeadlineSeconds,
@@ -216,7 +219,11 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 	// Limiter prevents scheduling more than cfg.MaxInFlight jobs at once
 	// (if configured) and is responsible for the priority queue of jobs.
 	// Once it figures out a job can be scheduled, it passes to the deduper.
-	limiter := limiter.New(ctx, logger.With("component", "limiter"), deduper,
+	var postLimiter model.JobHandler = deduper
+	if cfg.EnableJobAcquisitionTokens {
+		postLimiter = jatissuer.New(logger.With("component", "jat-issuer"), agentClient, deduper)
+	}
+	limiter := limiter.New(ctx, logger.With("component", "limiter"), postLimiter,
 		cfg.MaxInFlight,
 		cfg.JobCreationConcurrency,
 		cfg.WorkQueueLimit,

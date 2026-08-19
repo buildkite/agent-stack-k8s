@@ -60,6 +60,7 @@ type Config struct {
 	JobPrefix                            string
 	AgentToken                           string
 	AgentTokenSecretName                 string
+	EnableJobAcquisitionTokens           bool
 	JobTTL                               time.Duration
 	JobActiveDeadlineSeconds             int
 	AdditionalRedactedVars               []string
@@ -194,7 +195,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 
 		case kerrors.IsInvalid(err):
 			out := ""
-			yamlOut, marshalErr := yaml.Marshal(kjob)
+			yamlOut, marshalErr := yaml.Marshal(redactedJob(kjob))
 			if marshalErr != nil {
 				out = fmt.Sprintf("Couldn't marshal the Job into YAML: %v", marshalErr)
 			} else {
@@ -230,18 +231,23 @@ type buildInputs struct {
 	priority        int
 
 	// Involves some parsing of the job env / plugins map
-	envMap       map[string]string
-	k8sPlugin    *KubernetesPlugin
-	otherPlugins []map[string]json.RawMessage
+	envMap              map[string]string
+	k8sPlugin           *KubernetesPlugin
+	otherPlugins        []map[string]json.RawMessage
+	jobAcquisitionToken api.JobAcquisitionToken
 }
 
 func (w *worker) ParseJob(job *api.AgentJob, sjob *api.AgentScheduledJob) (buildInputs, error) {
 	parsed := buildInputs{
-		uuid:            job.ID,
-		command:         job.Command,
-		agentQueryRules: sjob.AgentQueryRules,
-		priority:        sjob.Priority,
-		envMap:          job.Env,
+		uuid:                job.ID,
+		command:             job.Command,
+		agentQueryRules:     sjob.AgentQueryRules,
+		priority:            sjob.Priority,
+		envMap:              job.Env,
+		jobAcquisitionToken: sjob.JobAcquisitionToken,
+	}
+	if w.cfg.EnableJobAcquisitionTokens && parsed.jobAcquisitionToken == "" {
+		return parsed, errors.New("job acquisition token is missing")
 	}
 
 	var plugins []map[string]json.RawMessage
@@ -551,6 +557,19 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// Calculating this imperatively is risky given we lack control over the context, this is subject to refactor.
 	managedContainerCount := len(podSpec.Containers) + systemContainerCount
 
+	agentTokenEnv := corev1.EnvVar{
+		Name: agentTokenKey,
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.AgentTokenSecretName},
+				Key:                  agentTokenKey,
+			},
+		},
+	}
+	if w.cfg.EnableJobAcquisitionTokens {
+		agentTokenEnv = corev1.EnvVar{Name: agentTokenKey, Value: string(inputs.jobAcquisitionToken)}
+	}
+
 	agentContainer := corev1.Container{
 		Name:            AgentContainerName,
 		Args:            []string{"start"},
@@ -622,15 +641,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				Name:  "BUILDKITE_SHELL",
 				Value: "/bin/sh -ec",
 			},
-			{
-				Name: agentTokenKey, // BUILDKITE_AGENT_TOKEN
-				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.AgentTokenSecretName},
-						Key:                  agentTokenKey,
-					},
-				},
-			},
+			agentTokenEnv,
 			{
 				Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
 				Value: inputs.uuid,
@@ -756,7 +767,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			return nil, fmt.Errorf("failed to apply podSpec patch from controller: %w", err)
 		}
 		podSpec = patched
-		w.logger.Debug("Applied podSpec patch from controller", "patched", patched)
+		w.logger.Debug("Applied podSpec patch from controller", "patched", redactedPodSpec(patched))
 	}
 
 	// Support `image: ` syntax, this HAS TO happen between controller podSpec patch and plugin podSpec patch.
@@ -769,7 +780,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
 		}
 		podSpec = patched
-		w.logger.Debug("Applied podSpec patch from k8s plugin", "patched", patched)
+		w.logger.Debug("Applied podSpec patch from k8s plugin", "patched", redactedPodSpec(patched))
 	}
 
 	// Removes all containers named "checkout" when checkout disabled via controller config or plugin
@@ -798,6 +809,27 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	kjob.Spec.Template.Spec = *podSpec
 
 	return kjob, nil
+}
+
+func redactedPodSpec(podSpec *corev1.PodSpec) *corev1.PodSpec {
+	redacted := podSpec.DeepCopy()
+	for _, containers := range [][]corev1.Container{redacted.Containers, redacted.InitContainers} {
+		for i := range containers {
+			for j := range containers[i].Env {
+				env := &containers[i].Env[j]
+				if env.Name == agentTokenKey && env.Value != "" {
+					env.Value = "<redacted>"
+				}
+			}
+		}
+	}
+	return redacted
+}
+
+func redactedJob(job *batchv1.Job) *batchv1.Job {
+	redacted := job.DeepCopy()
+	redacted.Spec.Template.Spec = *redactedPodSpec(&redacted.Spec.Template.Spec)
+	return redacted
 }
 
 var ErrNoCommandModification = errors.New("modifying container commands or args via podSpecPatch is not supported")
