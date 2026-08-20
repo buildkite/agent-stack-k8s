@@ -1127,6 +1127,59 @@ func TestBuildDefaultCheckoutParams(t *testing.T) {
 	}
 }
 
+func TestCheckoutGitCredentialsHelperEscaping(t *testing.T) {
+	t.Parallel()
+
+	podUser := int64(1000)
+	job := &api.AgentJob{
+		ID:      "abc",
+		Command: "echo hello world",
+	}
+	sjob := &api.AgentScheduledJob{}
+	worker := New(slog.Default(), nil, nil, Config{
+		Image: "buildkite/agent:latest",
+		DefaultCheckoutParams: &config.CheckoutParams{
+			GitCredentialsSecret: &corev1.SecretVolumeSource{
+				SecretName: "bluh",
+			},
+		},
+	})
+	inputs, err := worker.ParseJob(job, sjob)
+	if err != nil {
+		t.Fatalf("worker.ParseJob(job, sjob) error = %v, want nil", err)
+	}
+	podSpec := &corev1.PodSpec{
+		SecurityContext: &corev1.PodSecurityContext{
+			RunAsUser: &podUser,
+		},
+	}
+	kjob, err := worker.Build(podSpec, false, inputs)
+	if err != nil {
+		t.Fatalf("worker.Build(podSpec, %t, inputs) error = %v, want nil", false, err)
+	}
+
+	var checkoutContainer *corev1.Container
+	for _, container := range kjob.Spec.Template.Spec.Containers {
+		if container.Name == "checkout" {
+			checkoutContainer = &container
+		}
+	}
+	if checkoutContainer == nil {
+		t.Fatal("checkout container not found")
+	}
+	if len(checkoutContainer.Args) != 1 {
+		t.Fatalf("checkout container Args = %v, want single shell script arg", checkoutContainer.Args)
+	}
+
+	checkoutScript := checkoutContainer.Args[0]
+	if !strings.Contains(checkoutScript, `\$1`) {
+		t.Error("checkout script missing escaped \\$1 in git credential helper for su -c path")
+	}
+	if strings.Contains(checkoutScript, `"$1"`) {
+		t.Error("checkout script contains unescaped $1 in git credential helper; outer shell would expand it inside su -c")
+	}
+}
+
 // CheckoutParams come from our bk yaml
 func TestBuildCheckoutParams(t *testing.T) {
 	t.Parallel()
