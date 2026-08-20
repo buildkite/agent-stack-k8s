@@ -1091,21 +1091,15 @@ func TestBuildDefaultCheckoutParams(t *testing.T) {
 	}
 
 	// Validate that git credential secret is mounted and available in checkout container's path
-	var hasGitCredentialsRO, hasGitCredentials bool
+	var hasGitCredentialsRO bool
 	for _, mount := range checkoutContainer.VolumeMounts {
 		if mount.Name == "git-credentials-ro" && mount.MountPath == "/buildkite/git-credentials-ro" {
 			hasGitCredentialsRO = true
-		}
-		if mount.Name == "git-credentials" && mount.MountPath == "/buildkite/git-credentials" {
-			hasGitCredentials = true
 		}
 	}
 
 	if !hasGitCredentialsRO {
 		t.Error("checkout container missing git-credentials-ro volume mount at /buildkite/git-credentials-ro")
-	}
-	if !hasGitCredentials {
-		t.Error("checkout container missing git-credentials volume mount at /buildkite/git-credentials")
 	}
 
 	// Validate that the EnvFrom is passed down to checkout container pod spec
@@ -1192,21 +1186,15 @@ func TestBuildCheckoutParams(t *testing.T) {
 	}
 
 	// Validate that git credential secret is mounted and available in checkout container's path
-	var hasGitCredentialsRO, hasGitCredentials bool
+	var hasGitCredentialsRO bool
 	for _, mount := range checkoutContainer.VolumeMounts {
 		if mount.Name == "git-credentials-ro" && mount.MountPath == "/buildkite/git-credentials-ro" {
 			hasGitCredentialsRO = true
-		}
-		if mount.Name == "git-credentials" && mount.MountPath == "/buildkite/git-credentials" {
-			hasGitCredentials = true
 		}
 	}
 
 	if !hasGitCredentialsRO {
 		t.Error("checkout container missing git-credentials-ro volume mount at /buildkite/git-credentials-ro")
-	}
-	if !hasGitCredentials {
-		t.Error("checkout container missing git-credentials volume mount at /buildkite/git-credentials")
 	}
 
 	// Validate that the EnvFrom is passed down to checkout container pod spec

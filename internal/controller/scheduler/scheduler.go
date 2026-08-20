@@ -1166,14 +1166,6 @@ func (w *worker) createCheckoutContainer(
 				Name:         "git-credentials-ro",
 				VolumeSource: corev1.VolumeSource{Secret: gitCredsSecret},
 			},
-			corev1.Volume{
-				Name: "git-credentials",
-				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{
-						Medium: "Memory",
-					},
-				},
-			},
 		)
 
 		checkoutContainer.VolumeMounts = append(checkoutContainer.VolumeMounts,
@@ -1181,23 +1173,12 @@ func (w *worker) createCheckoutContainer(
 				Name:      "git-credentials-ro",
 				MountPath: "/buildkite/git-credentials-ro",
 			},
-			corev1.VolumeMount{
-				Name:      "git-credentials",
-				MountPath: "/buildkite/git-credentials",
-			},
 		)
 
-		// Why copy the file between volumes instead of mounting it directly
-		// into place?
-		// K8s secret mounts are *always* read only, but the 'store' credential
-		// helper always tries to write back to the file.
-		// If we didn't do this, we'd get some alarming-looking log lines like:
-		// "fatal: unable to write credential store: Resource busy"
-		// (despite Git being a drama llama, the failure doesn't impact the
-		// checkout process in any meaningful way).
-		// TODO: replace this nonsense with a better git credential helper
-		gitConfigCmd = "cp /buildkite/git-credentials-ro/.git-credentials /buildkite/git-credentials && " +
-			"git config --global credential.helper 'store --file /buildkite/git-credentials/.git-credentials'"
+		// K8s secret mounts are always read-only, but the 'store' credential
+		// helper tries to write credentials back to the file. Use a custom
+		// helper that only reads from the mounted secret via credential-store.
+		gitConfigCmd = "git config --global credential.helper '!f() { [ \"$1\" = get ] && git credential-store --file=/buildkite/git-credentials-ro/.git-credentials get; }; f'"
 	}
 
 	// Ensure that the checkout occurs as the user/group specified in the pod's security context.
@@ -1219,7 +1200,9 @@ func (w *worker) createCheckoutContainer(
 		}
 
 		createUserScript := generateCreateUserScript(podUser, gid, "buildkite-agent", groupname)
-		bootstrapCmd := fmt.Sprintf(`su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`, gitConfigCmd)
+		// Escape $1 so the outer shell does not expand it inside su's double-quoted -c string.
+		gitConfigCmdForSu := strings.ReplaceAll(gitConfigCmd, "$1", `\$1`)
+		bootstrapCmd := fmt.Sprintf(`su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`, gitConfigCmdForSu)
 		checkoutScript := strings.Join([]string{"set -exuf", createUserScript, bootstrapCmd}, "\n")
 
 		checkoutContainer.Command = []string{"/bin/sh", "-c"}
