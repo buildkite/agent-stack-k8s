@@ -192,8 +192,7 @@ func (w *jobWatcher) cleanupJobAcquisitionTokenSecret(ctx context.Context, log *
 		log.Warn("Failed to get job acquisition token secret", "error", err)
 		return
 	}
-	controller := metav1.GetControllerOf(secret)
-	if !metav1.IsControlledBy(secret, kjob) || controller.Name != kjob.Name || controller.APIVersion != batchv1.SchemeGroupVersion.String() || controller.Kind != "Job" {
+	if !secretControlledByJob(secret, kjob) {
 		log.Warn("Refusing to delete job acquisition token secret not controlled by Job", "secret", name)
 		return
 	}

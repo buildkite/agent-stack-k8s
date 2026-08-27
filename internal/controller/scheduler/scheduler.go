@@ -218,55 +218,71 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job, token api.JobAcquisitionToken) error {
 	createdJob, err := w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to create job: %w", err)
+		if !w.cfg.EnableJobAcquisitionTokens {
+			return fmt.Errorf("failed to create job: %w", err)
+		}
+		liveJob, getErr := w.client.BatchV1().Jobs(w.cfg.Namespace).Get(ctx, kjob.Name, metav1.GetOptions{})
+		if getErr != nil {
+			return errors.Join(fmt.Errorf("failed to create job: %w", err), fmt.Errorf("failed to reconcile job: %w", getErr))
+		}
+		secretName := liveJob.Annotations[config.JobAcquisitionTokenSecretAnnotation]
+		if !hasSameJobIdentity(kjob.Labels, liveJob.Labels) || liveJob.UID == "" || secretName == "" || !jobReferencesSecret(liveJob, secretName) {
+			return fmt.Errorf("failed to create job: %w", err)
+		}
+		createdJob = liveJob
 	}
 	if !w.cfg.EnableJobAcquisitionTokens {
 		return nil
 	}
 
+	secretName := createdJob.Annotations[config.JobAcquisitionTokenSecretAnnotation]
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            kjob.Annotations[config.JobAcquisitionTokenSecretAnnotation],
+			Name:            secretName,
 			Namespace:       w.cfg.Namespace,
-			Labels:          maps.Clone(kjob.Labels),
+			Labels:          maps.Clone(createdJob.Labels),
 			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(createdJob, batchv1.SchemeGroupVersion.WithKind("Job"))},
 		},
 		Immutable: new(true),
 		Data:      map[string][]byte{agentTokenKey: []byte(token)},
 	}
 	if _, err := w.client.CoreV1().Secrets(w.cfg.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
-		var cleanupSecretErr error
-		if !kerrors.IsAlreadyExists(err) {
-			cleanupSecretErr = w.deleteSecret(ctx, secret.Name)
+		liveSecret, getErr := w.client.CoreV1().Secrets(w.cfg.Namespace).Get(ctx, secret.Name, metav1.GetOptions{})
+		if getErr != nil {
+			return errors.Join(fmt.Errorf("failed to create job acquisition token secret: %w", err), fmt.Errorf("failed to reconcile job acquisition token secret: %w", getErr))
 		}
-		return errors.Join(
-			fmt.Errorf("failed to create job acquisition token secret: %w", err),
-			w.deleteJob(ctx, createdJob.Name),
-			cleanupSecretErr,
-		)
+		if !secretControlledByJob(liveSecret, createdJob) || !hasSameJobIdentity(createdJob.Labels, liveSecret.Labels) ||
+			liveSecret.Immutable == nil || !*liveSecret.Immutable || len(liveSecret.Data[agentTokenKey]) == 0 {
+			return fmt.Errorf("job acquisition token secret %q does not match Job %q", secret.Name, createdJob.Name)
+		}
 	}
 	return nil
 }
 
-func (w *worker) deleteSecret(ctx context.Context, name string) error {
-	if name == "" {
-		return nil
-	}
-	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	if err := w.client.CoreV1().Secrets(w.cfg.Namespace).Delete(cleanupCtx, name, metav1.DeleteOptions{}); err != nil && !kerrors.IsNotFound(err) {
-		return fmt.Errorf("failed to delete job acquisition token secret: %w", err)
-	}
-	return nil
+func hasSameJobIdentity(expected, actual map[string]string) bool {
+	expectedControllerID, expectedHasControllerID := expected[config.ControllerIDLabel]
+	actualControllerID, actualHasControllerID := actual[config.ControllerIDLabel]
+	return expected[config.UUIDLabel] != "" && actual[config.UUIDLabel] == expected[config.UUIDLabel] &&
+		expectedHasControllerID == actualHasControllerID && actualControllerID == expectedControllerID
 }
 
-func (w *worker) deleteJob(ctx context.Context, name string) error {
-	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
-	if err := w.client.BatchV1().Jobs(w.cfg.Namespace).Delete(cleanupCtx, name, metav1.DeleteOptions{}); err != nil && !kerrors.IsNotFound(err) {
-		return fmt.Errorf("failed to delete job after job acquisition token secret failure: %w", err)
+func jobReferencesSecret(kjob *batchv1.Job, secretName string) bool {
+	for _, container := range kjob.Spec.Template.Spec.Containers {
+		if container.Name != AgentContainerName {
+			continue
+		}
+		for _, env := range container.Env {
+			if env.Name == agentTokenKey && env.Value == "" && env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil && env.ValueFrom.SecretKeyRef.Name == secretName {
+				return true
+			}
+		}
 	}
-	return nil
+	return false
+}
+
+func secretControlledByJob(secret *corev1.Secret, kjob *batchv1.Job) bool {
+	controller := metav1.GetControllerOf(secret)
+	return metav1.IsControlledBy(secret, kjob) && controller.Name == kjob.Name && controller.APIVersion == batchv1.SchemeGroupVersion.String() && controller.Kind == "Job"
 }
 
 // buildInputs contains the relevant components of a CommandJob needed for Build.
