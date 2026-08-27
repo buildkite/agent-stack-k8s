@@ -678,9 +678,20 @@ tags:
 		}
 	})
 
-	t.Run("job acquisition tokens default disabled", func(t *testing.T) {
+	t.Run("job acquisition tokens default enabled", func(t *testing.T) {
 		cleanTestEnv(t)
 		cfg, err := buildConfig(t, []string{}, "")
+		if err != nil {
+			t.Fatalf("buildConfig() error = %v", err)
+		}
+		if !cfg.EnableJobAcquisitionTokens {
+			t.Error("cfg.EnableJobAcquisitionTokens = false, want true")
+		}
+	})
+
+	t.Run("job acquisition tokens disableable via CLI flag", func(t *testing.T) {
+		cleanTestEnv(t)
+		cfg, err := buildConfig(t, []string{"--enable-job-acquisition-tokens=false"}, "")
 		if err != nil {
 			t.Fatalf("buildConfig() error = %v", err)
 		}
@@ -689,26 +700,15 @@ tags:
 		}
 	})
 
-	t.Run("job acquisition tokens settable via CLI flag", func(t *testing.T) {
+	t.Run("job acquisition tokens disableable via env var", func(t *testing.T) {
 		cleanTestEnv(t)
-		cfg, err := buildConfig(t, []string{"--enable-job-acquisition-tokens"}, "")
-		if err != nil {
-			t.Fatalf("buildConfig() error = %v", err)
-		}
-		if !cfg.EnableJobAcquisitionTokens {
-			t.Error("cfg.EnableJobAcquisitionTokens = false, want true")
-		}
-	})
-
-	t.Run("job acquisition tokens settable via env var", func(t *testing.T) {
-		cleanTestEnv(t)
-		t.Setenv("ENABLE_JOB_ACQUISITION_TOKENS", "true")
+		t.Setenv("ENABLE_JOB_ACQUISITION_TOKENS", "false")
 		cfg, err := buildConfig(t, []string{}, "")
 		if err != nil {
 			t.Fatalf("buildConfig() error = %v", err)
 		}
-		if !cfg.EnableJobAcquisitionTokens {
-			t.Error("cfg.EnableJobAcquisitionTokens = false, want true")
+		if cfg.EnableJobAcquisitionTokens {
+			t.Error("cfg.EnableJobAcquisitionTokens = true, want false")
 		}
 	})
 }

@@ -360,6 +360,12 @@
           "title": "Runs an extra loop that checks for and terminates pods that are still running but with a terminated agent container",
           "examples": [false, true]
         },
+        "enable-job-acquisition-tokens": {
+          "type": "boolean",
+          "default": true,
+          "title": "Issue a job-scoped acquisition token immediately before scheduling each job",
+          "examples": [false, true]
+        },
         "prometheus-port": {
           "type": "integer",
           "default": 9216,
