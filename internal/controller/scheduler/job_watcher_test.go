@@ -13,6 +13,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -420,5 +421,46 @@ func TestFinishedJobIsDeregistered(t *testing.T) {
 
 	if got := checker.GetActiveCheckCount(); got != 0 {
 		t.Errorf("checker.GetActiveCheckCount() = %d, want 0", got)
+	}
+}
+
+func TestJobAcquisitionTokenSecretIsDeletedWhenJobFinishes(t *testing.T) {
+	t.Parallel()
+
+	fakeServer := api.NewFakeAgentServer()
+	defer fakeServer.Close()
+	w, k8sClient := newTestJobWatcher(t, fakeServer)
+	kjob := newTestK8sJob(testJobUUID)
+	kjob.Annotations = map[string]string{config.JobAcquisitionTokenSecretAnnotation: "job-token"}
+	kjob.Status.Succeeded = 1
+	kjob.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	if _, err := k8sClient.CoreV1().Secrets("default").Create(t.Context(), &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "job-token"}}, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create secret: %v", err)
+	}
+
+	w.runChecks(t.Context(), kjob)
+
+	if _, err := k8sClient.CoreV1().Secrets("default").Get(t.Context(), "job-token", metav1.GetOptions{}); !kerrors.IsNotFound(err) {
+		t.Errorf("Get secret error = %v, want NotFound", err)
+	}
+}
+
+func TestJobAcquisitionTokenSecretIsDeletedWhenJobIsDeleted(t *testing.T) {
+	t.Parallel()
+
+	fakeServer := api.NewFakeAgentServer()
+	defer fakeServer.Close()
+	w, k8sClient := newTestJobWatcher(t, fakeServer)
+	w.resourceEventHandlerCtx = t.Context()
+	kjob := newTestK8sJob(testJobUUID)
+	kjob.Annotations = map[string]string{config.JobAcquisitionTokenSecretAnnotation: "job-token"}
+	if _, err := k8sClient.CoreV1().Secrets("default").Create(t.Context(), &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "job-token"}}, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create secret: %v", err)
+	}
+
+	w.OnDelete(kjob)
+
+	if _, err := k8sClient.CoreV1().Secrets("default").Get(t.Context(), "job-token", metav1.GetOptions{}); !kerrors.IsNotFound(err) {
+		t.Errorf("Get secret error = %v, want NotFound", err)
 	}
 }

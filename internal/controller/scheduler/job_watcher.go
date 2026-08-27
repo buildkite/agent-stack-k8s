@@ -130,6 +130,7 @@ func (w *jobWatcher) OnDelete(prev any) {
 	if kjob == nil {
 		return
 	}
+	w.cleanupJobAcquisitionTokenSecret(w.resourceEventHandlerCtx, loggerForObject(w.logger, kjob), kjob)
 
 	jobUUID, err := jobUUIDForObject(kjob)
 	if err != nil {
@@ -161,6 +162,7 @@ func (w *jobWatcher) runChecks(ctx context.Context, kjob *batchv1.Job) {
 	if model.JobFinished(kjob) {
 		w.removeFromStalling(jobUUID)
 		w.stopCheckingBuildkiteJob(jobUUID)
+		w.cleanupJobAcquisitionTokenSecret(ctx, log, kjob)
 		w.checkFinished(ctx, log, jobUUID, kjob)
 		return
 	}
@@ -174,6 +176,16 @@ func (w *jobWatcher) runChecks(ctx context.Context, kjob *batchv1.Job) {
 	}
 
 	w.checkStalledWithoutPod(log, jobUUID, kjob)
+}
+
+func (w *jobWatcher) cleanupJobAcquisitionTokenSecret(ctx context.Context, log *slog.Logger, kjob *batchv1.Job) {
+	name := kjob.Annotations[config.JobAcquisitionTokenSecretAnnotation]
+	if name == "" {
+		return
+	}
+	if err := w.k8s.CoreV1().Secrets(kjob.Namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !kerrors.IsNotFound(err) {
+		log.Warn("Failed to delete job acquisition token secret", "error", err)
+	}
 }
 
 func (w *jobWatcher) addToBuildkiteJobChecker(jobUUID uuid.UUID, kjob *batchv1.Job) {

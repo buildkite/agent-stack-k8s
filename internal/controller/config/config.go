@@ -21,6 +21,7 @@ const (
 	PipelineSlugAnnotation                = "buildkite.com/pipeline-slug"
 	StepKeyAnnotation                     = "buildkite.com/step-key"
 	PodTemplateAnnotation                 = "buildkite.com/pod-template-name"
+	JobAcquisitionTokenSecretAnnotation   = "buildkite.com/job-acquisition-token-secret"
 	DefaultNamespace                      = "default"
 	DefaultImagePullBackOffGracePeriod    = 30 * time.Second
 	DefaultJobCancelCheckerPollInterval   = 5 * time.Second

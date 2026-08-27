@@ -23,11 +23,10 @@ func TestJobAcquisitionTokenCredentials(t *testing.T) {
 		name          string
 		enabled       bool
 		token         api.JobAcquisitionToken
-		wantLiteral   string
 		wantSecretRef string
 	}{
 		{name: "disabled uses shared secret", wantSecretRef: "token-secret"},
-		{name: "enabled uses JAT", enabled: true, token: "jat-secret", wantLiteral: "jat-secret"},
+		{name: "enabled uses per-job secret", enabled: true, token: "jat-secret"},
 	}
 
 	for _, test := range tests {
@@ -49,15 +48,18 @@ func TestJobAcquisitionTokenCredentials(t *testing.T) {
 
 			agent := findContainer(t, kjob.Spec.Template.Spec.Containers, AgentContainerName)
 			token := findEnv(t, agent.Env, agentTokenKey)
-			if got := token.Value; got != test.wantLiteral {
-				t.Errorf("agent token literal = %q, want %q", got, test.wantLiteral)
+			if token.Value != "" {
+				t.Errorf("agent token literal = %q, want empty", token.Value)
 			}
-			if test.wantSecretRef == "" {
-				if token.ValueFrom != nil {
-					t.Errorf("agent token ValueFrom = %#v, want nil", token.ValueFrom)
-				}
-			} else if got := token.ValueFrom.SecretKeyRef.Name; got != test.wantSecretRef {
+			if token.ValueFrom == nil || token.ValueFrom.SecretKeyRef == nil {
+				t.Fatalf("agent token ValueFrom.SecretKeyRef = nil, want secret reference")
+			}
+			if test.wantSecretRef != "" && token.ValueFrom.SecretKeyRef.Name != test.wantSecretRef {
+				got := token.ValueFrom.SecretKeyRef.Name
 				t.Errorf("agent token secret = %q, want %q", got, test.wantSecretRef)
+			}
+			if test.enabled && token.ValueFrom.SecretKeyRef.Name == "token-secret" {
+				t.Error("agent token references shared token secret")
 			}
 			if got := findEnv(t, agent.Env, "BUILDKITE_AGENT_ACQUIRE_JOB").Value; got != "job-uuid" {
 				t.Errorf("BUILDKITE_AGENT_ACQUIRE_JOB = %q, want %q", got, "job-uuid")
@@ -117,9 +119,6 @@ func TestJobAcquisitionTokenIsRedactedFromSchedulerOutput(t *testing.T) {
 	}
 	if strings.Contains(string(serialized), "jat-secret") {
 		t.Errorf("redacted invalid Job output contains JAT: %s", serialized)
-	}
-	if !strings.Contains(string(serialized), "<redacted>") {
-		t.Errorf("redacted invalid Job output does not contain redaction marker: %s", serialized)
 	}
 }
 

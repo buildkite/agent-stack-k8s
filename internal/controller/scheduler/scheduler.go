@@ -27,6 +27,7 @@ import (
 	"github.com/buildkite/agent/v3/clicommand"
 
 	"github.com/distribution/reference"
+	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -185,7 +186,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 	}
 
 	jobCreateCallsCounter.Inc()
-	if err := w.createJob(ctx, kjob); err != nil {
+	if err := w.createJob(ctx, kjob, inputs.jobAcquisitionToken); err != nil {
 		jobCreateErrorCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
 
 		switch {
@@ -214,10 +215,56 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 	return nil
 }
 
-func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job) error {
-	_, err := w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
+func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job, token api.JobAcquisitionToken) error {
+	createdJob, err := w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to create job: %w", err)
+	}
+	if !w.cfg.EnableJobAcquisitionTokens {
+		return nil
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            kjob.Annotations[config.JobAcquisitionTokenSecretAnnotation],
+			Namespace:       w.cfg.Namespace,
+			Labels:          maps.Clone(kjob.Labels),
+			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(createdJob, batchv1.SchemeGroupVersion.WithKind("Job"))},
+		},
+		Immutable: new(true),
+		Data:      map[string][]byte{agentTokenKey: []byte(token)},
+	}
+	if _, err := w.client.CoreV1().Secrets(w.cfg.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
+		var cleanupSecretErr error
+		if !kerrors.IsAlreadyExists(err) {
+			cleanupSecretErr = w.deleteSecret(ctx, secret.Name)
+		}
+		return errors.Join(
+			fmt.Errorf("failed to create job acquisition token secret: %w", err),
+			w.deleteJob(ctx, createdJob.Name),
+			cleanupSecretErr,
+		)
+	}
+	return nil
+}
+
+func (w *worker) deleteSecret(ctx context.Context, name string) error {
+	if name == "" {
+		return nil
+	}
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := w.client.CoreV1().Secrets(w.cfg.Namespace).Delete(cleanupCtx, name, metav1.DeleteOptions{}); err != nil && !kerrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete job acquisition token secret: %w", err)
+	}
+	return nil
+}
+
+func (w *worker) deleteJob(ctx context.Context, name string) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := w.client.BatchV1().Jobs(w.cfg.Namespace).Delete(cleanupCtx, name, metav1.DeleteOptions{}); err != nil && !kerrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete job after job acquisition token secret failure: %w", err)
 	}
 	return nil
 }
@@ -567,7 +614,9 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		},
 	}
 	if w.cfg.EnableJobAcquisitionTokens {
-		agentTokenEnv = corev1.EnvVar{Name: agentTokenKey, Value: string(inputs.jobAcquisitionToken)}
+		secretName := "buildkite-job-token-" + uuid.NewString()
+		kjob.Annotations[config.JobAcquisitionTokenSecretAnnotation] = secretName
+		agentTokenEnv.ValueFrom.SecretKeyRef.Name = secretName
 	}
 
 	agentContainer := corev1.Container{

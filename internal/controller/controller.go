@@ -447,6 +447,7 @@ func informerTransform(obj any) (any, error) {
 		return obj, nil
 
 	case *batchv1.Job:
+		jobAcquisitionTokenSecret := obj.Annotations[config.JobAcquisitionTokenSecretAnnotation]
 		// Job metadata we care about:
 		// - Name
 		// - Labels
@@ -454,6 +455,9 @@ func informerTransform(obj any) (any, error) {
 		obj.DeletionTimestamp = nil
 		obj.DeletionGracePeriodSeconds = nil
 		obj.Annotations = nil
+		if jobAcquisitionTokenSecret != "" {
+			obj.Annotations = map[string]string{config.JobAcquisitionTokenSecretAnnotation: jobAcquisitionTokenSecret}
+		}
 		obj.OwnerReferences = nil
 		obj.Finalizers = nil
 		obj.ManagedFields = nil

@@ -73,6 +73,8 @@ echo "------------------------------"
 
 # Secrets permissions
 check_permission "secrets" "get" "" "Secrets"
+check_permission "secrets" "create" "" "Secrets"
+check_permission "secrets" "delete" "" "Secrets"
 
 # Pods permissions
 check_permission "pods" "get" "" "Pods"
