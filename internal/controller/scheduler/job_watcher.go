@@ -183,7 +183,21 @@ func (w *jobWatcher) cleanupJobAcquisitionTokenSecret(ctx context.Context, log *
 	if name == "" {
 		return
 	}
-	if err := w.k8s.CoreV1().Secrets(kjob.Namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !kerrors.IsNotFound(err) {
+	secrets := w.k8s.CoreV1().Secrets(kjob.Namespace)
+	secret, err := secrets.Get(ctx, name, metav1.GetOptions{})
+	if kerrors.IsNotFound(err) {
+		return
+	}
+	if err != nil {
+		log.Warn("Failed to get job acquisition token secret", "error", err)
+		return
+	}
+	controller := metav1.GetControllerOf(secret)
+	if !metav1.IsControlledBy(secret, kjob) || controller.Name != kjob.Name || controller.APIVersion != batchv1.SchemeGroupVersion.String() || controller.Kind != "Job" {
+		log.Warn("Refusing to delete job acquisition token secret not controlled by Job", "secret", name)
+		return
+	}
+	if err := secrets.Delete(ctx, name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &secret.UID}}); err != nil && !kerrors.IsNotFound(err) {
 		log.Warn("Failed to delete job acquisition token secret", "error", err)
 	}
 }

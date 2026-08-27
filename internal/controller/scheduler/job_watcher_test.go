@@ -73,6 +73,147 @@ func newTestK8sJob(jobUUID string) *batchv1.Job {
 	}
 }
 
+func newTestJobAcquisitionTokenSecret(kjob *batchv1.Job, name string) *corev1.Secret {
+	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+		Name:            name,
+		Namespace:       kjob.Namespace,
+		UID:             "secret-uid",
+		OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(kjob, batchv1.SchemeGroupVersion.WithKind("Job"))},
+	}}
+}
+
+func TestCleanupJobAcquisitionTokenSecret(t *testing.T) {
+	t.Run("deletes a Secret controlled by the Job with a UID precondition", func(t *testing.T) {
+		server := api.NewFakeAgentServer()
+		defer server.Close()
+		w, k8sClient := newTestJobWatcher(t, server)
+		kjob := newTestK8sJob(testJobUUID)
+		secret := newTestJobAcquisitionTokenSecret(kjob, "job-acquisition-token")
+		kjob.Annotations = map[string]string{config.JobAcquisitionTokenSecretAnnotation: secret.Name}
+		if _, err := k8sClient.CoreV1().Secrets(kjob.Namespace).Create(t.Context(), secret, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("Create secret: %v", err)
+		}
+
+		w.cleanupJobAcquisitionTokenSecret(t.Context(), slog.Default(), kjob)
+
+		if _, err := k8sClient.CoreV1().Secrets(kjob.Namespace).Get(t.Context(), secret.Name, metav1.GetOptions{}); !kerrors.IsNotFound(err) {
+			t.Fatalf("Get secret after cleanup error = %v, want NotFound", err)
+		}
+		actions := k8sClient.Actions()
+		deleteAction, ok := actions[len(actions)-2].(k8stesting.DeleteAction)
+		if !ok {
+			t.Fatalf("cleanup action = %T, want DeleteAction", actions[len(actions)-2])
+		}
+		preconditions := deleteAction.GetDeleteOptions().Preconditions
+		if preconditions == nil || preconditions.UID == nil || *preconditions.UID != secret.UID {
+			t.Errorf("delete UID precondition = %v, want %q", preconditions, secret.UID)
+		}
+	})
+
+	t.Run("preserves a replacement Secret when the UID precondition conflicts", func(t *testing.T) {
+		server := api.NewFakeAgentServer()
+		defer server.Close()
+		w, k8sClient := newTestJobWatcher(t, server)
+		kjob := newTestK8sJob(testJobUUID)
+		secret := newTestJobAcquisitionTokenSecret(kjob, "job-acquisition-token")
+		kjob.Annotations = map[string]string{config.JobAcquisitionTokenSecretAnnotation: secret.Name}
+		if _, err := k8sClient.CoreV1().Secrets(kjob.Namespace).Create(t.Context(), secret, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("Create secret: %v", err)
+		}
+		k8sClient.PrependReactor("delete", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+			deleteAction := action.(k8stesting.DeleteAction)
+			preconditions := deleteAction.GetDeleteOptions().Preconditions
+			if preconditions == nil || preconditions.UID == nil || *preconditions.UID != secret.UID {
+				t.Fatalf("delete UID precondition = %v, want %q", preconditions, secret.UID)
+			}
+			replacement := secret.DeepCopy()
+			replacement.UID = "replacement-secret-uid"
+			if err := k8sClient.Tracker().Update(corev1.SchemeGroupVersion.WithResource("secrets"), replacement, kjob.Namespace); err != nil {
+				t.Fatalf("Update replacement secret: %v", err)
+			}
+			return true, nil, kerrors.NewConflict(corev1.Resource("secrets"), secret.Name, errors.New("UID precondition failed"))
+		})
+
+		w.cleanupJobAcquisitionTokenSecret(t.Context(), slog.Default(), kjob)
+
+		got, err := k8sClient.CoreV1().Secrets(kjob.Namespace).Get(t.Context(), secret.Name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("Get replacement secret: %v", err)
+		}
+		if got.UID != "replacement-secret-uid" {
+			t.Errorf("replacement secret UID = %q, want replacement-secret-uid", got.UID)
+		}
+	})
+
+	tests := []struct {
+		name   string
+		secret func(*batchv1.Job) *corev1.Secret
+	}{
+		{
+			name: "preserves an unowned shared Secret named by a malicious annotation",
+			secret: func(kjob *batchv1.Job) *corev1.Secret {
+				return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "buildkite-agent-token", Namespace: kjob.Namespace, UID: "shared-secret-uid"}}
+			},
+		},
+		{
+			name: "preserves a Secret controlled by a different Job UID",
+			secret: func(kjob *batchv1.Job) *corev1.Secret {
+				secret := newTestJobAcquisitionTokenSecret(kjob, "job-acquisition-token")
+				secret.OwnerReferences[0].UID = "different-job-uid"
+				return secret
+			},
+		},
+		{
+			name: "preserves a Secret with a mismatched Job owner identity",
+			secret: func(kjob *batchv1.Job) *corev1.Secret {
+				secret := newTestJobAcquisitionTokenSecret(kjob, "job-acquisition-token")
+				secret.OwnerReferences[0].Name = "different-job"
+				return secret
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := api.NewFakeAgentServer()
+			defer server.Close()
+			w, k8sClient := newTestJobWatcher(t, server)
+			kjob := newTestK8sJob(testJobUUID)
+			secret := tt.secret(kjob)
+			kjob.Annotations = map[string]string{config.JobAcquisitionTokenSecretAnnotation: secret.Name}
+			if _, err := k8sClient.CoreV1().Secrets(kjob.Namespace).Create(t.Context(), secret, metav1.CreateOptions{}); err != nil {
+				t.Fatalf("Create secret: %v", err)
+			}
+
+			w.cleanupJobAcquisitionTokenSecret(t.Context(), slog.Default(), kjob)
+
+			if _, err := k8sClient.CoreV1().Secrets(kjob.Namespace).Get(t.Context(), secret.Name, metav1.GetOptions{}); err != nil {
+				t.Fatalf("Get secret after cleanup: %v", err)
+			}
+			for _, action := range k8sClient.Actions() {
+				if action.GetVerb() == "delete" {
+					t.Errorf("unexpected delete action: %v", action)
+				}
+			}
+		})
+	}
+
+	t.Run("treats a missing Secret as successful cleanup", func(t *testing.T) {
+		server := api.NewFakeAgentServer()
+		defer server.Close()
+		w, k8sClient := newTestJobWatcher(t, server)
+		kjob := newTestK8sJob(testJobUUID)
+		kjob.Annotations = map[string]string{config.JobAcquisitionTokenSecretAnnotation: "missing"}
+
+		w.cleanupJobAcquisitionTokenSecret(t.Context(), slog.Default(), kjob)
+
+		for _, action := range k8sClient.Actions() {
+			if action.GetVerb() == "delete" {
+				t.Errorf("unexpected delete action: %v", action)
+			}
+		}
+	})
+}
+
 func TestCleanupStalledJobs(t *testing.T) {
 	tests := []struct {
 		name string
@@ -434,7 +575,7 @@ func TestJobAcquisitionTokenSecretIsDeletedWhenJobFinishes(t *testing.T) {
 	kjob.Annotations = map[string]string{config.JobAcquisitionTokenSecretAnnotation: "job-token"}
 	kjob.Status.Succeeded = 1
 	kjob.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
-	if _, err := k8sClient.CoreV1().Secrets("default").Create(t.Context(), &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "job-token"}}, metav1.CreateOptions{}); err != nil {
+	if _, err := k8sClient.CoreV1().Secrets("default").Create(t.Context(), newTestJobAcquisitionTokenSecret(kjob, "job-token"), metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Create secret: %v", err)
 	}
 
@@ -454,7 +595,7 @@ func TestJobAcquisitionTokenSecretIsDeletedWhenJobIsDeleted(t *testing.T) {
 	w.resourceEventHandlerCtx = t.Context()
 	kjob := newTestK8sJob(testJobUUID)
 	kjob.Annotations = map[string]string{config.JobAcquisitionTokenSecretAnnotation: "job-token"}
-	if _, err := k8sClient.CoreV1().Secrets("default").Create(t.Context(), &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "job-token"}}, metav1.CreateOptions{}); err != nil {
+	if _, err := k8sClient.CoreV1().Secrets("default").Create(t.Context(), newTestJobAcquisitionTokenSecret(kjob, "job-token"), metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Create secret: %v", err)
 	}
 
