@@ -53,6 +53,7 @@ var (
 	errJobIdentityConflict        = errors.New("existing Job does not match the intended workload identity")
 	errSecretIdentityConflict     = errors.New("existing Secret does not match the intended Job identity")
 	resourceReconciliationBackoff = wait.Backoff{Duration: 100 * time.Millisecond, Factor: 2, Jitter: 0.1, Steps: 5}
+	resourceRecoveryTimeout       = 5 * time.Second
 )
 
 var (
@@ -228,13 +229,28 @@ func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job, token api.Job
 		if !w.cfg.EnableJobAcquisitionTokens {
 			return fmt.Errorf("failed to create job: %w", createErr)
 		}
-		if isPermanentKubernetesError(createErr) {
+		if !isAmbiguousKubernetesCreateError(createErr) {
 			return fmt.Errorf("failed to create job: %w", createErr)
 		}
-		createdJob, err = w.reconcileCreatedJob(ctx, kjob)
+		reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), resourceRecoveryTimeout)
+		createdJob, err = w.reconcileCreatedJob(reconcileCtx, kjob)
 		if err != nil {
-			return errors.Join(fmt.Errorf("failed to create job: %w", createErr), fmt.Errorf("failed to reconcile job: %w", err))
+			cancel()
+			reconcileErr := fmt.Errorf("failed to reconcile job: %w", err)
+			if errors.Is(err, errJobIdentityConflict) || isPermanentKubernetesError(err) {
+				return errors.Join(fmt.Errorf("failed to create job: %w", createErr), reconcileErr)
+			}
+
+			recoveryCtx, recoveryCancel := context.WithTimeout(context.WithoutCancel(ctx), resourceRecoveryTimeout)
+			verifiedJob, recoveryErr := w.reconcileCreatedJob(recoveryCtx, kjob)
+			recoveryCancel()
+			if recoveryErr != nil {
+				return errors.Join(fmt.Errorf("failed to create job: %w", createErr), reconcileErr, fmt.Errorf("failed to recover job for cleanup: %w", recoveryErr))
+			}
+			return errors.Join(fmt.Errorf("failed to create job: %w", createErr), reconcileErr, w.cleanupIncompleteJob(context.WithoutCancel(ctx), verifiedJob))
 		}
+		defer cancel()
+		ctx = reconcileCtx
 	}
 	if !w.cfg.EnableJobAcquisitionTokens {
 		return nil
@@ -374,6 +390,17 @@ func isPermanentKubernetesError(err error) bool {
 	return kerrors.IsInvalid(err) || kerrors.IsForbidden(err) || kerrors.IsUnauthorized(err) || kerrors.IsBadRequest(err) ||
 		kerrors.IsMethodNotSupported(err) || kerrors.IsNotAcceptable(err) || kerrors.IsRequestEntityTooLargeError(err) ||
 		kerrors.IsUnsupportedMediaType(err)
+}
+
+func isAmbiguousKubernetesCreateError(err error) bool {
+	if kerrors.IsAlreadyExists(err) || kerrors.IsConflict(err) || isPermanentKubernetesError(err) {
+		return false
+	}
+	if kerrors.IsTimeout(err) || kerrors.IsServerTimeout(err) {
+		return true
+	}
+	var status kerrors.APIStatus
+	return !errors.As(err, &status)
 }
 
 func hasSameJobIdentity(expected, actual map[string]string) bool {

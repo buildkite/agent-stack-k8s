@@ -11,6 +11,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/limiter"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -63,10 +64,10 @@ func TestCreateJobWithJobAcquisitionTokenSecret(t *testing.T) {
 	}
 }
 
-func TestCreateJobDoesNotCreateSecretWhenJobCreationFails(t *testing.T) {
+func TestCreateJobDoesNotCreateSecretWhenJobCreationHasDeterministicConflict(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
 	k8sClient.PrependReactor("create", "jobs", func(k8stesting.Action) (bool, runtime.Object, error) {
-		return true, nil, errors.New("job create failed")
+		return true, nil, kerrors.NewConflict(batchv1.Resource("jobs"), "job-uuid", errors.New("conflict"))
 	})
 	worker := newJobAcquisitionTokenWorker(k8sClient)
 	kjob := buildJobWithJobAcquisitionToken(t, worker, "jat-secret")
@@ -80,6 +81,99 @@ func TestCreateJobDoesNotCreateSecretWhenJobCreationFails(t *testing.T) {
 	}
 	if len(secrets.Items) != 0 {
 		t.Errorf("len(secrets.Items) = %d, want 0", len(secrets.Items))
+	}
+	for _, action := range k8sClient.Actions() {
+		if action.GetVerb() == "get" || action.GetVerb() == "delete" {
+			t.Errorf("unexpected %s action after deterministic conflict: %v", action.GetVerb(), action)
+		}
+	}
+}
+
+type reportingHandler struct {
+	handler model.JobHandler
+	result  chan error
+}
+
+func (h *reportingHandler) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
+	err := h.handler.Handle(ctx, job)
+	h.result <- err
+	return err
+}
+
+func TestHandleAlreadyExistingJobReportsDuplicateWithoutTouchingExistingResources(t *testing.T) {
+	k8sClient := fake.NewSimpleClientset()
+	worker := newJobAcquisitionTokenWorker(k8sClient)
+	existingJob := buildJobWithJobAcquisitionToken(t, worker, "original-jat")
+	existingJob.Namespace = "test-namespace"
+	existingJob.UID = "existing-job-uid"
+	if _, err := k8sClient.BatchV1().Jobs("test-namespace").Create(t.Context(), existingJob, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create existing Job: %v", err)
+	}
+	immutable := true
+	existingSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            existingJob.Annotations[config.JobAcquisitionTokenSecretAnnotation],
+			Namespace:       existingJob.Namespace,
+			UID:             "existing-secret-uid",
+			Labels:          existingJob.Labels,
+			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(existingJob, batchv1.SchemeGroupVersion.WithKind("Job"))},
+		},
+		Immutable: &immutable,
+		Data:      map[string][]byte{agentTokenKey: []byte("original-jat")},
+	}
+	if _, err := k8sClient.CoreV1().Secrets("test-namespace").Create(t.Context(), existingSecret, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create existing Secret: %v", err)
+	}
+
+	server := api.NewFakeAgentServer()
+	defer server.Close()
+	server.AgentJobs = map[string]*api.AgentJob{"job-uuid": {ID: "job-uuid", Command: "true"}}
+	agentClient, err := api.NewAgentClient(t.Context(), api.AgentClientOpts{
+		Token: "fake-token", Endpoint: server.URL(), StackID: "test-stack", Logger: slog.Default(),
+	})
+	if err != nil {
+		t.Fatalf("NewAgentClient() error = %v", err)
+	}
+	worker = New(slog.Default(), k8sClient, agentClient, worker.cfg)
+	reporter := &reportingHandler{handler: worker, result: make(chan error, 1)}
+	ctx, cancel := context.WithCancel(t.Context())
+	lim := limiter.New(ctx, slog.Default(), reporter, 1, 1, 10)
+	defer func() {
+		cancel()
+		lim.Wait()
+	}()
+	actionCount := len(k8sClient.Actions())
+	if err := lim.HandleMany(ctx, []*api.AgentScheduledJob{{ID: "job-uuid", JobAcquisitionToken: "new-jat", QueriedAt: time.Now()}}); err != nil {
+		t.Fatalf("HandleMany() error = %v", err)
+	}
+	select {
+	case err := <-reporter.result:
+		if !errors.Is(err, model.ErrDuplicateJob) {
+			t.Fatalf("Handle() error = %v, want ErrDuplicateJob", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for handler result")
+	}
+	handlerActions := append([]k8stesting.Action(nil), k8sClient.Actions()[actionCount:]...)
+
+	job, err := k8sClient.BatchV1().Jobs("test-namespace").Get(t.Context(), existingJob.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get existing Job: %v", err)
+	}
+	secret, err := k8sClient.CoreV1().Secrets("test-namespace").Get(t.Context(), existingSecret.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get existing Secret: %v", err)
+	}
+	if job.UID != existingJob.UID || secret.UID != existingSecret.UID || string(secret.Data[agentTokenKey]) != "original-jat" {
+		t.Fatalf("existing resources changed: Job UID %q, Secret UID %q, token %q", job.UID, secret.UID, secret.Data[agentTokenKey])
+	}
+	for _, action := range handlerActions {
+		if action.GetResource().Resource == "secrets" && (action.GetVerb() == "create" || action.GetVerb() == "delete") {
+			t.Errorf("unexpected Secret %s after AlreadyExists", action.GetVerb())
+		}
+		if action.GetResource().Resource == "jobs" && (action.GetVerb() == "get" || action.GetVerb() == "delete") {
+			t.Errorf("unexpected Job %s after AlreadyExists", action.GetVerb())
+		}
 	}
 }
 
@@ -108,6 +202,7 @@ func TestCreateJobDoesNotRetryPermanentJobCreationError(t *testing.T) {
 
 func TestHandleReconcilesJobCreatedBeforeResponseWasLost(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
+	ctx, cancel := context.WithCancel(t.Context())
 	k8sClient.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		job := action.(k8stesting.CreateAction).GetObject().(*batchv1.Job).DeepCopy()
 		job.Namespace = action.GetNamespace()
@@ -115,6 +210,7 @@ func TestHandleReconcilesJobCreatedBeforeResponseWasLost(t *testing.T) {
 		if err := k8sClient.Tracker().Create(batchv1.SchemeGroupVersion.WithResource("jobs"), job, job.Namespace); err != nil {
 			t.Fatalf("Track accepted job: %v", err)
 		}
+		cancel()
 		return true, nil, errors.New("job create response lost")
 	})
 	getCalls := 0
@@ -137,14 +233,8 @@ func TestHandleReconcilesJobCreatedBeforeResponseWasLost(t *testing.T) {
 	worker := New(slog.Default(), k8sClient, agentClient, Config{
 		Image: "buildkite/agent:latest", Namespace: "test-namespace", ID: "controller-id", EnableJobAcquisitionTokens: true,
 	})
-	ctx, cancel := context.WithCancel(t.Context())
-	lim := limiter.New(ctx, slog.Default(), worker, 1, 1, 10)
-	defer func() {
-		cancel()
-		lim.Wait()
-	}()
-	if err := lim.HandleMany(ctx, []*api.AgentScheduledJob{{ID: "job-uuid", JobAcquisitionToken: "jat-secret", QueriedAt: time.Now()}}); err != nil {
-		t.Fatalf("HandleMany() error = %v", err)
+	if err := worker.Handle(ctx, &api.AgentScheduledJob{ID: "job-uuid", JobAcquisitionToken: "jat-secret", QueriedAt: time.Now()}); err != nil {
+		t.Fatalf("Handle() error = %v", err)
 	}
 
 	var secret *corev1.Secret
@@ -168,6 +258,79 @@ func TestHandleReconcilesJobCreatedBeforeResponseWasLost(t *testing.T) {
 	}
 	if got := string(secret.Data[agentTokenKey]); got != "jat-secret" {
 		t.Errorf("reconciled secret token = %q, want jat-secret", got)
+	}
+}
+
+func TestCreateJobRecoversVerifiedJobForCleanupAfterLookupRetriesExhausted(t *testing.T) {
+	k8sClient := fake.NewSimpleClientset()
+	k8sClient.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		job := action.(k8stesting.CreateAction).GetObject().(*batchv1.Job).DeepCopy()
+		job.Namespace = action.GetNamespace()
+		job.UID = "accepted-job-uid"
+		if err := k8sClient.Tracker().Create(batchv1.SchemeGroupVersion.WithResource("jobs"), job, job.Namespace); err != nil {
+			t.Fatalf("Track accepted job: %v", err)
+		}
+		return true, nil, errors.New("job create response lost")
+	})
+	getCalls := 0
+	k8sClient.PrependReactor("get", "jobs", func(k8stesting.Action) (bool, runtime.Object, error) {
+		getCalls++
+		if getCalls <= resourceReconciliationBackoff.Steps {
+			return true, nil, kerrors.NewServerTimeout(batchv1.Resource("jobs"), "get", 0)
+		}
+		return false, nil, nil
+	})
+	worker := newJobAcquisitionTokenWorker(k8sClient)
+	kjob := buildJobWithJobAcquisitionToken(t, worker, "jat-secret")
+
+	if err := worker.createJob(t.Context(), kjob, "jat-secret"); err == nil {
+		t.Fatal("createJob() error = nil, want reconciliation error")
+	}
+	if getCalls <= resourceReconciliationBackoff.Steps {
+		t.Fatalf("Job get calls = %d, want bounded recovery after %d normal attempts", getCalls, resourceReconciliationBackoff.Steps)
+	}
+	if _, err := k8sClient.BatchV1().Jobs("test-namespace").Get(t.Context(), kjob.Name, metav1.GetOptions{}); !kerrors.IsNotFound(err) {
+		t.Fatalf("Get cleaned Job error = %v, want NotFound", err)
+	}
+	for _, action := range k8sClient.Actions() {
+		deleteAction, ok := action.(k8stesting.DeleteAction)
+		if !ok || action.GetResource().Resource != "jobs" {
+			continue
+		}
+		preconditions := deleteAction.GetDeleteOptions().Preconditions
+		if preconditions == nil || preconditions.UID == nil || *preconditions.UID != "accepted-job-uid" {
+			t.Errorf("Job delete UID precondition = %v, want accepted-job-uid", preconditions)
+		}
+	}
+}
+
+func TestCreateJobDoesNotDeleteUnverifiedJobWhenRecoveryExhausted(t *testing.T) {
+	k8sClient := fake.NewSimpleClientset()
+	k8sClient.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		job := action.(k8stesting.CreateAction).GetObject().(*batchv1.Job).DeepCopy()
+		job.Namespace = action.GetNamespace()
+		job.UID = "accepted-job-uid"
+		if err := k8sClient.Tracker().Create(batchv1.SchemeGroupVersion.WithResource("jobs"), job, job.Namespace); err != nil {
+			t.Fatalf("Track accepted job: %v", err)
+		}
+		return true, nil, errors.New("job create response lost")
+	})
+	k8sClient.PrependReactor("get", "jobs", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, kerrors.NewServerTimeout(batchv1.Resource("jobs"), "get", 0)
+	})
+	worker := newJobAcquisitionTokenWorker(k8sClient)
+	kjob := buildJobWithJobAcquisitionToken(t, worker, "jat-secret")
+
+	if err := worker.createJob(t.Context(), kjob, "jat-secret"); err == nil || !strings.Contains(err.Error(), "failed to recover job for cleanup") {
+		t.Fatalf("createJob() error = %v, want exhausted recovery error", err)
+	}
+	if _, err := k8sClient.Tracker().Get(batchv1.SchemeGroupVersion.WithResource("jobs"), "test-namespace", kjob.Name); err != nil {
+		t.Fatalf("accepted unverified Job was removed: %v", err)
+	}
+	for _, action := range k8sClient.Actions() {
+		if action.GetVerb() == "delete" {
+			t.Errorf("unexpected unverified %s delete", action.GetResource().Resource)
+		}
 	}
 }
 
@@ -278,9 +441,12 @@ func TestCreateJobDoesNotReconcileJobWithDifferentIdentity(t *testing.T) {
 			preexistingJob.Namespace = "test-namespace"
 			preexistingJob.UID = "preexisting-job-uid"
 			preexistingJob.Labels[tt.label] = tt.value
-			if _, err := k8sClient.BatchV1().Jobs("test-namespace").Create(t.Context(), preexistingJob, metav1.CreateOptions{}); err != nil {
-				t.Fatalf("Create pre-existing job: %v", err)
-			}
+			k8sClient.PrependReactor("create", "jobs", func(k8stesting.Action) (bool, runtime.Object, error) {
+				if err := k8sClient.Tracker().Create(batchv1.SchemeGroupVersion.WithResource("jobs"), preexistingJob, preexistingJob.Namespace); err != nil {
+					t.Fatalf("Track conflicting job: %v", err)
+				}
+				return true, nil, errors.New("job create response lost")
+			})
 			retryJob := buildJobWithJobAcquisitionToken(t, worker, "retry-jat")
 
 			if err := worker.createJob(t.Context(), retryJob, "retry-jat"); err == nil {
