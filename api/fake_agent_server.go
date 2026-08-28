@@ -48,6 +48,7 @@ type FakeAgentServer struct {
 
 	// JobStates maps job UUIDs to their state strings for GetJobStates.
 	JobStates map[string]string
+	AgentJobs map[string]*AgentJob
 
 	// GetJobStatesStatusCode configures the HTTP status code for GetJobStates.
 	// Default is 200.
@@ -240,14 +241,24 @@ func (f *FakeAgentServer) handleGetJobStates(w http.ResponseWriter, r *http.Requ
 }
 
 func (f *FakeAgentServer) handleFinishJob(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	const prefix = "/stacks/test-stack/jobs/"
+	if r.Method == http.MethodGet {
+		jobUUID := strings.TrimPrefix(path, prefix)
+		job, ok := f.AgentJobs[jobUUID]
+		if !ok {
+			writeJSONResponse(w, http.StatusNotFound, map[string]string{"message": "job not found"})
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, job)
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Path: /stacks/test-stack/jobs/{uuid}/finish
-	path := r.URL.Path
-	const prefix = "/stacks/test-stack/jobs/"
 	const suffix = "/finish"
 	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
 		http.Error(w, "not found", http.StatusNotFound)

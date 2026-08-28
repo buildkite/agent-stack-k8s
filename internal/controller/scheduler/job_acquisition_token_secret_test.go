@@ -1,19 +1,23 @@
 package scheduler
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/limiter"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 	"sigs.k8s.io/yaml"
@@ -79,14 +83,32 @@ func TestCreateJobDoesNotCreateSecretWhenJobCreationFails(t *testing.T) {
 	}
 }
 
-func TestCreateJobRetryRecoversJobCreatedBeforeResponseWasLost(t *testing.T) {
+func TestCreateJobDoesNotRetryPermanentJobCreationError(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
 	createCalls := 0
-	k8sClient.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, runtime.Object, error) {
+	k8sClient.PrependReactor("create", "jobs", func(k8stesting.Action) (bool, runtime.Object, error) {
 		createCalls++
-		if createCalls != 1 {
-			return false, nil, nil
+		return true, nil, kerrors.NewForbidden(batchv1.Resource("jobs"), "job-uuid", errors.New("forbidden"))
+	})
+	worker := newJobAcquisitionTokenWorker(k8sClient)
+	kjob := buildJobWithJobAcquisitionToken(t, worker, "jat-secret")
+
+	if err := worker.createJob(t.Context(), kjob, "jat-secret"); !kerrors.IsForbidden(err) {
+		t.Fatalf("createJob() error = %v, want Forbidden", err)
+	}
+	if createCalls != 1 {
+		t.Errorf("Job create calls = %d, want 1", createCalls)
+	}
+	for _, action := range k8sClient.Actions() {
+		if action.GetVerb() == "get" || action.GetVerb() == "delete" {
+			t.Errorf("unexpected %s action after permanent error: %v", action.GetVerb(), action)
 		}
+	}
+}
+
+func TestHandleReconcilesJobCreatedBeforeResponseWasLost(t *testing.T) {
+	k8sClient := fake.NewSimpleClientset()
+	k8sClient.PrependReactor("create", "jobs", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		job := action.(k8stesting.CreateAction).GetObject().(*batchv1.Job).DeepCopy()
 		job.Namespace = action.GetNamespace()
 		job.UID = "accepted-job-uid"
@@ -103,44 +125,76 @@ func TestCreateJobRetryRecoversJobCreatedBeforeResponseWasLost(t *testing.T) {
 		}
 		return false, nil, nil
 	})
-	worker := newJobAcquisitionTokenWorker(k8sClient)
-	firstJob := buildJobWithJobAcquisitionToken(t, worker, "first-jat")
-	firstSecretName := firstJob.Annotations[config.JobAcquisitionTokenSecretAnnotation]
-
-	if err := worker.createJob(t.Context(), firstJob, "first-jat"); err == nil {
-		t.Fatal("first createJob() error = nil, want ambiguous creation error")
+	server := api.NewFakeAgentServer()
+	defer server.Close()
+	server.AgentJobs = map[string]*api.AgentJob{"job-uuid": {ID: "job-uuid", Command: "true"}}
+	agentClient, err := api.NewAgentClient(t.Context(), api.AgentClientOpts{
+		Token: "fake-token", Endpoint: server.URL(), StackID: "test-stack", Logger: slog.Default(),
+	})
+	if err != nil {
+		t.Fatalf("NewAgentClient() error = %v", err)
+	}
+	worker := New(slog.Default(), k8sClient, agentClient, Config{
+		Image: "buildkite/agent:latest", Namespace: "test-namespace", ID: "controller-id", EnableJobAcquisitionTokens: true,
+	})
+	ctx, cancel := context.WithCancel(t.Context())
+	lim := limiter.New(ctx, slog.Default(), worker, 1, 1, 10)
+	defer func() {
+		cancel()
+		lim.Wait()
+	}()
+	if err := lim.HandleMany(ctx, []*api.AgentScheduledJob{{ID: "job-uuid", JobAcquisitionToken: "jat-secret", QueriedAt: time.Now()}}); err != nil {
+		t.Fatalf("HandleMany() error = %v", err)
 	}
 
-	retryJob := buildJobWithJobAcquisitionToken(t, worker, "retry-jat")
-	if err := worker.createJob(t.Context(), retryJob, "retry-jat"); err != nil {
-		t.Fatalf("retry createJob() error = %v", err)
+	var secret *corev1.Secret
+	err = wait.PollUntilContextTimeout(t.Context(), 10*time.Millisecond, time.Second, true, func(ctx context.Context) (bool, error) {
+		secrets, err := k8sClient.CoreV1().Secrets("test-namespace").List(ctx, metav1.ListOptions{})
+		if err != nil || len(secrets.Items) == 0 {
+			return false, err
+		}
+		secret = &secrets.Items[0]
+		return true, nil
+	})
+	if err != nil {
+		t.Fatalf("waiting for reconciled secret: %v", err)
 	}
-	acceptedJob, err := k8sClient.BatchV1().Jobs("test-namespace").Get(t.Context(), firstJob.Name, metav1.GetOptions{})
+	acceptedJob, err := k8sClient.BatchV1().Jobs("test-namespace").Get(t.Context(), "job-uuid", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get accepted job: %v", err)
-	}
-	if got := acceptedJob.Annotations[config.JobAcquisitionTokenSecretAnnotation]; got != firstSecretName {
-		t.Errorf("accepted Job secret annotation = %q, want %q", got, firstSecretName)
-	}
-	secret, err := k8sClient.CoreV1().Secrets("test-namespace").Get(t.Context(), firstSecretName, metav1.GetOptions{})
-	if err != nil {
-		t.Fatalf("Get reconciled secret: %v", err)
-	}
-	if got := string(secret.Data[agentTokenKey]); got != "retry-jat" {
-		t.Errorf("reconciled secret token = %q, want retry-jat", got)
 	}
 	if len(secret.OwnerReferences) != 1 || secret.OwnerReferences[0].UID != acceptedJob.UID {
 		t.Errorf("reconciled secret owner references = %#v, want accepted Job UID %q", secret.OwnerReferences, acceptedJob.UID)
 	}
-	if _, err := k8sClient.CoreV1().Secrets("test-namespace").Get(t.Context(), retryJob.Annotations[config.JobAcquisitionTokenSecretAnnotation], metav1.GetOptions{}); err == nil {
-		t.Fatal("retry's newly generated Secret unexpectedly exists")
+	if got := string(secret.Data[agentTokenKey]); got != "jat-secret" {
+		t.Errorf("reconciled secret token = %q, want jat-secret", got)
 	}
 }
 
-func TestCreateJobLeavesAcceptedJobForRetryWhenSecretCreationFails(t *testing.T) {
+func TestCreateJobExhaustedSecretReconciliationCleansVerifiedJobAndOwnedSecret(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
-	k8sClient.PrependReactor("create", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
-		return true, nil, errors.New("secret create failed")
+	setCreatedJobUID(k8sClient)
+	createCalls := 0
+	k8sClient.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		createCalls++
+		if createCalls != 1 {
+			return false, nil, nil
+		}
+		secret := action.(k8stesting.CreateAction).GetObject().(*corev1.Secret).DeepCopy()
+		secret.Namespace = action.GetNamespace()
+		secret.UID = "accepted-secret-uid"
+		if err := k8sClient.Tracker().Create(corev1.SchemeGroupVersion.WithResource("secrets"), secret, secret.Namespace); err != nil {
+			t.Fatalf("Track accepted secret: %v", err)
+		}
+		return true, nil, errors.New("secret create response lost")
+	})
+	getCalls := 0
+	k8sClient.PrependReactor("get", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		getCalls++
+		if getCalls <= resourceReconciliationBackoff.Steps {
+			return true, nil, kerrors.NewServerTimeout(corev1.Resource("secrets"), "get", 0)
+		}
+		return false, nil, nil
 	})
 	worker := newJobAcquisitionTokenWorker(k8sClient)
 	kjob := buildJobWithJobAcquisitionToken(t, worker, "jat-secret")
@@ -148,60 +202,56 @@ func TestCreateJobLeavesAcceptedJobForRetryWhenSecretCreationFails(t *testing.T)
 	if err := worker.createJob(t.Context(), kjob, "jat-secret"); err == nil {
 		t.Fatal("createJob() error = nil, want error")
 	}
-	jobs, err := k8sClient.BatchV1().Jobs("test-namespace").List(t.Context(), metav1.ListOptions{})
-	if err != nil {
-		t.Fatalf("List jobs: %v", err)
+	if _, err := k8sClient.BatchV1().Jobs("test-namespace").Get(t.Context(), kjob.Name, metav1.GetOptions{}); !kerrors.IsNotFound(err) {
+		t.Fatalf("Get cleaned Job error = %v, want NotFound", err)
 	}
-	if len(jobs.Items) != 1 {
-		t.Errorf("len(jobs.Items) = %d, want 1", len(jobs.Items))
+	secretName := kjob.Annotations[config.JobAcquisitionTokenSecretAnnotation]
+	if _, err := k8sClient.CoreV1().Secrets("test-namespace").Get(t.Context(), secretName, metav1.GetOptions{}); !kerrors.IsNotFound(err) {
+		t.Fatalf("Get cleaned Secret error = %v, want NotFound", err)
 	}
-	secrets, err := k8sClient.CoreV1().Secrets("test-namespace").List(t.Context(), metav1.ListOptions{})
-	if err != nil {
-		t.Fatalf("List secrets: %v", err)
+	deleteCounts := map[string]int{}
+	for _, action := range k8sClient.Actions() {
+		deleteAction, ok := action.(k8stesting.DeleteAction)
+		if !ok {
+			continue
+		}
+		deleteCounts[action.GetResource().Resource]++
+		preconditions := deleteAction.GetDeleteOptions().Preconditions
+		if action.GetResource().Resource == "jobs" && (preconditions == nil || preconditions.UID == nil || *preconditions.UID != "created-job-uid") {
+			t.Errorf("Job delete UID precondition = %v, want created-job-uid", preconditions)
+		}
+		if action.GetResource().Resource == "secrets" && (preconditions == nil || preconditions.UID == nil || *preconditions.UID != "accepted-secret-uid") {
+			t.Errorf("Secret delete UID precondition = %v, want accepted-secret-uid", preconditions)
+		}
 	}
-	if len(secrets.Items) != 0 {
-		t.Errorf("len(secrets.Items) = %d, want 0", len(secrets.Items))
-	}
-}
-
-func TestCreateJobRetryReusesExistingSecretOwnedByAcceptedJob(t *testing.T) {
-	k8sClient := fake.NewSimpleClientset()
-	setCreatedJobUID(k8sClient)
-	worker := newJobAcquisitionTokenWorker(k8sClient)
-	firstJob := buildJobWithJobAcquisitionToken(t, worker, "first-jat")
-	if err := worker.createJob(t.Context(), firstJob, "first-jat"); err != nil {
-		t.Fatalf("first createJob() error = %v", err)
-	}
-
-	retryJob := buildJobWithJobAcquisitionToken(t, worker, "retry-jat")
-	if err := worker.createJob(t.Context(), retryJob, "retry-jat"); err != nil {
-		t.Fatalf("retry createJob() error = %v", err)
-	}
-	secrets, err := k8sClient.CoreV1().Secrets("test-namespace").List(t.Context(), metav1.ListOptions{})
-	if err != nil {
-		t.Fatalf("List secrets: %v", err)
-	}
-	if len(secrets.Items) != 1 {
-		t.Fatalf("len(secrets.Items) = %d, want 1", len(secrets.Items))
-	}
-	if got := secrets.Items[0].Name; got != firstJob.Annotations[config.JobAcquisitionTokenSecretAnnotation] {
-		t.Errorf("remaining secret = %q, want %q", got, firstJob.Annotations[config.JobAcquisitionTokenSecretAnnotation])
-	}
-	if got := string(secrets.Items[0].Data[agentTokenKey]); got != "first-jat" {
-		t.Errorf("remaining token = %q, want %q", got, "first-jat")
+	if deleteCounts["jobs"] != 1 || deleteCounts["secrets"] != 1 {
+		t.Errorf("delete counts = %v, want one Job and one Secret", deleteCounts)
 	}
 }
 
-func TestCreateJobReconcilesSecretCreatedBeforeResponseWasLost(t *testing.T) {
+func TestCreateJobReconcilesTransientSecretCreateAndGetAmbiguity(t *testing.T) {
 	k8sClient := fake.NewSimpleClientset()
 	setCreatedJobUID(k8sClient)
+	createCalls := 0
 	k8sClient.PrependReactor("create", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		createCalls++
+		if createCalls != 1 {
+			return false, nil, nil
+		}
 		secret := action.(k8stesting.CreateAction).GetObject().(*corev1.Secret).DeepCopy()
 		secret.Namespace = action.GetNamespace()
 		if err := k8sClient.Tracker().Create(corev1.SchemeGroupVersion.WithResource("secrets"), secret, secret.Namespace); err != nil {
 			t.Fatalf("Track accepted secret: %v", err)
 		}
 		return true, nil, errors.New("secret create response lost")
+	})
+	getCalls := 0
+	k8sClient.PrependReactor("get", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+		getCalls++
+		if getCalls == 1 {
+			return true, nil, kerrors.NewServerTimeout(corev1.Resource("secrets"), "get", 0)
+		}
+		return false, nil, nil
 	})
 	worker := newJobAcquisitionTokenWorker(k8sClient)
 	kjob := buildJobWithJobAcquisitionToken(t, worker, "jat-secret")
@@ -235,6 +285,9 @@ func TestCreateJobDoesNotReconcileJobWithDifferentIdentity(t *testing.T) {
 
 			if err := worker.createJob(t.Context(), retryJob, "retry-jat"); err == nil {
 				t.Fatal("createJob() error = nil, want conflicting Job error")
+			}
+			if _, err := k8sClient.BatchV1().Jobs("test-namespace").Get(t.Context(), preexistingJob.Name, metav1.GetOptions{}); err != nil {
+				t.Fatalf("Get pre-existing Job after conflict: %v", err)
 			}
 			if _, err := k8sClient.CoreV1().Secrets("test-namespace").Get(t.Context(), preexistingJob.Annotations[config.JobAcquisitionTokenSecretAnnotation], metav1.GetOptions{}); !kerrors.IsNotFound(err) {
 				t.Fatalf("Get hostile Job secret error = %v, want NotFound", err)
@@ -273,6 +326,9 @@ func TestCreateJobDoesNotReuseSecretOwnedByDifferentJob(t *testing.T) {
 	}
 	if got := secret.OwnerReferences[0].UID; got != "different-job-uid" {
 		t.Errorf("foreign secret owner UID = %q, want different-job-uid", got)
+	}
+	if _, err := k8sClient.BatchV1().Jobs("test-namespace").Get(t.Context(), kjob.Name, metav1.GetOptions{}); !kerrors.IsNotFound(err) {
+		t.Fatalf("Get cleaned Job error = %v, want NotFound", err)
 	}
 }
 

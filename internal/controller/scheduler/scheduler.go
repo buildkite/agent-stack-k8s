@@ -34,6 +34,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/yaml"
 )
@@ -47,7 +48,12 @@ const (
 	DefaultCommandContainerName   = "container-0"
 )
 
-var errK8sPluginProhibited = errors.New("the kubernetes plugin is prohibited by this controller, but was configured on this job")
+var (
+	errK8sPluginProhibited        = errors.New("the kubernetes plugin is prohibited by this controller, but was configured on this job")
+	errJobIdentityConflict        = errors.New("existing Job does not match the intended workload identity")
+	errSecretIdentityConflict     = errors.New("existing Secret does not match the intended Job identity")
+	resourceReconciliationBackoff = wait.Backoff{Duration: 100 * time.Millisecond, Factor: 2, Jitter: 0.1, Steps: 5}
+)
 
 var (
 	commandContainerCommand = []string{"/workspace/tini-static"}
@@ -218,23 +224,60 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job, token api.JobAcquisitionToken) error {
 	createdJob, err := w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
+		createErr := err
 		if !w.cfg.EnableJobAcquisitionTokens {
-			return fmt.Errorf("failed to create job: %w", err)
+			return fmt.Errorf("failed to create job: %w", createErr)
 		}
-		liveJob, getErr := w.client.BatchV1().Jobs(w.cfg.Namespace).Get(ctx, kjob.Name, metav1.GetOptions{})
-		if getErr != nil {
-			return errors.Join(fmt.Errorf("failed to create job: %w", err), fmt.Errorf("failed to reconcile job: %w", getErr))
+		if isPermanentKubernetesError(createErr) {
+			return fmt.Errorf("failed to create job: %w", createErr)
 		}
-		secretName := liveJob.Annotations[config.JobAcquisitionTokenSecretAnnotation]
-		if !hasSameJobIdentity(kjob.Labels, liveJob.Labels) || liveJob.UID == "" || secretName == "" || !jobReferencesSecret(liveJob, secretName) {
-			return fmt.Errorf("failed to create job: %w", err)
+		createdJob, err = w.reconcileCreatedJob(ctx, kjob)
+		if err != nil {
+			return errors.Join(fmt.Errorf("failed to create job: %w", createErr), fmt.Errorf("failed to reconcile job: %w", err))
 		}
-		createdJob = liveJob
 	}
 	if !w.cfg.EnableJobAcquisitionTokens {
 		return nil
 	}
 
+	if err := w.reconcileJobAcquisitionTokenSecret(ctx, createdJob, token); err != nil {
+		return errors.Join(err, w.cleanupIncompleteJob(context.WithoutCancel(ctx), createdJob))
+	}
+	return nil
+}
+
+func (w *worker) reconcileCreatedJob(ctx context.Context, expected *batchv1.Job) (*batchv1.Job, error) {
+	var liveJob *batchv1.Job
+	var lastErr error
+	err := wait.ExponentialBackoffWithContext(ctx, resourceReconciliationBackoff, func(ctx context.Context) (bool, error) {
+		job, err := w.client.BatchV1().Jobs(w.cfg.Namespace).Get(ctx, expected.Name, metav1.GetOptions{})
+		if err != nil {
+			if isPermanentKubernetesError(err) {
+				return false, err
+			}
+			lastErr = err
+			return false, nil
+		}
+		secretName := job.Annotations[config.JobAcquisitionTokenSecretAnnotation]
+		if !hasSameJobIdentity(expected.Labels, job.Labels) || job.UID == "" || secretName == "" || !jobReferencesSecret(job, secretName) {
+			return false, errJobIdentityConflict
+		}
+		liveJob = job
+		return true, nil
+	})
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if wait.Interrupted(err) && lastErr != nil {
+			return nil, lastErr
+		}
+		return nil, err
+	}
+	return liveJob, nil
+}
+
+func (w *worker) reconcileJobAcquisitionTokenSecret(ctx context.Context, createdJob *batchv1.Job, token api.JobAcquisitionToken) error {
 	secretName := createdJob.Annotations[config.JobAcquisitionTokenSecretAnnotation]
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -246,17 +289,91 @@ func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job, token api.Job
 		Immutable: new(true),
 		Data:      map[string][]byte{agentTokenKey: []byte(token)},
 	}
-	if _, err := w.client.CoreV1().Secrets(w.cfg.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
-		liveSecret, getErr := w.client.CoreV1().Secrets(w.cfg.Namespace).Get(ctx, secret.Name, metav1.GetOptions{})
-		if getErr != nil {
-			return errors.Join(fmt.Errorf("failed to create job acquisition token secret: %w", err), fmt.Errorf("failed to reconcile job acquisition token secret: %w", getErr))
+	var lastErr error
+	err := wait.ExponentialBackoffWithContext(ctx, resourceReconciliationBackoff, func(ctx context.Context) (bool, error) {
+		if _, err := w.client.CoreV1().Secrets(w.cfg.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err == nil {
+			return true, nil
+		} else if isPermanentKubernetesError(err) {
+			return false, err
+		} else {
+			lastErr = err
+		}
+		liveSecret, err := w.client.CoreV1().Secrets(w.cfg.Namespace).Get(ctx, secret.Name, metav1.GetOptions{})
+		if err != nil {
+			if isPermanentKubernetesError(err) {
+				return false, err
+			}
+			lastErr = errors.Join(lastErr, err)
+			return false, nil
 		}
 		if !secretControlledByJob(liveSecret, createdJob) || !hasSameJobIdentity(createdJob.Labels, liveSecret.Labels) ||
-			liveSecret.Immutable == nil || !*liveSecret.Immutable || len(liveSecret.Data[agentTokenKey]) == 0 {
-			return fmt.Errorf("job acquisition token secret %q does not match Job %q", secret.Name, createdJob.Name)
+			liveSecret.Immutable == nil || !*liveSecret.Immutable || !slices.Equal(liveSecret.Data[agentTokenKey], secret.Data[agentTokenKey]) {
+			return false, errSecretIdentityConflict
 		}
+		return true, nil
+	})
+	if err == nil {
+		return nil
 	}
-	return nil
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if wait.Interrupted(err) && lastErr != nil {
+		err = lastErr
+	}
+	return fmt.Errorf("failed to reconcile job acquisition token secret: %w", err)
+}
+
+func (w *worker) cleanupIncompleteJob(ctx context.Context, kjob *batchv1.Job) error {
+	cleanupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var errs []error
+	secrets := w.client.CoreV1().Secrets(w.cfg.Namespace)
+	secretName := kjob.Annotations[config.JobAcquisitionTokenSecretAnnotation]
+	secret, err := secrets.Get(cleanupCtx, secretName, metav1.GetOptions{})
+	if err == nil && secretControlledByJob(secret, kjob) && hasSameJobIdentity(kjob.Labels, secret.Labels) {
+		if err := retryKubernetesDelete(cleanupCtx, func(ctx context.Context) error {
+			return secrets.Delete(ctx, secretName, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &secret.UID}})
+		}); err != nil {
+			errs = append(errs, fmt.Errorf("failed to delete incomplete job acquisition token secret: %w", err))
+		}
+	} else if err != nil && !kerrors.IsNotFound(err) {
+		errs = append(errs, fmt.Errorf("failed to get incomplete job acquisition token secret: %w", err))
+	}
+	if err := retryKubernetesDelete(cleanupCtx, func(ctx context.Context) error {
+		return w.client.BatchV1().Jobs(w.cfg.Namespace).Delete(ctx, kjob.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &kjob.UID}})
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("failed to delete incomplete job: %w", err))
+	}
+	return errors.Join(errs...)
+}
+
+func retryKubernetesDelete(ctx context.Context, deleteResource func(context.Context) error) error {
+	var lastErr error
+	err := wait.ExponentialBackoffWithContext(ctx, resourceReconciliationBackoff, func(ctx context.Context) (bool, error) {
+		err := deleteResource(ctx)
+		if err == nil || kerrors.IsNotFound(err) {
+			return true, nil
+		}
+		if isPermanentKubernetesError(err) || kerrors.IsConflict(err) {
+			return false, err
+		}
+		lastErr = err
+		return false, nil
+	})
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if wait.Interrupted(err) && lastErr != nil {
+		return lastErr
+	}
+	return err
+}
+
+func isPermanentKubernetesError(err error) bool {
+	return kerrors.IsInvalid(err) || kerrors.IsForbidden(err) || kerrors.IsUnauthorized(err) || kerrors.IsBadRequest(err) ||
+		kerrors.IsMethodNotSupported(err) || kerrors.IsNotAcceptable(err) || kerrors.IsRequestEntityTooLargeError(err) ||
+		kerrors.IsUnsupportedMediaType(err)
 }
 
 func hasSameJobIdentity(expected, actual map[string]string) bool {
