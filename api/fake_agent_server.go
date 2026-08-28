@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -36,11 +37,18 @@ type FakeAgentServer struct {
 	// ReserveError configures an error message to return.
 	ReserveError string
 
+	JobAcquisitionTokenCalls         []IssueJobAcquisitionTokensRequest
+	JobAcquisitionTokenRequestBodies [][]byte
+	JobAcquisitionTokenResponse      *IssueJobAcquisitionTokensResponse
+	JobAcquisitionTokenStatusCode    int
+	JobAcquisitionTokenError         string
+
 	// NotificationCalls records all notification batches sent to the server.
 	NotificationCalls [][]stacksapi.StackNotification
 
 	// JobStates maps job UUIDs to their state strings for GetJobStates.
 	JobStates map[string]string
+	AgentJobs map[string]*AgentJob
 
 	// GetJobStatesStatusCode configures the HTTP status code for GetJobStates.
 	// Default is 200.
@@ -64,20 +72,57 @@ type FakeAgentServer struct {
 // Use server.URL() to get the endpoint for creating a real AgentClient.
 func NewFakeAgentServer() *FakeAgentServer {
 	fake := &FakeAgentServer{
-		ReserveStatusCode:      http.StatusOK,
-		GetJobStatesStatusCode: http.StatusOK,
-		FinishJobStatusCode:    http.StatusOK,
+		ReserveStatusCode:             http.StatusOK,
+		JobAcquisitionTokenStatusCode: http.StatusCreated,
+		GetJobStatesStatusCode:        http.StatusOK,
+		FinishJobStatusCode:           http.StatusOK,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stacks/register", fake.handleRegisterStack)
 	mux.HandleFunc("/stacks/test-stack/scheduled-jobs/batch-reserve", fake.handleReserveJobs)
+	mux.HandleFunc("/stacks/test-stack/job-acquisition-tokens", fake.handleIssueJobAcquisitionTokens)
 	mux.HandleFunc("/stacks/test-stack/notifications", fake.handleNotifications)
 	mux.HandleFunc("/stacks/test-stack/jobs/get-states", fake.handleGetJobStates)
 	mux.HandleFunc("/stacks/test-stack/jobs/", fake.handleFinishJob)
 
 	fake.server = httptest.NewServer(mux)
 	return fake
+}
+
+func (f *FakeAgentServer) handleIssueJobAcquisitionTokens(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var req IssueJobAcquisitionTokensRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	f.mu.Lock()
+	f.JobAcquisitionTokenCalls = append(f.JobAcquisitionTokenCalls, req)
+	f.JobAcquisitionTokenRequestBodies = append(f.JobAcquisitionTokenRequestBodies, bytes.Clone(body))
+	f.mu.Unlock()
+	if f.JobAcquisitionTokenError != "" {
+		writeJSONResponse(w, f.JobAcquisitionTokenStatusCode, map[string]string{"message": f.JobAcquisitionTokenError})
+		return
+	}
+	resp := f.JobAcquisitionTokenResponse
+	if resp == nil {
+		resp = &IssueJobAcquisitionTokensResponse{}
+		for _, id := range req.JobUUIDs {
+			resp.JobAcquisitionTokens = append(resp.JobAcquisitionTokens, IssuedJobAcquisitionToken{
+				JobUUID: id, JobAcquisitionToken: JobAcquisitionToken("jat-" + id),
+			})
+		}
+	}
+	writeJSONResponse(w, f.JobAcquisitionTokenStatusCode, resp)
 }
 
 // URL returns the base URL of the fake server.
@@ -196,14 +241,24 @@ func (f *FakeAgentServer) handleGetJobStates(w http.ResponseWriter, r *http.Requ
 }
 
 func (f *FakeAgentServer) handleFinishJob(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	const prefix = "/stacks/test-stack/jobs/"
+	if r.Method == http.MethodGet {
+		jobUUID := strings.TrimPrefix(path, prefix)
+		job, ok := f.AgentJobs[jobUUID]
+		if !ok {
+			writeJSONResponse(w, http.StatusNotFound, map[string]string{"message": "job not found"})
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, job)
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Path: /stacks/test-stack/jobs/{uuid}/finish
-	path := r.URL.Path
-	const prefix = "/stacks/test-stack/jobs/"
 	const suffix = "/finish"
 	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
 		http.Error(w, "not found", http.StatusNotFound)

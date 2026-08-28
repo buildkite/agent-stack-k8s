@@ -27,12 +27,14 @@ import (
 	"github.com/buildkite/agent/v3/clicommand"
 
 	"github.com/distribution/reference"
+	"github.com/google/uuid"
 	"github.com/jedib0t/go-pretty/v6/table"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/yaml"
 )
@@ -46,7 +48,13 @@ const (
 	DefaultCommandContainerName   = "container-0"
 )
 
-var errK8sPluginProhibited = errors.New("the kubernetes plugin is prohibited by this controller, but was configured on this job")
+var (
+	errK8sPluginProhibited        = errors.New("the kubernetes plugin is prohibited by this controller, but was configured on this job")
+	errJobIdentityConflict        = errors.New("existing Job does not match the intended workload identity")
+	errSecretIdentityConflict     = errors.New("existing Secret does not match the intended Job identity")
+	resourceReconciliationBackoff = wait.Backoff{Duration: 100 * time.Millisecond, Factor: 2, Jitter: 0.1, Steps: 5}
+	resourceRecoveryTimeout       = 5 * time.Second
+)
 
 var (
 	commandContainerCommand = []string{"/workspace/tini-static"}
@@ -60,6 +68,7 @@ type Config struct {
 	JobPrefix                            string
 	AgentToken                           string
 	AgentTokenSecretName                 string
+	EnableJobAcquisitionTokens           bool
 	JobTTL                               time.Duration
 	JobActiveDeadlineSeconds             int
 	AdditionalRedactedVars               []string
@@ -184,7 +193,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 	}
 
 	jobCreateCallsCounter.Inc()
-	if err := w.createJob(ctx, kjob); err != nil {
+	if err := w.createJob(ctx, kjob, inputs.jobAcquisitionToken); err != nil {
 		jobCreateErrorCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
 
 		switch {
@@ -194,7 +203,7 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 
 		case kerrors.IsInvalid(err):
 			out := ""
-			yamlOut, marshalErr := yaml.Marshal(kjob)
+			yamlOut, marshalErr := yaml.Marshal(redactedJob(kjob))
 			if marshalErr != nil {
 				out = fmt.Sprintf("Couldn't marshal the Job into YAML: %v", marshalErr)
 			} else {
@@ -213,12 +222,211 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 	return nil
 }
 
-func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job) error {
-	_, err := w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
+func (w *worker) createJob(ctx context.Context, kjob *batchv1.Job, token api.JobAcquisitionToken) error {
+	createdJob, err := w.client.BatchV1().Jobs(w.cfg.Namespace).Create(ctx, kjob, metav1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to create job: %w", err)
+		createErr := err
+		if !w.cfg.EnableJobAcquisitionTokens {
+			return fmt.Errorf("failed to create job: %w", createErr)
+		}
+		if !isAmbiguousKubernetesCreateError(createErr) {
+			return fmt.Errorf("failed to create job: %w", createErr)
+		}
+		reconcileCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), resourceRecoveryTimeout)
+		createdJob, err = w.reconcileCreatedJob(reconcileCtx, kjob)
+		if err != nil {
+			cancel()
+			reconcileErr := fmt.Errorf("failed to reconcile job: %w", err)
+			if errors.Is(err, errJobIdentityConflict) || isPermanentKubernetesError(err) {
+				return errors.Join(fmt.Errorf("failed to create job: %w", createErr), reconcileErr)
+			}
+
+			recoveryCtx, recoveryCancel := context.WithTimeout(context.WithoutCancel(ctx), resourceRecoveryTimeout)
+			verifiedJob, recoveryErr := w.reconcileCreatedJob(recoveryCtx, kjob)
+			recoveryCancel()
+			if recoveryErr != nil {
+				return errors.Join(fmt.Errorf("failed to create job: %w", createErr), reconcileErr, fmt.Errorf("failed to recover job for cleanup: %w", recoveryErr))
+			}
+			return errors.Join(fmt.Errorf("failed to create job: %w", createErr), reconcileErr, w.cleanupIncompleteJob(context.WithoutCancel(ctx), verifiedJob))
+		}
+		defer cancel()
+		ctx = reconcileCtx
+	}
+	if !w.cfg.EnableJobAcquisitionTokens {
+		return nil
+	}
+
+	if err := w.reconcileJobAcquisitionTokenSecret(ctx, createdJob, token); err != nil {
+		return errors.Join(err, w.cleanupIncompleteJob(context.WithoutCancel(ctx), createdJob))
 	}
 	return nil
+}
+
+func (w *worker) reconcileCreatedJob(ctx context.Context, expected *batchv1.Job) (*batchv1.Job, error) {
+	var liveJob *batchv1.Job
+	var lastErr error
+	err := wait.ExponentialBackoffWithContext(ctx, resourceReconciliationBackoff, func(ctx context.Context) (bool, error) {
+		job, err := w.client.BatchV1().Jobs(w.cfg.Namespace).Get(ctx, expected.Name, metav1.GetOptions{})
+		if err != nil {
+			if isPermanentKubernetesError(err) {
+				return false, err
+			}
+			lastErr = err
+			return false, nil
+		}
+		secretName := job.Annotations[config.JobAcquisitionTokenSecretAnnotation]
+		if !hasSameJobIdentity(expected.Labels, job.Labels) || job.UID == "" || secretName == "" || !jobReferencesSecret(job, secretName) {
+			return false, errJobIdentityConflict
+		}
+		liveJob = job
+		return true, nil
+	})
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if wait.Interrupted(err) && lastErr != nil {
+			return nil, lastErr
+		}
+		return nil, err
+	}
+	return liveJob, nil
+}
+
+func (w *worker) reconcileJobAcquisitionTokenSecret(ctx context.Context, createdJob *batchv1.Job, token api.JobAcquisitionToken) error {
+	secretName := createdJob.Annotations[config.JobAcquisitionTokenSecretAnnotation]
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            secretName,
+			Namespace:       w.cfg.Namespace,
+			Labels:          maps.Clone(createdJob.Labels),
+			OwnerReferences: []metav1.OwnerReference{*metav1.NewControllerRef(createdJob, batchv1.SchemeGroupVersion.WithKind("Job"))},
+		},
+		Immutable: new(true),
+		Data:      map[string][]byte{agentTokenKey: []byte(token)},
+	}
+	var lastErr error
+	err := wait.ExponentialBackoffWithContext(ctx, resourceReconciliationBackoff, func(ctx context.Context) (bool, error) {
+		if _, err := w.client.CoreV1().Secrets(w.cfg.Namespace).Create(ctx, secret, metav1.CreateOptions{}); err == nil {
+			return true, nil
+		} else if isPermanentKubernetesError(err) {
+			return false, err
+		} else {
+			lastErr = err
+		}
+		liveSecret, err := w.client.CoreV1().Secrets(w.cfg.Namespace).Get(ctx, secret.Name, metav1.GetOptions{})
+		if err != nil {
+			if isPermanentKubernetesError(err) {
+				return false, err
+			}
+			lastErr = errors.Join(lastErr, err)
+			return false, nil
+		}
+		if !secretControlledByJob(liveSecret, createdJob) || !hasSameJobIdentity(createdJob.Labels, liveSecret.Labels) ||
+			liveSecret.Immutable == nil || !*liveSecret.Immutable || !slices.Equal(liveSecret.Data[agentTokenKey], secret.Data[agentTokenKey]) {
+			return false, errSecretIdentityConflict
+		}
+		return true, nil
+	})
+	if err == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if wait.Interrupted(err) && lastErr != nil {
+		err = lastErr
+	}
+	return fmt.Errorf("failed to reconcile job acquisition token secret: %w", err)
+}
+
+func (w *worker) cleanupIncompleteJob(ctx context.Context, kjob *batchv1.Job) error {
+	cleanupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	var errs []error
+	secrets := w.client.CoreV1().Secrets(w.cfg.Namespace)
+	secretName := kjob.Annotations[config.JobAcquisitionTokenSecretAnnotation]
+	secret, err := secrets.Get(cleanupCtx, secretName, metav1.GetOptions{})
+	if err == nil && secretControlledByJob(secret, kjob) && hasSameJobIdentity(kjob.Labels, secret.Labels) {
+		if err := retryKubernetesDelete(cleanupCtx, func(ctx context.Context) error {
+			return secrets.Delete(ctx, secretName, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &secret.UID}})
+		}); err != nil {
+			errs = append(errs, fmt.Errorf("failed to delete incomplete job acquisition token secret: %w", err))
+		}
+	} else if err != nil && !kerrors.IsNotFound(err) {
+		errs = append(errs, fmt.Errorf("failed to get incomplete job acquisition token secret: %w", err))
+	}
+	if err := retryKubernetesDelete(cleanupCtx, func(ctx context.Context) error {
+		return w.client.BatchV1().Jobs(w.cfg.Namespace).Delete(ctx, kjob.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &kjob.UID}})
+	}); err != nil {
+		errs = append(errs, fmt.Errorf("failed to delete incomplete job: %w", err))
+	}
+	return errors.Join(errs...)
+}
+
+func retryKubernetesDelete(ctx context.Context, deleteResource func(context.Context) error) error {
+	var lastErr error
+	err := wait.ExponentialBackoffWithContext(ctx, resourceReconciliationBackoff, func(ctx context.Context) (bool, error) {
+		err := deleteResource(ctx)
+		if err == nil || kerrors.IsNotFound(err) {
+			return true, nil
+		}
+		if isPermanentKubernetesError(err) || kerrors.IsConflict(err) {
+			return false, err
+		}
+		lastErr = err
+		return false, nil
+	})
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if wait.Interrupted(err) && lastErr != nil {
+		return lastErr
+	}
+	return err
+}
+
+func isPermanentKubernetesError(err error) bool {
+	return kerrors.IsInvalid(err) || kerrors.IsForbidden(err) || kerrors.IsUnauthorized(err) || kerrors.IsBadRequest(err) ||
+		kerrors.IsMethodNotSupported(err) || kerrors.IsNotAcceptable(err) || kerrors.IsRequestEntityTooLargeError(err) ||
+		kerrors.IsUnsupportedMediaType(err)
+}
+
+func isAmbiguousKubernetesCreateError(err error) bool {
+	if kerrors.IsAlreadyExists(err) || kerrors.IsConflict(err) || isPermanentKubernetesError(err) {
+		return false
+	}
+	if kerrors.IsTimeout(err) || kerrors.IsServerTimeout(err) {
+		return true
+	}
+	var status kerrors.APIStatus
+	return !errors.As(err, &status)
+}
+
+func hasSameJobIdentity(expected, actual map[string]string) bool {
+	expectedControllerID, expectedHasControllerID := expected[config.ControllerIDLabel]
+	actualControllerID, actualHasControllerID := actual[config.ControllerIDLabel]
+	return expected[config.UUIDLabel] != "" && actual[config.UUIDLabel] == expected[config.UUIDLabel] &&
+		expectedHasControllerID == actualHasControllerID && actualControllerID == expectedControllerID
+}
+
+func jobReferencesSecret(kjob *batchv1.Job, secretName string) bool {
+	for _, container := range kjob.Spec.Template.Spec.Containers {
+		if container.Name != AgentContainerName {
+			continue
+		}
+		for _, env := range container.Env {
+			if env.Name == agentTokenKey && env.Value == "" && env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil && env.ValueFrom.SecretKeyRef.Name == secretName {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func secretControlledByJob(secret *corev1.Secret, kjob *batchv1.Job) bool {
+	controller := metav1.GetControllerOf(secret)
+	return metav1.IsControlledBy(secret, kjob) && controller.Name == kjob.Name && controller.APIVersion == batchv1.SchemeGroupVersion.String() && controller.Kind == "Job"
 }
 
 // buildInputs contains the relevant components of a CommandJob needed for Build.
@@ -230,18 +438,23 @@ type buildInputs struct {
 	priority        int
 
 	// Involves some parsing of the job env / plugins map
-	envMap       map[string]string
-	k8sPlugin    *KubernetesPlugin
-	otherPlugins []map[string]json.RawMessage
+	envMap              map[string]string
+	k8sPlugin           *KubernetesPlugin
+	otherPlugins        []map[string]json.RawMessage
+	jobAcquisitionToken api.JobAcquisitionToken
 }
 
 func (w *worker) ParseJob(job *api.AgentJob, sjob *api.AgentScheduledJob) (buildInputs, error) {
 	parsed := buildInputs{
-		uuid:            job.ID,
-		command:         job.Command,
-		agentQueryRules: sjob.AgentQueryRules,
-		priority:        sjob.Priority,
-		envMap:          job.Env,
+		uuid:                job.ID,
+		command:             job.Command,
+		agentQueryRules:     sjob.AgentQueryRules,
+		priority:            sjob.Priority,
+		envMap:              job.Env,
+		jobAcquisitionToken: sjob.JobAcquisitionToken,
+	}
+	if w.cfg.EnableJobAcquisitionTokens && parsed.jobAcquisitionToken == "" {
+		return parsed, errors.New("job acquisition token is missing")
 	}
 
 	var plugins []map[string]json.RawMessage
@@ -551,6 +764,21 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// Calculating this imperatively is risky given we lack control over the context, this is subject to refactor.
 	managedContainerCount := len(podSpec.Containers) + systemContainerCount
 
+	agentTokenEnv := corev1.EnvVar{
+		Name: agentTokenKey,
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.AgentTokenSecretName},
+				Key:                  agentTokenKey,
+			},
+		},
+	}
+	if w.cfg.EnableJobAcquisitionTokens {
+		secretName := "buildkite-job-token-" + uuid.NewString()
+		kjob.Annotations[config.JobAcquisitionTokenSecretAnnotation] = secretName
+		agentTokenEnv.ValueFrom.SecretKeyRef.Name = secretName
+	}
+
 	agentContainer := corev1.Container{
 		Name:            AgentContainerName,
 		Args:            []string{"start"},
@@ -622,15 +850,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				Name:  "BUILDKITE_SHELL",
 				Value: "/bin/sh -ec",
 			},
-			{
-				Name: agentTokenKey, // BUILDKITE_AGENT_TOKEN
-				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{Name: w.cfg.AgentTokenSecretName},
-						Key:                  agentTokenKey,
-					},
-				},
-			},
+			agentTokenEnv,
 			{
 				Name:  "BUILDKITE_AGENT_ACQUIRE_JOB",
 				Value: inputs.uuid,
@@ -756,7 +976,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			return nil, fmt.Errorf("failed to apply podSpec patch from controller: %w", err)
 		}
 		podSpec = patched
-		w.logger.Debug("Applied podSpec patch from controller", "patched", patched)
+		w.logger.Debug("Applied podSpec patch from controller", "patched", redactedPodSpec(patched))
 	}
 
 	// Support `image: ` syntax, this HAS TO happen between controller podSpec patch and plugin podSpec patch.
@@ -769,7 +989,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			return nil, fmt.Errorf("failed to apply podSpec patch from k8s plugin: %w", err)
 		}
 		podSpec = patched
-		w.logger.Debug("Applied podSpec patch from k8s plugin", "patched", patched)
+		w.logger.Debug("Applied podSpec patch from k8s plugin", "patched", redactedPodSpec(patched))
 	}
 
 	// Removes all containers named "checkout" when checkout disabled via controller config or plugin
@@ -798,6 +1018,27 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	kjob.Spec.Template.Spec = *podSpec
 
 	return kjob, nil
+}
+
+func redactedPodSpec(podSpec *corev1.PodSpec) *corev1.PodSpec {
+	redacted := podSpec.DeepCopy()
+	for _, containers := range [][]corev1.Container{redacted.Containers, redacted.InitContainers} {
+		for i := range containers {
+			for j := range containers[i].Env {
+				env := &containers[i].Env[j]
+				if env.Name == agentTokenKey && env.Value != "" {
+					env.Value = "<redacted>"
+				}
+			}
+		}
+	}
+	return redacted
+}
+
+func redactedJob(job *batchv1.Job) *batchv1.Job {
+	redacted := job.DeepCopy()
+	redacted.Spec.Template.Spec = *redactedPodSpec(&redacted.Spec.Template.Spec)
+	return redacted
 }
 
 var ErrNoCommandModification = errors.New("modifying container commands or args via podSpecPatch is not supported")

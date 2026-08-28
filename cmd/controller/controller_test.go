@@ -45,6 +45,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		DefaultImageCheckPullPolicy:          "IfNotPresent",
 		EnableQueuePause:                     true,
 		EnableCompletionWatcher:              true,
+		EnableJobAcquisitionTokens:           true,
 		WorkQueueLimit:                       2_000_000,
 		ImageCheckContainerCPULimit:          "201m",
 		ImageCheckContainerMemoryLimit:       "129Mi",
@@ -676,6 +677,40 @@ tags:
 			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want non-nil error", configFile, err)
 		}
 	})
+
+	t.Run("job acquisition tokens default enabled", func(t *testing.T) {
+		cleanTestEnv(t)
+		cfg, err := buildConfig(t, []string{}, "")
+		if err != nil {
+			t.Fatalf("buildConfig() error = %v", err)
+		}
+		if !cfg.EnableJobAcquisitionTokens {
+			t.Error("cfg.EnableJobAcquisitionTokens = false, want true")
+		}
+	})
+
+	t.Run("job acquisition tokens disableable via CLI flag", func(t *testing.T) {
+		cleanTestEnv(t)
+		cfg, err := buildConfig(t, []string{"--enable-job-acquisition-tokens=false"}, "")
+		if err != nil {
+			t.Fatalf("buildConfig() error = %v", err)
+		}
+		if cfg.EnableJobAcquisitionTokens {
+			t.Error("cfg.EnableJobAcquisitionTokens = true, want false")
+		}
+	})
+
+	t.Run("job acquisition tokens disableable via env var", func(t *testing.T) {
+		cleanTestEnv(t)
+		t.Setenv("ENABLE_JOB_ACQUISITION_TOKENS", "false")
+		cfg, err := buildConfig(t, []string{}, "")
+		if err != nil {
+			t.Fatalf("buildConfig() error = %v", err)
+		}
+		if cfg.EnableJobAcquisitionTokens {
+			t.Error("cfg.EnableJobAcquisitionTokens = true, want false")
+		}
+	})
 }
 
 // cleanTestEnv unsets environment variables that might be set in CI or .envrc
@@ -691,6 +726,7 @@ func cleanTestEnv(t *testing.T) {
 		"IMAGE_PULL_BACKOFF_GRACE_PERIOD",
 		"CONFIG",
 		"MAX_IN_FLIGHT",
+		"ENABLE_JOB_ACQUISITION_TOKENS",
 		"DEBUG",
 		"JOB_TTL",
 		"BUILDKITE_K8S_STACK_CONTROLLER_ID",

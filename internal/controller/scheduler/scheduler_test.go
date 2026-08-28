@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -14,6 +15,112 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
 )
+
+func TestJobAcquisitionTokenCredentials(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		enabled       bool
+		token         api.JobAcquisitionToken
+		wantSecretRef string
+	}{
+		{name: "disabled uses shared secret", wantSecretRef: "token-secret"},
+		{name: "enabled uses per-job secret", enabled: true, token: "jat-secret"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			worker := New(slog.Default(), nil, nil, Config{
+				Image:                      "buildkite/agent:latest",
+				AgentTokenSecretName:       "token-secret",
+				EnableJobAcquisitionTokens: test.enabled,
+			})
+			sjob := &api.AgentScheduledJob{ID: "job-uuid", JobAcquisitionToken: test.token}
+			inputs, err := worker.ParseJob(&api.AgentJob{ID: "job-uuid", Command: "true"}, sjob)
+			if err != nil {
+				t.Fatalf("ParseJob() error = %v", err)
+			}
+			kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+			if err != nil {
+				t.Fatalf("Build() error = %v", err)
+			}
+
+			agent := findContainer(t, kjob.Spec.Template.Spec.Containers, AgentContainerName)
+			token := findEnv(t, agent.Env, agentTokenKey)
+			if token.Value != "" {
+				t.Errorf("agent token literal = %q, want empty", token.Value)
+			}
+			if token.ValueFrom == nil || token.ValueFrom.SecretKeyRef == nil {
+				t.Fatalf("agent token ValueFrom.SecretKeyRef = nil, want secret reference")
+			}
+			if test.wantSecretRef != "" && token.ValueFrom.SecretKeyRef.Name != test.wantSecretRef {
+				got := token.ValueFrom.SecretKeyRef.Name
+				t.Errorf("agent token secret = %q, want %q", got, test.wantSecretRef)
+			}
+			if test.enabled && token.ValueFrom.SecretKeyRef.Name == "token-secret" {
+				t.Error("agent token references shared token secret")
+			}
+			if got := findEnv(t, agent.Env, "BUILDKITE_AGENT_ACQUIRE_JOB").Value; got != "job-uuid" {
+				t.Errorf("BUILDKITE_AGENT_ACQUIRE_JOB = %q, want %q", got, "job-uuid")
+			}
+
+			for _, container := range append(kjob.Spec.Template.Spec.InitContainers, kjob.Spec.Template.Spec.Containers...) {
+				if container.Name == AgentContainerName {
+					continue
+				}
+				for _, env := range container.Env {
+					if env.Name == agentTokenKey && env.Value == "jat-secret" {
+						t.Errorf("container %q received JAT", container.Name)
+					}
+				}
+			}
+			if test.enabled {
+				for _, container := range append(kjob.Spec.Template.Spec.InitContainers, kjob.Spec.Template.Spec.Containers...) {
+					for _, env := range container.Env {
+						if env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil && env.ValueFrom.SecretKeyRef.Name == "token-secret" {
+							t.Errorf("container %q references shared token secret", container.Name)
+						}
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestJobAcquisitionTokenIsRedactedFromSchedulerOutput(t *testing.T) {
+	t.Parallel()
+
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	worker := New(logger, nil, nil, Config{
+		Image:                      "buildkite/agent:latest",
+		EnableJobAcquisitionTokens: true,
+		PodSpecPatch:               &corev1.PodSpec{NodeName: "patched-node"},
+	})
+	inputs, err := worker.ParseJob(
+		&api.AgentJob{ID: "job-uuid", Command: "true"},
+		&api.AgentScheduledJob{ID: "job-uuid", JobAcquisitionToken: "jat-secret"},
+	)
+	if err != nil {
+		t.Fatalf("ParseJob() error = %v", err)
+	}
+	kjob, err := worker.Build(&corev1.PodSpec{}, false, inputs)
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if strings.Contains(logs.String(), "jat-secret") {
+		t.Errorf("debug logs contain JAT: %s", logs.String())
+	}
+
+	serialized, err := yaml.Marshal(redactedJob(kjob))
+	if err != nil {
+		t.Fatalf("yaml.Marshal(redactedJob(kjob)) error = %v", err)
+	}
+	if strings.Contains(string(serialized), "jat-secret") {
+		t.Errorf("redacted invalid Job output contains JAT: %s", serialized)
+	}
+}
 
 func TestPatchPodSpec(t *testing.T) {
 	t.Parallel()

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -24,6 +25,8 @@ func isDefaultQueue(queue string) bool {
 // AgentClient is a client for Agent API methods for retrieving jobs.
 type AgentClient struct {
 	endpoint        *url.URL
+	httpClient      *http.Client
+	token           string
 	stacksAPIClient *stacksapi.Client
 
 	clusterID string
@@ -73,7 +76,12 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 	}
 
 	client := &AgentClient{
-		endpoint:  endpointURL,
+		endpoint: endpointURL,
+		token:    opts.Token,
+		httpClient: &http.Client{
+			Timeout:   opts.HTTPTimeout,
+			Transport: NewLogTransport(http.DefaultTransport, opts.Logger.With("component", "job-acquisition-tokens"), false),
+		},
 		clusterID: opts.ClusterID,
 		queue:     opts.Queue,
 		logger:    opts.Logger,
@@ -190,6 +198,26 @@ type AgentScheduledJob struct {
 
 	// added by GetScheduledJobs to track end-to-end latency
 	QueriedAt time.Time `json:"-"`
+
+	JobAcquisitionToken JobAcquisitionToken `json:"-"`
+}
+
+type JobAcquisitionToken string
+
+type IssueJobAcquisitionTokensRequest struct {
+	JobUUIDs             []string `json:"job_uuids"`
+	TokenLifetimeSeconds *int     `json:"token_lifetime_seconds,omitempty"`
+}
+
+type IssuedJobAcquisitionToken struct {
+	JobUUID             string              `json:"job_uuid"`
+	JobAcquisitionToken JobAcquisitionToken `json:"job_acquisition_token"`
+	ExpiresAt           time.Time           `json:"expires_at"`
+}
+
+type IssueJobAcquisitionTokensResponse struct {
+	JobAcquisitionTokens []IssuedJobAcquisitionToken `json:"job_acquisition_tokens"`
+	NotIssued            []string                    `json:"not_issued"`
 }
 
 // GetScheduledJobs gets a page of jobs that could be run.
@@ -322,6 +350,44 @@ func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string, reservation
 	}
 
 	return reservations, readRetryAfter(header), nil
+}
+
+func (c *AgentClient) IssueJobAcquisitionTokens(ctx context.Context, ids []string, tokenLifetimeSeconds int) (*IssueJobAcquisitionTokensResponse, time.Duration, error) {
+	if len(ids) > 1000 {
+		return nil, 0, fmt.Errorf("job acquisition token request contains %d UUIDs, maximum is 1000", len(ids))
+	}
+	if tokenLifetimeSeconds < 0 || tokenLifetimeSeconds > 3600 {
+		return nil, 0, fmt.Errorf("job acquisition token lifetime must be between 1 and 3600 seconds, or 0 to use the server default")
+	}
+	request := IssueJobAcquisitionTokensRequest{JobUUIDs: ids}
+	if tokenLifetimeSeconds > 0 {
+		request.TokenLifetimeSeconds = &tokenLifetimeSeconds
+	}
+	body, err := json.Marshal(request)
+	if err != nil {
+		return nil, 0, err
+	}
+	u := c.endpoint.JoinPath("stacks", c.stack.Key, "job-acquisition-tokens")
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("creating job acquisition token request: %w", err)
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Token %s", c.token))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "agent-stack-k8s/"+version.Version())
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		if resp.StatusCode >= 400 {
+			return nil, readRetryAfter(resp.Header), decodeError(resp)
+		}
+		return nil, readRetryAfter(resp.Header), fmt.Errorf("issuing job acquisition tokens returned %s, want 201 Created", resp.Status)
+	}
+	return decodeResponse[IssueJobAcquisitionTokensResponse](resp)
 }
 
 func (c *AgentClient) DeregisterStack(ctx context.Context) error {
