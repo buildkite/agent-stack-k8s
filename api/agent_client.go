@@ -205,7 +205,8 @@ type AgentScheduledJob struct {
 type JobAcquisitionToken string
 
 type IssueJobAcquisitionTokensRequest struct {
-	JobUUIDs []string `json:"job_uuids"`
+	JobUUIDs             []string `json:"job_uuids"`
+	TokenLifetimeSeconds *int     `json:"token_lifetime_seconds,omitempty"`
 }
 
 type IssuedJobAcquisitionToken struct {
@@ -351,11 +352,18 @@ func (c *AgentClient) ReserveJobs(ctx context.Context, ids []string, reservation
 	return reservations, readRetryAfter(header), nil
 }
 
-func (c *AgentClient) IssueJobAcquisitionTokens(ctx context.Context, ids []string) (*IssueJobAcquisitionTokensResponse, time.Duration, error) {
+func (c *AgentClient) IssueJobAcquisitionTokens(ctx context.Context, ids []string, tokenLifetimeSeconds int) (*IssueJobAcquisitionTokensResponse, time.Duration, error) {
 	if len(ids) > 1000 {
 		return nil, 0, fmt.Errorf("job acquisition token request contains %d UUIDs, maximum is 1000", len(ids))
 	}
-	body, err := json.Marshal(IssueJobAcquisitionTokensRequest{JobUUIDs: ids})
+	if tokenLifetimeSeconds < 0 || tokenLifetimeSeconds > 3600 {
+		return nil, 0, fmt.Errorf("job acquisition token lifetime must be between 1 and 3600 seconds, or 0 to use the server default")
+	}
+	request := IssueJobAcquisitionTokensRequest{JobUUIDs: ids}
+	if tokenLifetimeSeconds > 0 {
+		request.TokenLifetimeSeconds = &tokenLifetimeSeconds
+	}
+	body, err := json.Marshal(request)
 	if err != nil {
 		return nil, 0, err
 	}

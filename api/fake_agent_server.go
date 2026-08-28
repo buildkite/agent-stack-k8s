@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -36,10 +37,11 @@ type FakeAgentServer struct {
 	// ReserveError configures an error message to return.
 	ReserveError string
 
-	JobAcquisitionTokenCalls      [][]string
-	JobAcquisitionTokenResponse   *IssueJobAcquisitionTokensResponse
-	JobAcquisitionTokenStatusCode int
-	JobAcquisitionTokenError      string
+	JobAcquisitionTokenCalls         []IssueJobAcquisitionTokensRequest
+	JobAcquisitionTokenRequestBodies [][]byte
+	JobAcquisitionTokenResponse      *IssueJobAcquisitionTokensResponse
+	JobAcquisitionTokenStatusCode    int
+	JobAcquisitionTokenError         string
 
 	// NotificationCalls records all notification batches sent to the server.
 	NotificationCalls [][]stacksapi.StackNotification
@@ -92,13 +94,19 @@ func (f *FakeAgentServer) handleIssueJobAcquisitionTokens(w http.ResponseWriter,
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	var req IssueJobAcquisitionTokensRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	f.mu.Lock()
-	f.JobAcquisitionTokenCalls = append(f.JobAcquisitionTokenCalls, req.JobUUIDs)
+	f.JobAcquisitionTokenCalls = append(f.JobAcquisitionTokenCalls, req)
+	f.JobAcquisitionTokenRequestBodies = append(f.JobAcquisitionTokenRequestBodies, bytes.Clone(body))
 	f.mu.Unlock()
 	if f.JobAcquisitionTokenError != "" {
 		writeJSONResponse(w, f.JobAcquisitionTokenStatusCode, map[string]string{"message": f.JobAcquisitionTokenError})

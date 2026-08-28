@@ -12,17 +12,18 @@ import (
 )
 
 type client interface {
-	IssueJobAcquisitionTokens(context.Context, []string) (*api.IssueJobAcquisitionTokensResponse, time.Duration, error)
+	IssueJobAcquisitionTokens(context.Context, []string, int) (*api.IssueJobAcquisitionTokensResponse, time.Duration, error)
 }
 
 type Issuer struct {
-	logger  *slog.Logger
-	client  client
-	handler model.JobHandler
+	logger               *slog.Logger
+	client               client
+	handler              model.JobHandler
+	tokenLifetimeSeconds int
 }
 
-func New(logger *slog.Logger, client client, handler model.JobHandler) *Issuer {
-	return &Issuer{logger: logger, client: client, handler: handler}
+func New(logger *slog.Logger, client client, handler model.JobHandler, tokenLifetimeSeconds int) *Issuer {
+	return &Issuer{logger: logger, client: client, handler: handler, tokenLifetimeSeconds: tokenLifetimeSeconds}
 }
 
 func (i *Issuer) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
@@ -33,7 +34,7 @@ func (i *Issuer) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 		roko.WithMaxAttempts(5),
 	)
 	response, err := roko.DoFunc(ctx, retrier, func(*roko.Retrier) (*api.IssueJobAcquisitionTokensResponse, error) {
-		response, retryAfter, err := i.client.IssueJobAcquisitionTokens(ctx, []string{job.ID})
+		response, retryAfter, err := i.client.IssueJobAcquisitionTokens(ctx, []string{job.ID}, i.tokenLifetimeSeconds)
 		if api.IsPermanentError(err) {
 			retrier.Break()
 		}

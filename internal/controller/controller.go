@@ -221,7 +221,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 	// Once it figures out a job can be scheduled, it passes to the deduper.
 	var postLimiter model.JobHandler = deduper
 	if cfg.EnableJobAcquisitionTokens {
-		postLimiter = jatissuer.New(logger.With("component", "jat-issuer"), agentClient, deduper)
+		postLimiter = jatissuer.New(logger.With("component", "jat-issuer"), agentClient, deduper, cfg.ReservationExpirySeconds)
 	}
 	limiter := limiter.New(ctx, logger.With("component", "limiter"), postLimiter,
 		cfg.MaxInFlight,

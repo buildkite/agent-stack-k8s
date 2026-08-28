@@ -21,13 +21,18 @@ type fakeClient struct {
 	mu        sync.Mutex
 	responses []*api.IssueJobAcquisitionTokensResponse
 	errors    []error
-	calls     [][]string
+	calls     []fakeClientCall
 }
 
-func (f *fakeClient) IssueJobAcquisitionTokens(_ context.Context, ids []string) (*api.IssueJobAcquisitionTokensResponse, time.Duration, error) {
+type fakeClientCall struct {
+	ids                  []string
+	tokenLifetimeSeconds int
+}
+
+func (f *fakeClient) IssueJobAcquisitionTokens(_ context.Context, ids []string, tokenLifetimeSeconds int) (*api.IssueJobAcquisitionTokensResponse, time.Duration, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.calls = append(f.calls, ids)
+	f.calls = append(f.calls, fakeClientCall{ids: ids, tokenLifetimeSeconds: tokenLifetimeSeconds})
 	i := len(f.calls) - 1
 	var resp *api.IssueJobAcquisitionTokensResponse
 	if i < len(f.responses) {
@@ -75,7 +80,7 @@ func TestHandleCorrelatesIssuedTokenByJobUUID(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			next := &captureHandler{jobs: make(chan *api.AgentScheduledJob, 1)}
-			h := New(slog.Default(), &fakeClient{responses: []*api.IssueJobAcquisitionTokensResponse{test.resp}}, next)
+			h := New(slog.Default(), &fakeClient{responses: []*api.IssueJobAcquisitionTokensResponse{test.resp}}, next, 0)
 			if err := h.Handle(t.Context(), &api.AgentScheduledJob{ID: jobID}); err == nil {
 				t.Fatal("Handle() error = nil, want non-nil")
 			}
@@ -88,7 +93,7 @@ func TestHandleCorrelatesIssuedTokenByJobUUID(t *testing.T) {
 	}
 }
 
-func TestHandleRetriesAndForwardsTokenThroughDeduper(t *testing.T) {
+func TestHandleRetriesWithConfiguredLifetimeAndForwardsTokenThroughDeduper(t *testing.T) {
 	t.Parallel()
 
 	jobID := uuid.NewString()
@@ -99,7 +104,7 @@ func TestHandleRetriesAndForwardsTokenThroughDeduper(t *testing.T) {
 		errors: []error{errors.New("temporary failure"), nil},
 	}
 	next := &captureHandler{jobs: make(chan *api.AgentScheduledJob, 1)}
-	h := New(slog.Default(), client, deduper.New(slog.Default(), next))
+	h := New(slog.Default(), client, deduper.New(slog.Default(), next), 1800)
 
 	if err := h.Handle(t.Context(), &api.AgentScheduledJob{ID: jobID}); err != nil {
 		t.Fatalf("Handle() error = %v", err)
@@ -111,6 +116,14 @@ func TestHandleRetriesAndForwardsTokenThroughDeduper(t *testing.T) {
 	if got := len(client.calls); got != 2 {
 		t.Errorf("issuance calls = %d, want 2", got)
 	}
+	for i, call := range client.calls {
+		if len(call.ids) != 1 || call.ids[0] != jobID {
+			t.Errorf("issuance call %d job IDs = %v, want [%s]", i, call.ids, jobID)
+		}
+		if call.tokenLifetimeSeconds != 1800 {
+			t.Errorf("issuance call %d token lifetime = %d, want 1800", i, call.tokenLifetimeSeconds)
+		}
+	}
 }
 
 func TestIssuerRunsOnlyAfterLimiterReleasesCapacity(t *testing.T) {
@@ -121,7 +134,7 @@ func TestIssuerRunsOnlyAfterLimiterReleasesCapacity(t *testing.T) {
 		{JobAcquisitionTokens: []api.IssuedJobAcquisitionToken{{JobUUID: job2, JobAcquisitionToken: "jat-2"}}},
 	}}
 	next := &captureHandler{jobs: make(chan *api.AgentScheduledJob, 2)}
-	h := New(slog.Default(), client, next)
+	h := New(slog.Default(), client, next, 0)
 	ctx, cancel := context.WithCancel(t.Context())
 	lim := limiter.New(ctx, slog.Default(), h, 1, 1, 10)
 	defer lim.Wait()

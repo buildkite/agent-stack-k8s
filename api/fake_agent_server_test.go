@@ -39,18 +39,37 @@ func TestFakeAgentServer_IssuesJobAcquisitionTokens(t *testing.T) {
 		t.Fatalf("NewAgentClient() error = %v", err)
 	}
 
-	got, _, err := client.IssueJobAcquisitionTokens(ctx, []string{"job-1", "job-2"})
+	got, _, err := client.IssueJobAcquisitionTokens(ctx, []string{"job-1", "job-2"}, 1800)
 	if err != nil {
 		t.Fatalf("IssueJobAcquisitionTokens() error = %v", err)
 	}
 	if diff := cmp.Diff(got, server.JobAcquisitionTokenResponse); diff != "" {
 		t.Errorf("IssueJobAcquisitionTokens() diff (-got +want):\n%s", diff)
 	}
-	if diff := cmp.Diff(server.JobAcquisitionTokenCalls, [][]string{{"job-1", "job-2"}}); diff != "" {
+	wantCalls := []api.IssueJobAcquisitionTokensRequest{{JobUUIDs: []string{"job-1", "job-2"}, TokenLifetimeSeconds: new(1800)}}
+	if diff := cmp.Diff(server.JobAcquisitionTokenCalls, wantCalls); diff != "" {
 		t.Errorf("server.JobAcquisitionTokenCalls diff (-got +want):\n%s", diff)
 	}
 	if got := server.JobAcquisitionTokenStatusCode; got != http.StatusCreated {
 		t.Errorf("JobAcquisitionTokenStatusCode = %d, want %d", got, http.StatusCreated)
+	}
+}
+
+func TestIssueJobAcquisitionTokensOmitsDefaultTokenLifetime(t *testing.T) {
+	server := api.NewFakeAgentServer()
+	defer server.Close()
+	client, err := api.NewAgentClient(t.Context(), api.AgentClientOpts{
+		Token: "fake-token", Endpoint: server.URL(), StackID: "test-stack", Logger: slog.Default(),
+	})
+	if err != nil {
+		t.Fatalf("NewAgentClient() error = %v", err)
+	}
+
+	if _, _, err := client.IssueJobAcquisitionTokens(t.Context(), []string{"job-1"}, 0); err != nil {
+		t.Fatalf("IssueJobAcquisitionTokens() error = %v", err)
+	}
+	if bytes.Contains(server.JobAcquisitionTokenRequestBodies[0], []byte("token_lifetime_seconds")) {
+		t.Errorf("request body contains token_lifetime_seconds: %s", server.JobAcquisitionTokenRequestBodies[0])
 	}
 }
 
@@ -76,7 +95,7 @@ func TestIssueJobAcquisitionTokensDoesNotLogTokenPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAgentClient() error = %v", err)
 	}
-	if _, _, err := client.IssueJobAcquisitionTokens(ctx, []string{"job-1"}); err != nil {
+	if _, _, err := client.IssueJobAcquisitionTokens(ctx, []string{"job-1"}, 0); err != nil {
 		t.Fatalf("IssueJobAcquisitionTokens() error = %v", err)
 	}
 	if strings.Contains(logs.String(), "jat-secret") {
@@ -97,8 +116,28 @@ func TestIssueJobAcquisitionTokensRejectsMoreThan1000Jobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewAgentClient() error = %v", err)
 	}
-	if _, _, err := client.IssueJobAcquisitionTokens(ctx, make([]string, 1001)); err == nil {
+	if _, _, err := client.IssueJobAcquisitionTokens(ctx, make([]string, 1001), 0); err == nil {
 		t.Fatal("IssueJobAcquisitionTokens() error = nil, want non-nil")
+	}
+	if got := len(server.JobAcquisitionTokenCalls); got != 0 {
+		t.Errorf("issuance calls = %d, want 0", got)
+	}
+}
+
+func TestIssueJobAcquisitionTokensRejectsInvalidTokenLifetime(t *testing.T) {
+	server := api.NewFakeAgentServer()
+	defer server.Close()
+	client, err := api.NewAgentClient(t.Context(), api.AgentClientOpts{
+		Token: "fake-token", Endpoint: server.URL(), StackID: "test-stack", Logger: slog.Default(),
+	})
+	if err != nil {
+		t.Fatalf("NewAgentClient() error = %v", err)
+	}
+
+	for _, lifetime := range []int{-1, 3601} {
+		if _, _, err := client.IssueJobAcquisitionTokens(t.Context(), []string{"job-1"}, lifetime); err == nil {
+			t.Errorf("IssueJobAcquisitionTokens(tokenLifetimeSeconds: %d) error = nil, want non-nil", lifetime)
+		}
 	}
 	if got := len(server.JobAcquisitionTokenCalls); got != 0 {
 		t.Errorf("issuance calls = %d, want 0", got)
