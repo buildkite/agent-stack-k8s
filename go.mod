@@ -1,7 +1,7 @@
 module github.com/buildkite/agent-stack-k8s/v2
 
 go 1.26.5
-
+// some comment
 require (
 	github.com/Khan/genqlient v0.8.1
 	github.com/alecthomas/kong v1.16.0
