@@ -103,7 +103,7 @@ steps:
       - buildkite-agent cache restore --name go_mod --name go_build
       - 'echo "--- :docker: Build and push controller image"'
       - .buildkite/steps/build-and-push-controller.sh
-      - buildkite-agent cache save --name go_mod --name go_build
+      # - buildkite-agent cache save --name go_mod --name go_build
 
   # On feature branches, don't wait for tests. We may want to deploy
   # to a test cluster to debug the feature branch.
