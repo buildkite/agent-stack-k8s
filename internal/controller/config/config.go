@@ -78,8 +78,9 @@ type Config struct {
 	ReservationExpirySeconds int `json:"reservation-expiry-seconds" validate:"omitempty,min=0,max=3600"`
 
 	// ID is an optional unique identifier for the controller instance.
-	// It is used as both a Kubernetes label (buildkite.com/controller-id) to filter
-	// resources, and as the Stack key when registering with the Buildkite API.
+	// It is used as a Kubernetes label (buildkite.com/controller-id) to filter
+	// resources. The API stack key is derived from this ID, the Buildkite cluster
+	// UUID, and the queue, so another queue cannot overwrite its registration.
 	// When running multiple controllers in the same namespace, each must have a
 	// distinct ID so that they target the correct pods and register separate stacks.
 	// If two controllers share the same ID, both may successfully reserve the same
