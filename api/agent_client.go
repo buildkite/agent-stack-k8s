@@ -43,10 +43,11 @@ type AgentClient struct {
 const DefaultHTTPTimeout = 60 * time.Second
 
 type AgentClientOpts struct {
-	Token           string
-	Endpoint        string
-	ClusterID       string
-	Queue           string
+	Token     string
+	Endpoint  string
+	ClusterID string
+	Queue     string
+	// StackID is the local controller ID. API keys also include cluster/queue scope.
 	StackID         string
 	AgentQueryRules []string
 	Logger          *slog.Logger
@@ -104,10 +105,7 @@ func NewAgentClient(ctx context.Context, opts AgentClientOpts) (*AgentClient, er
 		return nil, fmt.Errorf("couldn't create Buildkite Stacks API client: %w", err)
 	}
 
-	stackKey := opts.StackID
-	if stackKey == "" {
-		stackKey = "agent-stack-k8s"
-	}
+	stackKey := scopedStackKey(opts.ClusterID, opts.Queue, opts.StackID)
 
 	client.notificationBatcher = newNotificationBatcher(stackKey, client.stacksAPIClient, opts.Logger)
 	stack, _, err := client.stacksAPIClient.RegisterStack(ctx, stacksapi.RegisterStackRequest{
