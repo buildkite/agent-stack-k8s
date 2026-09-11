@@ -8,7 +8,7 @@ apk add --update-cache --no-progress skopeo
 repo="ghcr.io/buildkite/agent"
 
 echo --- Awking go.mod for agent version
-agent_version="$(awk '/github\.com\/buildkite\/agent\/v3/ { print $2 }' go.mod | cut -c 2- )"
+agent_version="$(awk '/github\.com\/buildkite\/agent\/v4/ { print $2 }' go.mod | cut -c 2- )"
 echo "Using agent version ${agent_version} as image tag"
 buildkite-agent meta-data set agent-version "${agent_version}"
 
