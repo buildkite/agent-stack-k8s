@@ -581,6 +581,20 @@ unknown-field: some-value
 		}
 	})
 
+	t.Run("controller ID environment variable overrides Helm config", func(t *testing.T) {
+		cleanTestEnv(t)
+		configFile := createTempConfigFile(t, "id: agent-stack-k8s\n")
+		t.Setenv("BUILDKITE_K8S_STACK_CONTROLLER_ID", "production-usw2-agent-stack-k8s")
+
+		cfg, err := buildConfig(t, []string{}, configFile)
+		if err != nil {
+			t.Fatalf("buildConfig() error = %v", err)
+		}
+		if got, want := cfg.ID, "production-usw2-agent-stack-k8s"; got != want {
+			t.Errorf("cfg.ID = %q, want %q", got, want)
+		}
+	})
+
 	t.Run("CLI can override config file tags with empty", func(t *testing.T) {
 		cleanTestEnv(t)
 		configFile := createTempConfigFile(t, `

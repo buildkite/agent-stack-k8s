@@ -42,13 +42,16 @@ func (i *Issuer) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 		return response, err
 	})
 	if err != nil {
+		i.logger.Warn("job acquisition token issuance failed", "job-uuid", job.ID, "error", err)
 		return fmt.Errorf("issuing job acquisition token for job %s: %w", job.ID, err)
 	}
 	if response == nil || len(response.NotIssued) != 0 || len(response.JobAcquisitionTokens) != 1 {
+		i.logger.Warn("job acquisition token was not issued", "job-uuid", job.ID)
 		return fmt.Errorf("job acquisition token was not issued for job %s", job.ID)
 	}
 	issued := response.JobAcquisitionTokens[0]
 	if issued.JobUUID != job.ID || issued.JobAcquisitionToken == "" {
+		i.logger.Warn("invalid job acquisition token response", "job-uuid", job.ID)
 		return fmt.Errorf("invalid job acquisition token response for job %s", job.ID)
 	}
 	job.JobAcquisitionToken = issued.JobAcquisitionToken

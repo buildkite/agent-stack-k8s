@@ -1,9 +1,12 @@
 package jatissuer
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -66,21 +69,27 @@ func TestHandleCorrelatesIssuedTokenByJobUUID(t *testing.T) {
 	t.Parallel()
 
 	jobID := uuid.NewString()
+	const secret = "jat-secret-must-not-appear-in-logs"
 	tests := []struct {
 		name string
 		resp *api.IssueJobAcquisitionTokensResponse
+		err  error
 	}{
+		{name: "API error", err: api.AgentError{Message: "stack queue mismatch", StatusCode: 403}},
+		{name: "nil response"},
 		{name: "not issued", resp: &api.IssueJobAcquisitionTokensResponse{NotIssued: []string{jobID}}},
 		{name: "missing", resp: &api.IssueJobAcquisitionTokensResponse{}},
-		{name: "mismatched", resp: &api.IssueJobAcquisitionTokensResponse{JobAcquisitionTokens: []api.IssuedJobAcquisitionToken{{JobUUID: uuid.NewString(), JobAcquisitionToken: "wrong"}}}},
-		{name: "duplicate", resp: &api.IssueJobAcquisitionTokensResponse{JobAcquisitionTokens: []api.IssuedJobAcquisitionToken{{JobUUID: jobID, JobAcquisitionToken: "one"}, {JobUUID: jobID, JobAcquisitionToken: "two"}}}},
+		{name: "mismatched", resp: &api.IssueJobAcquisitionTokensResponse{JobAcquisitionTokens: []api.IssuedJobAcquisitionToken{{JobUUID: uuid.NewString(), JobAcquisitionToken: secret}}}},
+		{name: "duplicate", resp: &api.IssueJobAcquisitionTokensResponse{JobAcquisitionTokens: []api.IssuedJobAcquisitionToken{{JobUUID: jobID, JobAcquisitionToken: secret}, {JobUUID: jobID, JobAcquisitionToken: secret}}}},
 		{name: "empty token", resp: &api.IssueJobAcquisitionTokensResponse{JobAcquisitionTokens: []api.IssuedJobAcquisitionToken{{JobUUID: jobID}}}},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			next := &captureHandler{jobs: make(chan *api.AgentScheduledJob, 1)}
-			h := New(slog.Default(), &fakeClient{responses: []*api.IssueJobAcquisitionTokensResponse{test.resp}}, next, 0)
+			var logs bytes.Buffer
+			logger := slog.New(slog.NewJSONHandler(&logs, nil)) // Default Info level, as in production.
+			h := New(logger, &fakeClient{responses: []*api.IssueJobAcquisitionTokensResponse{test.resp}, errors: []error{test.err}}, next, 0)
 			if err := h.Handle(t.Context(), &api.AgentScheduledJob{ID: jobID}); err == nil {
 				t.Fatal("Handle() error = nil, want non-nil")
 			}
@@ -88,6 +97,21 @@ func TestHandleCorrelatesIssuedTokenByJobUUID(t *testing.T) {
 			case <-next.jobs:
 				t.Fatal("next handler called for malformed issuance response")
 			default:
+			}
+			var record map[string]any
+			// Unmarshal also rejects multiple records: terminal issuance failures
+			// should emit exactly one warning after retries finish.
+			if err := json.Unmarshal(logs.Bytes(), &record); err != nil {
+				t.Fatalf("expected one visible log record: %v", err)
+			}
+			if record["level"] != "WARN" || record["job-uuid"] != jobID {
+				t.Errorf("log record = %v, want warning for job %s", record, jobID)
+			}
+			if test.err != nil && record["error"] != test.err.Error() {
+				t.Errorf("logged error = %v, want %v", record["error"], test.err)
+			}
+			if strings.Contains(logs.String(), secret) {
+				t.Error("log contains a job acquisition token")
 			}
 		})
 	}
@@ -104,7 +128,9 @@ func TestHandleRetriesWithConfiguredLifetimeAndForwardsTokenThroughDeduper(t *te
 		errors: []error{errors.New("temporary failure"), nil},
 	}
 	next := &captureHandler{jobs: make(chan *api.AgentScheduledJob, 1)}
-	h := New(slog.Default(), client, deduper.New(slog.Default(), next), 1800)
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&logs, nil))
+	h := New(logger, client, deduper.New(logger, next), 1800)
 
 	if err := h.Handle(t.Context(), &api.AgentScheduledJob{ID: jobID}); err != nil {
 		t.Fatalf("Handle() error = %v", err)
@@ -115,6 +141,9 @@ func TestHandleRetriesWithConfiguredLifetimeAndForwardsTokenThroughDeduper(t *te
 	}
 	if got := len(client.calls); got != 2 {
 		t.Errorf("issuance calls = %d, want 2", got)
+	}
+	if logs.Len() != 0 {
+		t.Errorf("successful retry emitted a log at default level: %s", logs.String())
 	}
 	for i, call := range client.calls {
 		if len(call.ids) != 1 || call.ids[0] != jobID {

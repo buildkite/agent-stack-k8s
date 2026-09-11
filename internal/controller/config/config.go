@@ -80,8 +80,10 @@ type Config struct {
 	// ID is an optional unique identifier for the controller instance.
 	// It is used as both a Kubernetes label (buildkite.com/controller-id) to filter
 	// resources, and as the Stack key when registering with the Buildkite API.
-	// When running multiple controllers in the same namespace, each must have a
-	// distinct ID so that they target the correct pods and register separate stacks.
+	// Each controller must have a distinct ID within the Buildkite organization,
+	// including controllers in different Kubernetes clusters or namespaces.
+	// Reusing an ID for a different queue overwrites the stack's queue registration,
+	// which can prevent job acquisition tokens from being issued for the first queue.
 	// If two controllers share the same ID, both may successfully reserve the same
 	// job, causing duplicate pods to be spawned.
 	// By default, if Helm is used to install, this is set to the Helm release full name.
