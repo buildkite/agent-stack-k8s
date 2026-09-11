@@ -23,8 +23,8 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 	"github.com/buildkite/roko"
 
-	"github.com/buildkite/agent/v3/agent"
-	"github.com/buildkite/agent/v3/clicommand"
+	"github.com/buildkite/agent/v4/agent"
+	"github.com/buildkite/agent/v4/clicommand"
 
 	"github.com/distribution/reference"
 	"github.com/google/uuid"
@@ -755,7 +755,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// This runs the "upper layer" of the agent that is responsible for talking
 	// to Buildkite: acquiring the job, starting the job, uploading log chunks,
 	// finishing the job.
-	redactedVars := slices.Clone(clicommand.RedactedVars.Value.Value())
+	redactedVars := slices.Clone(clicommand.RedactedVars.Value)
 	redactedVars = append(redactedVars, w.cfg.AdditionalRedactedVars...)
 
 	// Managed containers are those containers that runs agent as parent process.
@@ -856,7 +856,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				Value: inputs.uuid,
 			},
 			{
-				Name:  clicommand.RedactedVars.EnvVar,
+				Name:  "BUILDKITE_REDACTED_VARS",
 				Value: strings.Join(redactedVars, ","),
 			},
 		},

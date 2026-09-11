@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buildkite/agent/v3/version"
+	"github.com/buildkite/agent/v4/version"
 	corev1 "k8s.io/api/core/v1"
 )
 

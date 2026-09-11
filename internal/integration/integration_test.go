@@ -12,7 +12,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/scheduler"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/integration/api"
-	agentversion "github.com/buildkite/agent/v3/version"
+	agentversion "github.com/buildkite/agent/v4/version"
 	"github.com/buildkite/roko"
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"

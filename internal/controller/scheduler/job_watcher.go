@@ -9,7 +9,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
-	"github.com/buildkite/agent/v3/agent"
+	"github.com/buildkite/agent/v4/agent"
 
 	"log/slog"
 

@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	agentcore "github.com/buildkite/agent/v3/core"
+	agentcore "github.com/buildkite/agent/v4/core"
 )
 
 // AgentConfig stores shared parameters for things that run buildkite-agent in
