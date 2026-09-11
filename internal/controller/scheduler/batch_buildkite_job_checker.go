@@ -137,16 +137,22 @@ func (c *BatchBuildkiteJobChecker) checkJobStates(ctx context.Context) {
 		close(jobStatesCh)
 	}()
 
-	// Process results from all batches
+	// Process results from all batches. Wait for handlers before the next poll:
+	// otherwise slow, rate-limited DELETEs accumulate another goroutine for the
+	// same target on every tick and starve unrelated Kubernetes requests.
+	var handlers sync.WaitGroup
 	for jobStates := range jobStatesCh {
 		for jobUUIDStr, jobState := range jobStates {
 			target := jobToTarget[jobUUIDStr]
 			// Concurrently handle cancelled jobs.
 			// This is at the mercy of k8s API rate limit and buildkite stack API rate limit.
 			// If either rate limit were breached, it will result in delay in resource release.
-			go c.handleJobState(ctx, jobUUIDStr, jobState, target)
+			handlers.Go(func() {
+				c.handleJobState(ctx, jobUUIDStr, jobState, target)
+			})
 		}
 	}
+	handlers.Wait()
 }
 
 // AddPod registers a Buildkite job whose pod exists and is pending. A pod is

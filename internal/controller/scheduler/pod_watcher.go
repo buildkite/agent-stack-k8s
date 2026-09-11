@@ -496,6 +496,11 @@ func forcefullyDeletePod(
 	}
 
 	if err := k8s.CoreV1().Pods(podMetadata.Namespace).Delete(ctx, podMetadata.Name, deleteOptions); err != nil {
+		// Another cleanup path may have already removed the pod. Its absence
+		// satisfies the deletion request and must not keep cancellation alive.
+		if kerrors.IsNotFound(err) {
+			return nil
+		}
 		log.Error("Couldn't forcefully delete pod", "error", err)
 		forcefulPodDeletionErrorsCounter.WithLabelValues(reason, string(kerrors.ReasonForError(err))).Inc()
 		return err
@@ -524,6 +529,11 @@ func forcefullyDeleteJob(
 	}
 
 	if err := k8s.BatchV1().Jobs(jobMetadata.Namespace).Delete(ctx, jobMetadata.Name, deleteOptions); err != nil {
+		// A delayed delete event must not turn an already-deleted Job into an
+		// endless cancellation retry loop.
+		if kerrors.IsNotFound(err) {
+			return nil
+		}
 		log.Error("Couldn't forcefully delete job", "error", err)
 		forcefulJobDeletionErrorsCounter.WithLabelValues(reason, string(kerrors.ReasonForError(err))).Inc()
 		return err
