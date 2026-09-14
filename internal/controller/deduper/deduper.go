@@ -40,6 +40,8 @@ func New(logger *slog.Logger, handler model.JobHandler) *Deduper {
 		inFlight: make(map[uuid.UUID]bool),
 	}
 	// Provide the callback for numInFlightGauge.
+	metricCallbackMu.Lock()
+	defer metricCallbackMu.Unlock()
 	jobsRunningGaugeFunc = func() int {
 		d.inFlightMu.Lock()
 		defer d.inFlightMu.Unlock()
@@ -76,7 +78,10 @@ func (d *Deduper) Handle(ctx context.Context, job *api.AgentScheduledJob) error 
 	}
 	if numInFlight, ok := d.casa(uuid, true); !ok {
 		jobsAlreadyRunningCounter.WithLabelValues("Handle").Inc()
-		d.logger.Debug("job is already in-flight",
+		// This is a drop decision: the job will not be scheduled, and (if it
+		// was reserved) will only return after its reservation expires.
+		// Log at Warn so a stuck deduper is visible without debug logging.
+		d.logger.Warn("job is already in-flight",
 			"job-uuid", job.ID,
 			"num-in-flight", numInFlight,
 		)
@@ -134,6 +139,13 @@ func (d *Deduper) OnAdd(obj any, inInitialList bool) {
 	if !inInitialList {
 		return
 	}
+
+	// A job that is already finished (Complete or Failed) can never become a
+	// duplicate worth blocking on, so don't track it as in-flight.
+	if model.JobFinished(job) {
+		return
+	}
+
 	id, err := uuid.Parse(job.Labels[config.UUIDLabel])
 	if err != nil {
 		d.logger.Error("invalid UUID in job label", "error", err)
@@ -159,12 +171,52 @@ func (d *Deduper) OnAdd(obj any, inInitialList bool) {
 }
 
 // OnUpdate is called by k8s to inform us a resource is updated.
-func (d *Deduper) OnUpdate(any, any) {
+func (d *Deduper) OnUpdate(_, curr any) {
 	onUpdateEventCounter.Inc()
-	// Otherwise ignore this event. Although this can tell us that a job has
-	// gone from running to finished, the Job continues to exist in the cluster
-	// until it is cleaned up through ttlSecondsAfterFinished. Trying to
-	// create the same job again will fail.
+
+	currState, _ := curr.(*batchv1.Job)
+	if currState == nil {
+		return
+	}
+
+	// Once a job is finished (Complete or Failed), it can no longer be
+	// considered in-flight: forget it, so that if the underlying Buildkite
+	// job is re-reserved (e.g. its reservation expired while a previous
+	// controller was evicted), it is allowed through to the scheduler again.
+	//
+	// Note that the Job object typically continues to exist in the cluster
+	// until it is cleaned up through ttlSecondsAfterFinished. If the same
+	// Buildkite job is re-reserved within that window, the scheduler fails to
+	// create the Job with an AlreadyExists error, which it wraps in
+	// model.ErrDuplicateJob. Handle treats that as "leave marked in-flight",
+	// so the job stays tracked until OnDelete fires. If the Job object is
+	// already gone, however, a replacement can (and should) be created.
+	if !model.JobFinished(currState) {
+		return
+	}
+
+	id, err := uuid.Parse(currState.Labels[config.UUIDLabel])
+	if err != nil {
+		d.logger.Error("invalid UUID in job label", "error", err)
+		return
+	}
+
+	// Change state from in-flight to not in-flight.
+	numInFlight, ok := d.casa(id, false)
+	if !ok {
+		d.logger.Debug("job was already missing from inFlight!",
+			"job-uuid", id.String(),
+			"num-in-flight", numInFlight,
+		)
+		jobsAlreadyNotRunningCounter.WithLabelValues("OnUpdate").Inc()
+		return
+	}
+
+	d.logger.Debug("finished job removed from inFlight",
+		"job-uuid", id.String(),
+		"num-in-flight", numInFlight,
+	)
+	jobsUnmarkedRunningCounter.WithLabelValues("OnUpdate").Inc()
 }
 
 // OnDelete is called by k8s to inform us a resource is deleted.

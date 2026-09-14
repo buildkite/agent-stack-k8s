@@ -386,7 +386,10 @@ func (l *Limiter) tryTakeToken(source string) {
 			"remaining-tokens", len(l.tokenBucket),
 		)
 	default:
-		l.logger.Debug("Failed to take token - bucket empty",
+		// Not being able to take a token means jobs are being dropped or
+		// delayed. Log at Warn so a stuck limiter is visible without debug
+		// logging.
+		l.logger.Warn("Failed to take token - bucket empty",
 			"source", source,
 			"max-in-flight", l.MaxInFlight,
 		)

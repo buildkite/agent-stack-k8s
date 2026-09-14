@@ -1,6 +1,8 @@
 package deduper
 
 import (
+	"sync"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -10,8 +12,18 @@ const (
 	promSubsystem = "deduper"
 )
 
-// Overridden by New to return len(inFlight).
-var jobsRunningGaugeFunc = func() int { return 0 }
+// Overridden by New to return len(inFlight). Guarded by metricCallbackMu
+// because New can be called concurrently (at least in tests).
+var (
+	metricCallbackMu     sync.Mutex
+	jobsRunningGaugeFunc = func() int { return 0 }
+)
+
+func jobsRunningGaugeValue() float64 {
+	metricCallbackMu.Lock()
+	defer metricCallbackMu.Unlock()
+	return float64(jobsRunningGaugeFunc())
+}
 
 var (
 	_ = promauto.NewGaugeFunc(prometheus.GaugeOpts{
@@ -19,7 +31,7 @@ var (
 		Subsystem: promSubsystem,
 		Name:      "jobs_running",
 		Help:      "Current number of running jobs according to deduper",
-	}, func() float64 { return float64(jobsRunningGaugeFunc()) })
+	}, jobsRunningGaugeValue)
 
 	jobHandlerCallsCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Namespace: promNamespace,
