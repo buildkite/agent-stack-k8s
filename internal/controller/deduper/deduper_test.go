@@ -1,6 +1,7 @@
 package deduper_test
 
 import (
+	"context"
 	"log/slog"
 	"testing"
 
@@ -12,7 +13,14 @@ import (
 	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/cache"
 )
+
+type handleFunc func(context.Context, *api.AgentScheduledJob) error
+
+func (f handleFunc) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
+	return f(ctx, job)
+}
 
 func TestDeduper_SkipsDuplicateJobs(t *testing.T) {
 	t.Parallel()
@@ -138,5 +146,84 @@ func TestDeduper_IgnoresFinishedJobsInInitialList(t *testing.T) {
 	}
 	if got, want := fakeSched.Errors, 0; got != want {
 		t.Errorf("fakeSched.Errors = %d, want %d", got, want)
+	}
+}
+
+func TestDeduper_IgnoresUpdatesToAlreadyFinishedJobs(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	handlerCalls := 0
+	dd := deduper.New(slog.Default(), handleFunc(func(context.Context, *api.AgentScheduledJob) error {
+		handlerCalls++
+		return model.ErrDuplicateJob
+	}))
+
+	id := uuid.New()
+	unfinishedJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{config.UUIDLabel: id.String()},
+		},
+	}
+	finishedJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{config.UUIDLabel: id.String()},
+		},
+		Status: batchv1.JobStatus{
+			Conditions: []batchv1.JobCondition{{Type: batchv1.JobComplete}},
+		},
+	}
+
+	dd.OnAdd(unfinishedJob, true)
+	dd.OnUpdate(unfinishedJob, finishedJob)
+
+	// The first retry reaches the scheduler, where the still-existing k8s Job
+	// produces ErrDuplicateJob. The deduper deliberately marks it in-flight.
+	if err := dd.Handle(ctx, &api.AgentScheduledJob{ID: id.String()}); err != model.ErrDuplicateJob {
+		t.Errorf("first dd.Handle(ctx, &job) = %v, want %v", err, model.ErrDuplicateJob)
+	}
+
+	// A metadata or status update that leaves the Job terminal must not clear
+	// the marker established by the failed retry.
+	dd.OnUpdate(finishedJob, finishedJob.DeepCopy())
+	if err := dd.Handle(ctx, &api.AgentScheduledJob{ID: id.String()}); err != model.ErrDuplicateJob {
+		t.Errorf("second dd.Handle(ctx, &job) = %v, want %v", err, model.ErrDuplicateJob)
+	}
+	if got, want := handlerCalls, 1; got != want {
+		t.Errorf("handler calls = %d, want %d", got, want)
+	}
+}
+
+func TestDeduper_HandlesDeleteTombstone(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	fakeSched := model.NewFakeScheduler(0, nil)
+	dd := deduper.New(slog.Default(), fakeSched)
+
+	id := uuid.New()
+	staleJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{config.UUIDLabel: id.String()},
+		},
+	}
+
+	dd.OnAdd(staleJob, true)
+	if err := dd.Handle(ctx, &api.AgentScheduledJob{ID: id.String()}); err != model.ErrDuplicateJob {
+		t.Errorf("dd.Handle(ctx, &job) before deletion = %v, want %v", err, model.ErrDuplicateJob)
+	}
+
+	dd.OnDelete(cache.DeletedFinalStateUnknown{
+		Key: "default/buildkite-" + id.String(),
+		Obj: staleJob,
+	})
+
+	if err := dd.Handle(ctx, &api.AgentScheduledJob{ID: id.String()}); err != nil {
+		t.Errorf("dd.Handle(ctx, &job) after deletion = %v, want nil", err)
+	}
+	if got, want := len(fakeSched.Running), 1; got != want {
+		t.Errorf("len(fakeSched.Running) = %d, want %d", got, want)
 	}
 }

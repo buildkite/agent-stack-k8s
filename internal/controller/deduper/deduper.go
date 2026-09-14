@@ -171,11 +171,12 @@ func (d *Deduper) OnAdd(obj any, inInitialList bool) {
 }
 
 // OnUpdate is called by k8s to inform us a resource is updated.
-func (d *Deduper) OnUpdate(_, curr any) {
+func (d *Deduper) OnUpdate(prev, curr any) {
 	onUpdateEventCounter.Inc()
 
+	prevState, _ := prev.(*batchv1.Job)
 	currState, _ := curr.(*batchv1.Job)
-	if currState == nil {
+	if prevState == nil || currState == nil {
 		return
 	}
 
@@ -191,7 +192,7 @@ func (d *Deduper) OnUpdate(_, curr any) {
 	// model.ErrDuplicateJob. Handle treats that as "leave marked in-flight",
 	// so the job stays tracked until OnDelete fires. If the Job object is
 	// already gone, however, a replacement can (and should) be created.
-	if !model.JobFinished(currState) {
+	if model.JobFinished(prevState) || !model.JobFinished(currState) {
 		return
 	}
 
@@ -225,7 +226,16 @@ func (d *Deduper) OnDelete(prev any) {
 
 	prevState, _ := prev.(*batchv1.Job)
 	if prevState == nil {
-		return
+		// If the watch missed the deletion, client-go delivers the last known
+		// object wrapped in a tombstone during a later relist.
+		tombstone, ok := prev.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			return
+		}
+		prevState, _ = tombstone.Obj.(*batchv1.Job)
+		if prevState == nil {
+			return
+		}
 	}
 	// Whether or not the job had become terminal, it's now deleted.
 	id, err := uuid.Parse(prevState.Labels[config.UUIDLabel])
