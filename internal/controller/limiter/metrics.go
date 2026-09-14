@@ -55,6 +55,7 @@ var (
 		Subsystem:                    promSubsystem,
 		Name:                         "token_wait_duration_seconds",
 		Help:                         "Time spent waiting for a limiter token to become available",
+		Buckets:                      []float64{0.1, 0.5, 1, 5, 10, 30, 60, 120, 300, 600},
 		NativeHistogramBucketFactor:  1.1,
 		NativeHistogramZeroThreshold: 0.01,
 	})
@@ -63,6 +64,7 @@ var (
 		Subsystem:                    promSubsystem,
 		Name:                         "work_wait_duration_seconds",
 		Help:                         "Time spent waiting in the limiter for work to become available",
+		Buckets:                      []float64{0.1, 0.5, 1, 5, 10, 30, 60, 120, 300, 600},
 		NativeHistogramBucketFactor:  1.1,
 		NativeHistogramZeroThreshold: 0.01,
 	})
