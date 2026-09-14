@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync"
 
 	"github.com/buildkite/stacksapi"
@@ -80,11 +79,12 @@ func NewFakeAgentServer() *FakeAgentServer {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/stacks/register", fake.handleRegisterStack)
-	mux.HandleFunc("/stacks/test-stack/scheduled-jobs/batch-reserve", fake.handleReserveJobs)
-	mux.HandleFunc("/stacks/test-stack/job-acquisition-tokens", fake.handleIssueJobAcquisitionTokens)
-	mux.HandleFunc("/stacks/test-stack/notifications", fake.handleNotifications)
-	mux.HandleFunc("/stacks/test-stack/jobs/get-states", fake.handleGetJobStates)
-	mux.HandleFunc("/stacks/test-stack/jobs/", fake.handleFinishJob)
+	mux.HandleFunc("/stacks/{stack}/scheduled-jobs/batch-reserve", fake.handleReserveJobs)
+	mux.HandleFunc("/stacks/{stack}/job-acquisition-tokens", fake.handleIssueJobAcquisitionTokens)
+	mux.HandleFunc("/stacks/{stack}/notifications", fake.handleNotifications)
+	mux.HandleFunc("/stacks/{stack}/jobs/get-states", fake.handleGetJobStates)
+	mux.HandleFunc("/stacks/{stack}/jobs/{uuid}", fake.handleFinishJob)
+	mux.HandleFunc("/stacks/{stack}/jobs/{uuid}/finish", fake.handleFinishJob)
 
 	fake.server = httptest.NewServer(mux)
 	return fake
@@ -241,10 +241,8 @@ func (f *FakeAgentServer) handleGetJobStates(w http.ResponseWriter, r *http.Requ
 }
 
 func (f *FakeAgentServer) handleFinishJob(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path
-	const prefix = "/stacks/test-stack/jobs/"
+	jobUUID := r.PathValue("uuid")
 	if r.Method == http.MethodGet {
-		jobUUID := strings.TrimPrefix(path, prefix)
 		job, ok := f.AgentJobs[jobUUID]
 		if !ok {
 			writeJSONResponse(w, http.StatusNotFound, map[string]string{"message": "job not found"})
@@ -257,14 +255,6 @@ func (f *FakeAgentServer) handleFinishJob(w http.ResponseWriter, r *http.Request
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	// Path: /stacks/test-stack/jobs/{uuid}/finish
-	const suffix = "/finish"
-	if !strings.HasPrefix(path, prefix) || !strings.HasSuffix(path, suffix) {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-	jobUUID := path[len(prefix) : len(path)-len(suffix)]
 
 	f.mu.Lock()
 	f.FinishJobCalls = append(f.FinishJobCalls, jobUUID)

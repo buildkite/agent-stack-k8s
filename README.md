@@ -33,6 +33,14 @@ helm install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
 
 Full instructions can be found [in the documentation](https://buildkite.com/docs/agent/v3/agent-stack-k8s/installation).
 
+The controller derives its API stack key from the Buildkite cluster UUID, queue,
+and configured controller ID. This prevents installations with the same Helm
+release name from overwriting another queue's organization-wide stack registration.
+The derived key is stable across restarts and agent-token rotation. Kubernetes
+controller-ID labels stay unchanged, so the controller continues watching its
+existing Jobs. Upgrading from a version that used the controller ID directly as
+the stack key creates a new API stack registration.
+
 ## Documentation
 
 Comprehensive documentation for the Buildkite Agent Stack for Kubernetes controller can be found in the [Agent Stack for Kubernetes section of the Buildkite Docs](https://buildkite.com/docs/agent/v3/agent-stack-k8s).
