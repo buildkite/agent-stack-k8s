@@ -35,6 +35,7 @@ var (
 		Subsystem:                    promSubsystem,
 		Name:                         "job_query_seconds",
 		Help:                         "Time taken to fetch jobs from Buildkite",
+		Buckets:                      prometheus.DefBuckets,
 		NativeHistogramBucketFactor:  1.1,
 		NativeHistogramZeroThreshold: 0.001,
 	})
