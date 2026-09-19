@@ -90,10 +90,14 @@ func NewJobWatcher(logger *slog.Logger, k8sClient kubernetes.Interface, agentCli
 func (w *jobWatcher) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
 	informer := factory.Batch().V1().Jobs()
 	jobInformer := informer.Informer()
+	// Must be set before AddEventHandler: if the informer has already been
+	// started (the deduper and limiter start and sync this one), AddEventHandler
+	// replays cached Jobs to the handler immediately, on another goroutine.
+	// See field comment.
+	w.resourceEventHandlerCtx = ctx
 	if _, err := jobInformer.AddEventHandler(w); err != nil {
 		return err
 	}
-	w.resourceEventHandlerCtx = ctx // See field comment
 	go factory.Start(ctx.Done())
 	// No need to wait for cache sync here. These are cleanup tasks, not
 	// barriers to prevent creating new jobs.

@@ -1,9 +1,9 @@
 package scheduler
 
 import (
+	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"testing"
 	"time"
 
@@ -16,11 +16,18 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/cache"
 )
 
 const testJobUUID = "019f719c-0000-0000-0000-000000000000"
+
+// replayTimeout bounds how long the informer-replay regression tests wait for a
+// handler's effect to show up.
+const replayTimeout = 5 * time.Second
 
 func newTestJobWatcher(t *testing.T, fakeServer *api.FakeAgentServer) (*jobWatcher, *fake.Clientset) {
 	t.Helper()
@@ -30,18 +37,7 @@ func newTestJobWatcher(t *testing.T, fakeServer *api.FakeAgentServer) (*jobWatch
 
 func newTestJobWatcherWithChecker(t *testing.T, fakeServer *api.FakeAgentServer) (*jobWatcher, *fake.Clientset, *BatchBuildkiteJobChecker) {
 	t.Helper()
-	ctx := t.Context()
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-
-	agentClient, err := api.NewAgentClient(ctx, api.AgentClientOpts{
-		Token:    "fake-token",
-		Endpoint: fakeServer.URL(),
-		StackID:  "test-stack",
-		Logger:   logger,
-	})
-	if err != nil {
-		t.Fatalf("NewAgentClient: %v", err)
-	}
+	agentClient, logger := newTestAgentClient(t, fakeServer)
 
 	k8sClient := fake.NewSimpleClientset()
 
@@ -603,5 +599,64 @@ func TestJobAcquisitionTokenSecretIsDeletedWhenJobIsDeleted(t *testing.T) {
 
 	if _, err := k8sClient.CoreV1().Secrets("default").Get(t.Context(), "job-token", metav1.GetOptions{}); !kerrors.IsNotFound(err) {
 		t.Errorf("Get secret error = %v, want NotFound", err)
+	}
+}
+
+// TestRegisterInformerReplaysWithValidContext is a regression test for
+// https://github.com/buildkite/agent-stack-k8s/issues/951.
+//
+// The deduper and limiter start and sync the shared Jobs informer before
+// jobWatcher registers on it. AddEventHandler on an already-started informer
+// starts the listener goroutines inside the call and then enqueues a synthetic
+// Add for every cached Job, so OnAdd can run before AddEventHandler returns.
+// Assigning resourceEventHandlerCtx after that call therefore races the
+// handler, and a finished Job with a job-acquisition-token Secret reaches
+// secrets.Get with a nil context, which panics inside client-go.
+//
+// This test must be run with -race. A nil context is harmless to the fake
+// clientset, so the production symptom (a nil dereference inside client-go's
+// REST layer) cannot be reproduced here; what is reproducible is the
+// unsynchronised access to resourceEventHandlerCtx that causes it, which the
+// race detector reports every time. The Secret assertion is what keeps the
+// test from passing vacuously: it only holds if OnAdd really ran.
+func TestJobWatcherRegisterInformerReplaysWithValidContext(t *testing.T) {
+	// Deliberately not t.Parallel(): NewJobWatcher writes package-level gauge
+	// funcs, which parallel tests in this package already race on.
+	fakeServer := api.NewFakeAgentServer()
+	defer fakeServer.Close()
+	// Cancel before fakeServer.Close (defers run LIFO), so the watcher's
+	// goroutines stop before the server they talk to goes away.
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	w, k8sClient := newTestJobWatcher(t, fakeServer)
+
+	kjob := newTestK8sJob(testJobUUID)
+	kjob.Annotations = map[string]string{config.JobAcquisitionTokenSecretAnnotation: "job-token"}
+	kjob.Status.Succeeded = 1
+	kjob.Status.Conditions = []batchv1.JobCondition{{Type: batchv1.JobComplete, Status: corev1.ConditionTrue}}
+	if _, err := k8sClient.BatchV1().Jobs("default").Create(t.Context(), kjob, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create job: %v", err)
+	}
+	if _, err := k8sClient.CoreV1().Secrets("default").Create(t.Context(), newTestJobAcquisitionTokenSecret(kjob, "job-token"), metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create secret: %v", err)
+	}
+
+	// Mimic the deduper and limiter: by the time jobWatcher registers, the
+	// factory has been started and the Job is in the informer's cache.
+	factory := startedAndSyncedFactory(t, ctx, k8sClient, func(f informers.SharedInformerFactory) cache.SharedIndexInformer {
+		return f.Batch().V1().Jobs().Informer()
+	})
+
+	if err := w.RegisterInformer(ctx, factory); err != nil {
+		t.Fatalf("RegisterInformer: %v", err)
+	}
+
+	// Replay is delivered on the listener goroutine, so the effect of OnAdd
+	// having run is only observable asynchronously.
+	if err := wait.PollUntilContextTimeout(ctx, 10*time.Millisecond, replayTimeout, true, func(ctx context.Context) (bool, error) {
+		_, err := k8sClient.CoreV1().Secrets("default").Get(ctx, "job-token", metav1.GetOptions{})
+		return kerrors.IsNotFound(err), nil
+	}); err != nil {
+		t.Fatalf("job acquisition token Secret not deleted during informer replay: %v", err)
 	}
 }
