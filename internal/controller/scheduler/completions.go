@@ -11,7 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 )
 
@@ -67,10 +66,13 @@ func NewPodCompletionWatcher(logger *slog.Logger, k8s kubernetes.Interface, term
 // RegisterInformer creates a Pods informer and registers the handler on it.
 func (w *completionsWatcher) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
 	informer := factory.Core().V1().Pods().Informer()
+	// Must be set before AddEventHandler: if the informer has already been
+	// started, AddEventHandler replays cached Pods to the handler immediately,
+	// on another goroutine. See note on field.
+	w.resourceEventHandlerCtx = ctx
 	if _, err := informer.AddEventHandler(w); err != nil {
 		return err
 	}
-	w.resourceEventHandlerCtx = ctx // see note on field
 	go factory.Start(ctx.Done())
 	return nil
 }
