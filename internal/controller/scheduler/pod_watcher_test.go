@@ -1,13 +1,22 @@
 package scheduler
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/google/uuid"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 )
 
 func TestPodHasExceededPendingTimeout(t *testing.T) {
@@ -257,5 +266,64 @@ func TestPodHasFailingImages_RunningPod(t *testing.T) {
 	}
 	if got, want := got[0].State.Waiting.Reason, "ImagePullBackOff"; got != want {
 		t.Errorf("got[0].State.Waiting.Reason = %q, want %q", got, want)
+	}
+}
+
+func newTestPodWatcher(t *testing.T, fakeServer *api.FakeAgentServer) (*podWatcher, *fake.Clientset) {
+	t.Helper()
+	agentClient, logger := newTestAgentClient(t, fakeServer)
+	k8sClient := fake.NewSimpleClientset()
+	checker := NewBatchBuildkiteJobChecker(logger, agentClient, k8sClient, time.Second)
+	w := NewPodWatcher(logger, k8sClient, agentClient, &config.Config{Namespace: "default"}, checker)
+	return w, k8sClient
+}
+
+// TestPodWatcherRegisterInformerReplaysWithValidContext covers podWatcher's
+// half of https://github.com/buildkite/agent-stack-k8s/issues/951. When the
+// completions watcher is enabled it creates and starts the Pods informer
+// first, so podWatcher registers on an already-started informer and its
+// cached Pods replay while RegisterInformer is still running. See
+// TestJobWatcherRegisterInformerReplaysWithValidContext for the mechanism.
+func TestPodWatcherRegisterInformerReplaysWithValidContext(t *testing.T) {
+	// Deliberately not t.Parallel(): NewPodWatcher writes package-level gauge
+	// funcs, which parallel tests in this package already race on.
+	fakeServer := api.NewFakeAgentServer()
+	defer fakeServer.Close()
+	// Cancel before fakeServer.Close (defers run LIFO), so the watcher's
+	// goroutines stop before the server they talk to goes away.
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	w, k8sClient := newTestPodWatcher(t, fakeServer)
+
+	jobUUID := uuid.MustParse(testJobUUID)
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "buildkite-pod",
+			Namespace: "default",
+			Labels:    map[string]string{config.UUIDLabel: testJobUUID},
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodPending},
+	}
+	if _, err := k8sClient.CoreV1().Pods("default").Create(ctx, pod, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("Create pod: %v", err)
+	}
+
+	factory := startedAndSyncedFactory(t, ctx, k8sClient, func(f informers.SharedInformerFactory) cache.SharedIndexInformer {
+		return f.Core().V1().Pods().Informer()
+	})
+
+	if err := w.RegisterInformer(ctx, factory); err != nil {
+		t.Fatalf("RegisterInformer: %v", err)
+	}
+
+	// runChecks on a pending Pod registers it for image-failure watching, so
+	// this is only true once OnAdd has run.
+	if err := wait.PollUntilContextTimeout(ctx, 10*time.Millisecond, replayTimeout, true, func(context.Context) (bool, error) {
+		w.watchingForImageFailureMu.Lock()
+		defer w.watchingForImageFailureMu.Unlock()
+		_, ok := w.watchingForImageFailure[jobUUID]
+		return ok, nil
+	}); err != nil {
+		t.Fatalf("pending Pod not registered for image failure watching during informer replay: %v", err)
 	}
 }

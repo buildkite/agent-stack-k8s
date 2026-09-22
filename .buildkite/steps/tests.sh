@@ -2,6 +2,14 @@
 
 set -eufo pipefail
 
+# The informer-registration regression tests for
+# https://github.com/buildkite/agent-stack-k8s/issues/951 only fail under the
+# race detector, so run them with -race before the main suite. Scoped with
+# -run because the rest of the package is not race-clean yet: NewJobWatcher and
+# friends write package-level gauge funcs that parallel tests race on.
+echo "+++ Race detector on informer registration :zap:"
+go test -race -count=1 -run 'ReplaysWithValidContext' ./internal/controller/scheduler/
+
 echo "+++ Running integration tests :test_tube:"
 package="github.com/buildkite/agent-stack-k8s/v2/internal/integration_test"
 branch="${BUILDKITE_BRANCH:-main}"

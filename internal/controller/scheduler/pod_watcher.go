@@ -130,10 +130,13 @@ func NewPodWatcher(logger *slog.Logger, k8s kubernetes.Interface, agentClient *a
 // Creates a Pods informer and registers the handler on it
 func (w *podWatcher) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
 	informer := factory.Core().V1().Pods().Informer()
+	// Must be set before AddEventHandler: if the informer has already been
+	// started, AddEventHandler replays cached Pods to the handler immediately,
+	// on another goroutine. See note on field.
+	w.resourceEventHandlerCtx = ctx
 	if _, err := informer.AddEventHandler(w); err != nil {
 		return err
 	}
-	w.resourceEventHandlerCtx = ctx // 😡
 	go factory.Start(ctx.Done())
 	go w.imageFailureChecker(ctx, w.logger)
 	go w.pendingTimeoutChecker(ctx, w.logger)
