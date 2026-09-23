@@ -31,29 +31,17 @@ helm install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --set config.queue=arm64
 ```
 
-### Choose a stable controller ID
+### Multiple independent controllers serving the same queue
 
-The controller registers itself with the Buildkite Agent API using its controller
-ID as the [stack key](https://buildkite.com/docs/apis/agent-api/stacks#register-a-stack).
-Stack keys identify stacks within a Buildkite organization, so reusing an ID
-refers to the same stack even across Kubernetes clusters or namespaces. We
-recommend a distinct ID for each independently operated installation, kept
-stable across restarts and upgrades.
+Most installations need no controller ID configuration. If multiple independent
+controller installations service the same queue, give each installation a
+distinct controller ID (its Agent API stack key), stable across restarts and
+upgrades.
 
-The Helm chart sets the controller ID to the Helm release's full name. Choose a
-distinct release name, for example:
-
-```sh
-helm upgrade --install agent-stack-k8s-us-east \
-    oci://ghcr.io/buildkite/helm/agent-stack-k8s \
-    --set agentToken=<buildkite-agent-token>
-```
-
-Alternatively, set a unique `fullnameOverride`, or set
-`BUILDKITE_K8S_STACK_CONTROLLER_ID` using `controllerEnv` if Kubernetes resource
-names must remain unchanged. Non-Helm deployments can set the same environment
-variable or pass `--id`; without an ID, the controller uses `agent-stack-k8s` as
-the stack key.
+With Helm, use distinct release full names or set
+`BUILDKITE_K8S_STACK_CONTROLLER_ID` through `controllerEnv` to leave Kubernetes
+resource names unchanged. Non-Helm deployments can set the same environment
+variable or pass `--id`.
 
 Full instructions can be found [in the documentation](https://buildkite.com/docs/agent/v3/agent-stack-k8s/installation).
 
