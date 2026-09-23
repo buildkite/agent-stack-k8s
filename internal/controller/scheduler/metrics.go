@@ -13,6 +13,7 @@ var jobEndToEndDurationHistogram = promauto.NewHistogram(prometheus.HistogramOpt
 	Namespace:                    promNamespace,
 	Name:                         "job_end_to_end_seconds",
 	Help:                         "End-to-end processing times of jobs. Specifically, for each job, the duration between starting the query that returned the job from Buildkite, and successfully creating that job in Kubernetes.",
+	Buckets:                      []float64{0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60},
 	NativeHistogramBucketFactor:  1.1,
 	NativeHistogramZeroThreshold: 0.01,
 })
