@@ -31,25 +31,17 @@ helm install agent-stack-k8s oci://ghcr.io/buildkite/helm/agent-stack-k8s \
     --set config.queue=arm64
 ```
 
-### Use a unique stack ID for each installation
+### Choose a stable controller ID
 
 The controller registers itself with the Buildkite Agent API using its controller
-ID as the stack key, and deregisters that key when it shuts down. Stack keys must
-be unique within a Buildkite organization, not only within a Kubernetes cluster
-or namespace. See the Agent API documentation for
-[registering](https://buildkite.com/docs/apis/agent-api/stacks#register-a-stack)
-and [deregistering](https://buildkite.com/docs/apis/agent-api/stacks#de-register-a-stack)
-a stack.
+ID as the [stack key](https://buildkite.com/docs/apis/agent-api/stacks#register-a-stack).
+Stack keys identify stacks within a Buildkite organization, so reusing an ID
+refers to the same stack even across Kubernetes clusters or namespaces. We
+recommend a distinct ID for each independently operated installation, kept
+stable across restarts and upgrades.
 
-The Helm chart sets the controller ID to the Helm release's full name. If
-independent installations in different Kubernetes clusters or namespaces use the
-same release name, they register the same stack key. Registration is idempotent,
-so this may initially appear to work, but shutting down either controller
-deregisters the key used by the others. The remaining controllers may then
-receive `Stack not found with the provided key` errors.
-
-Give every independently operated installation in the organization a unique,
-stable Helm release name:
+The Helm chart sets the controller ID to the Helm release's full name. Choose a
+distinct release name, for example:
 
 ```sh
 helm upgrade --install agent-stack-k8s-us-east \
