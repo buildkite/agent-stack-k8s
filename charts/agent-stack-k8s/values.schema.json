@@ -432,8 +432,8 @@
             "no-multipart-artifact-upload": {
               "type": "boolean"
             },
-            "tracing-backend": {
-              "type": "string"
+            "opentelemetry-tracing": {
+              "type": "boolean"
             },
             "telemetry-service-name": {
               "type": "string"

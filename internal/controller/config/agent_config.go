@@ -24,7 +24,7 @@ type AgentConfig struct {
 	NoColor                     *bool          `json:"no-color,omitempty"`                        // BUILDKITE_AGENT_NO_COLOR
 	StrictSingleHooks           *bool          `json:"strict-single-hooks,omitempty"`             // BUILDKITE_STRICT_SINGLE_HOOKS
 	NoMultipartArtifactUpload   *bool          `json:"no-multipart-artifact-upload,omitempty"`    // BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD
-	TracingBackend              *string        `json:"tracing-backend,omitempty"`                 // BUILDKITE_TRACING_BACKEND
+	OpenTelemetryTracing        *bool          `json:"opentelemetry-tracing,omitempty"`           // BUILDKITE_OPENTELEMETRY_TRACING
 	TelemetryServiceName        *string        `json:"telemetry-service-name,omitempty"`          // BUILDKITE_TELEMETRY_SERVICE_NAME
 	DisableWarningsFor          []string       `json:"disable-warnings-for,omitempty"`            // BUILDKITE_AGENT_DISABLE_WARNINGS_FOR
 	DebugSigning                *bool          `json:"debug-signing,omitempty"`                   // BUILDKITE_AGENT_DEBUG_SIGNING
@@ -115,7 +115,7 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	setEnvBoolOpt(ctr, "BUILDKITE_AGENT_NO_COLOR", a.NoColor)
 	setEnvBoolOpt(ctr, "BUILDKITE_STRICT_SINGLE_HOOKS", a.StrictSingleHooks)
 	setEnvBoolOpt(ctr, "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", a.NoMultipartArtifactUpload)
-	setEnvOpt(ctr, "BUILDKITE_TRACING_BACKEND", a.TracingBackend)
+	setEnvBoolOpt(ctr, "BUILDKITE_OPENTELEMETRY_TRACING", a.OpenTelemetryTracing)
 	setEnvOpt(ctr, "BUILDKITE_TELEMETRY_SERVICE_NAME", a.TelemetryServiceName)
 	setEnvCommaSep(ctr, "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", a.DisableWarningsFor)
 	setEnvBoolOpt(ctr, "BUILDKITE_AGENT_DEBUG_SIGNING", a.DebugSigning)

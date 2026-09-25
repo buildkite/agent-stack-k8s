@@ -86,7 +86,7 @@ func TestReadAndParseConfig(t *testing.T) {
 		},
 		AgentConfig: &config.AgentConfig{
 			Endpoint:             new("http://agent.buildkite.localhost/v3"),
-			TracingBackend:       new("opentelemetry"),
+			OpenTelemetryTracing: new(true),
 			TelemetryServiceName: new("buildkite-agent"),
 			AdditionalHooksPaths: []string{"/buildkite/baked-in-hooks"},
 			AdditionalHooks: []config.AdditionalHook{

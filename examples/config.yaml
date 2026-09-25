@@ -70,11 +70,10 @@ agent-config:
   # Setting a custom Agent REST API endpoint is usually only useful if you have
   # a different instance of Buildkite itself available to run.
   endpoint: http://agent.buildkite.localhost/v3
-  # Enable distributed tracing for build jobs. tracing-backend accepts
-  # "datadog" or "opentelemetry". The trace exporter itself still needs its own
-  # configuration (a Datadog APM agent, or OTEL_EXPORTER_OTLP_* env vars for
-  # opentelemetry).
-  tracing-backend: opentelemetry
+  # Enable distributed tracing for build jobs with OpenTelemetry. The trace
+  # exporter itself still needs its own configuration (the standard
+  # OTEL_EXPORTER_OTLP_* env vars).
+  opentelemetry-tracing: true
   telemetry-service-name: buildkite-agent
   additional-hooks-paths:
     - /buildkite/baked-in-hooks
