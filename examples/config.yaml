@@ -75,7 +75,7 @@ agent-config:
   # configuration (a Datadog APM agent, or OTEL_EXPORTER_OTLP_* env vars for
   # opentelemetry).
   tracing-backend: opentelemetry
-  tracing-service-name: buildkite-agent
+  telemetry-service-name: buildkite-agent
   # Only supported by the opentelemetry backend.
   tracing-propagate-traceparent: true
   additional-hooks-paths:

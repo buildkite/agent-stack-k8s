@@ -18,7 +18,7 @@ func envValue(ctr *corev1.Container, name string) (string, bool) {
 func TestApplyToAgentStart_Tracing(t *testing.T) {
 	agentConfig := &AgentConfig{
 		TracingBackend:              new("opentelemetry"),
-		TracingServiceName:          new("my-service"),
+		TelemetryServiceName:        new("my-service"),
 		TracingPropagateTraceparent: new(true),
 	}
 
@@ -27,7 +27,7 @@ func TestApplyToAgentStart_Tracing(t *testing.T) {
 
 	want := map[string]string{
 		"BUILDKITE_TRACING_BACKEND":               "opentelemetry",
-		"BUILDKITE_TRACING_SERVICE_NAME":          "my-service",
+		"BUILDKITE_TELEMETRY_SERVICE_NAME":        "my-service",
 		"BUILDKITE_TRACING_PROPAGATE_TRACEPARENT": "true",
 	}
 	for name, wantVal := range want {
@@ -48,7 +48,7 @@ func TestApplyToAgentStart_TracingUnset(t *testing.T) {
 
 	for _, name := range []string{
 		"BUILDKITE_TRACING_BACKEND",
-		"BUILDKITE_TRACING_SERVICE_NAME",
+		"BUILDKITE_TELEMETRY_SERVICE_NAME",
 		"BUILDKITE_TRACING_PROPAGATE_TRACEPARENT",
 	} {
 		if val, ok := envValue(ctr, name); ok {

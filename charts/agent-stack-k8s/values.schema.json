@@ -438,7 +438,7 @@
             "tracing-backend": {
               "type": "string"
             },
-            "tracing-service-name": {
+            "telemetry-service-name": {
               "type": "string"
             },
             "tracing-propagate-traceparent": {
