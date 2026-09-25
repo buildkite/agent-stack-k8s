@@ -24,10 +24,8 @@ type AgentConfig struct {
 	NoColor                     *bool          `json:"no-color,omitempty"`                        // BUILDKITE_AGENT_NO_COLOR
 	StrictSingleHooks           *bool          `json:"strict-single-hooks,omitempty"`             // BUILDKITE_STRICT_SINGLE_HOOKS
 	NoMultipartArtifactUpload   *bool          `json:"no-multipart-artifact-upload,omitempty"`    // BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD
-	TraceContextEncoding        *string        `json:"trace-context-encoding,omitempty"`          // BUILDKITE_TRACE_CONTEXT_ENCODING
 	TracingBackend              *string        `json:"tracing-backend,omitempty"`                 // BUILDKITE_TRACING_BACKEND
 	TelemetryServiceName        *string        `json:"telemetry-service-name,omitempty"`          // BUILDKITE_TELEMETRY_SERVICE_NAME
-	TracingPropagateTraceparent *bool          `json:"tracing-propagate-traceparent,omitempty"`   // BUILDKITE_TRACING_PROPAGATE_TRACEPARENT
 	DisableWarningsFor          []string       `json:"disable-warnings-for,omitempty"`            // BUILDKITE_AGENT_DISABLE_WARNINGS_FOR
 	DebugSigning                *bool          `json:"debug-signing,omitempty"`                   // BUILDKITE_AGENT_DEBUG_SIGNING
 	GitSkipFetchExistingCommits *bool          `json:"git-skip-fetch-existing-commits,omitempty"` // BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS
@@ -117,10 +115,8 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	setEnvBoolOpt(ctr, "BUILDKITE_AGENT_NO_COLOR", a.NoColor)
 	setEnvBoolOpt(ctr, "BUILDKITE_STRICT_SINGLE_HOOKS", a.StrictSingleHooks)
 	setEnvBoolOpt(ctr, "BUILDKITE_NO_MULTIPART_ARTIFACT_UPLOAD", a.NoMultipartArtifactUpload)
-	setEnvOpt(ctr, "BUILDKITE_TRACE_CONTEXT_ENCODING", a.TraceContextEncoding)
 	setEnvOpt(ctr, "BUILDKITE_TRACING_BACKEND", a.TracingBackend)
 	setEnvOpt(ctr, "BUILDKITE_TELEMETRY_SERVICE_NAME", a.TelemetryServiceName)
-	setEnvBoolOpt(ctr, "BUILDKITE_TRACING_PROPAGATE_TRACEPARENT", a.TracingPropagateTraceparent)
 	setEnvCommaSep(ctr, "BUILDKITE_AGENT_DISABLE_WARNINGS_FOR", a.DisableWarningsFor)
 	setEnvBoolOpt(ctr, "BUILDKITE_AGENT_DEBUG_SIGNING", a.DebugSigning)
 	setEnvBoolOpt(ctr, "BUILDKITE_GIT_SKIP_FETCH_EXISTING_COMMITS", a.GitSkipFetchExistingCommits)

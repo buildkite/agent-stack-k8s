@@ -432,17 +432,11 @@
             "no-multipart-artifact-upload": {
               "type": "boolean"
             },
-            "trace-context-encoding": {
-              "type": "string"
-            },
             "tracing-backend": {
               "type": "string"
             },
             "telemetry-service-name": {
               "type": "string"
-            },
-            "tracing-propagate-traceparent": {
-              "type": "boolean"
             },
             "disable-warnings-for": {
               "type": "array",

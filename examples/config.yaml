@@ -76,8 +76,6 @@ agent-config:
   # opentelemetry).
   tracing-backend: opentelemetry
   telemetry-service-name: buildkite-agent
-  # Only supported by the opentelemetry backend.
-  tracing-propagate-traceparent: true
   additional-hooks-paths:
     - /buildkite/baked-in-hooks
   additional-hooks:
