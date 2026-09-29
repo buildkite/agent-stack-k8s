@@ -867,29 +867,30 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	if podSpec.TerminationGracePeriodSeconds != nil {
 		termGraceSecs := int(*podSpec.TerminationGracePeriodSeconds)
 		// When the agent cancels the job (e.g. when it receives SIGTERM), it
-		// first interrupts the job, waits for signal-grace-period, then
-		// terminates the job before waiting the remainder of the cancel-grace-
-		// period.
+		// first interrupts the job, waits for cancel-signal-timeout, then
+		// terminates the job before waiting up to cancel-cleanup-timeout.
+		// The agent's total cancel grace period is the sum of the two.
 		// When the pod is deleted, Kubernetes first sends SIGTERM to all
 		// containers. From Agent v3.110.0, kubernetes-bootstrap absorbs that
 		// signal and instead waits for the agent container to send an interrupt
 		// over the socket.
 		// Kubernetes will then take care of killing the job after
 		// TerminationGracePeriodSeconds is up. But we should still configure
-		// signal-grace-period so that the agent has time to upload logs and
-		// mark the job as finished, and also cancel-grace-period in case it
+		// cancel-signal-timeout so that the agent has time to upload logs and
+		// mark the job as finished, and also cancel-cleanup-timeout in case it
 		// needs to know how long it has left.
-		signalGracePeriod := max(0, termGraceSecs-10)
-		// Note that the agent requires cancelGracePeriod > signalGracePeriod.
-		cancelGracePeriod := max(termGraceSecs, 1)
+		signalTimeout := max(0, termGraceSecs-10)
+		// Keep the total (signal + cleanup) equal to the termination grace
+		// period, with a minimum of 1 second.
+		cleanupTimeout := max(termGraceSecs, 1) - signalTimeout
 		agentContainer.Env = append(agentContainer.Env,
 			corev1.EnvVar{
-				Name:  "BUILDKITE_CANCEL_GRACE_PERIOD",
-				Value: strconv.Itoa(cancelGracePeriod),
+				Name:  "BUILDKITE_CANCEL_SIGNAL_TIMEOUT",
+				Value: (time.Duration(signalTimeout) * time.Second).String(),
 			},
 			corev1.EnvVar{
-				Name:  "BUILDKITE_SIGNAL_GRACE_PERIOD_SECONDS",
-				Value: strconv.Itoa(signalGracePeriod),
+				Name:  "BUILDKITE_CANCEL_CLEANUP_TIMEOUT",
+				Value: (time.Duration(cleanupTimeout) * time.Second).String(),
 			},
 		)
 	}
