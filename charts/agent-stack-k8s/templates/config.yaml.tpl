@@ -8,4 +8,4 @@ data:
     agent-token-secret: {{ if .Values.agentStackSecret }}{{ .Values.agentStackSecret }}{{ else }}{{ include "agent-stack-k8s.fullname" . }}-secrets{{ end }}
     namespace: {{ .Release.Namespace }}
     id: {{ include "agent-stack-k8s.fullname" . }}
-    {{- .Values.config | toYaml | nindent 4 }}
+    {{- .Values.config | toYamlPretty | nindent 4 }}
