@@ -188,7 +188,7 @@ func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {
 	a.applyPluginsVolumeTo(ctr)
 	// Signing happens either with "pipeline upload" or "tool sign", so the
 	// signing side of any key needs to be attached to the command container,
-	// not the agent start container or checkout containers.
+	// not the agent start container.
 	if a.SigningJWKSVolume == nil {
 		return
 	}
@@ -197,15 +197,6 @@ func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {
 		Name:      a.SigningJWKSVolume.Name,
 		MountPath: dir,
 	})
-}
-
-func (a *AgentConfig) ApplyToCheckout(ctr *corev1.Container) {
-	if a == nil || ctr == nil {
-		return
-	}
-	a.applyHooksVolumeTo(ctr)
-	a.applyAdditionalHooksVolumesTo(ctr)
-	a.applyPluginsVolumeTo(ctr)
 }
 
 func (a *AgentConfig) applyHooksVolumeTo(ctr *corev1.Container) {
