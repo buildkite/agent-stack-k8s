@@ -592,11 +592,6 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		volumeMounts = append(volumeMounts, inputs.k8sPlugin.ExtraVolumeMounts...)
 	}
 
-	systemContainerCount := 0
-	if !skipCheckout {
-		systemContainerCount = 1
-	}
-
 	ttl := int32(w.cfg.JobTTL.Seconds())
 	kjob.Spec.TTLSecondsAfterFinished = &ttl
 
@@ -606,6 +601,15 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	if inputs.k8sPlugin != nil && int64(inputs.k8sPlugin.JobActiveDeadlineSeconds) > 0 {
 		activeDeadlineSeconds = int64(inputs.k8sPlugin.JobActiveDeadlineSeconds)
 		kjob.Spec.ActiveDeadlineSeconds = &activeDeadlineSeconds
+	}
+
+	// The first command container also runs the checkout phase, using git from
+	// the image or the static git that the workspace setup container installs.
+	bootstrapPhases := func(containerID int) string {
+		if containerID == 0 && !skipCheckout {
+			return "plugin,checkout,command"
+		}
+		return "plugin,command"
 	}
 
 	// Env vars used for command containers (`buildkite-agent bootstrap` with
@@ -633,7 +637,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		c.Env = append(c.Env,
 			corev1.EnvVar{
 				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-				Value: "plugin,command",
+				Value: bootstrapPhases(i),
 			},
 			corev1.EnvVar{
 				Name:  "BUILDKITE_COMMAND",
@@ -641,7 +645,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			},
 			corev1.EnvVar{
 				Name:  "BUILDKITE_CONTAINER_ID",
-				Value: strconv.Itoa(i + systemContainerCount),
+				Value: strconv.Itoa(i),
 			},
 		)
 
@@ -684,7 +688,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			Env: []corev1.EnvVar{
 				{
 					Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-					Value: "plugin,command",
+					Value: bootstrapPhases(0),
 				},
 				{
 					Name:  "BUILDKITE_COMMAND",
@@ -692,7 +696,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 				},
 				{
 					Name:  "BUILDKITE_CONTAINER_ID",
-					Value: strconv.Itoa(0 + systemContainerCount),
+					Value: "0",
 				},
 				{
 					Name:  "BUILDKITE_SOCKETS_PATH",
@@ -707,6 +711,10 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 			c.EnvFrom = append(c.EnvFrom, inputs.k8sPlugin.GitEnvFrom...)
 		}
 		podSpec.Containers = append(podSpec.Containers, c)
+	}
+
+	if !skipCheckout {
+		w.configureCheckout(podSpec, &podSpec.Containers[0], inputs.k8sPlugin)
 	}
 
 	sidecarCounterCount := 0
@@ -762,7 +770,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// The coordinating agent container are expecting those managed containers to connect.
 	//
 	// Calculating this imperatively is risky given we lack control over the context, this is subject to refactor.
-	managedContainerCount := len(podSpec.Containers) + systemContainerCount
+	managedContainerCount := len(podSpec.Containers)
 
 	agentTokenEnv := corev1.EnvVar{
 		Name: agentTokenKey,
@@ -908,14 +916,7 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 
 	podSpec.Containers = append(podSpec.Containers, agentContainer)
 
-	if !skipCheckout {
-		// The checkout container is a `buildkite-agent bootstrap` container.
-		podSpec.Containers = append(podSpec.Containers,
-			w.createCheckoutContainer(podSpec, volumeMounts, inputs.k8sPlugin),
-		)
-	}
-
-	initContainers := []corev1.Container{w.createWorkspaceSetupContainer(podSpec, workspaceVolume)}
+	initContainers := []corev1.Container{w.createWorkspaceSetupContainer(podSpec, workspaceVolume, skipCheckout, inputs.k8sPlugin)}
 
 	// First decide which images to pre-check and what pull policy to use.
 	preflightImageChecks, invalidRefs := selectImagesToCheck(w, podSpec)
@@ -969,6 +970,12 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 	// Only attempt the job once.
 	podSpec.RestartPolicy = corev1.RestartPolicyNever
 
+	// A command container may itself be named "checkout"; remember that so
+	// only containers added by a patch get removed below.
+	hasCheckoutNamedContainer := slices.ContainsFunc(podSpec.Containers, func(c corev1.Container) bool {
+		return c.Name == CheckoutContainerName
+	})
+
 	// Allow podSpec to be overridden by the controller configuration and the k8s plugin
 	// Patch from the controller is applied first
 	if w.cfg.PodSpecPatch != nil {
@@ -993,19 +1000,17 @@ func (w *worker) Build(podSpec *corev1.PodSpec, skipCheckout bool, inputs buildI
 		w.logger.Debug("Applied podSpec patch from k8s plugin", "patched", redactedPodSpec(patched))
 	}
 
-	// Removes all containers named "checkout" when checkout disabled via controller config or plugin
-	// This will also remove containers named "checkout" added via PodSpecPatch
-	if skipCheckout {
-		for i, pod := range podSpec.Containers {
-			switch pod.Name {
-			case CheckoutContainerName:
-				podSpec.Containers = slices.Delete(podSpec.Containers, i, i+1)
-				w.logger.Info("skipCheckout is set to 'true', removing 'checkout' container from podSpec.Containers", "job-uuid", inputs.uuid)
-
-			default:
-				continue
+	// There is no separate checkout container any more: the first command
+	// container runs the checkout phase. Remove a "checkout" container that a
+	// podSpecPatch written for the old layout would otherwise add.
+	if !hasCheckoutNamedContainer {
+		podSpec.Containers = slices.DeleteFunc(podSpec.Containers, func(c corev1.Container) bool {
+			if c.Name != CheckoutContainerName {
+				return false
 			}
-		}
+			w.logger.Info("removing 'checkout' container added by podSpecPatch; the first command container runs the checkout", "job-uuid", inputs.uuid)
+			return true
+		})
 	}
 
 	// Dedupe VolumeMounts for both InitContainers and Containers
@@ -1256,7 +1261,7 @@ func (w *worker) workspaceVolumeMount(volumeName string) corev1.VolumeMount {
 	}
 }
 
-func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspaceVolume *corev1.Volume) corev1.Container {
+func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspaceVolume *corev1.Volume, skipCheckout bool, k8sPlugin *KubernetesPlugin) corev1.Container {
 	podUser, podGroup := int64(0), int64(0)
 	if podSpec.SecurityContext != nil {
 		if podSpec.SecurityContext.RunAsUser != nil {
@@ -1268,10 +1273,42 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 	}
 
 	var securityContext *corev1.SecurityContext
+	var envFrom []corev1.EnvFromSource
 	var containerArgs strings.Builder
-	// Ensure that the checkout occurs as the user/group specified in the pod's security context.
-	// we will create a buildkite-agent user/group in the checkout container as needed and switch
-	// to it. The created user/group will have the uid/gid specified in the pod's security context.
+	volumeMounts := []corev1.VolumeMount{w.workspaceVolumeMount(workspaceVolume.Name)}
+
+	// The first command container runs the checkout, and its image may have no
+	// git. Install static git into the workspace, and link it as
+	// /workspace/git: the bootstrap appends its own directory (/workspace) to
+	// the end of PATH, so the image's git still wins when it has one.
+	if !skipCheckout {
+		containerArgs.WriteString(staticGitInstallScript)
+
+		// ssh only reads keys from files, so write keys supplied as env vars
+		// (SSH_PRIVATE_RSA_KEY, ...) to files the checkout's ssh can read.
+		envFrom = w.checkoutSSHEnvFrom(k8sPlugin)
+		if len(envFrom) > 0 {
+			containerArgs.WriteString(checkoutSSHSetupScript)
+		}
+
+		// ssh refuses to run as a UID with no passwd entry, and the command
+		// image may not have one. Write a passwd file with an entry for the
+		// pod's user, which configureCheckout mounts over /etc/passwd.
+		if needsCheckoutPasswd(podSpec, envFrom) {
+			fmt.Fprintf(&containerArgs, `
+cp /etc/passwd %[1]s/passwd
+echo "buildkite-agent:x:%[2]d:%[3]d:buildkite-agent:/workspace:/bin/sh" >> %[1]s/passwd
+`, checkoutPasswdDir, podUser, podGroup)
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      checkoutPasswdVolumeName,
+				MountPath: checkoutPasswdDir,
+			})
+		}
+	}
+
+	// Ensure the workspace (including the files written above) is owned by
+	// the user/group specified in the pod's security context, which the
+	// checkout runs as.
 	switch {
 	case podUser != 0 && podGroup != 0:
 		// The init container needs to be run as root to create the user and give it ownership to the workspace directory
@@ -1304,6 +1341,7 @@ func (w *worker) createWorkspaceSetupContainer(podSpec *corev1.PodSpec, workspac
 	// We run some init containers before any specified in the given podSpec.
 	//
 	// The very first init container prepares the workspace:
+	// - install static git and SSH keys for the checkout (see above)
 	// - chown the workspace directory according to the security context
 	// - make /workspace/{build,plugins,sockets} directories usable by any user
 	// - copy buildkite-agent and tini-static (from /sbin/tini-static or /usr/bin/tini-static) into /workspace
@@ -1335,133 +1373,148 @@ fi
 		Command:         []string{"/bin/sh"},
 		Args:            []string{"-cefx", containerArgs.String()},
 		SecurityContext: securityContext,
-		VolumeMounts:    []corev1.VolumeMount{w.workspaceVolumeMount(workspaceVolume.Name)},
+		EnvFrom:         envFrom,
+		VolumeMounts:    volumeMounts,
 	}
 }
 
-func (w *worker) createCheckoutContainer(
-	podSpec *corev1.PodSpec,
-	volumeMounts []corev1.VolumeMount,
-	k8sPlugin *KubernetesPlugin,
-) corev1.Container {
-	checkoutContainer := corev1.Container{
-		Name:            CheckoutContainerName,
-		Image:           w.cfg.Image,
-		ImagePullPolicy: cmp.Or(w.cfg.DefaultImagePullPolicy, defaultPullPolicyForImage(w.defaultImageRef)),
-		WorkingDir:      "/workspace",
-		VolumeMounts:    volumeMounts,
-		Env: []corev1.EnvVar{
-			{
-				Name:  "BUILDKITE_BOOTSTRAP_PHASES",
-				Value: "plugin,checkout",
-			},
-			{
-				Name:  "BUILDKITE_CONTAINER_ID",
-				Value: "0",
-			},
-			{
-				Name:  "BUILDKITE_SOCKETS_PATH",
-				Value: "/workspace/sockets/checkout",
-			},
-		},
+const (
+	staticGitRelease = "2026.10.8-1112607"
+	staticGitVersion = "2.54.0"
+
+	// checkoutSSHDir holds the SSH keys and config written by
+	// checkoutSSHSetupScript.
+	checkoutSSHDir = "/workspace/.buildkite-ssh/.ssh"
+
+	gitCredentialsMountPath = "/buildkite/git-credentials-ro"
+
+	checkoutPasswdVolumeName = "buildkite-checkout-passwd"
+	checkoutPasswdDir        = "/buildkite/checkout-passwd"
+)
+
+// needsCheckoutPasswd reports whether the checkout needs a passwd entry for
+// the pod's user, which is when it runs as non-root and may use ssh.
+func needsCheckoutPasswd(podSpec *corev1.PodSpec, sshEnvFrom []corev1.EnvFromSource) bool {
+	sc := podSpec.SecurityContext
+	return len(sshEnvFrom) > 0 && sc != nil && sc.RunAsUser != nil && *sc.RunAsUser != 0
+}
+
+// staticGitInstallScript downloads static git
+// (https://github.com/zhming0/static-git) into /workspace/static-git.
+var staticGitInstallScript = fmt.Sprintf(`
+case "$(uname -m)" in
+x86_64) static_git_arch=amd64 static_git_sha256=2540dcb0fa8b8fbc6e2c6257975aee0ded3ac15c81bb4c11bac7b72f0e8dbd5e ;;
+aarch64) static_git_arch=arm64 static_git_sha256=c5f12df586093aa71d1859cada6e98e4e46276054e34c55d3791470ed46efc23 ;;
+*) echo "Error: static git is not available for $(uname -m)" >&2; exit 1 ;;
+esac
+curl -fsSL --retry 3 -o /workspace/static-git.tar.gz "https://github.com/zhming0/static-git/releases/download/%s/static-git-%s-linux-${static_git_arch}.tar.gz"
+echo "${static_git_sha256}  /workspace/static-git.tar.gz" | sha256sum -c -
+mkdir -p /workspace/static-git
+tar -C /workspace/static-git -xzf /workspace/static-git.tar.gz
+chmod -R a+rX /workspace/static-git
+rm /workspace/static-git.tar.gz
+ln -sfn static-git/bin/git /workspace/git
+`, staticGitRelease, staticGitVersion)
+
+// checkoutSSHSetupScript writes SSH keys, known hosts and config from env vars
+// (see https://github.com/buildkite/docker-ssh-env-config) into
+// checkoutSSHDir, then writes an ssh config that uses them. ssh finds ~/.ssh
+// through the user's /etc/passwd entry rather than $HOME, so the checkout
+// points ssh at this config through GIT_SSH_COMMAND.
+var checkoutSSHSetupScript = fmt.Sprintf(`
+HOME=%[1]s ssh-env-config.sh true
+mkdir -p %[2]s
+chmod 700 %[2]s
+{
+  echo "UserKnownHostsFile %[2]s/known_hosts"
+  for key in id_ed25519 id_ecdsa id_rsa id_dsa; do
+    if [ -f "%[2]s/$key" ]; then echo "IdentityFile %[2]s/$key"; fi
+  done
+  if [ -f "%[2]s/config" ]; then echo "Include %[2]s/config"; fi
+} > %[2]s/buildkite-config
+chmod 600 %[2]s/buildkite-config
+`, filepath.Dir(checkoutSSHDir), checkoutSSHDir)
+
+// checkoutSSHEnvFrom returns the env sources that may hold SSH keys for the
+// checkout.
+func (w *worker) checkoutSSHEnvFrom(k8sPlugin *KubernetesPlugin) []corev1.EnvFromSource {
+	var envFrom []corev1.EnvFromSource
+	if co := w.cfg.DefaultCheckoutParams; co != nil {
+		envFrom = append(envFrom, co.EnvFrom...)
 	}
-	w.cfg.AgentConfig.ApplyToCheckout(&checkoutContainer)
-	w.cfg.DefaultCheckoutParams.ApplyToCheckout(podSpec, &checkoutContainer)
 	if k8sPlugin != nil {
-		k8sPlugin.CheckoutParams.ApplyToCheckout(podSpec, &checkoutContainer)
-		checkoutContainer.EnvFrom = append(checkoutContainer.EnvFrom, k8sPlugin.GitEnvFrom...)
+		if co := k8sPlugin.CheckoutParams; co != nil {
+			envFrom = append(envFrom, co.EnvFrom...)
+		}
+		envFrom = append(envFrom, k8sPlugin.GitEnvFrom...)
+	}
+	return envFrom
+}
+
+// configureCheckout adds what the checkout phase needs to the command
+// container that runs it.
+func (w *worker) configureCheckout(podSpec *corev1.PodSpec, ctr *corev1.Container, k8sPlugin *KubernetesPlugin) {
+	// Hooks and plugins volumes are already applied to every command container.
+	w.cfg.DefaultCheckoutParams.ApplyToCheckout(podSpec, ctr)
+	if k8sPlugin != nil {
+		// GitEnvFrom is already applied to every command container.
+		k8sPlugin.CheckoutParams.ApplyToCheckout(podSpec, ctr)
 	}
 
-	podUser, podGroup := int64(0), int64(0)
-	if podSpec.SecurityContext != nil {
-		if podSpec.SecurityContext.RunAsUser != nil {
-			podUser = *(podSpec.SecurityContext.RunAsUser)
-		}
-		if podSpec.SecurityContext.RunAsGroup != nil {
-			podGroup = *(podSpec.SecurityContext.RunAsGroup)
-		}
+	sshEnvFrom := w.checkoutSSHEnvFrom(k8sPlugin)
+	if len(sshEnvFrom) > 0 && !slices.ContainsFunc(ctr.Env, func(e corev1.EnvVar) bool {
+		return e.Name == "GIT_SSH_COMMAND" || e.Name == "GIT_SSH"
+	}) {
+		ctr.Env = append(ctr.Env, corev1.EnvVar{
+			Name:  "GIT_SSH_COMMAND",
+			Value: "ssh -F " + checkoutSSHDir + "/buildkite-config",
+		})
+	}
+	if needsCheckoutPasswd(podSpec, sshEnvFrom) {
+		podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+			Name:         checkoutPasswdVolumeName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		})
+		ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
+			Name:      checkoutPasswdVolumeName,
+			MountPath: "/etc/passwd",
+			SubPath:   "passwd",
+			ReadOnly:  true,
+		})
 	}
 
 	// If configured, set up a volume mount of a secret containing a
 	// .git-credentials file. k8sPlugin (if allowed) supersedes the default.
 	gitCredsSecret := w.cfg.DefaultCheckoutParams.GitCredsSecret()
-
 	if k8sPlugin != nil && k8sPlugin.CheckoutParams != nil {
 		if k8sPlugin.CheckoutParams.GitCredentialsSecret != nil {
 			gitCredsSecret = k8sPlugin.CheckoutParams.GitCredsSecret()
 		}
 	}
-
-	// Note about gitEnvFrom:
-	// gitEnvFrom is typically used to incorporate an env var like
-	// "SSH_PRIVATE_RSA_KEY" from a k8s secret.
-	// ssh-env-config.sh is the script that writes vars like SSH_PRIVATE_RSA_KEY
-	// into files in ~/.ssh (SSH_PRIVATE_RSA_KEY -> ~/.ssh/id_rsa).
-	// It's included in the agent container image, run automatically by
-	// the default agent container entrypoint, and comes from
-	// https://github.com/buildkite/docker-ssh-env-config
-
-	gitConfigCmd := "true"
-	if gitCredsSecret != nil {
-		podSpec.Volumes = append(podSpec.Volumes,
-			corev1.Volume{
-				Name:         "git-credentials-ro",
-				VolumeSource: corev1.VolumeSource{Secret: gitCredsSecret},
-			},
-		)
-
-		checkoutContainer.VolumeMounts = append(checkoutContainer.VolumeMounts,
-			corev1.VolumeMount{
-				Name:      "git-credentials-ro",
-				MountPath: "/buildkite/git-credentials-ro",
-			},
-		)
-
-		// K8s secret mounts are always read-only, but the 'store' credential
-		// helper tries to write credentials back to the file. Use a custom
-		// helper that only reads from the mounted secret via credential-store.
-		gitConfigCmd = "git config --global credential.helper '!f() { [ \"$1\" = get ] && git credential-store --file=/buildkite/git-credentials-ro/.git-credentials get; }; f'"
+	if gitCredsSecret == nil {
+		return
 	}
-
-	// Ensure that the checkout occurs as the user/group specified in the pod's security context.
-	// we will create a buildkite-agent user/group in the checkout container as needed and switch
-	// to it. The created user/group will have the uid/gid specified in the pod's security context.
-	switch {
-	case podUser != 0:
-		// The checkout container needs to be run as root to create the user. After that, it switches to the user.
-		checkoutContainer.SecurityContext = &corev1.SecurityContext{
-			RunAsUser:    new(int64(0)),
-			RunAsGroup:   new(int64(0)),
-			RunAsNonRoot: new(false),
-		}
-
-		gid := podGroup
-		groupname := "buildkite-agent"
-		if podGroup == 0 {
-			groupname = "root"
-		}
-
-		createUserScript := generateCreateUserScript(podUser, gid, "buildkite-agent", groupname)
-		// Escape $1 so the outer shell does not expand it inside su's double-quoted -c string.
-		gitConfigCmdForSu := strings.ReplaceAll(gitConfigCmd, "$1", `\$1`)
-		bootstrapCmd := fmt.Sprintf(`su buildkite-agent -c "%s && buildkite-agent-entrypoint kubernetes-bootstrap"`, gitConfigCmdForSu)
-		checkoutScript := strings.Join([]string{"set -exuf", createUserScript, bootstrapCmd}, "\n")
-
-		checkoutContainer.Command = []string{"/bin/sh", "-c"}
-		checkoutContainer.Args = []string{checkoutScript}
-
-	// If the group is not root, but the user is root, I don't think we NEED to do anything. It's fine
-	// for the user and group to be root for the checked out repo, even though the Pod's security
-	// context has a non-root group.
-	default:
-		checkoutContainer.SecurityContext = nil
-		checkoutScript := strings.Join([]string{"set -exuf", gitConfigCmd, "buildkite-agent-entrypoint kubernetes-bootstrap"}, "\n")
-
-		checkoutContainer.Command = []string{"/bin/sh", "-c"}
-		checkoutContainer.Args = []string{checkoutScript}
-	}
-
-	return checkoutContainer
+	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+		Name:         "git-credentials-ro",
+		VolumeSource: corev1.VolumeSource{Secret: gitCredsSecret},
+	})
+	ctr.VolumeMounts = append(ctr.VolumeMounts, corev1.VolumeMount{
+		Name:      "git-credentials-ro",
+		MountPath: gitCredentialsMountPath,
+	})
+	// K8s secret mounts are always read-only, but the 'store' credential
+	// helper tries to write credentials back to the file. Use a custom helper
+	// that only reads from the mounted secret via credential-store. Set it
+	// through GIT_CONFIG_* env vars, because the container may have no shell
+	// to run `git config` in, nor a writable home directory.
+	ctr.Env = append(ctr.Env,
+		corev1.EnvVar{Name: "GIT_CONFIG_COUNT", Value: "1"},
+		corev1.EnvVar{Name: "GIT_CONFIG_KEY_0", Value: "credential.helper"},
+		corev1.EnvVar{
+			Name:  "GIT_CONFIG_VALUE_0",
+			Value: `!f() { [ "$1" = get ] && git credential-store --file=` + gitCredentialsMountPath + `/.git-credentials get; }; f`,
+		},
+	)
 }
 
 // failJob fails the job in Buildkite.
