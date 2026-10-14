@@ -45,6 +45,14 @@ type AgentConfig struct {
 	SigningJWKSKeyID  *string        `json:"signing-jwks-key-id,omitempty"` // BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID / BUILDKITE_AGENT_JWKS_KEY_ID
 	SigningJWKSVolume *corev1.Volume `json:"signingJWKSVolume,omitempty"`
 
+	// KMS keys are used for both signing and verification. The agent passes
+	// them down to the command container itself, but the agent and command
+	// containers need credentials for the KMS provider (e.g. via the pod's
+	// service account).
+	//                                                                    // agent start                         / pipeline upload or agent tool sign
+	SigningAWSKMSKey *string `json:"signing-aws-kms-key,omitempty"` // BUILDKITE_AGENT_SIGNING_AWS_KMS_KEY / BUILDKITE_AGENT_AWS_KMS_KEY
+	SigningGCPKMSKey *string `json:"signing-gcp-kms-key,omitempty"` // BUILDKITE_AGENT_SIGNING_GCP_KMS_KEY / BUILDKITE_AGENT_GCP_KMS_KEY
+
 	// Hooks and plugins can be supplied with a volume source.
 	HooksPath            *string          `json:"hooks-path,omitempty"` // BUILDKITE_HOOKS_PATH
 	HooksVolume          *corev1.Volume   `json:"hooksVolume,omitempty"`
@@ -155,6 +163,8 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	}
 	setEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_JWKS_FILE", a.SigningJWKSFile)
 	setEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_JWKS_KEY_ID", a.SigningJWKSKeyID)
+	setEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_AWS_KMS_KEY", a.SigningAWSKMSKey)
+	setEnvOpt(ctr, "BUILDKITE_AGENT_SIGNING_GCP_KMS_KEY", a.SigningGCPKMSKey)
 
 	// See notes in normaliseJWKSFile about the default directory/file handling.
 	// Similarly to SigningJWKSFile, if there is no VerificationJWKSVolume but
@@ -169,14 +179,23 @@ func (a *AgentConfig) ApplyToAgentStart(ctr *corev1.Container) {
 	}
 	setEnvOpt(ctr, "BUILDKITE_AGENT_VERIFICATION_JWKS_FILE", a.VerificationJWKSFile)
 
-	if a.VerificationJWKSFile == nil && a.VerificationFailureBehavior == nil {
+	if !a.hasVerificationKey() && a.VerificationFailureBehavior == nil {
 		// The agent defaults to "block", but this makes it slightly harder to
 		// incremenetally adopt signed pipelines because signatures can be added
 		// from differently configured agents, but "block" mode means the agent
 		// rejects jobs with secrets if the key is missing.
+		// KMS keys are also used for verification, so they count as a key.
 		a.VerificationFailureBehavior = new("warn")
 	}
 	setEnvOpt(ctr, "BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR", a.VerificationFailureBehavior)
+}
+
+func (a *AgentConfig) hasVerificationKey() bool {
+	empty := func(s *string) bool {
+		return s == nil || *s == ""
+	}
+
+	return !empty(a.VerificationJWKSFile) || !empty(a.SigningAWSKMSKey) || !empty(a.SigningGCPKMSKey)
 }
 
 func (a *AgentConfig) ApplyToCommand(ctr *corev1.Container) {

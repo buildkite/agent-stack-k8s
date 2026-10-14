@@ -2173,6 +2173,9 @@ func TestPipelineSigningOptions(t *testing.T) {
 			name:              "no keys",
 			agentConfig:       &config.AgentConfig{},
 			wantNotPodVolumes: []string{verificationVol.Name, signingVol.Name},
+			wantAgentEnv: map[string]string{
+				"BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR": "warn",
+			},
 			wantNotAgentEnv: []string{
 				"BUILDKITE_AGENT_SIGNING_JWKS_FILE",
 				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE",
@@ -2209,6 +2212,38 @@ func TestPipelineSigningOptions(t *testing.T) {
 				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE",
 			},
 			wantCommandMounts: []string{signingVol.Name},
+		},
+		{
+			name: "AWS KMS key",
+			agentConfig: &config.AgentConfig{
+				SigningAWSKMSKey: new("alias/pipeline-signing"),
+			},
+			wantNotPodVolumes: []string{verificationVol.Name, signingVol.Name},
+			wantAgentEnv: map[string]string{
+				"BUILDKITE_AGENT_SIGNING_AWS_KMS_KEY": "alias/pipeline-signing",
+			},
+			wantNotAgentEnv: []string{
+				"BUILDKITE_AGENT_SIGNING_GCP_KMS_KEY",
+				"BUILDKITE_AGENT_SIGNING_JWKS_FILE",
+				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE",
+				"BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
+			},
+		},
+		{
+			name: "GCP KMS key",
+			agentConfig: &config.AgentConfig{
+				SigningGCPKMSKey: new("projects/p/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1"),
+			},
+			wantNotPodVolumes: []string{verificationVol.Name, signingVol.Name},
+			wantAgentEnv: map[string]string{
+				"BUILDKITE_AGENT_SIGNING_GCP_KMS_KEY": "projects/p/locations/global/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
+			},
+			wantNotAgentEnv: []string{
+				"BUILDKITE_AGENT_SIGNING_AWS_KMS_KEY",
+				"BUILDKITE_AGENT_SIGNING_JWKS_FILE",
+				"BUILDKITE_AGENT_VERIFICATION_JWKS_FILE",
+				"BUILDKITE_AGENT_JOB_VERIFICATION_NO_SIGNATURE_BEHAVIOR",
+			},
 		},
 		{
 			name: "both keys",

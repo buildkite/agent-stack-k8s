@@ -521,6 +521,14 @@
             "signingJWKSVolume": {
               "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.Volume"
             },
+            "signing-aws-kms-key": {
+              "type": "string",
+              "title": "AWS KMS key ID or alias used to sign and verify pipelines"
+            },
+            "signing-gcp-kms-key": {
+              "type": "string",
+              "title": "GCP KMS key version resource name used to sign and verify pipelines"
+            },
             "verification-jwks-file": {
               "type": "string"
             },
