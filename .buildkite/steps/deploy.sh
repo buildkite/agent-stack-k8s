@@ -20,8 +20,4 @@ helm upgrade agent-stack-k8s "${helm_repo_pecr}/agent-stack-k8s" \
   --wait \
   -f .buildkite/production-helm-values.yaml \
   --set agentToken="${DEFAULT_CLUSTER_TOKEN}" \
-  --set config.image=buildkite/agent:beta
-
-# Note: using :beta to test v4 with agent-stack-k8s prior to v4 hitting stable.
-# In case of problems with v4 or the beta image, set this back to use:
-#  --set config.image="${agent_image}"
+  --set config.image="${agent_image}"

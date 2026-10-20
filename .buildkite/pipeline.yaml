@@ -25,7 +25,7 @@ steps:
   - label: ":go::broom: tidy"
     key: tidy
     env: *go-cache-env
-    image: public.ecr.aws/docker/library/golang:1.26.7-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468
+    image: public.ecr.aws/docker/library/golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod
@@ -48,7 +48,7 @@ steps:
   - label: ":golang::robot_face: check code generation"
     key: check-code-generation
     env: *go-cache-env
-    image: public.ecr.aws/docker/library/golang:1.26.7-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468
+    image: public.ecr.aws/docker/library/golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build
@@ -74,7 +74,7 @@ steps:
     secrets:
       INTEGRATION_TEST_BUILDKITE_TOKEN: integration_test_buildkite_api_token
       BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
-    image: public.ecr.aws/docker/library/golang:1.26.7@sha256:e30143be198ab04cf7ba25fba83ab3a692ca584c994aad0bf131fa0eb32dd8c1
+    image: public.ecr.aws/docker/library/golang:1.26.10@sha256:5c3f3f28a273c9b61698b2d34f18375929790ab1f1d3835d032d21e2b31eae0c
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build
@@ -97,7 +97,7 @@ steps:
     secrets:
       REGISTRY_PASSWORD: ghcr_password
       REGISTRY_USERNAME: ghcr_username
-    image: public.ecr.aws/docker/library/golang:1.26.7@sha256:e30143be198ab04cf7ba25fba83ab3a692ca584c994aad0bf131fa0eb32dd8c1
+    image: public.ecr.aws/docker/library/golang:1.26.10@sha256:5c3f3f28a273c9b61698b2d34f18375929790ab1f1d3835d032d21e2b31eae0c
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build
@@ -161,7 +161,7 @@ steps:
       REGISTRY_PASSWORD: ghcr_password
       REGISTRY_USERNAME: ghcr_username
       GITHUB_TOKEN: github_release_token
-    image: public.ecr.aws/docker/library/golang:1.26.7-alpine@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 # Note goreleaser shells out to go!
+    image: public.ecr.aws/docker/library/golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca # Note goreleaser shells out to go!
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build
