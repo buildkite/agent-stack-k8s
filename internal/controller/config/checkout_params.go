@@ -7,7 +7,7 @@ import (
 )
 
 // CheckoutParams contains parameters that provide additional control over the
-// checkout container.
+// checkout, which runs in the first command container.
 type CheckoutParams struct {
 	Skip                 *bool                      `json:"skip,omitempty"`
 	CheckoutFlags        *string                    `json:"checkoutFlags,omitempty"`
@@ -27,8 +27,8 @@ type CheckoutParams struct {
 // `kubernetes-bootstrap`.
 // NOTE:
 // It's worthnoting that only some checkout params get passed in this way, many other params are still applied directly
-// to checkout container.
-// Basically any k8s construct needs to be passed directly to checkout container
+// to the container that runs the checkout.
+// Basically any k8s construct needs to be passed directly to that container
 func (co *CheckoutParams) ApplyToAgentStart(ctr *corev1.Container) {
 	if co == nil || ctr == nil {
 		return
@@ -45,7 +45,8 @@ func (co *CheckoutParams) ApplyToAgentStart(ctr *corev1.Container) {
 	co.GitMirrors.ApplyToAgentStart(ctr)
 }
 
-// Any k8s related config things need to be passed to checkout container directly.
+// Any k8s related config things need to be passed to the container that runs
+// the checkout (the first command container) directly.
 // "kubernetes-bootstrap" won't work for those for obvious reason: they are passed k8s pod lifecycle.
 //
 // NOTE: despite this is called ApplyToCheckout, it mutate not only the container spec but also the pod spec.

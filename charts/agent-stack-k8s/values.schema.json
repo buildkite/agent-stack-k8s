@@ -543,12 +543,12 @@
         "default-checkout-params": {
           "type": "object",
           "default": null,
-          "title": "Default parameters for checkout containers",
+          "title": "Default parameters for the checkout",
           "properties": {
             "skip": {
               "type": "boolean",
               "default": null,
-              "title": "If true, skips building and running checkout containers"
+              "title": "If true, skips the checkout"
             },
             "cleanFlags": {
               "type": "string",
@@ -613,7 +613,7 @@
             "extraVolumeMounts": {
               "type": "array",
               "default": [],
-              "title": "extra volumes to mount to all checkout containers",
+              "title": "extra volumes to mount to the container that runs the checkout",
               "items": {
                 "$ref": "https://raw.githubusercontent.com/buildkite/kubernetes-json-schema/master/v1.35.0/_definitions.json#/definitions/io.k8s.api.core.v1.VolumeMount"
               }
