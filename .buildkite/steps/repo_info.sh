@@ -3,8 +3,9 @@
 
 set -eufo pipefail
 
-tag="$(git describe)"
-version="${tag#v}"
+release_version="$(buildkite-agent meta-data get release-version --default '')"
+version="${release_version:-$(git describe --tags)}"
+version="${version#v}"
 agent_image="$(buildkite-agent meta-data get agent-image)"
 
 # Clearly indicate PR number in version if it's a PR build.
@@ -12,8 +13,8 @@ if [[ "${BUILDKITE_PULL_REQUEST:false}" != "false" ]]; then
   version="${version}-PR-${BUILDKITE_PULL_REQUEST}"
 fi
 
-# Is this a release version (version-tagged)?
-if [[ "${version}" == "${BUILDKITE_TAG#v}" ]] ; then
+# Only the reviewed main-branch release gate sets release-version.
+if [[ -n "$release_version" ]] ; then
     # Publish releases to both PECR and GHCR
     controller_repo_pecr="public.ecr.aws/buildkite/agent-stack-k8s/controller"
     controller_image_pecr="$(buildkite-agent meta-data get controller-image-pecr)"

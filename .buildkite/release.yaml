@@ -1,0 +1,30 @@
+agents:
+  queue: kubernetes
+
+steps:
+  - label: ":rocket: release"
+    key: release
+    concurrency: 1
+    concurrency_group: agent-stack-k8s-release
+    env:
+      GOCACHE: /root/.cache/go-build
+      GOMODCACHE: /root/.cache/go-mod
+      GOLANGCI_LINT_CACHE: /root/.cache/golangci-lint
+      BUILDKITE_AGENT_CACHE_STORE_URL: s3://buildkite-agent-stack-k8s-cache
+    depends_on:
+      - deploy
+    secrets:
+      REGISTRY_PASSWORD: ghcr_password
+      REGISTRY_USERNAME: ghcr_username
+      GITHUB_TOKEN: github_release_token
+    image: public.ecr.aws/docker/library/golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca # Note goreleaser shells out to go!
+    command:
+      - . .buildkite/steps/assume-role.sh
+      - buildkite-agent cache restore --name go_mod --name go_build
+      - 'echo "--- :rocket: Release"'
+      - .buildkite/steps/release.sh
+      - buildkite-agent cache save --name go_mod --name go_build
+    plugins:
+      - kubernetes:
+          checkout:
+            fetchFlags: -v --tags

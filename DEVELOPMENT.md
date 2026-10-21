@@ -225,27 +225,19 @@ The `config` key contains configuration passed directly to the binary, and so su
 
 ## Release procedure
 
-1. Make sure you're on the main branch!
-1. Create a tag
+Releases start with a reviewed version-bump PR. Don't push release tags manually.
 
-    ```bash
-    git tag -sm v0.x.x v0.x.x
-    ```
+1. Fetch `origin/main` and tags, and inspect all changes since the last published release. Choose the next stable SemVer version.
+2. Create a branch from `origin/main`, such as `release-0.52.0`. Update `VERSION` to the bare version (`0.52.0`, without `v`). Don't change `Chart.yaml`: CI supplies the chart and application versions when packaging.
+3. Open a PR against `main`, titled `release: v0.52.0`, with the `release` label. Put the final release notes in the PR body, including a comparison link and relevant PR links. Group changes under `Added`, `Fixed`, `Changed`, `Security` and `Internal`, omitting empty sections. Explain any upgrade requirements; CI appends image references and digests.
+4. Review both the version diff and the PR body through the normal required-approval process. Refresh the notes if other changes land before merge. Merging the PR authorises publication.
+5. Watch the [Buildkite pipeline](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack). After main's checks pass, CI validates the merged release PR before publishing versioned controller images or charts. The initial introduction of `VERSION`, and ordinary main commits that don't change it, only publish development artifacts.
+6. After deployment passes, CI uploads `.buildkite/release.yaml` only if the release gate accepted a version bump. That job builds binary archives and checksums locally, advances the registry `latest` aliases, and runs `gh release create --target <merge-commit>` with the final notes and assets. GitHub creates the `v<VERSION>` tag at that exact commit. Verify the published notes, image digests, archives and checksums. There's no manual draft-publication step.
 
-1. Push your tag
+The release gate requires an increased stable version with no existing tag, and exactly one associated PR merged into this repository's `main` at the release commit, with the `release` label and a non-empty body. GitHub's main-branch review rules provide the approval requirement. Missing release metadata or GitHub API failures stop publication; there's no generated-notes fallback. Keep the PR body and label unchanged until publication finishes: notes are read from the current PR body, not an immutable file in the commit.
 
-    ```bash
-    git push --tags
-    ```
+GitHub creates lightweight, unsigned tags using the existing GitHub release token. The token needs to read PRs and create releases and their tags. Like the agent pipeline, tag builds can run normal CI and publish development artifacts. They can't enable the release gate or deploy to the cluster, so they don't publish another production release. Historical commits still contain the old pipeline. Restricting who can create version tags, including tags on historical commits, requires repository tag rules outside this code change.
 
-1. A build will start at https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack/builds?branch=v0.x.x. It will create a draft release with a changelog. Edit the changelog to group the PRs in to sections like
+If a build fails, inspect its jobs and existing artifacts before retrying. Release publication is serialised, and already published or older versions are rejected before updating `latest`. Registry updates and GitHub publication aren't transactional: failures can leave some aliases advanced, and a failed asset upload can leave a partially populated GitHub release. Resolve the failure and inspect that state before retrying; repairing a published release needs explicit approval. Don't move/delete tags or overwrite a published release. Prereleases aren't supported by this stable-only flow.
 
-    ```markdown
-    # Added
-    # Fixed
-    # Changed
-    # Security
-    # Internal
-    ```
-
-1. Publish the release 🎉
+The [release skill](.agents/skills/releasing-agent-stack-k8s/SKILL.md) covers preparing and verifying releases.

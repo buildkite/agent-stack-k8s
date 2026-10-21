@@ -89,8 +89,25 @@ steps:
           files: junit-*.xml
           format: junit
 
+  - if: build.branch == pipeline.default_branch && build.tag !~ /^.+\$/
+    label: ":lock: validate release PR"
+    key: prepare-release
+    depends_on:
+      - tidy
+      - lint
+      - helm-lint
+      - check-code-generation
+      - tests
+    secrets:
+      GITHUB_TOKEN: github_release_token
+    image: alpine:3.23.0@sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375
+    command:
+      - apk add --no-progress bash git github-cli jq
+      - bash .buildkite/steps/prepare-release.sh
+
   - label: ":docker: build and push controller image"
     key: controller
+    depends_on: prepare-release
     env:
       <<: *go-cache-env
       KO_DOCKER_REPO: ghcr.io/buildkite
@@ -107,7 +124,7 @@ steps:
 
   # On feature branches, don't wait for tests. We may want to deploy
   # to a test cluster to debug the feature branch.
-  - if: build.branch != pipeline.default_branch && build.tag !~ /^.+\$/
+  - if: build.branch != pipeline.default_branch
     <<: *push-helm
     key: push-feature-branch
     depends_on:
@@ -118,11 +135,11 @@ steps:
       - agent
       - controller
 
-  # On the main branch or tags, wait for tests. We don't want to
+  # On the main branch, wait for tests. We don't want to
   # push a new image or chart unless the tests pass.
-  - if: build.branch == pipeline.default_branch || build.tag =~ /^.+\$/
+  - if: build.branch == pipeline.default_branch
     <<: *push-helm
-    key: push-main-or-tag
+    key: push-main
     depends_on:
       - tidy
       - lint
@@ -132,11 +149,11 @@ steps:
       - controller
       - tests
 
-  - if: build.branch == pipeline.default_branch
+  - if: build.branch == pipeline.default_branch && build.tag !~ /^.+\$/
     label: ":shipit: deploy to our own k8s cluster"
     key: deploy
     depends_on:
-      - push-main-or-tag
+      - push-main
     secrets:
       REGISTRY_PASSWORD: ghcr_password
       REGISTRY_USERNAME: ghcr_username
@@ -150,25 +167,13 @@ steps:
           podSpec:
             serviceAccountName: deploy
 
-  - if: build.tag =~ /^.+\$/
-    label: ":rocket: release"
-    key: release
-    env: *go-cache-env
+  - if: build.branch == pipeline.default_branch
+    label: ":pipeline: upload release steps"
+    key: upload-release
     depends_on:
       - deploy
-      - push-main-or-tag
-    secrets:
-      REGISTRY_PASSWORD: ghcr_password
-      REGISTRY_USERNAME: ghcr_username
-      GITHUB_TOKEN: github_release_token
-    image: public.ecr.aws/docker/library/golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca # Note goreleaser shells out to go!
-    command:
-      - . .buildkite/steps/assume-role.sh
-      - buildkite-agent cache restore --name go_mod --name go_build
-      - 'echo "--- :rocket: Release"'
-      - .buildkite/steps/release.sh
-      - buildkite-agent cache save --name go_mod --name go_build
-    plugins:
-      - kubernetes:
-          checkout:
-            fetchFlags: -v --tags
+    image: alpine:3.23.0@sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375
+    command: |
+      if [ -n "$(buildkite-agent meta-data get release-version --default '')" ]; then
+        buildkite-agent pipeline upload .buildkite/release.yaml
+      fi

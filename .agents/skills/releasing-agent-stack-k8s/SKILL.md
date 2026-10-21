@@ -27,6 +27,6 @@ Release through a reviewed PR, not a manually pushed tag. Read `DEVELOPMENT.md`'
 ## Boundaries
 
 - Only stable versions are supported by this pipeline. Prereleases need a separate design for registry aliases and GitHub release flags.
-- GitHub creates lightweight, unsigned tags when releases are created. Tag builds are skipped by the new pipeline. Historical commits contain the old tag-driven pipeline; repository tag rules are needed to prevent that separate bypass.
+- GitHub creates lightweight, unsigned tags when releases are created. Tag builds can run normal CI and publish development artifacts, but can't enable the release gate or deploy to the cluster. Historical commits contain the old tag-driven pipeline; repository tag rules are needed to prevent that separate bypass.
 - GitHub PR bodies are editable after review. This process uses the current body, like the agent release process, rather than an immutable changelog in the commit.
 - Existing main-branch review requirements supply the approval gate. Don't weaken repository protections or use an administrative bypass to merge a release.
