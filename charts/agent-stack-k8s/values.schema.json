@@ -243,7 +243,7 @@
         "image": {
           "type": "string",
           "default": "",
-          "title": "The container image used to obtain buildkite-agent, and for running commands without any k8s-specific configuration. The default for each release of agent-stack-k8s is set to a version tag of gchr.io/buildkite/agent matching agent-stack-k8s's go.mod file",
+          "title": "The container image used to obtain buildkite-agent, and for running commands without any k8s-specific configuration. The default for each release of agent-stack-k8s is set to a version tag of ghcr.io/buildkite/agent matching agent-stack-k8s's go.mod file",
           "examples": [""]
         },
         "debug": {
