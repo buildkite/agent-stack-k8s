@@ -1,6 +1,8 @@
 builds:
   - env:
       - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X github.com/buildkite/agent-stack-k8s/v2/internal/version.version=v{{ .Version }}
     goos:
       - linux
     goarch:
@@ -19,14 +21,4 @@ archives:
 checksum:
   name_template: "checksums.txt"
 snapshot:
-  name_template: "{{ incpatch .Version }}-next"
-changelog:
-  sort: asc
-  use: github
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-release:
-  draft: true
-  replace_existing_draft: true
+  name_template: "{{ .Env.RELEASE_VERSION }}"

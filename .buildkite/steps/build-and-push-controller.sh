@@ -8,15 +8,16 @@ OS="$(go env GOOS)"
 ARCH="$(uname -m)"
 curl -sSfL "https://github.com/ko-build/ko/releases/download/v${KO_VERSION}/ko_${KO_VERSION}_${OS^}_${ARCH}.tar.gz" | tar -xzv -C /bin ko
 
-tag="$(git describe)"
-version="${tag#v}"
-
-# Is this a release version (version-tagged)?
-if [[ "${version}" == "${BUILDKITE_TAG#v}" ]] ; then
+release_version="$(buildkite-agent meta-data get release-version --default '')"
+if [[ -n "$release_version" ]]; then
+    version="$release_version"
+    tag="v${version}"
     # Publish to both PECR and GHCR
     controller_repo_pecr="public.ecr.aws/buildkite/agent-stack-k8s/controller"
     controller_repo_ghcr="ghcr.io/buildkite/agent-stack-k8s/controller"
 else
+    tag="$(git describe --tags)"
+    version="${tag#v}"
     # Publish dev images to PECR dev repo only
     controller_repo_pecr="public.ecr.aws/buildkite/agent-stack-k8s-dev/controller"
 fi
