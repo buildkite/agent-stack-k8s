@@ -47,11 +47,7 @@ crane auth login ghcr.io \
   --username "${REGISTRY_USERNAME}" \
   --password "${REGISTRY_PASSWORD}"
 
-echo --- :docker: Tagging latest images
-crane tag "public.ecr.aws/buildkite/helm/agent-stack-k8s:${version}" latest
-crane tag "public.ecr.aws/buildkite/agent-stack-k8s/controller:${version}" latest
-crane tag "ghcr.io/buildkite/helm/agent-stack-k8s:${version}" latest
-crane tag "ghcr.io/buildkite/agent-stack-k8s/controller:${version}" latest
+# Maintenance releases must leave the current release's latest aliases unchanged.
 
 echo --- :golang: Creating draft release with goreleaser
 chart_digest="$(crane digest "public.ecr.aws/buildkite/helm/agent-stack-k8s:$version")"

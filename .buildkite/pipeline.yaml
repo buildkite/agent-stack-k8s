@@ -25,7 +25,7 @@ steps:
   - label: ":go::broom: tidy"
     key: tidy
     env: *go-cache-env
-    image: public.ecr.aws/docker/library/golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2
+    image: public.ecr.aws/docker/library/golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod
@@ -48,7 +48,7 @@ steps:
   - label: ":golang::robot_face: check code generation"
     key: check-code-generation
     env: *go-cache-env
-    image: public.ecr.aws/docker/library/golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2
+    image: public.ecr.aws/docker/library/golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build
@@ -74,7 +74,7 @@ steps:
     secrets:
       INTEGRATION_TEST_BUILDKITE_TOKEN: integration_test_buildkite_api_token
       BUILDKITE_ANALYTICS_TOKEN: test_engine_suite_token
-    image: public.ecr.aws/docker/library/golang:1.26.5@sha256:2005724102f45917a63e9d092fc0e4ea56ea575048ce147caad5f5f61502c365
+    image: public.ecr.aws/docker/library/golang:1.26.10@sha256:5c3f3f28a273c9b61698b2d34f18375929790ab1f1d3835d032d21e2b31eae0c
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build
@@ -97,7 +97,7 @@ steps:
     secrets:
       REGISTRY_PASSWORD: ghcr_password
       REGISTRY_USERNAME: ghcr_username
-    image: public.ecr.aws/docker/library/golang:1.26.5@sha256:2005724102f45917a63e9d092fc0e4ea56ea575048ce147caad5f5f61502c365
+    image: public.ecr.aws/docker/library/golang:1.26.10@sha256:5c3f3f28a273c9b61698b2d34f18375929790ab1f1d3835d032d21e2b31eae0c
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build
@@ -132,36 +132,18 @@ steps:
       - controller
       - tests
 
-  - if: build.branch == pipeline.default_branch
-    label: ":shipit: deploy to our own k8s cluster"
-    key: deploy
-    depends_on:
-      - push-main-or-tag
-    secrets:
-      REGISTRY_PASSWORD: ghcr_password
-      REGISTRY_USERNAME: ghcr_username
-      DEFAULT_CLUSTER_TOKEN: default_cluster_token
-    image: alpine:3.23.0@sha256:51183f2cfa6320055da30872f211093f9ff1d3cf06f39a0bdb212314c5dc7375
-    command: .buildkite/steps/deploy.sh
-    plugins:
-      - kubernetes:
-          checkout:
-            fetchFlags: -v --tags
-          podSpec:
-            serviceAccountName: deploy
-
+  # Maintenance releases don't deploy to the shared CI cluster.
   - if: build.tag =~ /^.+\$/
     label: ":rocket: release"
     key: release
     env: *go-cache-env
     depends_on:
-      - deploy
       - push-main-or-tag
     secrets:
       REGISTRY_PASSWORD: ghcr_password
       REGISTRY_USERNAME: ghcr_username
       GITHUB_TOKEN: github_release_token
-    image: public.ecr.aws/docker/library/golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 # Note goreleaser shells out to go!
+    image: public.ecr.aws/docker/library/golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca # Note goreleaser shells out to go!
     command:
       - . .buildkite/steps/assume-role.sh
       - buildkite-agent cache restore --name go_mod --name go_build

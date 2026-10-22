@@ -194,7 +194,7 @@ kubectl get -o jsonpath='{.items[*].metadata.name}' jobs | xargs -L1 kubectl del
 ## CI ❤️  integration test
 
 At the time of writing, the CI pipeline run in an EKS cluster, `agent-stack-k8s-ci` in the `buildkite-dist` AWS account.
-CI deploys the controller onto `buildkite` namespace in that cluster.
+The maintenance branch runs integration tests in `buildkite-k8s-integration-test`, using the agent image selected from `go.mod`. It doesn't deploy the controller into the shared `buildkite` namespace.
 
 ## Local deployment with Helm
 
@@ -225,20 +225,23 @@ The `config` key contains configuration passed directly to the binary, and so su
 
 ## Release procedure
 
-1. Make sure you're on the main branch!
-1. Create a tag
+This maintenance branch releases patches to the 0.49 line using the tag-driven pipeline. It doesn't deploy to the shared CI cluster or update registry `latest` aliases.
+
+1. Merge the reviewed backport PR into `v0.49.x`, and check out that exact commit. Don't release this line from `main`.
+1. After the branch's CI checks pass, create a signed tag for the next patch version:
 
     ```bash
-    git tag -sm v0.x.x v0.x.x
+    git tag -sm v0.49.1 v0.49.1
     ```
 
-1. Push your tag
+1. Push only the release tag:
 
     ```bash
-    git push --tags
+    git push origin v0.49.1
     ```
 
-1. A build will start at https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack/builds?branch=v0.x.x. It will create a draft release with a changelog. Edit the changelog to group the PRs in to sections like
+1. Watch the [Buildkite pipeline](https://buildkite.com/buildkite-kubernetes-stack/kubernetes-agent-stack). The tag build runs checks and integration tests, publishes versioned controller images and Helm charts, and creates a GitHub draft release with archives, checksums and image digests. CI supplies the chart version; don't change `Chart.yaml` or add `VERSION` for this tag-driven flow.
+1. Review the draft's notes and assets. Describe the agent upgrade and security implications, including that OS, container and custom trust stores need separate remediation. Group changes under the following headings, omitting empty sections:
 
     ```markdown
     # Added
@@ -248,4 +251,10 @@ The `config` key contains configuration passed directly to the binary, and so su
     # Internal
     ```
 
-1. Publish the release 🎉
+1. Publish the draft without marking the maintenance line as the latest release:
+
+    ```bash
+    gh release edit v0.49.1 --repo buildkite/agent-stack-k8s --draft=false --latest=false
+    ```
+
+1. Verify the release targets the reviewed commit, the chart pins the expected agent digest, and the registry `latest` aliases and GitHub's latest release still point to the current release line.
