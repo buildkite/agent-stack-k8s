@@ -232,6 +232,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		logger.Error("failed to register limiter informer", "error", err)
 		return
 	}
+	limiter.Start(ctx)
 
 	// Reserver marks the job as reserved in backend if possible.
 	// Then pases jobs to the limiter.

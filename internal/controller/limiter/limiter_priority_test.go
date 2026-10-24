@@ -33,6 +33,7 @@ func TestHandleMany_SortsBatchByPriority(t *testing.T) {
 	const n = 10
 	rec := &drainOrderHandler{out: make(chan *api.AgentScheduledJob, n)}
 	lim := limiter.New(ctx, slog.Default(), rec, n, 1, -1)
+	lim.Start(ctx)
 
 	jobs := []*api.AgentScheduledJob{
 		{ID: uuid.NewString(), Priority: 0},
@@ -74,6 +75,7 @@ func TestHandleMany_SortsAcrossBatches(t *testing.T) {
 	const lowN = 200
 	rec := &drainOrderHandler{out: make(chan *api.AgentScheduledJob, lowN+1)}
 	lim := limiter.New(ctx, slog.Default(), rec, lowN+1, 1, lowN+10)
+	lim.Start(ctx)
 
 	batchA := make([]*api.AgentScheduledJob, 0, lowN)
 	for range lowN {
@@ -110,6 +112,7 @@ func TestHandleMany_WorkQueueLimitDropsByPriority(t *testing.T) {
 
 	rec := &drainOrderHandler{out: make(chan *api.AgentScheduledJob, maxFlt)}
 	lim := limiter.New(ctx, slog.Default(), rec, maxFlt, 1, queueCap)
+	lim.Start(ctx)
 	lim.Pause(true)
 
 	highIDs := make(map[string]bool, highN)
@@ -159,6 +162,7 @@ func TestHandleMany_ConcurrentProducersRaceFree(t *testing.T) {
 
 	rec := &drainOrderHandler{out: make(chan *api.AgentScheduledJob, totalJobs)}
 	lim := limiter.New(ctx, slog.Default(), rec, totalJobs, 8, totalJobs)
+	lim.Start(ctx)
 
 	var wg sync.WaitGroup
 	for pid := range producers {
