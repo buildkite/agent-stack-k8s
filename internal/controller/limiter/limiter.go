@@ -56,6 +56,20 @@ type Limiter struct {
 
 	// A wait group for workers (mainly for the benefit of unit tests).
 	workerWG sync.WaitGroup
+
+	// debt counts running jobs that hold no token, because none was free when
+	// the limiter learned of them. Each job that finishes pays off one unit of
+	// debt instead of returning a token, so the bucket never holds more tokens
+	// than there are free slots. Only the informer's handlers touch it, and
+	// client-go calls those one at a time.
+	debt int
+
+	// handed holds the UUIDs of jobs a worker passed to the handler, whose
+	// tokens the workers already took. Any other job that appears after the
+	// initial sync was created by another controller, such as the old pod
+	// during a rolling update, and must be charged when it appears.
+	handedMu sync.Mutex
+	handed   map[string]struct{}
 }
 
 // New creates a Limiter. maxInFlight must be non-negative, but 0 is interpreted
@@ -81,6 +95,7 @@ func New(ctx context.Context, logger *slog.Logger, scheduler model.JobHandler, m
 		logger:                 logger,
 		tokenBucket:            make(chan struct{}, maxInFlight),
 		newWork:                make(chan struct{}, concurrency),
+		handed:                 make(map[string]struct{}),
 	}
 	if maxInFlight == 0 {
 		// Reads on a closed channel always succeed immediately.
@@ -103,12 +118,19 @@ func New(ctx context.Context, logger *slog.Logger, scheduler model.JobHandler, m
 			return len(l.queue)
 		}
 	}()
+	return l
+}
 
-	l.workerWG.Add(concurrency)
-	for range concurrency {
+// Start launches the workers. Call it after RegisterInformer has synced, so
+// that jobs left running by a previous controller take their tokens before any
+// worker can. Workers started earlier would hold every token while they wait
+// for work, leaving those jobs nothing to take, yet each would still return a
+// token when it finished: max-in-flight would grow by one per such job.
+func (l *Limiter) Start(ctx context.Context) {
+	l.workerWG.Add(l.JobCreationConcurrency)
+	for range l.JobCreationConcurrency {
 		go l.worker(ctx)
 	}
-	return l
 }
 
 // Pause pauses (or un-pauses) the queue.
@@ -283,8 +305,11 @@ func (l *Limiter) worker(ctx context.Context) {
 			"handler", reflect.TypeOf(l.handler),
 		)
 		jobHandlerCallsCounter.Inc()
+		// Before Handle, because the informer can report the new job first.
+		l.setHanded(job.ID, true)
 		if err := l.handler.Handle(ctx, job); err != nil {
 			// Oh well. Return the token.
+			l.setHanded(job.ID, false)
 			l.tryReturnToken("Handle")
 
 			switch {
@@ -318,7 +343,16 @@ func (l *Limiter) OnAdd(obj any, inInitialList bool) {
 		return
 	}
 	if !inInitialList {
-		// After sync is finished, the limiter handler takes tokens directly.
+		// After sync is finished, the limiter's workers take tokens for the
+		// jobs they hand on. A job no worker handed on holds no token yet.
+		if l.setHanded(job.Labels[config.UUIDLabel], false) || model.JobFinished(job) {
+			return
+		}
+		l.chargeJob("OnAdd")
+		l.logger.Debug("not-finished job created by another controller discovered",
+			"job-uuid", job.Labels[config.UUIDLabel],
+			"tokens-available", len(l.tokenBucket),
+		)
 		return
 	}
 
@@ -328,7 +362,7 @@ func (l *Limiter) OnAdd(obj any, inInitialList bool) {
 	// Otherwise, try to take one, but don't block (in case the stack was
 	// restarted with a different limit).
 	if !model.JobFinished(job) {
-		l.tryTakeToken("OnAdd")
+		l.chargeJob("OnAdd")
 		l.logger.Debug("existing not-finished job discovered",
 			"job-uuid", job.Labels[config.UUIDLabel],
 			"tokens-available", len(l.tokenBucket),
@@ -347,7 +381,7 @@ func (l *Limiter) OnUpdate(prev, curr any) {
 	// Only take or return a token if the job state has *changed*.
 	// The only valid change is from not-finished to finished.
 	if !model.JobFinished(prevState) && model.JobFinished(currState) {
-		l.tryReturnToken("OnUpdate")
+		l.releaseJobToken("OnUpdate")
 		l.logger.Debug("job state changed from not-finished to finished",
 			"job-uuid", currState.Labels[config.UUIDLabel],
 			"tokens-available", len(l.tokenBucket),
@@ -358,6 +392,10 @@ func (l *Limiter) OnUpdate(prev, curr any) {
 // OnDelete is called by k8s to inform us a resource is deleted.
 func (l *Limiter) OnDelete(obj any) {
 	onDeleteEventCounter.Inc()
+	// A deletion missed during a watch gap arrives wrapped in a tombstone.
+	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		obj = tombstone.Obj
+	}
 	prevState, _ := obj.(*batchv1.Job)
 	if prevState == nil {
 		return
@@ -367,7 +405,7 @@ func (l *Limiter) OnDelete(obj any) {
 	// If that state was finished, we've already returned a token.
 	// If that state was not-finished, we need to return a token now.
 	if !model.JobFinished(prevState) {
-		l.tryReturnToken("OnDelete")
+		l.releaseJobToken("OnDelete")
 		l.logger.Debug("not-finished job was deleted",
 			"job-uuid", prevState.Labels[config.UUIDLabel],
 			"tokens-available", len(l.tokenBucket),
@@ -375,9 +413,9 @@ func (l *Limiter) OnDelete(obj any) {
 	}
 }
 
-// tryTakeToken takes a token from the bucket, if one is available. It does not
-// block.
-func (l *Limiter) tryTakeToken(source string) {
+// tryTakeToken takes a token from the bucket, if one is available, and reports
+// whether it did. It does not block.
+func (l *Limiter) tryTakeToken(source string) bool {
 	select {
 	case <-l.tokenBucket:
 		// Success.
@@ -385,13 +423,52 @@ func (l *Limiter) tryTakeToken(source string) {
 			"source", source,
 			"remaining-tokens", len(l.tokenBucket),
 		)
+		return true
 	default:
 		l.logger.Debug("Failed to take token - bucket empty",
 			"source", source,
 			"max-in-flight", l.MaxInFlight,
 		)
 		tokenUnderflowCounter.WithLabelValues(source).Inc()
+		return false
 	}
+}
+
+// chargeJob counts a running job that no worker took a token for. It takes a
+// token if one is free, and otherwise records a unit of debt.
+func (l *Limiter) chargeJob(source string) {
+	if !l.tryTakeToken(source) {
+		l.debt++
+	}
+}
+
+// releaseJobToken is called when a job stops occupying a slot. It pays off one
+// unit of debt if there is any, and otherwise returns a token to the bucket.
+func (l *Limiter) releaseJobToken(source string) {
+	if l.debt > 0 {
+		l.debt--
+		l.logger.Debug("Job finished while over the limit - token not returned",
+			"source", source,
+			"remaining-debt", l.debt,
+		)
+		return
+	}
+	l.tryReturnToken(source)
+}
+
+// setHanded records (handed=true) or forgets (handed=false) that a worker
+// passed the job with this UUID to the handler. It reports whether the UUID
+// was recorded before the call.
+func (l *Limiter) setHanded(uuid string, handed bool) bool {
+	l.handedMu.Lock()
+	defer l.handedMu.Unlock()
+	_, was := l.handed[uuid]
+	if handed {
+		l.handed[uuid] = struct{}{}
+	} else {
+		delete(l.handed, uuid)
+	}
+	return was
 }
 
 // tryReturnToken returns a token to the bucket, if not full. It does not block.

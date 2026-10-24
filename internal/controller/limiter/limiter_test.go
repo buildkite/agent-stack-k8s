@@ -20,6 +20,7 @@ func TestLimiter(t *testing.T) {
 
 	fakeSched := model.NewFakeScheduler(1, nil)
 	limiter := limiter.New(ctx, slog.Default(), fakeSched, 1, 1, -1)
+	limiter.Start(ctx)
 	fakeSched.EventHandler = limiter
 	fakeSched.Add(50)
 
@@ -55,6 +56,7 @@ func TestLimiter_SchedulerErrors(t *testing.T) {
 
 	fakeSched := model.NewFakeScheduler(0, errors.New("invalid"))
 	limiter := limiter.New(ctx, slog.Default(), fakeSched, 1, 1, -1)
+	limiter.Start(ctx)
 	fakeSched.EventHandler = limiter
 	fakeSched.Add(50)
 
