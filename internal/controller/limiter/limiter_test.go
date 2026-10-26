@@ -51,33 +51,37 @@ func TestLimiter(t *testing.T) {
 func TestLimiter_SchedulerErrors(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(t.Context())
+	for _, schedulingErr := range []error{errors.New("invalid"), model.ErrDuplicateJob, model.ErrStaleJob} {
+		t.Run(schedulingErr.Error(), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
 
-	fakeSched := model.NewFakeScheduler(0, errors.New("invalid"))
-	limiter := limiter.New(ctx, slog.Default(), fakeSched, 1, 1, -1)
-	fakeSched.EventHandler = limiter
-	fakeSched.Add(50)
+			fakeSched := model.NewFakeScheduler(0, schedulingErr)
+			limiter := limiter.New(ctx, slog.Default(), fakeSched, 1, 1, -1)
+			fakeSched.EventHandler = limiter
+			fakeSched.Add(50)
 
-	var jobs []*api.AgentScheduledJob
-	for range 50 {
-		jobs = append(jobs, &api.AgentScheduledJob{ID: uuid.New().String()})
-	}
-	if err := limiter.HandleMany(ctx, jobs); err != nil {
-		t.Errorf("limiter.HandleMany(ctx, jobs) = %v", err)
-	}
-	fakeSched.Wait()
+			var jobs []*api.AgentScheduledJob
+			for range 50 {
+				jobs = append(jobs, &api.AgentScheduledJob{ID: uuid.New().String()})
+			}
+			if err := limiter.HandleMany(ctx, jobs); err != nil {
+				t.Errorf("limiter.HandleMany(ctx, jobs) = %v", err)
+			}
+			fakeSched.Wait()
 
-	if got, want := len(fakeSched.Running), 0; got != want {
-		t.Errorf("len(fakeSched.Running) = %d, want %d", got, want)
-	}
-	if got, want := len(fakeSched.Finished), 0; got != want {
-		t.Errorf("len(fakeSched.Finished) = %d, want %d", got, want)
-	}
-	if got, want := fakeSched.Errors, 50; got != want {
-		t.Errorf("fakeSched.Errors = %d, want %d", got, want)
-	}
+			if got, want := len(fakeSched.Running), 0; got != want {
+				t.Errorf("len(fakeSched.Running) = %d, want %d", got, want)
+			}
+			if got, want := len(fakeSched.Finished), 0; got != want {
+				t.Errorf("len(fakeSched.Finished) = %d, want %d", got, want)
+			}
+			if got, want := fakeSched.Errors, 50; got != want {
+				t.Errorf("fakeSched.Errors = %d, want %d", got, want)
+			}
 
-	// Wait for the limiter workers to exit (to avoid logging after the test)
-	cancel()
-	limiter.Wait()
+			// Wait for the limiter workers to exit (to avoid logging after the test)
+			cancel()
+			limiter.Wait()
+		})
+	}
 }

@@ -26,7 +26,7 @@ import (
 // the next handler in the chain.
 type Limiter struct {
 	// MaxInFlight sets the upper limit on number of jobs running concurrently
-	// in the cluster. Must be at least 1.
+	// in the cluster. Zero means unlimited.
 	MaxInFlight int
 
 	// Controls the number of workers that pass along jobs.
@@ -41,21 +41,28 @@ type Limiter struct {
 	// Logs go here
 	logger *slog.Logger
 
-	// tokenBucket implements the max-in-flight limit using a channel.
-	// When a job starts, it takes a token from the bucket.
-	// When a job ends, it puts a token back in the bucket.
-	tokenBucket chan struct{}
-
-	// A channel to notify workers that there is new work.
+	// A channel to notify workers when work or capacity becomes available.
 	newWork chan struct{}
 
-	// A priority queue of pending jobs, and pause flag.
-	queueMu sync.Mutex
-	queue   []*api.AgentScheduledJob
-	paused  bool
+	// Queue and job accounting share a lock: checking capacity, dequeuing a
+	// job, and occupying its slot must be atomic with informer notifications.
+	mu       sync.Mutex
+	queue    []*api.AgentScheduledJob
+	paused   bool
+	jobs     map[string]*jobState
+	inFlight int
 
 	// A wait group for workers (mainly for the benefit of unit tests).
 	workerWG sync.WaitGroup
+}
+
+// A scheduling attempt occupies a slot before Kubernetes reports the job.
+// Once observed, the job keeps its slot even if the attempt returns an error.
+// Finished jobs occupy no slot, but remain known until deletion so that a
+// repeated poll cannot schedule them again while they still exist.
+type jobState struct {
+	observed bool
+	finished bool
 }
 
 // New creates a Limiter. maxInFlight must be non-negative, but 0 is interpreted
@@ -79,27 +86,22 @@ func New(ctx context.Context, logger *slog.Logger, scheduler model.JobHandler, m
 		JobCreationConcurrency: concurrency,
 		WorkQueueLimit:         workQueueLimit,
 		logger:                 logger,
-		tokenBucket:            make(chan struct{}, maxInFlight),
 		newWork:                make(chan struct{}, concurrency),
-	}
-	if maxInFlight == 0 {
-		// Reads on a closed channel always succeed immediately.
-		close(l.tokenBucket)
-	} else {
-		for range maxInFlight {
-			// Fill the bucket with tokens.
-			l.tokenBucket <- struct{}{}
-		}
+		jobs:                   make(map[string]*jobState),
 	}
 	func() {
 		metricCallbackMu.Lock()
 		defer metricCallbackMu.Unlock()
 		// Rather than calling gauge.Set, get the number of tokens during scrape.
 		// Provide callbacks for tokens_available and work_queue_length gauges.
-		tokensAvailableFunc = func() int { return len(l.tokenBucket) }
+		tokensAvailableFunc = func() int {
+			l.mu.Lock()
+			defer l.mu.Unlock()
+			return max(0, l.MaxInFlight-l.inFlight)
+		}
 		workQueueLengthFunc = func() int {
-			l.queueMu.Lock()
-			defer l.queueMu.Unlock()
+			l.mu.Lock()
+			defer l.mu.Unlock()
 			return len(l.queue)
 		}
 	}()
@@ -113,15 +115,19 @@ func New(ctx context.Context, logger *slog.Logger, scheduler model.JobHandler, m
 
 // Pause pauses (or un-pauses) the queue.
 func (l *Limiter) Pause(pause bool) {
-	l.queueMu.Lock()
-	defer l.queueMu.Unlock()
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
 	l.paused = pause
-	if pause {
+	l.notifyWorkers()
+}
+
+// notifyWorkers wakes workers to recheck the queue and capacity. l.mu must be held.
+func (l *Limiter) notifyWorkers() {
+	if l.paused {
 		return
 	}
 
-	// Not paused. Let the workers know that work is available.
 	for range min(l.JobCreationConcurrency, len(l.queue)) {
 		select {
 		case l.newWork <- struct{}{}:
@@ -131,7 +137,8 @@ func (l *Limiter) Pause(pause bool) {
 }
 
 // RegisterInformer registers the limiter to listen for Kubernetes job events,
-// and waits for cache sync.
+// and waits for cache sync. Call it before HandleMany so inherited jobs are
+// counted before dispatch begins.
 func (l *Limiter) RegisterInformer(ctx context.Context, factory informers.SharedInformerFactory) error {
 	informer := factory.Batch().V1().Jobs()
 	jobInformer := informer.Informer()
@@ -162,8 +169,8 @@ func (l *Limiter) RegisterInformer(ctx context.Context, factory informers.Shared
 
 // HandleMany enqueues jobs. Workers dequeue jobs and schedule them.
 func (l *Limiter) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob) error {
-	l.queueMu.Lock()
-	defer l.queueMu.Unlock()
+	l.mu.Lock()
+	defer l.mu.Unlock()
 
 	l.queue = append(l.queue, jobs...)
 	if len(l.queue) == 0 {
@@ -187,95 +194,59 @@ func (l *Limiter) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob)
 	// remain.
 	l.queue = l.queue[:min(len(l.queue), l.WorkQueueLimit)]
 
-	if l.paused {
-		return nil
-	}
-
-	// Tell the workers that work exists.
-	for range min(l.JobCreationConcurrency, len(l.queue)) {
-		select {
-		case l.newWork <- struct{}{}:
-		default:
-		}
-	}
+	l.notifyWorkers()
 	return nil
 }
 
-func (l *Limiter) tryDequeueWork() (job *api.AgentScheduledJob) {
-	l.queueMu.Lock()
-	defer l.queueMu.Unlock()
-	if len(l.queue) == 0 || l.paused {
-		return nil
+func (l *Limiter) tryDequeueWork() (*api.AgentScheduledJob, *jobState) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.paused || (l.MaxInFlight > 0 && l.inFlight >= l.MaxInFlight) {
+		return nil, nil
 	}
-	job, l.queue = l.queue[0], l.queue[1:]
-	if len(l.queue) > 0 {
-		// More work exists.
-		select {
-		case l.newWork <- struct{}{}:
-		default:
+	for len(l.queue) > 0 {
+		job := l.queue[0]
+		l.queue = l.queue[1:]
+		if _, known := l.jobs[job.ID]; known {
+			continue
 		}
+		state := &jobState{}
+		l.jobs[job.ID] = state
+		l.inFlight++
+		l.notifyWorkers()
+		return job, state
 	}
-	return job
+	return nil, nil
 }
 
 func (l *Limiter) worker(ctx context.Context) {
 	defer l.workerWG.Done()
 
 	for {
-		// Track time to acquire a token.
 		start := time.Now()
-
-		l.logger.Debug("Waiting for token",
-			"max-in-flight", l.MaxInFlight,
-			"available-tokens", len(l.tokenBucket),
-			"new-work", len(l.newWork),
-		)
-
-		// Block until there's a token in the bucket.
-		waitingForTokenGauge.Inc()
-		select {
-		case <-ctx.Done():
-			return
-
-		case <-l.tokenBucket:
-			// Continue below.
+		l.mu.Lock()
+		atCapacity := l.MaxInFlight > 0 && l.inFlight >= l.MaxInFlight
+		l.mu.Unlock()
+		gauge, histogram := waitingForWorkGauge, workWaitDurationHistogram
+		if atCapacity {
+			gauge, histogram = waitingForTokenGauge, tokenWaitDurationHistogram
 		}
-		waitingForTokenGauge.Dec()
-		tokenWaitDurationHistogram.Observe(time.Since(start).Seconds())
-		l.logger.Debug("token acquired",
-			"available-tokens", len(l.tokenBucket),
-		)
-
-		// We got a token from the bucket above! Is there work we can do?
-		// Track time to acquire work.
-		start = time.Now()
-		l.logger.Debug("Waiting for work",
-			"max-in-flight", l.MaxInFlight,
-			"available-tokens", len(l.tokenBucket),
-			"new-work", len(l.newWork),
-		)
-		waitingForWorkGauge.Inc()
+		gauge.Inc()
 		select {
 		case <-ctx.Done():
-			l.tryReturnToken("Handle")
+			gauge.Dec()
 			return
 
 		case <-l.newWork:
-			// Continue below.
 		}
-		waitingForWorkGauge.Dec()
-		workWaitDurationHistogram.Observe(time.Since(start).Seconds())
+		gauge.Dec()
+		histogram.Observe(time.Since(start).Seconds())
+		if ctx.Err() != nil {
+			return
+		}
 
-		l.logger.Debug("Dequeueing some work",
-			"max-in-flight", l.MaxInFlight,
-			"available-tokens", len(l.tokenBucket),
-			"new-work", len(l.newWork),
-		)
-		job := l.tryDequeueWork()
+		job, state := l.tryDequeueWork()
 		if job == nil {
-			// Got a token and even got notified of some work, but got no job
-			// (maybe another worker got it, maybe the queue is paused).
-			l.tryReturnToken("Handle")
 			continue
 		}
 
@@ -284,8 +255,17 @@ func (l *Limiter) worker(ctx context.Context) {
 		)
 		jobHandlerCallsCounter.Inc()
 		if err := l.handler.Handle(ctx, job); err != nil {
-			// Oh well. Return the token.
-			l.tryReturnToken("Handle")
+			l.mu.Lock()
+			// An observed job still occupies its slot even when scheduling
+			// failed. An unobserved attempt can be released: a duplicate may
+			// belong to a different stack outside this informer's scope.
+			// Don't release a slot already released by a notification.
+			if l.jobs[job.ID] == state && !state.observed {
+				delete(l.jobs, job.ID)
+				l.inFlight--
+				l.notifyWorkers()
+			}
+			l.mu.Unlock()
 
 			switch {
 			case errors.Is(err, model.ErrDuplicateJob):
@@ -298,8 +278,6 @@ func (l *Limiter) worker(ctx context.Context) {
 
 			l.logger.Debug("next handler failed",
 				"job-uuid", job.ID,
-				"available-tokens", len(l.tokenBucket),
-				"new-work", len(l.newWork),
 				"error", err,
 			)
 			continue
@@ -313,106 +291,62 @@ func (l *Limiter) Wait() { l.workerWG.Wait() }
 // OnAdd is called by k8s to inform us a resource is added.
 func (l *Limiter) OnAdd(obj any, inInitialList bool) {
 	onAddEventCounter.Inc()
-	job, _ := obj.(*batchv1.Job)
-	if job == nil {
-		return
-	}
-	if !inInitialList {
-		// After sync is finished, the limiter handler takes tokens directly.
-		return
-	}
-
-	// Before sync is finished: we're learning about existing jobs, so we should
-	// (try to) take tokens for unfinished jobs started by a previous controller.
-	// If it's added as already finished, no need to take a token for it.
-	// Otherwise, try to take one, but don't block (in case the stack was
-	// restarted with a different limit).
-	if !model.JobFinished(job) {
-		l.tryTakeToken("OnAdd")
-		l.logger.Debug("existing not-finished job discovered",
-			"job-uuid", job.Labels[config.UUIDLabel],
-			"tokens-available", len(l.tokenBucket),
-		)
+	if job, ok := obj.(*batchv1.Job); ok {
+		l.observeJob(job, false)
 	}
 }
 
 // OnUpdate is called by k8s to inform us a resource is updated.
 func (l *Limiter) OnUpdate(prev, curr any) {
 	onUpdateEventCounter.Inc()
-	prevState, _ := prev.(*batchv1.Job)
-	currState, _ := curr.(*batchv1.Job)
-	if prevState == nil || currState == nil {
-		return
-	}
-	// Only take or return a token if the job state has *changed*.
-	// The only valid change is from not-finished to finished.
-	if !model.JobFinished(prevState) && model.JobFinished(currState) {
-		l.tryReturnToken("OnUpdate")
-		l.logger.Debug("job state changed from not-finished to finished",
-			"job-uuid", currState.Labels[config.UUIDLabel],
-			"tokens-available", len(l.tokenBucket),
-		)
+	if job, ok := curr.(*batchv1.Job); ok {
+		l.observeJob(job, false)
 	}
 }
 
 // OnDelete is called by k8s to inform us a resource is deleted.
 func (l *Limiter) OnDelete(obj any) {
 	onDeleteEventCounter.Inc()
-	prevState, _ := obj.(*batchv1.Job)
-	if prevState == nil {
-		return
+	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		obj = tombstone.Obj
 	}
-
-	// OnDelete gives us the last-known state prior to deletion.
-	// If that state was finished, we've already returned a token.
-	// If that state was not-finished, we need to return a token now.
-	if !model.JobFinished(prevState) {
-		l.tryReturnToken("OnDelete")
-		l.logger.Debug("not-finished job was deleted",
-			"job-uuid", prevState.Labels[config.UUIDLabel],
-			"tokens-available", len(l.tokenBucket),
-		)
+	if job, ok := obj.(*batchv1.Job); ok {
+		l.observeJob(job, true)
 	}
 }
 
-// tryTakeToken takes a token from the bucket, if one is available. It does not
-// block.
-func (l *Limiter) tryTakeToken(source string) {
-	select {
-	case <-l.tokenBucket:
-		// Success.
-		l.logger.Debug("Token taken successfully",
-			"source", source,
-			"remaining-tokens", len(l.tokenBucket),
-		)
-	default:
-		l.logger.Debug("Failed to take token - bucket empty",
-			"source", source,
-			"max-in-flight", l.MaxInFlight,
-		)
-		tokenUnderflowCounter.WithLabelValues(source).Inc()
-	}
-}
-
-// tryReturnToken returns a token to the bucket, if not full. It does not block.
-func (l *Limiter) tryReturnToken(source string) {
-	if l.MaxInFlight == 0 {
+func (l *Limiter) observeJob(job *batchv1.Job, deleted bool) {
+	id := job.Labels[config.UUIDLabel]
+	if id == "" {
 		return
 	}
-	select {
-	case l.tokenBucket <- struct{}{}:
-		// Success.
-		l.logger.Debug("Token returned successfully",
-			"source", source,
-			"available-tokens", len(l.tokenBucket),
-		)
-	default:
-		l.logger.Warn("Failed to return token - bucket full",
-			"source", source,
-			"max-in-flight", l.MaxInFlight,
-		)
-		tokenOverflowCounter.WithLabelValues(source).Inc()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	state := l.jobs[id]
+	if state == nil {
+		if deleted {
+			return
+		}
+		state = &jobState{finished: model.JobFinished(job)}
+		l.jobs[id] = state
+		if !state.finished {
+			l.inFlight++
+		}
 	}
+	state.observed = true
+	if !state.finished && (deleted || model.JobFinished(job)) {
+		state.finished = true
+		l.inFlight--
+		l.notifyWorkers()
+	}
+	if deleted {
+		delete(l.jobs, id)
+	}
+	l.logger.Debug("job accounting updated",
+		"job-uuid", id,
+		"in-flight", l.inFlight,
+		"deleted", deleted,
+	)
 }
 
 func inPlaceDedup(jobs []*api.AgentScheduledJob) []*api.AgentScheduledJob {

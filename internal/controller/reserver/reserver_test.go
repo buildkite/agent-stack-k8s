@@ -16,11 +16,13 @@ import (
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/limiter"
 	"github.com/buildkite/stacksapi"
 
 	"github.com/google/uuid"
 	batchv1 "k8s.io/api/batch/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type handlerFunc func(context.Context, *api.AgentScheduledJob) error
@@ -212,9 +214,12 @@ func TestReservationsRespectMaxInFlight(t *testing.T) {
 					t.Fatal(err)
 				}
 				// Completion should free one slot and allow one more reservation.
-				l.OnUpdate(&batchv1.Job{}, &batchv1.Job{Status: batchv1.JobStatus{
-					Conditions: []batchv1.JobCondition{{Type: batchv1.JobComplete}},
-				}})
+				l.OnUpdate(&batchv1.Job{}, &batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{config.UUIDLabel: first.ID}},
+					Status: batchv1.JobStatus{
+						Conditions: []batchv1.JobCondition{{Type: batchv1.JobComplete}},
+					},
+				})
 				select {
 				case next := <-scheduled:
 					if next.ID != fresh.ID {
