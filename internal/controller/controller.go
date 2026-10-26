@@ -150,7 +150,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 
 	// **************************************************************************
 	// ***                        JOB FLOW                                    ***
-	// ***  Monitor -> Reserver -> Limiter -> JAT issuer -> Deduper -> Scheduler  ***
+	// ***  Monitor -> Limiter -> Reserver -> JAT issuer -> Deduper -> Scheduler  ***
 	// **************************************************************************
 	//
 	// Monitor polls Buildkite for jobs. It passes them to Limiter.
@@ -218,11 +218,13 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 
 	// Limiter prevents scheduling more than cfg.MaxInFlight jobs at once
 	// (if configured) and is responsible for the priority queue of jobs.
-	// Once it figures out a job can be scheduled, it passes to the deduper.
+	// Reserve only after acquiring a slot, so queued jobs remain available to
+	// other stacks rather than waiting here with an exclusive reservation.
 	var postLimiter model.JobHandler = deduper
 	if cfg.EnableJobAcquisitionTokens {
 		postLimiter = jatissuer.New(logger.With("component", "jat-issuer"), agentClient, deduper, cfg.ReservationExpirySeconds)
 	}
+	postLimiter = reserver.New(logger.With("component", "reserver"), agentClient, postLimiter, cfg.ReservationExpirySeconds)
 	limiter := limiter.New(ctx, logger.With("component", "limiter"), postLimiter,
 		cfg.MaxInFlight,
 		cfg.JobCreationConcurrency,
@@ -232,13 +234,6 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		logger.Error("failed to register limiter informer", "error", err)
 		return
 	}
-
-	// Reserver marks the job as reserved in backend if possible.
-	// Then pases jobs to the limiter.
-	//
-	// This happens right after monitor so we can maximize our collected signals.
-	// But it does bring a trade-off of more likely reservation expiration.
-	reserver := reserver.New(logger.With("component", "reserver"), agentClient, limiter, cfg.ReservationExpirySeconds)
 
 	if cfg.EnableCompletionWatcher {
 		// PodCompletionWatcher watches k8s for pods where the agent has terminated,
@@ -324,7 +319,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 			logger.Info("controller exiting")
 		}
 
-	case err := <-m.Start(ctx, reserver):
+	case err := <-m.Start(ctx, limiter):
 		logger.Error("monitor failed", "error", err)
 	}
 }
