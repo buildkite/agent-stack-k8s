@@ -1,6 +1,7 @@
 package reserver
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -60,7 +62,9 @@ func TestReserver(t *testing.T) {
 			}
 			job := &api.AgentScheduledJob{ID: uuid.NewString()}
 			var handled *api.AgentScheduledJob
-			r := New(slog.Default(), client, handlerFunc(func(_ context.Context, job *api.AgentScheduledJob) error {
+			var logs bytes.Buffer
+			logger := slog.New(slog.NewJSONHandler(&logs, nil))
+			r := New(logger, client, handlerFunc(func(_ context.Context, job *api.AgentScheduledJob) error {
 				handled = job
 				return tc.schedulerErr
 			}), 1800)
@@ -82,6 +86,23 @@ func TestReserver(t *testing.T) {
 			}
 			if got := server.ReserveExpirySeconds[0]; got != 1800 {
 				t.Errorf("reservation expiry = %d, want 1800", got)
+			}
+			if tc.apiError == "" {
+				if logs.Len() != 0 {
+					t.Errorf("unexpected default-level reservation log: %s", &logs)
+				}
+				return
+			}
+			var entry struct {
+				Level   string
+				JobUUID string `json:"job-uuid"`
+				Error   string
+			}
+			if err := json.Unmarshal(logs.Bytes(), &entry); err != nil {
+				t.Fatalf("reservation API failure did not produce a default-level log: %v", err)
+			}
+			if entry.Level != "WARN" || entry.JobUUID != job.ID || !strings.Contains(entry.Error, tc.apiError) {
+				t.Errorf("reservation warning = %+v, want WARN with job %s and API error %q", entry, job.ID, tc.apiError)
 			}
 		})
 	}

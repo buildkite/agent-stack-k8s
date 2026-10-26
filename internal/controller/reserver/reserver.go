@@ -41,6 +41,7 @@ func (r *Reserver) Handle(ctx context.Context, job *api.AgentScheduledJob) error
 	r.logger.Debug("reserving job via Stacks API", "job-uuid", job.ID)
 	result, _, err := r.agentClient.ReserveJobs(ctx, []string{job.ID}, r.reservationExpirySeconds)
 	if err != nil {
+		r.logger.Warn("failed to reserve job", "job-uuid", job.ID, "error", err)
 		return fmt.Errorf("reserving job %s: %w", job.ID, err)
 	}
 	if !slices.Contains(result.Reserved, job.ID) {
