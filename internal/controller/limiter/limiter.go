@@ -222,14 +222,18 @@ func (l *Limiter) tryDequeueWork() (*api.AgentScheduledJob, *jobState) {
 func (l *Limiter) worker(ctx context.Context) {
 	defer l.workerWG.Done()
 
+	var capacityWaitStart time.Time
 	for {
 		start := time.Now()
 		l.mu.Lock()
 		atCapacity := l.MaxInFlight > 0 && l.inFlight >= l.MaxInFlight
 		l.mu.Unlock()
-		gauge, histogram := waitingForWorkGauge, workWaitDurationHistogram
+		gauge := waitingForWorkGauge
 		if atCapacity {
-			gauge, histogram = waitingForTokenGauge, tokenWaitDurationHistogram
+			gauge = waitingForTokenGauge
+			if capacityWaitStart.IsZero() {
+				capacityWaitStart = start
+			}
 		}
 		gauge.Inc()
 		select {
@@ -240,7 +244,9 @@ func (l *Limiter) worker(ctx context.Context) {
 		case <-l.newWork:
 		}
 		gauge.Dec()
-		histogram.Observe(time.Since(start).Seconds())
+		if !atCapacity {
+			workWaitDurationHistogram.Observe(time.Since(start).Seconds())
+		}
 		if ctx.Err() != nil {
 			return
 		}
@@ -249,6 +255,13 @@ func (l *Limiter) worker(ctx context.Context) {
 		if job == nil {
 			continue
 		}
+		// Polls can wake us without freeing capacity. Record the whole wait
+		// only when a slot is acquired, not one sample per unsuccessful poll.
+		if capacityWaitStart.IsZero() {
+			capacityWaitStart = time.Now()
+		}
+		tokenWaitDurationHistogram.Observe(time.Since(capacityWaitStart).Seconds())
+		capacityWaitStart = time.Time{}
 
 		l.logger.Debug("passing job to next handler",
 			"handler", reflect.TypeOf(l.handler),

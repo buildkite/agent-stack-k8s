@@ -7,12 +7,14 @@ import (
 	"log/slog"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/limiter"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 
+	"github.com/prometheus/client_golang/prometheus"
 	batchv1 "k8s.io/api/batch/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -138,6 +140,66 @@ func TestLimiterForeignJobWhileFull(t *testing.T) {
 		expectStarts(t, rec.out, 1)
 		l.OnUpdate(runningJob(ours[1].ID), finishedJob(ours[1].ID))
 		expectStarts(t, rec.out, 1)
+	})
+}
+
+func TestLimiterCapacityWaitMetrics(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		rec := &drainOrderHandler{out: make(chan *api.AgentScheduledJob, 10)}
+		l := limiter.New(ctx, slog.Default(), rec, 1, 1, -1)
+		defer func() { cancel(); l.Wait() }()
+		readWait := func() (uint64, float64) {
+			t.Helper()
+			families, err := prometheus.DefaultGatherer.Gather()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, f := range families {
+				if f.GetName() == "buildkite_limiter_token_wait_duration_seconds" {
+					h := f.GetMetric()[0].GetHistogram()
+					return h.GetSampleCount(), h.GetSampleSum()
+				}
+			}
+			t.Fatal("capacity-wait histogram not found")
+			return 0, 0
+		}
+		if err := l.HandleMany(ctx, []*api.AgentScheduledJob{{ID: "first"}}); err != nil {
+			t.Fatal(err)
+		}
+		current := expectStarts(t, rec.out, 1)[0]
+		for i, tc := range []struct {
+			polls []time.Duration
+			want  float64
+		}{
+			{polls: []time.Duration{10 * time.Second, 20 * time.Second, 35 * time.Second}, want: 65},
+			{polls: []time.Duration{7 * time.Second, 11 * time.Second}, want: 18},
+		} {
+			count, sum := readWait()
+			next := &api.AgentScheduledJob{ID: fmt.Sprintf("next-%d", i)}
+			for _, interval := range tc.polls {
+				time.Sleep(interval)
+				if err := l.HandleMany(ctx, []*api.AgentScheduledJob{next}); err != nil {
+					t.Fatal(err)
+				}
+				expectStarts(t, rec.out, 0)
+				if gotCount, gotSum := readWait(); gotCount != count || gotSum != sum {
+					t.Fatalf("unsuccessful poll recorded capacity wait: count/sum = %d/%g, want %d/%g", gotCount, gotSum, count, sum)
+				}
+			}
+			l.OnUpdate(runningJob(current.ID), finishedJob(current.ID))
+			current = expectStarts(t, rec.out, 1)[0]
+			if gotCount, gotSum := readWait(); gotCount != count+1 || gotSum != sum+tc.want {
+				t.Fatalf("capacity acquisition count/sum = %d/%g, want %d/%g", gotCount, gotSum, count+1, sum+tc.want)
+			}
+		}
+		count, sum := readWait()
+		time.Sleep(5 * time.Second)
+		cancel()
+		l.Wait()
+		if gotCount, gotSum := readWait(); gotCount != count || gotSum != sum {
+			t.Fatalf("cancellation recorded capacity wait: count/sum = %d/%g, want %d/%g", gotCount, gotSum, count, sum)
+		}
 	})
 }
 
