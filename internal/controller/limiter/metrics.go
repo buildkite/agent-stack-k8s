@@ -113,17 +113,4 @@ var (
 		Name:      "ondelete_events_total",
 		Help:      "Count of OnDelete informer events",
 	})
-
-	tokenUnderflowCounter = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: promNamespace,
-		Subsystem: promSubsystem,
-		Name:      "token_underflows_total",
-		Help:      "Count of attempts to take a token when the bucket was empty",
-	}, []string{"source"})
-	tokenOverflowCounter = promauto.NewCounterVec(prometheus.CounterOpts{
-		Namespace: promNamespace,
-		Subsystem: promSubsystem,
-		Name:      "token_overflows_total",
-		Help:      "Count of attempts to return a token when the bucket was full",
-	}, []string{"source"})
 )
