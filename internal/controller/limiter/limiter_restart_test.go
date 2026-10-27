@@ -203,6 +203,59 @@ func TestLimiterCapacityWaitMetrics(t *testing.T) {
 	})
 }
 
+func TestLimiterCapacityWaitExcludesIdleQueue(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		rec := &drainOrderHandler{out: make(chan *api.AgentScheduledJob, 10)}
+		l := limiter.New(ctx, slog.Default(), rec, 1, 3, -1)
+		defer func() { cancel(); l.Wait() }()
+		readMetrics := func() (uint64, float64, float64, float64) {
+			t.Helper()
+			families, err := prometheus.DefaultGatherer.Gather()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var count uint64
+			var sum, capacity, work float64
+			for _, f := range families {
+				m := f.GetMetric()[0]
+				switch f.GetName() {
+				case "buildkite_limiter_token_wait_duration_seconds":
+					count, sum = m.GetHistogram().GetSampleCount(), m.GetHistogram().GetSampleSum()
+				case "buildkite_limiter_waiting_for_token":
+					capacity = m.GetGauge().GetValue()
+				case "buildkite_limiter_waiting_for_work":
+					work = m.GetGauge().GetValue()
+				}
+			}
+			return count, sum, capacity, work
+		}
+		if err := l.HandleMany(ctx, []*api.AgentScheduledJob{{ID: "first"}}); err != nil {
+			t.Fatal(err)
+		}
+		expectStarts(t, rec.out, 1)
+		count, sum, _, _ := readMetrics()
+		time.Sleep(12 * time.Second)
+		l.OnUpdate(runningJob("first"), finishedJob("first"))
+		expectStarts(t, rec.out, 0)
+		gotCount, gotSum, capacity, work := readMetrics()
+		if capacity != 0 || work != 3 {
+			t.Fatalf("idle workers: waiting for capacity/work = %g/%g, want 0/3", capacity, work)
+		}
+		if gotCount != count+3 || gotSum != sum+36 {
+			t.Fatalf("completed capacity waits: count/sum = %d/%g, want %d/%g", gotCount, gotSum, count+3, sum+36)
+		}
+		time.Sleep(time.Hour)
+		if err := l.HandleMany(ctx, []*api.AgentScheduledJob{{ID: "second"}}); err != nil {
+			t.Fatal(err)
+		}
+		expectStarts(t, rec.out, 1)
+		if afterCount, afterSum, _, _ := readMetrics(); afterCount != gotCount || afterSum != gotSum {
+			t.Fatalf("idle time counted as capacity wait: count/sum = %d/%g, want %d/%g", afterCount, afterSum, gotCount, gotSum)
+		}
+	})
+}
+
 type schedulingHandler func(context.Context, *api.AgentScheduledJob) error
 
 func (f schedulingHandler) Handle(ctx context.Context, j *api.AgentScheduledJob) error {

@@ -41,7 +41,7 @@ type Limiter struct {
 	// Logs go here
 	logger *slog.Logger
 
-	// A channel to notify workers when work or capacity becomes available.
+	// Closed and replaced under mu to notify every worker of state changes.
 	newWork chan struct{}
 
 	// Queue and job accounting share a lock: checking capacity, dequeuing a
@@ -86,7 +86,7 @@ func New(ctx context.Context, logger *slog.Logger, scheduler model.JobHandler, m
 		JobCreationConcurrency: concurrency,
 		WorkQueueLimit:         workQueueLimit,
 		logger:                 logger,
-		newWork:                make(chan struct{}, concurrency),
+		newWork:                make(chan struct{}),
 		jobs:                   make(map[string]*jobState),
 	}
 	func() {
@@ -124,16 +124,10 @@ func (l *Limiter) Pause(pause bool) {
 
 // notifyWorkers wakes workers to recheck the queue and capacity. l.mu must be held.
 func (l *Limiter) notifyWorkers() {
-	if l.paused {
-		return
-	}
-
-	for range min(l.JobCreationConcurrency, len(l.queue)) {
-		select {
-		case l.newWork <- struct{}{}:
-		default:
-		}
-	}
+	// Capacity can return with an empty queue. All workers must wake so
+	// their capacity-wait timers and gauges switch to waiting for work.
+	close(l.newWork)
+	l.newWork = make(chan struct{})
 }
 
 // RegisterInformer registers the limiter to listen for Kubernetes job events,
@@ -227,7 +221,13 @@ func (l *Limiter) worker(ctx context.Context) {
 		start := time.Now()
 		l.mu.Lock()
 		atCapacity := l.MaxInFlight > 0 && l.inFlight >= l.MaxInFlight
+		changed := l.newWork
+		ready := !l.paused && !atCapacity && len(l.queue) > 0
 		l.mu.Unlock()
+		if !atCapacity && !capacityWaitStart.IsZero() {
+			tokenWaitDurationHistogram.Observe(time.Since(capacityWaitStart).Seconds())
+			capacityWaitStart = time.Time{}
+		}
 		gauge := waitingForWorkGauge
 		if atCapacity {
 			gauge = waitingForTokenGauge
@@ -235,17 +235,19 @@ func (l *Limiter) worker(ctx context.Context) {
 				capacityWaitStart = start
 			}
 		}
-		gauge.Inc()
-		select {
-		case <-ctx.Done():
-			gauge.Dec()
-			return
+		if !ready {
+			gauge.Inc()
+			select {
+			case <-ctx.Done():
+				gauge.Dec()
+				return
 
-		case <-l.newWork:
-		}
-		gauge.Dec()
-		if !atCapacity {
-			workWaitDurationHistogram.Observe(time.Since(start).Seconds())
+			case <-changed:
+			}
+			gauge.Dec()
+			if !atCapacity {
+				workWaitDurationHistogram.Observe(time.Since(start).Seconds())
+			}
 		}
 		if ctx.Err() != nil {
 			return
@@ -255,13 +257,12 @@ func (l *Limiter) worker(ctx context.Context) {
 		if job == nil {
 			continue
 		}
-		// Polls can wake us without freeing capacity. Record the whole wait
-		// only when a slot is acquired, not one sample per unsuccessful poll.
-		if capacityWaitStart.IsZero() {
-			capacityWaitStart = time.Now()
+		// Acquiring a slot also ends the wait, even if this worker fills the
+		// last available slot before it can observe capacity at the loop top.
+		if !capacityWaitStart.IsZero() {
+			tokenWaitDurationHistogram.Observe(time.Since(capacityWaitStart).Seconds())
+			capacityWaitStart = time.Time{}
 		}
-		tokenWaitDurationHistogram.Observe(time.Since(capacityWaitStart).Seconds())
-		capacityWaitStart = time.Time{}
 
 		l.logger.Debug("passing job to next handler",
 			"handler", reflect.TypeOf(l.handler),
@@ -335,6 +336,7 @@ func (l *Limiter) observeJob(job *batchv1.Job, deleted bool) {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	previousInFlight := l.inFlight
 	state := l.jobs[id]
 	if state == nil {
 		if deleted {
@@ -350,10 +352,12 @@ func (l *Limiter) observeJob(job *batchv1.Job, deleted bool) {
 	if !state.finished && (deleted || model.JobFinished(job)) {
 		state.finished = true
 		l.inFlight--
-		l.notifyWorkers()
 	}
 	if deleted {
 		delete(l.jobs, id)
+	}
+	if l.inFlight != previousInFlight {
+		l.notifyWorkers()
 	}
 	l.logger.Debug("job accounting updated",
 		"job-uuid", id,
