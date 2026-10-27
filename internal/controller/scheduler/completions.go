@@ -3,9 +3,12 @@ package scheduler
 import (
 	"context"
 	"log/slog"
+	"math"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,12 +39,15 @@ import (
 // containers with their entrypoints substituted for buildkite-agent bootstrap.
 //
 // The cleanup works by setting ActiveDeadlineSeconds on the job when the agent
-// container terminates, which causes Kubernetes to terminate all remaining
-// containers in the pod.
+// container terminates while another regular container is still running. Once
+// that deadline passes, Kubernetes fails the Job with DeadlineExceeded and
+// deletes the pod, terminating all remaining containers.
 //
-// For pods using native Kubernetes sidecars (init containers with RestartPolicy:
-// Always), this cleanup is redundant but harmless as Kubernetes already handles
-// their termination automatically.
+// When every other regular container has already terminated, no deadline is
+// set. That covers pods with no sidecars and pods using native Kubernetes
+// sidecars (init containers with RestartPolicy: Always), which the kubelet
+// terminates itself. A deadline would only risk failing a Job whose pod is
+// about to succeed (#999).
 type completionsWatcher struct {
 	logger                        *slog.Logger
 	k8s                           kubernetes.Interface
@@ -102,16 +108,12 @@ func (w *completionsWatcher) OnUpdate(old any, new any) {
 }
 
 // cleanupSidecars checks if the agent container in the pod has terminated.
-// If so, it ensures the job is cleaned up by updating it with an
-// ActiveDeadlineSeconds value.
+// If so, and another regular container is still running, it ensures the job is
+// cleaned up by updating it with an ActiveDeadlineSeconds value.
 //
 // This is necessary for:
 //  1. Cleaning up unmanaged containers added via podSpecPatch
 //  2. Backward compatibility with legacy sidecars from older controller versions
-//
-// For pods using native Kubernetes sidecars (init containers with RestartPolicy:
-// Always), this cleanup is redundant but harmless as Kubernetes already handles
-// their termination automatically.
 func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *corev1.Pod) {
 	// Ignore completed (succeeded or failed) and unknown status pods.
 	// Most of the time, the remaining logic applies to "Running" pods.
@@ -133,20 +135,125 @@ func (w *completionsWatcher) cleanupSidecars(ctx context.Context, pod *corev1.Po
 		"exit code", terminated.ExitCode,
 	)
 
+	// Normally the command containers have exited by the time the agent does,
+	// so a regular container still running here is an unmanaged one. If there
+	// are none, the pod finishes on its own (the kubelet stops any native
+	// sidecars), and a deadline could only fail a Job whose pod is about to
+	// succeed (#999).
+	if !otherContainersRunning(pod) {
+		return
+	}
+
+	// Measure from when the agent exited, so a replay after a controller
+	// restart computes the same deadline.
+	agentExit := terminated.FinishedAt.Time
+	if agentExit.IsZero() {
+		agentExit = time.Now()
+	}
+
+	var previous *int64
+	var deadline int64
+	var written bool
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		job, err := w.k8s.BatchV1().Jobs(pod.Namespace).Get(ctx, pod.Labels["job-name"], metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
-		job.Spec.ActiveDeadlineSeconds = new(w.terminationGracePeriodSeconds)
-		_, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(ctx, job, metav1.UpdateOptions{})
-		return err
+		previous = job.Spec.ActiveDeadlineSeconds
+		deadline = sidecarCleanupDeadline(job, w.terminationGracePeriodSeconds, agentExit)
+		if previous != nil && *previous == deadline {
+			return nil
+		}
+		job.Spec.ActiveDeadlineSeconds = new(deadline)
+		if _, err = w.k8s.BatchV1().Jobs(pod.Namespace).Update(ctx, job, metav1.UpdateOptions{}); err != nil {
+			return err
+		}
+		written = true
+		return nil
 	}); err != nil {
 		completionWatcherJobCleanupErrorsCounter.WithLabelValues(string(kerrors.ReasonForError(err))).Inc()
 		w.logger.Error("failed to update job with ActiveDeadlineSeconds", "error", err)
 		return
 	}
+	if !written {
+		w.logger.Debug("job ActiveDeadlineSeconds unchanged", "uuid", pod.Labels[config.UUIDLabel], "deadline", deadline)
+		return
+	}
+	w.logger.Debug(
+		"set job ActiveDeadlineSeconds for sidecar cleanup",
+		"uuid", pod.Labels[config.UUIDLabel],
+		"previous", optionalSeconds(previous),
+		"deadline", deadline,
+	)
 	completionWatcherJobCleanupsCounter.Inc()
+}
+
+// optionalSeconds returns the value of an optional seconds field for logging,
+// or nil when it is unset (rather than the pointer itself).
+func optionalSeconds(seconds *int64) any {
+	if seconds == nil {
+		return nil
+	}
+	return *seconds
+}
+
+// sidecarCleanupBufferSeconds is the least time the remaining containers get
+// after the agent exits before the Job's deadline is reached, for a job that
+// has already run longer than the grace period. It is capped at the grace
+// period.
+//
+// It only needs to cover a command container that is still finishing, or whose
+// terminated status hasn't been reported yet, when the agent exits: those exit
+// within seconds. An unmanaged container that never exits on its own gets no
+// signal during this time, so a longer buffer would only keep its Job (and its
+// max-in-flight slot) active longer. Once the deadline passes, deleting the pod
+// still gives it the pod's terminationGracePeriodSeconds to stop.
+const sidecarCleanupBufferSeconds = 10
+
+// otherContainersRunning reports whether any regular container other than the
+// agent has not terminated yet. Containers that haven't started (Waiting) count
+// as not terminated, so a pod stuck on an unmanaged container is cleaned up too.
+func otherContainersRunning(pod *corev1.Pod) bool {
+	for _, container := range pod.Status.ContainerStatuses {
+		if container.Name != AgentContainerName && container.State.Terminated == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// sidecarCleanupDeadline returns the ActiveDeadlineSeconds value for cleaning
+// up the containers still running when the agent exited at agentExit.
+//
+// ActiveDeadlineSeconds is measured from the Job's status.startTime, not from
+// when it is set. The deadline is the grace period from the Job's start, as it
+// has always been, so a job that finished well within the grace period still
+// gives its remaining containers the rest of it. For a job that ran longer, that
+// deadline is already in the past: Kubernetes would fail the Job with
+// DeadlineExceeded and start deleting the pod straight away, even when its
+// remaining containers were about to exit cleanly (#999). So the deadline is
+// never earlier than sidecarCleanupBufferSeconds (capped at the grace period)
+// after the agent exited.
+//
+// Clock skew between the node (agentExit) and the control plane (startTime, and
+// the deadline check) shortens or lengthens that buffer by the same amount.
+//
+// An existing deadline that is already sooner is kept, so cleanup never extends
+// a job's configured lifetime.
+func sidecarCleanupDeadline(job *batchv1.Job, gracePeriodSeconds int64, agentExit time.Time) int64 {
+	deadline := gracePeriodSeconds
+	if start := job.Status.StartTime; start != nil {
+		// When the agent exited at or before the Job's start (clock skew),
+		// elapsed+buffer is at most the grace period, so max keeps the grace
+		// period.
+		elapsed := int64(math.Ceil(agentExit.Sub(start.Time).Seconds()))
+		buffer := min(gracePeriodSeconds, sidecarCleanupBufferSeconds)
+		deadline = max(deadline, elapsed+buffer)
+	}
+	if current := job.Spec.ActiveDeadlineSeconds; current != nil && *current < deadline {
+		return *current
+	}
+	return deadline
 }
 
 // getAgentTermination returns the termination state of the agent container

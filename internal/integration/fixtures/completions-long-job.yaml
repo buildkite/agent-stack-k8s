@@ -1,0 +1,5 @@
+steps:
+  - label: ":hourglass: runs longer than the termination grace period"
+    agents:
+      queue: "{{.queue}}"
+    command: sleep 15

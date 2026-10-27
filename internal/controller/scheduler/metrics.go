@@ -164,7 +164,7 @@ var (
 		Namespace: promNamespace,
 		Subsystem: "completion_watcher",
 		Name:      "cleanups_total",
-		Help:      "Count of legacy sidecar jobs successfully cleaned up",
+		Help:      "Count of jobs given a deadline to stop containers still running after the agent exited",
 	})
 	completionWatcherJobCleanupErrorsCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 		Namespace: promNamespace,
