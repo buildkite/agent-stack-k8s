@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
@@ -29,6 +30,73 @@ type handlerFunc func(context.Context, *api.AgentScheduledJob) error
 
 func (f handlerFunc) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 	return f(ctx, job)
+}
+
+type reserveFunc func(context.Context, []string, int) (*stacksapi.BatchReserveJobsResponse, time.Duration, error)
+
+func (f reserveFunc) ReserveJobs(ctx context.Context, ids []string, expiry int) (*stacksapi.BatchReserveJobsResponse, time.Duration, error) {
+	return f(ctx, ids, expiry)
+}
+
+func TestBatchesOnlyAdmittedJobsAndReturnsFailedCapacity(t *testing.T) {
+	for _, firstResult := range []string{"reserved", "partly refused", "failed"} {
+		t.Run(firstResult, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				var batches [][]string
+				client := reserveFunc(func(_ context.Context, ids []string, expiry int) (*stacksapi.BatchReserveJobsResponse, time.Duration, error) {
+					batches = append(batches, slices.Clone(ids))
+					if expiry != 900 {
+						t.Errorf("reservation expiry = %d, want 900", expiry)
+					}
+					if len(batches) == 1 {
+						switch firstResult {
+						case "partly refused":
+							return &stacksapi.BatchReserveJobsResponse{Reserved: ids[:1], NotReserved: ids[1:]}, 0, nil
+						case "failed":
+							return nil, 0, errors.New("reservation unavailable")
+						}
+					}
+					return &stacksapi.BatchReserveJobsResponse{Reserved: ids}, 0, nil
+				})
+				scheduled := make(chan string, 5)
+				r := New(ctx, slog.Default(), client, handlerFunc(func(_ context.Context, job *api.AgentScheduledJob) error {
+					scheduled <- job.ID
+					return nil
+				}), 900)
+				l := limiter.New(ctx, slog.Default(), r, 2, 25, 10)
+				defer func() { cancel(); l.Wait() }()
+				jobs := []*api.AgentScheduledJob{{ID: "one"}, {ID: "two"}, {ID: "three"}, {ID: "four"}, {ID: "five"}}
+				if err := l.HandleMany(ctx, jobs); err != nil {
+					t.Fatal(err)
+				}
+				time.Sleep(time.Second)
+				synctest.Wait()
+				wantSizes := []int{2}
+				switch firstResult {
+				case "partly refused":
+					wantSizes = []int{2, 1}
+				case "failed":
+					wantSizes = []int{2, 2}
+				}
+				var sizes []int
+				for _, batch := range batches {
+					sizes = append(sizes, len(batch))
+				}
+				if !slices.Equal(sizes, wantSizes) || len(scheduled) != 2 {
+					t.Fatalf("reservation batch sizes = %v, scheduled jobs = %d; want %v and 2", sizes, len(scheduled), wantSizes)
+				}
+				cancel()
+				l.Wait()
+				for _, batch := range batches {
+					if slices.Contains(batch, "five") {
+						t.Error("queued work was reserved despite no available capacity")
+					}
+				}
+			})
+		})
+	}
 }
 
 func TestReserver(t *testing.T) {
@@ -66,7 +134,7 @@ func TestReserver(t *testing.T) {
 			var handled *api.AgentScheduledJob
 			var logs bytes.Buffer
 			logger := slog.New(slog.NewJSONHandler(&logs, nil))
-			r := New(logger, client, handlerFunc(func(_ context.Context, job *api.AgentScheduledJob) error {
+			r := New(t.Context(), logger, client, handlerFunc(func(_ context.Context, job *api.AgentScheduledJob) error {
 				handled = job
 				return tc.schedulerErr
 			}), 1800)
@@ -105,6 +173,43 @@ func TestReserver(t *testing.T) {
 			}
 			if entry.Level != "WARN" || entry.JobUUID != job.ID || !strings.Contains(entry.Error, tc.apiError) {
 				t.Errorf("reservation warning = %+v, want WARN with job %s and API error %q", entry, job.ID, tc.apiError)
+			}
+		})
+	}
+}
+
+func TestReservationBoundsDispatchDeadline(t *testing.T) {
+	for _, seconds := range []int{0, 1, 1800} {
+		t.Run(strconv.Itoa(seconds), func(t *testing.T) {
+			server := api.NewFakeAgentServer()
+			defer server.Close()
+			client, err := api.NewAgentClient(t.Context(), api.AgentClientOpts{
+				Token: "fake-token", Endpoint: server.URL(), StackID: "test-stack", Logger: slog.Default(),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			start := time.Now()
+			lifetime := seconds
+			if lifetime == 0 {
+				lifetime = 900
+			}
+			r := New(t.Context(), slog.Default(), client, handlerFunc(func(ctx context.Context, _ *api.AgentScheduledJob) error {
+				deadline, ok := ctx.Deadline()
+				if !ok || deadline.Before(start.Add(time.Duration(lifetime)*time.Second)) || deadline.After(time.Now().Add(time.Duration(lifetime)*time.Second)) {
+					t.Fatalf("dispatch deadline = %v (present %v), want reservation lifetime %ds", deadline, ok, lifetime)
+				}
+				if seconds == 1 {
+					<-ctx.Done()
+					return ctx.Err()
+				}
+				return nil
+			}), seconds)
+			err = r.Handle(t.Context(), &api.AgentScheduledJob{ID: uuid.NewString()})
+			if seconds == 1 && !errors.Is(err, context.DeadlineExceeded) {
+				t.Errorf("Handle() = %v, want deadline exceeded", err)
+			} else if seconds != 1 && err != nil {
+				t.Fatal(err)
 			}
 		})
 	}
@@ -163,7 +268,7 @@ func TestReservationsRespectMaxInFlight(t *testing.T) {
 				{ID: uuid.NewString()}, {ID: uuid.NewString()},
 			}
 			scheduled := make(chan *api.AgentScheduledJob, len(jobs))
-			r := New(slog.Default(), client, handlerFunc(func(_ context.Context, job *api.AgentScheduledJob) error {
+			r := New(ctx, slog.Default(), client, handlerFunc(func(_ context.Context, job *api.AgentScheduledJob) error {
 				scheduled <- job
 				return nil
 			}), 0)
@@ -192,7 +297,7 @@ func TestReservationsRespectMaxInFlight(t *testing.T) {
 					t.Fatal(err)
 				}
 				peerScheduled := make(chan string, len(jobs))
-				peerReserver := New(slog.Default(), peerClient, handlerFunc(func(_ context.Context, job *api.AgentScheduledJob) error {
+				peerReserver := New(ctx, slog.Default(), peerClient, handlerFunc(func(_ context.Context, job *api.AgentScheduledJob) error {
 					peerScheduled <- job.ID
 					return nil
 				}), 0)

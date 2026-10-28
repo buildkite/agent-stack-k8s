@@ -45,6 +45,23 @@ variable or pass `--id`.
 
 Full instructions can be found [in the documentation](https://buildkite.com/docs/agent/v3/agent-stack-k8s/installation).
 
+### Dispatch and shutdown
+
+The controller reserves jobs only after local dispatch capacity is available,
+combining admitted jobs into reservation batches. With job acquisition tokens
+enabled, it also batches token requests and paces all attempts, including retries,
+at up to 10 requests per second per controller. This is not a distributed limit
+across controller replicas. Transient token failures retain the job for retry
+until it succeeds, its reservation expires, or dispatch is canceled; permanent
+rejections are not retried.
+
+On shutdown, the controller stops accepting work and allows up to 20 seconds to
+finish creating Kubernetes Jobs and their required Secrets, followed by up to
+5 seconds for stack deregistration. It does not wait for workloads to finish.
+Allow at least Kubernetes' default 30-second termination grace period. A forced
+kill or a dispatch that exceeds the drain deadline can still leave reservations
+held until they expire; deregistering the stack does not release them.
+
 ## Documentation
 
 Comprehensive documentation for the Buildkite Agent Stack for Kubernetes controller can be found in the [Agent Stack for Kubernetes section of the Buildkite Docs](https://buildkite.com/docs/agent/v3/agent-stack-k8s).

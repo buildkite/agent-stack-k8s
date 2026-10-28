@@ -36,6 +36,9 @@ import (
 const agentTokenKey = "BUILDKITE_AGENT_TOKEN"
 
 func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interface, cfg *config.Config) {
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+
 	httpMuxes := make(map[string]*http.ServeMux)
 
 	if cfg.ProfilerAddress != "" {
@@ -148,6 +151,34 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		return
 	}
 
+	dispatchCtx, cancelDispatch := context.WithCancel(context.WithoutCancel(ctx))
+	var dispatchLimiter *limiter.Limiter
+	defer func() {
+		// Also stop intake if startup or the monitor fails without a signal.
+		stop()
+		logger.Info("gracefully shutting down controller...")
+		if dispatchLimiter != nil {
+			// Leave room for deregistration within Kubernetes' default 30s
+			// termination grace period. Do not wait for workloads to finish.
+			drainCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+			if err := dispatchLimiter.Drain(drainCtx); err != nil {
+				logger.Warn("dispatch drain deadline reached; unfinished reservations may remain until expiry", "error", err)
+			}
+			cancel()
+		}
+		cancelDispatch()
+		agentClient.Stop()
+		deregisterCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		// Best effort: the backend also cleans up deregistration failures.
+		if err := agentClient.DeregisterStack(deregisterCtx); err != nil {
+			logger.Error("failed to deregister stack", "error", err)
+		} else {
+			logger.Info("deregistered stack")
+		}
+		logger.Info("controller exiting")
+	}()
+
 	// **************************************************************************
 	// ***                        JOB FLOW                                    ***
 	// ***  Monitor -> Limiter -> Reserver -> JAT issuer -> Deduper -> Scheduler  ***
@@ -222,14 +253,15 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 	// other stacks rather than waiting here with an exclusive reservation.
 	var postLimiter model.JobHandler = deduper
 	if cfg.EnableJobAcquisitionTokens {
-		postLimiter = jatissuer.New(logger.With("component", "jat-issuer"), agentClient, deduper, cfg.ReservationExpirySeconds)
+		postLimiter = jatissuer.New(dispatchCtx, logger.With("component", "jat-issuer"), agentClient, deduper, cfg.ReservationExpirySeconds)
 	}
-	postLimiter = reserver.New(logger.With("component", "reserver"), agentClient, postLimiter, cfg.ReservationExpirySeconds)
+	postLimiter = reserver.New(dispatchCtx, logger.With("component", "reserver"), agentClient, postLimiter, cfg.ReservationExpirySeconds)
 	limiter := limiter.New(ctx, logger.With("component", "limiter"), postLimiter,
 		cfg.MaxInFlight,
 		cfg.JobCreationConcurrency,
 		cfg.WorkQueueLimit,
 	)
+	dispatchLimiter = limiter
 	if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Error("failed to register limiter informer", "error", err)
 		return
@@ -298,27 +330,6 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 
 	select {
 	case <-ctx.Done():
-		logger.Info("gracefully shutting down controller...")
-
-		ctx = context.WithoutCancel(ctx) // we want stack deregistration to happen, even though the context has been cancelled
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-
-		agentClient.Stop()
-		// Try best-effort to deregister the stack, but if it fails or times out, the backend will still clean it up.
-		if err := agentClient.DeregisterStack(ctx); err != nil {
-			logger.Error("failed to deregister stack", "error", err)
-			return
-		}
-
-		logger.Info("deregistered stack")
-
-		if ctx.Err() != nil {
-			logger.Error("controller exiting", "error", ctx.Err())
-		} else {
-			logger.Info("controller exiting")
-		}
-
 	case err := <-m.Start(ctx, limiter):
 		logger.Error("monitor failed", "error", err)
 	}

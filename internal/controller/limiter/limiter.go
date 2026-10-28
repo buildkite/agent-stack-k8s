@@ -49,11 +49,17 @@ type Limiter struct {
 	mu       sync.Mutex
 	queue    []*api.AgentScheduledJob
 	paused   bool
+	stopping bool
 	jobs     map[string]*jobState
 	inFlight int
 
-	// A wait group for workers (mainly for the benefit of unit tests).
-	workerWG sync.WaitGroup
+	// Intake follows the controller context; accepted dispatch survives it
+	// until Drain's deadline. Workers finish at resource creation, not job completion.
+	intakeCtx      context.Context
+	dispatchCtx    context.Context
+	cancelDispatch context.CancelFunc
+	workersDone    chan struct{}
+	workerWG       sync.WaitGroup
 }
 
 // A scheduling attempt occupies a slot before Kubernetes reports the job.
@@ -67,6 +73,8 @@ type jobState struct {
 
 // New creates a Limiter. maxInFlight must be non-negative, but 0 is interpreted
 // as no limit. Zero or negative concurrency is replaced with the default.
+// Canceling ctx stops intake, not accepted dispatch. Call Drain with a deadline
+// during shutdown to bound the remaining dispatch work.
 func New(ctx context.Context, logger *slog.Logger, scheduler model.JobHandler, maxInFlight, concurrency, workQueueLimit int) *Limiter {
 	if maxInFlight < 0 {
 		// Using panic, because getting here is severe programmer error and the
@@ -80,6 +88,7 @@ func New(ctx context.Context, logger *slog.Logger, scheduler model.JobHandler, m
 	if workQueueLimit <= 0 {
 		workQueueLimit = config.DefaultWorkQueueLimit
 	}
+	dispatchCtx, cancelDispatch := context.WithCancel(context.WithoutCancel(ctx))
 	l := &Limiter{
 		handler:                scheduler,
 		MaxInFlight:            maxInFlight,
@@ -88,6 +97,10 @@ func New(ctx context.Context, logger *slog.Logger, scheduler model.JobHandler, m
 		logger:                 logger,
 		newWork:                make(chan struct{}),
 		jobs:                   make(map[string]*jobState),
+		intakeCtx:              ctx,
+		dispatchCtx:            dispatchCtx,
+		cancelDispatch:         cancelDispatch,
+		workersDone:            make(chan struct{}),
 	}
 	func() {
 		metricCallbackMu.Lock()
@@ -110,6 +123,11 @@ func New(ctx context.Context, logger *slog.Logger, scheduler model.JobHandler, m
 	for range concurrency {
 		go l.worker(ctx)
 	}
+	go func() {
+		l.workerWG.Wait()
+		cancelDispatch()
+		close(l.workersDone)
+	}()
 	return l
 }
 
@@ -166,6 +184,12 @@ func (l *Limiter) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob)
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if l.stopping || l.intakeCtx.Err() != nil {
+		return context.Canceled
+	}
 	l.queue = append(l.queue, jobs...)
 	if len(l.queue) == 0 {
 		return nil
@@ -195,7 +219,7 @@ func (l *Limiter) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob)
 func (l *Limiter) tryDequeueWork() (*api.AgentScheduledJob, *jobState) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.paused || (l.MaxInFlight > 0 && l.inFlight >= l.MaxInFlight) {
+	if l.stopping || l.intakeCtx.Err() != nil || l.paused || (l.MaxInFlight > 0 && l.inFlight >= l.MaxInFlight) {
 		return nil, nil
 	}
 	for len(l.queue) > 0 {
@@ -220,6 +244,10 @@ func (l *Limiter) worker(ctx context.Context) {
 	for {
 		start := time.Now()
 		l.mu.Lock()
+		if l.stopping {
+			l.mu.Unlock()
+			return
+		}
 		atCapacity := l.MaxInFlight > 0 && l.inFlight >= l.MaxInFlight
 		changed := l.newWork
 		ready := !l.paused && !atCapacity && len(l.queue) > 0
@@ -268,7 +296,7 @@ func (l *Limiter) worker(ctx context.Context) {
 			"handler", reflect.TypeOf(l.handler),
 		)
 		jobHandlerCallsCounter.Inc()
-		if err := l.handler.Handle(ctx, job); err != nil {
+		if err := l.handler.Handle(l.dispatchCtx, job); err != nil {
 			l.mu.Lock()
 			// An observed job still occupies its slot even when scheduling
 			// failed. An unobserved attempt can be released: a duplicate may
@@ -299,8 +327,28 @@ func (l *Limiter) worker(ctx context.Context) {
 	}
 }
 
-// Wait blocks until all worker goroutines return.
-func (l *Limiter) Wait() { l.workerWG.Wait() }
+// Drain stops intake and waits only for dispatches already admitted to a worker.
+// Queued jobs have not been reserved and are left for another controller.
+// If ctx expires, cancel dispatch and return even if a handler ignores cancellation.
+func (l *Limiter) Drain(ctx context.Context) error {
+	l.mu.Lock()
+	l.stopping = true
+	l.queue = nil
+	l.notifyWorkers()
+	l.mu.Unlock()
+
+	select {
+	case <-l.workersDone:
+		return nil
+	case <-ctx.Done():
+		l.cancelDispatch()
+		return ctx.Err()
+	}
+}
+
+// Wait blocks until all worker goroutines return. Call Drain to bound this wait
+// when shutting down with dispatches still in progress.
+func (l *Limiter) Wait() { <-l.workersDone }
 
 // OnAdd is called by k8s to inform us a resource is added.
 func (l *Limiter) OnAdd(obj any, inInitialList bool) {
