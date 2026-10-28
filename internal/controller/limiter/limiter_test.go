@@ -3,8 +3,11 @@ package limiter_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/limiter"
@@ -12,6 +15,55 @@ import (
 
 	"github.com/google/uuid"
 )
+
+func TestLimiterDrainDeadline(t *testing.T) {
+	for _, ignoresCancellation := range []bool{false, true} {
+		t.Run(fmt.Sprint(ignoresCancellation), func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx, cancel := context.WithCancel(t.Context())
+				defer cancel()
+				release := make(chan struct{})
+				var dispatchCtx context.Context
+				var starts int
+				l := limiter.New(ctx, slog.Default(), schedulingHandler(func(ctx context.Context, _ *api.AgentScheduledJob) error {
+					starts++
+					dispatchCtx = ctx
+					if ignoresCancellation {
+						<-release
+					} else {
+						<-ctx.Done()
+					}
+					return ctx.Err()
+				}), 0, 1, 10)
+				if err := l.HandleMany(ctx, []*api.AgentScheduledJob{{ID: "accepted"}, {ID: "queued"}}); err != nil {
+					t.Fatal(err)
+				}
+				synctest.Wait()
+				cancel()
+				if dispatchCtx == nil || dispatchCtx.Err() != nil {
+					t.Fatal("shutdown canceled accepted dispatch before the drain deadline")
+				}
+				if err := l.HandleMany(context.Background(), []*api.AgentScheduledJob{{ID: "late"}}); !errors.Is(err, context.Canceled) {
+					t.Fatalf("late admission error = %v, want context.Canceled", err)
+				}
+				drainCtx, drainCancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer drainCancel()
+				start := time.Now()
+				if err := l.Drain(drainCtx); !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("Drain() = %v, want deadline exceeded", err)
+				}
+				if time.Since(start) != 20*time.Second || dispatchCtx.Err() != context.Canceled {
+					t.Fatal("drain did not cancel dispatch at the deadline")
+				}
+				close(release)
+				l.Wait()
+				if starts != 1 {
+					t.Errorf("started %d dispatches, want only the accepted job", starts)
+				}
+			})
+		})
+	}
+}
 
 func TestLimiter(t *testing.T) {
 	t.Parallel()
