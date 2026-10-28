@@ -151,6 +151,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 		return
 	}
 
+	dispatchCtx, cancelDispatch := context.WithCancel(context.WithoutCancel(ctx))
 	var dispatchLimiter *limiter.Limiter
 	defer func() {
 		// Also stop intake if startup or the monitor fails without a signal.
@@ -165,6 +166,7 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 			}
 			cancel()
 		}
+		cancelDispatch()
 		agentClient.Stop()
 		deregisterCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
@@ -251,9 +253,9 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 	// other stacks rather than waiting here with an exclusive reservation.
 	var postLimiter model.JobHandler = deduper
 	if cfg.EnableJobAcquisitionTokens {
-		postLimiter = jatissuer.New(logger.With("component", "jat-issuer"), agentClient, deduper, cfg.ReservationExpirySeconds)
+		postLimiter = jatissuer.New(dispatchCtx, logger.With("component", "jat-issuer"), agentClient, deduper, cfg.ReservationExpirySeconds)
 	}
-	postLimiter = reserver.New(logger.With("component", "reserver"), agentClient, postLimiter, cfg.ReservationExpirySeconds)
+	postLimiter = reserver.New(dispatchCtx, logger.With("component", "reserver"), agentClient, postLimiter, cfg.ReservationExpirySeconds)
 	limiter := limiter.New(ctx, logger.With("component", "limiter"), postLimiter,
 		cfg.MaxInFlight,
 		cfg.JobCreationConcurrency,

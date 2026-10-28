@@ -33,6 +33,7 @@ func TestRunDrainsAcceptedDispatch(t *testing.T) {
 		{name: "job information", block: "info", tokens: true},
 		{name: "Kubernetes Job", block: "jobs", tokens: true},
 		{name: "token Secret", block: "secrets", tokens: true},
+		{name: "throttled tokens", block: "tokens", tokens: true},
 		{name: "shared token", block: "info"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -46,7 +47,7 @@ func TestRunDrainsAcceptedDispatch(t *testing.T) {
 			defer unblock()
 			block := func() { blocked <- struct{}{}; <-release }
 			reserved := make(chan struct{}, 2)
-			var polls, reservations, infos, deregistrations atomic.Int32
+			var polls, reservations, infos, deregistrations, tokenRequests atomic.Int32
 			mux := http.NewServeMux()
 			respond := func(w http.ResponseWriter, value any) {
 				w.Header().Set("Content-Type", "application/json")
@@ -73,13 +74,27 @@ func TestRunDrainsAcceptedDispatch(t *testing.T) {
 					return
 				}
 				reservations.Add(int32(len(req.JobUUIDs)))
-				reserved <- struct{}{}
+				for range req.JobUUIDs {
+					reserved <- struct{}{}
+				}
 				respond(w, stacksapi.BatchReserveJobsResponse{Reserved: req.JobUUIDs})
 			})
 			mux.HandleFunc("POST /stacks/test-stack/job-acquisition-tokens", func(w http.ResponseWriter, r *http.Request) {
 				var req api.IssueJobAcquisitionTokensRequest
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 					t.Error(err)
+					return
+				}
+				if tokenRequests.Add(1) == 1 && tc.block == "tokens" {
+					blocked <- struct{}{}
+					select {
+					case <-release:
+					case <-r.Context().Done():
+						return
+					}
+					w.Header().Set("Retry-After", "1")
+					w.WriteHeader(http.StatusTooManyRequests)
+					respond(w, map[string]string{"message": "temporarily throttled"})
 					return
 				}
 				var resp api.IssueJobAcquisitionTokensResponse
@@ -209,6 +224,9 @@ func TestRunDrainsAcceptedDispatch(t *testing.T) {
 			}
 			if polls.Load() != 1 || reservations.Load() != 2 || infos.Load() != 2 || deregistrations.Load() != 1 {
 				t.Errorf("polls/reservations/infos/deregistrations = %d/%d/%d/%d; want 1/2/2/1", polls.Load(), reservations.Load(), infos.Load(), deregistrations.Load())
+			}
+			if tc.block == "tokens" && tokenRequests.Load() < 2 {
+				t.Error("accepted dispatch did not retry token issuance during shutdown")
 			}
 		})
 	}
