@@ -140,7 +140,12 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 	)
 	jobToRun, err := roko.DoFunc(ctx, retrier, func(*roko.Retrier) (*api.AgentJob, error) {
 		jtr, retryAfter, err := w.agentClient.GetJobToRun(ctx, job.ID)
-		if api.IsPermanentError(err) {
+		// This stack has just reserved the job, but Buildkite can briefly
+		// return 404 for it, for example straight after the job becomes
+		// runnable. Retry those: giving up here leaves the job reserved by
+		// this stack with nothing to run it until the reservation expires
+		// (15 minutes by default).
+		if api.IsPermanentError(err) && !api.IsNotFoundError(err) {
 			retrier.Break()
 		}
 		retrier.SetNextInterval(max(retryAfter, retrier.NextInterval()))

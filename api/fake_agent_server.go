@@ -50,6 +50,13 @@ type FakeAgentServer struct {
 	JobStates map[string]string
 	AgentJobs map[string]*AgentJob
 
+	// GetJobCalls records the job UUIDs from each GetJob call.
+	GetJobCalls []string
+
+	// GetJobErrorStatusCodes configures status codes that GetJob returns, in
+	// order, before it starts serving AgentJobs.
+	GetJobErrorStatusCodes []int
+
 	// GetJobStatesStatusCode configures the HTTP status code for GetJobStates.
 	// Default is 200.
 	GetJobStatesStatusCode int
@@ -245,7 +252,19 @@ func (f *FakeAgentServer) handleFinishJob(w http.ResponseWriter, r *http.Request
 	const prefix = "/stacks/test-stack/jobs/"
 	if r.Method == http.MethodGet {
 		jobUUID := strings.TrimPrefix(path, prefix)
+		f.mu.Lock()
+		f.GetJobCalls = append(f.GetJobCalls, jobUUID)
+		var errorStatusCode int
+		if len(f.GetJobErrorStatusCodes) > 0 {
+			errorStatusCode = f.GetJobErrorStatusCodes[0]
+			f.GetJobErrorStatusCodes = f.GetJobErrorStatusCodes[1:]
+		}
 		job, ok := f.AgentJobs[jobUUID]
+		f.mu.Unlock()
+		if errorStatusCode != 0 {
+			writeJSONResponse(w, errorStatusCode, map[string]string{"message": http.StatusText(errorStatusCode)})
+			return
+		}
 		if !ok {
 			writeJSONResponse(w, http.StatusNotFound, map[string]string{"message": "job not found"})
 			return
