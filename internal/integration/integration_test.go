@@ -1244,8 +1244,9 @@ func TestCompletionsWatcherCleansUpSidecars(t *testing.T) {
 	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
 
 	// Use a short termination grace period so the test runs faster.
-	// The completionsWatcher sets ActiveDeadlineSeconds to this value when
-	// the agent terminates, triggering cleanup of unmanaged containers.
+	// When the agent terminates with an unmanaged container still running, the
+	// completionsWatcher sets ActiveDeadlineSeconds to stop it. A short grace
+	// period brings that deadline forward.
 	testCfg := cfg
 	testCfg.DefaultTerminationGracePeriodSeconds = 5
 
@@ -1286,6 +1287,67 @@ func TestCompletionsWatcherCleansUpSidecars(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("K8s Job should reach terminal state after completionsWatcher cleanup")
+	}
+}
+
+// TestCompletionsWatcherLongJobCompletes covers
+// https://github.com/buildkite/agent-stack-k8s/issues/999. The job has no
+// unmanaged containers and runs longer than the termination grace period. The
+// completionsWatcher must not cut it short when the agent exits, so the K8s Job
+// completes instead of failing with DeadlineExceeded.
+func TestCompletionsWatcherLongJobCompletes(t *testing.T) {
+	tc := testcase{
+		T:       t,
+		Fixture: "completions-long-job.yaml",
+		Repo:    repoHTTP,
+		GraphQL: api.NewGraphQLClient(cfg.BuildkiteToken, cfg.GraphQLEndpoint),
+	}.Init()
+	ctx := t.Context()
+	pipelineID := tc.PrepareQueueAndPipelineWithCleanup(ctx)
+
+	// Shorter than the step's 15s sleep, so a deadline measured from the Job's
+	// start (rather than from the agent exiting) would already have passed.
+	testCfg := cfg
+	testCfg.DefaultTerminationGracePeriodSeconds = 10
+
+	tc.StartController(ctx, testCfg)
+	build := tc.TriggerBuild(ctx, pipelineID)
+	tc.AssertSuccess(ctx, build)
+
+	job := build.Jobs.Edges[0].Node.(*api.JobJobTypeCommand)
+	jobName := testCfg.JobPrefix + job.Uuid
+
+	err := roko.NewRetrier(
+		roko.WithMaxAttempts(30),
+		roko.WithStrategy(roko.Constant(2*time.Second)),
+	).DoWithContext(ctx, func(r *roko.Retrier) error {
+		k8sJob, err := tc.Kubernetes.BatchV1().Jobs(testCfg.Namespace).Get(ctx, jobName, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to get job %s: %w", jobName, err)
+		}
+
+		for _, condition := range k8sJob.Status.Conditions {
+			if condition.Status != corev1.ConditionTrue {
+				continue
+			}
+			switch condition.Type {
+			case "Complete":
+				return nil
+			case "Failed":
+				// Terminal and wrong: stop retrying.
+				r.Break()
+				deadline := "unset"
+				if d := k8sJob.Spec.ActiveDeadlineSeconds; d != nil {
+					deadline = fmt.Sprint(*d)
+				}
+				return fmt.Errorf("job %s failed (reason %q, activeDeadlineSeconds %s), want it to complete", jobName, condition.Reason, deadline)
+			}
+		}
+
+		return fmt.Errorf("job %s not yet in terminal state, conditions: %v", jobName, k8sJob.Status.Conditions)
+	})
+	if err != nil {
+		t.Fatalf("K8s Job should complete after a passing build: %v", err)
 	}
 }
 
