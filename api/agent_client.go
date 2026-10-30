@@ -171,6 +171,17 @@ func IsPermanentError(err error) bool {
 	return agentErr.Permanent()
 }
 
+// IsNotFoundError reports whether err is a 404 response from the Agent or
+// Stacks API.
+func IsNotFoundError(err error) bool {
+	var stackResponseError *stacksapi.ErrorResponse
+	if errors.As(err, &stackResponseError) {
+		return stackResponseError.Response != nil && stackResponseError.Response.StatusCode == http.StatusNotFound
+	}
+	var agentErr AgentError
+	return errors.As(err, &agentErr) && agentErr.StatusCode == http.StatusNotFound
+}
+
 type ClusterQueue struct {
 	ID     string `json:"id"`
 	Paused bool   `json:"paused"`
