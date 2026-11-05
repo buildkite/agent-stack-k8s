@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"net/http"
 	"net/url"
 	"path/filepath"
 	"slices"
@@ -22,6 +23,7 @@ import (
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/model"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/version"
 	"github.com/buildkite/roko"
+	"github.com/buildkite/stacksapi"
 
 	"github.com/buildkite/agent/v4/agent"
 	"github.com/buildkite/agent/v4/clicommand"
@@ -138,9 +140,16 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 		roko.WithJitterRange(-1*time.Second, 1*time.Second),
 		roko.WithMaxAttempts(5),
 	)
+	var lastHTTPStatus int
 	jobToRun, err := roko.DoFunc(ctx, retrier, func(*roko.Retrier) (*api.AgentJob, error) {
 		jtr, retryAfter, err := w.agentClient.GetJobToRun(ctx, job.ID)
-		if api.IsPermanentError(err) {
+		var responseError *stacksapi.ErrorResponse
+		if errors.As(err, &responseError) {
+			lastHTTPStatus = responseError.Response.StatusCode
+		}
+		// A job-info 404 immediately after reservation may be transient.
+		// Allow the existing bounded retries without changing other API calls.
+		if api.IsPermanentError(err) && (responseError == nil || responseError.Response.StatusCode != http.StatusNotFound) {
 			retrier.Break()
 		}
 		retrier.SetNextInterval(max(retryAfter, retrier.NextInterval()))
@@ -150,7 +159,11 @@ func (w *worker) Handle(ctx context.Context, job *api.AgentScheduledJob) error {
 		return jtr, nil
 	})
 	if err != nil {
-		logger.Error("Couldn't get critical job information to run job", "error", err)
+		logger.Error("Couldn't get critical job information to run job",
+			"error", err,
+			"attempts", retrier.AttemptCount(),
+			"last-http-status", lastHTTPStatus,
+		)
 		return err
 	}
 	if jobToRun == nil {

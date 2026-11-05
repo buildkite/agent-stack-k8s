@@ -55,6 +55,10 @@ across controller replicas. Transient token failures retain the job for retry
 until it succeeds, its reservation expires, or dispatch is canceled; permanent
 rejections are not retried.
 
+Fetching job information retries HTTP 404s within the existing five-attempt
+budget, respecting `Retry-After` and the reservation deadline. Persistent fetch
+failures can still leave a reservation held until it expires.
+
 On shutdown, the controller stops accepting work and allows up to 20 seconds to
 finish creating Kubernetes Jobs and their required Secrets, followed by up to
 5 seconds for stack deregistration. It does not wait for workloads to finish.

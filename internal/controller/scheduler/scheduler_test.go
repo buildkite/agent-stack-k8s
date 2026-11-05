@@ -2,19 +2,225 @@ package scheduler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/reserver"
+	"github.com/buildkite/stacksapi"
 	"github.com/google/go-cmp/cmp"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 	"sigs.k8s.io/yaml"
 )
+
+func TestHandleJobInfoRetries(t *testing.T) {
+	const id = "01234567-89ab-4cde-8012-3456789abcde"
+	const command = "echo recovered job"
+	for _, test := range []struct {
+		name        string
+		status      int
+		recover     bool
+		wantGets    int32
+		wantSuccess bool
+	}{
+		{name: "reserved job recovers from 404", status: http.StatusNotFound, recover: true, wantGets: 2, wantSuccess: true},
+		{name: "persistent 404 exhausts budget", status: http.StatusNotFound, wantGets: 5},
+		{name: "401 is immediate", status: http.StatusUnauthorized, wantGets: 1},
+		{name: "403 is immediate", status: http.StatusForbidden, wantGets: 1},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+			defer cancel()
+			var gets, reservations atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.Method + " " + r.URL.Path {
+				case "POST /stacks/register":
+					if err := json.NewEncoder(w).Encode(map[string]string{"key": "test-stack"}); err != nil {
+						t.Error(err)
+					}
+				case "PUT /stacks/test-stack/scheduled-jobs/batch-reserve":
+					var req stacksapi.BatchReserveJobsRequest
+					if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+						t.Error(err)
+					}
+					if diff := cmp.Diff([]string{id}, req.JobUUIDs); diff != "" {
+						t.Errorf("reservation UUIDs (-want +got): %s", diff)
+					}
+					reservations.Add(1)
+					if err := json.NewEncoder(w).Encode(stacksapi.BatchReserveJobsResponse{Reserved: req.JobUUIDs}); err != nil {
+						t.Error(err)
+					}
+				case "GET /stacks/test-stack/jobs/" + id:
+					if reservations.Load() != 1 {
+						t.Error("job info fetched without a successful reservation")
+					}
+					if gets.Add(1) == 1 || !test.recover {
+						if test.recover {
+							w.Header().Set("Retry-After", "3")
+						}
+						w.WriteHeader(test.status)
+						if err := json.NewEncoder(w).Encode(map[string]string{"message": http.StatusText(test.status)}); err != nil {
+							t.Error(err)
+						}
+						return
+					}
+					if err := json.NewEncoder(w).Encode(api.AgentJob{ID: id, Command: command}); err != nil {
+						t.Error(err)
+					}
+				default:
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			defer server.Close()
+			var logs bytes.Buffer
+			logger := slog.New(slog.NewTextHandler(&logs, nil))
+			client, err := api.NewAgentClient(ctx, api.AgentClientOpts{
+				Token: "fake-token", Endpoint: server.URL, StackID: "test-stack", Logger: logger,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			k8s := fake.NewSimpleClientset()
+			worker := New(logger, k8s, client, Config{
+				Image: "buildkite/agent:latest", Namespace: "test-namespace", AgentTokenSecretName: "agent-token",
+			})
+			handler := reserver.New(ctx, logger, client, worker, 3600)
+			start := time.Now()
+			err = handler.Handle(ctx, &api.AgentScheduledJob{ID: id, QueriedAt: time.Now()})
+			if (err == nil) != test.wantSuccess {
+				t.Fatalf("Handle() error = %v, want success %t; logs:\n%s", err, test.wantSuccess, &logs)
+			}
+			if test.recover && time.Since(start) < 3*time.Second {
+				t.Error("retried before Retry-After elapsed")
+			}
+			if got := gets.Load(); got != test.wantGets {
+				t.Errorf("job GETs = %d, want %d", got, test.wantGets)
+			}
+			if got := reservations.Load(); got != 1 {
+				t.Errorf("reservations = %d, want 1", got)
+			}
+			if err != nil {
+				var responseError *stacksapi.ErrorResponse
+				if !errors.As(err, &responseError) || responseError.Response.StatusCode != test.status {
+					t.Errorf("Handle() error = %v, want HTTP %d", err, test.status)
+				}
+				if !api.IsPermanentError(err) {
+					t.Error("global permanent-error classification changed")
+				}
+			}
+			jobs, err := k8s.BatchV1().Jobs("test-namespace").List(ctx, metav1.ListOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !test.wantSuccess {
+				if len(jobs.Items) != 0 {
+					t.Errorf("created %d Jobs on fetch failure", len(jobs.Items))
+				}
+				return
+			}
+			if len(jobs.Items) != 1 {
+				t.Fatalf("created %d Jobs, want 1", len(jobs.Items))
+			}
+			job := jobs.Items[0]
+			if got := job.Labels[config.UUIDLabel]; got != id {
+				t.Errorf("Job UUID = %q, want %q", got, id)
+			}
+			agent := findContainer(t, job.Spec.Template.Spec.Containers, AgentContainerName)
+			if got := findEnv(t, agent.Env, "BUILDKITE_AGENT_ACQUIRE_JOB").Value; got != id {
+				t.Errorf("agent acquires %q, want %q", got, id)
+			}
+			container := findContainer(t, job.Spec.Template.Spec.Containers, DefaultCommandContainerName)
+			if got := findEnv(t, container.Env, "BUILDKITE_COMMAND").Value; got != command {
+				t.Errorf("command = %q, want %q", got, command)
+			}
+		})
+	}
+}
+
+func TestHandleJobInfoRetryCancellation(t *testing.T) {
+	for _, deadline := range []bool{false, true} {
+		name := "canceled"
+		if deadline {
+			name = "deadline"
+		}
+		t.Run(name, func(t *testing.T) {
+			var cancel context.CancelFunc
+			var gets atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				if r.URL.Path == "/stacks/register" {
+					if err := json.NewEncoder(w).Encode(map[string]string{"key": "test-stack"}); err != nil {
+						t.Error(err)
+					}
+					return
+				}
+				if r.Method != http.MethodGet || r.URL.Path != "/stacks/test-stack/jobs/job-uuid" {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+				gets.Add(1)
+				// Make the retry wait much longer than the cancellation/deadline,
+				// regardless of the scheduler's random backoff jitter.
+				w.Header().Set("Retry-After", "60")
+				w.WriteHeader(http.StatusNotFound)
+				if err := json.NewEncoder(w).Encode(map[string]string{"message": "Not Found"}); err != nil {
+					t.Error(err)
+				}
+				if !deadline {
+					time.AfterFunc(100*time.Millisecond, cancel)
+				}
+			}))
+			defer server.Close()
+			client, err := api.NewAgentClient(t.Context(), api.AgentClientOpts{
+				Token: "fake-token", Endpoint: server.URL, StackID: "test-stack", Logger: slog.Default(),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := t.Context()
+			wantErr := context.Canceled
+			if deadline {
+				ctx, cancel = context.WithTimeout(ctx, 250*time.Millisecond)
+				wantErr = context.DeadlineExceeded
+			} else {
+				ctx, cancel = context.WithCancel(ctx)
+			}
+			defer cancel()
+			k8s := fake.NewSimpleClientset()
+			worker := New(slog.Default(), k8s, client, Config{Image: "buildkite/agent:latest"})
+			start := time.Now()
+			if err := worker.Handle(ctx, &api.AgentScheduledJob{ID: "job-uuid"}); !errors.Is(err, wantErr) {
+				t.Errorf("Handle() error = %v, want %v", err, wantErr)
+			}
+			if elapsed := time.Since(start); elapsed > 5*time.Second {
+				t.Errorf("Handle() took %s to observe cancellation", elapsed)
+			}
+			if got := gets.Load(); got != 1 {
+				t.Errorf("job GETs = %d, want 1", got)
+			}
+			jobs, err := k8s.BatchV1().Jobs("").List(t.Context(), metav1.ListOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(jobs.Items) != 0 {
+				t.Errorf("created %d Jobs after cancellation", len(jobs.Items))
+			}
+		})
+	}
+}
 
 func TestJobAcquisitionTokenCredentials(t *testing.T) {
 	t.Parallel()
