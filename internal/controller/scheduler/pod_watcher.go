@@ -705,13 +705,17 @@ func (w *podWatcher) failForPendingTimeout(ctx context.Context, log *slog.Logger
 		log.Error("Could not fail Buildkite job", "error", err)
 		podWatcherBuildkiteJobFailErrorsCounter.Inc()
 
-		// If the error is permanent, ignore the job to prevent infinite retry
-		if api.IsPermanentError(err) {
-			w.ignoreJob(jobUUID)
+		// A transient error may succeed on the next re-sync, so leave the pod.
+		if !api.IsPermanentError(err) {
+			return
 		}
-		return
+		// A permanent error (e.g. 404 - the job no longer exists on
+		// Buildkite) means the job can never be failed. The pod will never
+		// start on its own, so still delete it below rather than leaving it
+		// Pending forever, holding node resources.
+	} else {
+		podWatcherBuildkiteJobFailsCounter.Inc()
 	}
-	podWatcherBuildkiteJobFailsCounter.Inc()
 
 	// Delete the pod
 	if err := forcefullyDeletePod(ctx, log, w.k8s, &pod.ObjectMeta, "pending_timeout"); err != nil {
@@ -774,9 +778,15 @@ func (w *podWatcher) failForImageFailure(ctx context.Context, log *slog.Logger, 
 			// Maybe the job was cancelled in the meantime?
 			// Either way we've done what we can here.
 			log.Error("Could not fail Buildkite job", "error", err)
-			return
+			// A permanent error (e.g. 404 - the job no longer exists on
+			// Buildkite) means the job can never be failed, but the pod
+			// still won't die on its own, so fall through and delete it.
+			if !api.IsPermanentError(err) {
+				return
+			}
+		} else {
+			podWatcherBuildkiteJobFailsCounter.Inc()
 		}
-		podWatcherBuildkiteJobFailsCounter.Inc()
 		// Also delete the pod, because it won't die on its own.
 
 		if err := forcefullyDeletePod(ctx, log, w.k8s, &pod.ObjectMeta, "image_pull_failure"); err != nil {
