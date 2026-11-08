@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -326,4 +328,78 @@ func TestPodWatcherRegisterInformerReplaysWithValidContext(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("pending Pod not registered for image failure watching during informer replay: %v", err)
 	}
+}
+
+// newPendingTestPod creates a Pending pod labelled with testJobUUID in k8sClient.
+func newPendingTestPod(t *testing.T, k8sClient *fake.Clientset) *corev1.Pod {
+	t.Helper()
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              "buildkite-pod",
+			Namespace:         "default",
+			Labels:            map[string]string{config.UUIDLabel: testJobUUID},
+			CreationTimestamp: metav1.NewTime(time.Now().Add(-time.Hour)),
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodPending},
+	}
+	created, err := k8sClient.CoreV1().Pods("default").Create(t.Context(), pod, metav1.CreateOptions{})
+	if err != nil {
+		t.Fatalf("Create pod: %v", err)
+	}
+	return created
+}
+
+func assertPodDeletedAndJobIgnored(t *testing.T, w *podWatcher, k8sClient *fake.Clientset, fakeServer *api.FakeAgentServer) {
+	t.Helper()
+	if got, want := len(fakeServer.FinishJobCalls), 1; got != want {
+		t.Errorf("len(fakeServer.FinishJobCalls) = %d, want %d", got, want)
+	}
+	_, err := k8sClient.CoreV1().Pods("default").Get(t.Context(), "buildkite-pod", metav1.GetOptions{})
+	if !kerrors.IsNotFound(err) {
+		t.Errorf("Get pod error = %v, want NotFound (pod should be deleted)", err)
+	}
+	if !w.isIgnored(uuid.MustParse(testJobUUID)) {
+		t.Errorf("w.isIgnored(%s) = false, want true", testJobUUID)
+	}
+}
+
+// TestFailForPendingTimeout_PermanentFailErrorStillDeletesPod: when the job can
+// never be failed on Buildkite (e.g. the build was cancelled and the stacks API
+// answers 404), the Pending pod must still be deleted, otherwise it stays
+// Pending forever and holds node resources.
+func TestFailForPendingTimeout_PermanentFailErrorStillDeletesPod(t *testing.T) {
+	// Deliberately not t.Parallel(): NewPodWatcher writes package-level gauge
+	// funcs, which parallel tests in this package already race on.
+	fakeServer := api.NewFakeAgentServer()
+	defer fakeServer.Close()
+	fakeServer.FinishJobStatusCode = http.StatusNotFound
+	fakeServer.FinishJobError = "Not Found"
+
+	w, k8sClient := newTestPodWatcher(t, fakeServer)
+	pod := newPendingTestPod(t, k8sClient)
+
+	w.failForPendingTimeout(t.Context(), w.logger, pod)
+
+	assertPodDeletedAndJobIgnored(t, w, k8sClient, fakeServer)
+}
+
+// TestFailForImageFailure_PermanentFailErrorStillDeletesPod is the image pull
+// failure counterpart of TestFailForPendingTimeout_PermanentFailErrorStillDeletesPod.
+func TestFailForImageFailure_PermanentFailErrorStillDeletesPod(t *testing.T) {
+	// Deliberately not t.Parallel(): see above.
+	fakeServer := api.NewFakeAgentServer()
+	defer fakeServer.Close()
+	fakeServer.JobStates = map[string]string{testJobUUID: string(api.JobStateScheduled)}
+	fakeServer.FinishJobStatusCode = http.StatusNotFound
+	fakeServer.FinishJobError = "Not Found"
+
+	w, k8sClient := newTestPodWatcher(t, fakeServer)
+	pod := newPendingTestPod(t, k8sClient)
+
+	w.failForImageFailure(t.Context(), w.logger, failingPod{
+		jobUUID: uuid.MustParse(testJobUUID),
+		pod:     pod,
+	})
+
+	assertPodDeletedAndJobIgnored(t, w, k8sClient, fakeServer)
 }
