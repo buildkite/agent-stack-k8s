@@ -53,6 +53,11 @@ type Limiter struct {
 	jobs     map[string]*jobState
 	inFlight int
 
+	// admitter, when set, must also accept a job before it leaves the queue.
+	// admitBlocked records a refusal until Recheck reports a capacity change.
+	admitter     Admitter
+	admitBlocked bool
+
 	// Intake follows the controller context; accepted dispatch survives it
 	// until Drain's deadline. Workers finish at resource creation, not job completion.
 	intakeCtx      context.Context
@@ -60,6 +65,13 @@ type Limiter struct {
 	cancelDispatch context.CancelFunc
 	workersDone    chan struct{}
 	workerWG       sync.WaitGroup
+}
+
+// Admitter is a second admission check after MaxInFlight, such as whether
+// the job's pod fits on a node. TryAdmit must not call back into the Limiter.
+type Admitter interface {
+	TryAdmit(jobID string) bool
+	Release(jobID string)
 }
 
 // A scheduling attempt occupies a slot before Kubernetes reports the job.
@@ -138,6 +150,23 @@ func (l *Limiter) Pause(pause bool) {
 
 	l.paused = pause
 	l.notifyWorkers()
+}
+
+// SetAdmitter installs an Admitter. Call it before HandleMany.
+func (l *Limiter) SetAdmitter(a Admitter) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.admitter = a
+}
+
+// Recheck reports that the Admitter may accept jobs it refused before.
+func (l *Limiter) Recheck() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.admitBlocked {
+		l.admitBlocked = false
+		l.notifyWorkers()
+	}
 }
 
 // notifyWorkers wakes workers to recheck the queue and capacity. l.mu must be held.
@@ -219,15 +248,21 @@ func (l *Limiter) HandleMany(ctx context.Context, jobs []*api.AgentScheduledJob)
 func (l *Limiter) tryDequeueWork() (*api.AgentScheduledJob, *jobState) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.stopping || l.intakeCtx.Err() != nil || l.paused || (l.MaxInFlight > 0 && l.inFlight >= l.MaxInFlight) {
+	if l.stopping || l.intakeCtx.Err() != nil || l.paused || l.admitBlocked || (l.MaxInFlight > 0 && l.inFlight >= l.MaxInFlight) {
 		return nil, nil
 	}
 	for len(l.queue) > 0 {
 		job := l.queue[0]
-		l.queue = l.queue[1:]
 		if _, known := l.jobs[job.ID]; known {
+			l.queue = l.queue[1:]
 			continue
 		}
+		if l.admitter != nil && !l.admitter.TryAdmit(job.ID) {
+			// The job stays queued and unreserved, so another stack can take it.
+			l.admitBlocked = true
+			return nil, nil
+		}
+		l.queue = l.queue[1:]
 		state := &jobState{}
 		l.jobs[job.ID] = state
 		l.inFlight++
@@ -248,7 +283,7 @@ func (l *Limiter) worker(ctx context.Context) {
 			l.mu.Unlock()
 			return
 		}
-		atCapacity := l.MaxInFlight > 0 && l.inFlight >= l.MaxInFlight
+		atCapacity := l.admitBlocked || (l.MaxInFlight > 0 && l.inFlight >= l.MaxInFlight)
 		changed := l.newWork
 		ready := !l.paused && !atCapacity && len(l.queue) > 0
 		l.mu.Unlock()
@@ -307,7 +342,11 @@ func (l *Limiter) worker(ctx context.Context) {
 				l.inFlight--
 				l.notifyWorkers()
 			}
+			admitter := l.admitter
 			l.mu.Unlock()
+			if admitter != nil {
+				admitter.Release(job.ID)
+			}
 
 			switch {
 			case errors.Is(err, model.ErrDuplicateJob):

@@ -380,6 +380,29 @@
           "maximum": 3600,
           "title": "How long (in seconds) a job reservation is held while waiting for Kubernetes infrastructure to be ready. Defaults to 900 (15 minutes). Maximum 3600 (1 hour)."
         },
+        "capacity-gate": {
+          "type": "object",
+          "title": "Admit a job only while a ready node has room for its pod, counting every pod in the cluster. Declined jobs stay unreserved for other stacks. The chart grants the controller cluster-wide read access to pods and nodes when this is set.",
+          "additionalProperties": false,
+          "required": ["cpu", "memory"],
+          "properties": {
+            "cpu": {
+              "type": "string",
+              "title": "Total CPU request of one job pod, e.g. 3000m",
+              "examples": ["3000m"]
+            },
+            "memory": {
+              "type": "string",
+              "title": "Total memory request of one job pod, e.g. 6Gi",
+              "examples": ["6Gi"]
+            },
+            "node-selector": {
+              "type": "object",
+              "title": "Only count nodes with these labels",
+              "additionalProperties": { "type": "string" }
+            }
+          }
+        },
         "allow-pod-spec-patch-unsafe-command-modification": {
           "type": "boolean",
           "default": false,

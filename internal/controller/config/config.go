@@ -77,6 +77,10 @@ type Config struct {
 	// Defaults to 900 (15 minutes) if not set. Maximum is 3600 (1 hour).
 	ReservationExpirySeconds int `json:"reservation-expiry-seconds" validate:"omitempty,min=0,max=3600"`
 
+	// CapacityGate, when set, admits a job only while a node has room for its
+	// pod right now. Declined jobs stay unreserved for other stacks to run.
+	CapacityGate *CapacityGateConfig `json:"capacity-gate" validate:"omitempty"`
+
 	// ID is an optional unique identifier for the controller instance.
 	// It is used as both a Kubernetes label (buildkite.com/controller-id) to filter
 	// resources, and as the Stack key when registering with the Buildkite API.
@@ -145,6 +149,14 @@ type Config struct {
 	// response bodies for the Stacks API client. This may expose sensitive
 	// data in logs and should only be used for debugging.
 	LogHTTPPayloads bool `json:"log-http-payloads" validate:"omitempty"`
+}
+
+// CapacityGateConfig describes the pod one job needs, as the sum of its
+// containers' requests, and which nodes may run it.
+type CapacityGateConfig struct {
+	CPU          string            `json:"cpu"           validate:"required"`
+	Memory       string            `json:"memory"        validate:"required"`
+	NodeSelector map[string]string `json:"node-selector" validate:"omitempty"`
 }
 
 // Helpers for applying configs / params to container env.
