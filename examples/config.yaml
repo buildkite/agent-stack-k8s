@@ -85,7 +85,7 @@ agent-config:
           defaultMode: 493
           name: extra-hooks
 
-# Applies to the checkout container in all spawned pods
+# Applies to the checkout, which runs in the first command container of each pod
 default-checkout-params:
   gitCredentialsSecret:
     secretName: "my-git-credentials"

@@ -708,7 +708,7 @@ func TestJobPluginConversion(t *testing.T) {
 
 	gotPodSpec := kjob.Spec.Template.Spec
 
-	if got, want := len(gotPodSpec.Containers), 3; got != want {
+	if got, want := len(gotPodSpec.Containers), 2; got != want {
 		t.Errorf("len(gotPodSpec.Containers) = %d, want %d", got, want)
 	}
 
@@ -856,11 +856,25 @@ func TestJobWithNoKubernetesPlugin(t *testing.T) {
 		t.Fatalf("worker.Build(&corev1.PodSpec{}, %t, inputs) error = %v, want nil", false, err)
 	}
 
-	if got, want := len(kjob.Spec.Template.Spec.Containers), 3; got != want {
+	if got, want := len(kjob.Spec.Template.Spec.Containers), 2; got != want {
 		t.Fatalf("len(kjob.Spec.Template.Spec.Containers) = %d, want %d", got, want)
 	}
 
 	commandContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
+	if got, want := findEnv(t, commandContainer.Env, "BUILDKITE_BOOTSTRAP_PHASES").Value, "plugin,checkout,command"; got != want {
+		t.Errorf("BUILDKITE_BOOTSTRAP_PHASES = %q, want %q", got, want)
+	}
+	if got, want := findEnv(t, commandContainer.Env, "BUILDKITE_CONTAINER_ID").Value, "0"; got != want {
+		t.Errorf("BUILDKITE_CONTAINER_ID = %q, want %q", got, want)
+	}
+	agentContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "agent")
+	if got, want := findEnv(t, agentContainer.Env, "BUILDKITE_CONTAINER_COUNT").Value, "1"; got != want {
+		t.Errorf("BUILDKITE_CONTAINER_COUNT = %q, want %q", got, want)
+	}
+	copyAgent := findContainer(t, kjob.Spec.Template.Spec.InitContainers, CopyAgentContainerName)
+	if !strings.Contains(copyAgent.Args[1], "ln -sfn static-git/bin/git /workspace/git") {
+		t.Errorf("copy-agent script does not install static git:\n%s", copyAgent.Args[1])
+	}
 	commandEnv := findEnv(t, commandContainer.Env, "BUILDKITE_COMMAND")
 	if got, want := commandEnv.Value, job.Command; got != want {
 		t.Fatalf("commandEnv.Value = %q, want %q", got, want)
@@ -930,7 +944,8 @@ func TestBuild(t *testing.T) {
 		t.Fatalf("worker.Build(&corev1.PodSpec{}, %t, inputs) error = %v, want nil", false, err)
 	}
 
-	if got, want := len(kjob.Spec.Template.Spec.Containers), 3; got != want {
+	// The patch for the "checkout" container must not add a container.
+	if got, want := len(kjob.Spec.Template.Spec.Containers), 2; got != want {
 		t.Fatalf("len(kjob.Spec.Template.Spec.Containers) = %d, want %d", got, want)
 	}
 
@@ -942,19 +957,6 @@ func TestBuild(t *testing.T) {
 	container0 := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
 	if diff := cmp.Diff(container0.Image, "alpine:latest"); diff != "" {
 		t.Errorf("unexpected container image (-want +got):\n%s", diff)
-	}
-
-	checkoutContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "checkout")
-	if diff := cmp.Diff(checkoutContainer.EnvFrom, []corev1.EnvFromSource{
-		{
-			SecretRef: &corev1.SecretEnvSource{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: "git-ssh-key",
-				},
-			},
-		},
-	}); diff != "" {
-		t.Errorf("unexpected pod spec (-want +got):\n%s", diff)
 	}
 }
 
@@ -1295,10 +1297,12 @@ func TestBuildSkipCheckout(t *testing.T) {
 		t.Errorf("unexpected container image (-want +got):\n%s", diff)
 	}
 
-	for _, container := range kjob.Spec.Template.Spec.Containers {
-		if container.Name == "checkout" {
-			t.Error("with `checkout: skip: true`: checkout container is present, want no checkout container")
-		}
+	if got, want := findEnv(t, container0.Env, "BUILDKITE_BOOTSTRAP_PHASES").Value, "plugin,command"; got != want {
+		t.Errorf("with `checkout: skip: true`: BUILDKITE_BOOTSTRAP_PHASES = %q, want %q", got, want)
+	}
+	copyAgent := findContainer(t, kjob.Spec.Template.Spec.InitContainers, CopyAgentContainerName)
+	if strings.Contains(copyAgent.Args[1], "static-git") {
+		t.Errorf("with `checkout: skip: true`: copy-agent script installs static git, want not:\n%s", copyAgent.Args[1])
 	}
 }
 
@@ -1342,13 +1346,9 @@ func TestBuildCheckoutEmptyConfigEnv(t *testing.T) {
 		t.Fatalf("worker.Build(&corev1.PodSpec{}, %t, inputs) error = %v, want nil", false, err)
 	}
 
-	for _, container := range kjob.Spec.Template.Spec.Containers {
-		if container.Name == "checkout" {
-			for _, envVar := range container.Env {
-				if envVar.Name == "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG" {
-					t.Error("with `checkout: {}`, want no BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG env on checkout container")
-				}
-			}
+	for _, envVar := range findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0").Env {
+		if envVar.Name == "BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG" {
+			t.Error("with `checkout: {}`, want no BUILDKITE_GIT_SUBMODULE_CLONE_CONFIG env on the container running the checkout")
 		}
 	}
 }
@@ -1392,16 +1392,8 @@ func TestBuildDefaultCheckoutParams(t *testing.T) {
 		t.Fatalf("worker.Build(&corev1.PodSpec{}, %t, inputs) error = %v, want nil", false, err)
 	}
 
-	var checkoutContainer *corev1.Container
-	for _, container := range kjob.Spec.Template.Spec.Containers {
-		if container.Name == "checkout" {
-			checkoutContainer = &container
-		}
-	}
-
-	if got := checkoutContainer; got == nil {
-		t.Fatalf("&container = %v, want non-nil value", got)
-	}
+	// The first command container runs the checkout.
+	checkoutContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
 
 	// Validate that git credential secret is mounted and available in checkout container's path
 	var hasGitCredentialsRO bool
@@ -1440,7 +1432,7 @@ func TestBuildDefaultCheckoutParams(t *testing.T) {
 	}
 }
 
-func TestCheckoutGitCredentialsHelperEscaping(t *testing.T) {
+func TestCheckoutGitCredentialsHelper(t *testing.T) {
 	t.Parallel()
 
 	podUser := int64(1000)
@@ -1471,25 +1463,77 @@ func TestCheckoutGitCredentialsHelperEscaping(t *testing.T) {
 		t.Fatalf("worker.Build(podSpec, %t, inputs) error = %v, want nil", false, err)
 	}
 
-	var checkoutContainer *corev1.Container
-	for _, container := range kjob.Spec.Template.Spec.Containers {
-		if container.Name == "checkout" {
-			checkoutContainer = &container
+	// The helper is passed as git config env vars, so it works without a
+	// shell or a writable home directory in the command container.
+	ctr := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
+	want := map[string]string{
+		"GIT_CONFIG_COUNT":   "1",
+		"GIT_CONFIG_KEY_0":   "credential.helper",
+		"GIT_CONFIG_VALUE_0": `!f() { [ "$1" = get ] && git credential-store --file=/buildkite/git-credentials-ro/.git-credentials get; }; f`,
+	}
+	for name, value := range want {
+		if got := findEnv(t, ctr.Env, name); got == nil || got.Value != value {
+			t.Errorf("container-0 env %s = %v, want %q", name, got, value)
 		}
 	}
-	if checkoutContainer == nil {
-		t.Fatal("checkout container not found")
-	}
-	if len(checkoutContainer.Args) != 1 {
-		t.Fatalf("checkout container Args = %v, want single shell script arg", checkoutContainer.Args)
-	}
+}
 
-	checkoutScript := checkoutContainer.Args[0]
-	if !strings.Contains(checkoutScript, `\$1`) {
-		t.Error("checkout script missing escaped \\$1 in git credential helper for su -c path")
+func TestCheckoutSSHSetup(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		runAsUser  int64
+		wantPasswd bool
+	}{
+		{name: "root", runAsUser: 0, wantPasswd: false},
+		{name: "non-root", runAsUser: 1000, wantPasswd: true},
 	}
-	if strings.Contains(checkoutScript, `"$1"`) {
-		t.Error("checkout script contains unescaped $1 in git credential helper; outer shell would expand it inside su -c")
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			worker := New(slog.Default(), nil, nil, Config{
+				Image: "buildkite/agent:latest",
+				DefaultCheckoutParams: &config.CheckoutParams{
+					EnvFrom: []corev1.EnvFromSource{{
+						SecretRef: &corev1.SecretEnvSource{LocalObjectReference: corev1.LocalObjectReference{Name: "ssh-key"}},
+					}},
+				},
+			})
+			podSpec := &corev1.PodSpec{
+				SecurityContext: &corev1.PodSecurityContext{RunAsUser: &test.runAsUser},
+			}
+			kjob, err := worker.Build(podSpec, false, buildInputs{uuid: "1234", command: "echo hello"})
+			if err != nil {
+				t.Fatalf("worker.Build() error = %v, want nil", err)
+			}
+			gotPodSpec := kjob.Spec.Template.Spec
+
+			// The init container gets the SSH key env to write key files.
+			copyAgent := findContainer(t, gotPodSpec.InitContainers, CopyAgentContainerName)
+			if !slices.ContainsFunc(copyAgent.EnvFrom, func(e corev1.EnvFromSource) bool {
+				return e.SecretRef != nil && e.SecretRef.Name == "ssh-key"
+			}) {
+				t.Errorf("copy-agent EnvFrom = %v, want secret ssh-key", copyAgent.EnvFrom)
+			}
+			if !strings.Contains(copyAgent.Args[1], "ssh-env-config.sh") {
+				t.Errorf("copy-agent script does not write SSH keys:\n%s", copyAgent.Args[1])
+			}
+
+			ctr := findContainer(t, gotPodSpec.Containers, "container-0")
+			if got, want := findEnv(t, ctr.Env, "GIT_SSH_COMMAND"), "ssh -F /workspace/.buildkite-ssh/.ssh/buildkite-config"; got == nil || got.Value != want {
+				t.Errorf("container-0 GIT_SSH_COMMAND = %v, want %q", got, want)
+			}
+
+			// ssh needs a passwd entry for a non-root user.
+			gotPasswd := hasMountAt(ctr.VolumeMounts, "buildkite-checkout-passwd", "/etc/passwd")
+			if gotPasswd != test.wantPasswd {
+				t.Errorf("container-0 has /etc/passwd mount = %t, want %t", gotPasswd, test.wantPasswd)
+			}
+			if got := strings.Contains(copyAgent.Args[1], "buildkite-agent:x:1000:0:"); got != test.wantPasswd {
+				t.Errorf("copy-agent script writes passwd entry = %t, want %t", got, test.wantPasswd)
+			}
+		})
 	}
 }
 
@@ -1540,16 +1584,8 @@ func TestBuildCheckoutParams(t *testing.T) {
 		t.Fatalf("worker.Build(&corev1.PodSpec{}, %t, inputs) error = %v, want nil", false, err)
 	}
 
-	var checkoutContainer *corev1.Container
-	for _, container := range kjob.Spec.Template.Spec.Containers {
-		if container.Name == "checkout" {
-			checkoutContainer = &container
-		}
-	}
-
-	if got := checkoutContainer; got == nil {
-		t.Fatalf("&container = %v, want non-nil value", got)
-	}
+	// The first command container runs the checkout.
+	checkoutContainer := findContainer(t, kjob.Spec.Template.Spec.Containers, "container-0")
 
 	// Validate that git credential secret is mounted and available in checkout container's path
 	var hasGitCredentialsRO bool
@@ -1752,7 +1788,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent,
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1769,7 +1804,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent,
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1786,7 +1820,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent,
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1806,7 +1839,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"copy-agent":  corev1.PullAlways,
 				"agent":       corev1.PullIfNotPresent, // because it was just pulled
-				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
 				"container-0": corev1.PullIfNotPresent, // because it was just pulled
 			},
 		},
@@ -1819,7 +1851,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent, // because it was just pulled
 				"agent":       corev1.PullIfNotPresent, // because it was just pulled
-				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1832,7 +1863,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent, // because it was just pulled
 				"agent":       corev1.PullIfNotPresent, // because it was just pulled
-				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1850,7 +1880,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent, // because it was just pulled
 				"agent":       corev1.PullIfNotPresent, // because it was just pulled
-				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1868,7 +1897,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent, // because it was just pulled
 				"agent":       corev1.PullIfNotPresent, // because it was just pulled
-				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1886,7 +1914,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent, // because it was just pulled
 				"agent":       corev1.PullIfNotPresent, // because it was just pulled
-				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1904,7 +1931,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent, // because it was just pulled
 				"agent":       corev1.PullIfNotPresent, // because it was just pulled
-				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1924,7 +1950,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent,
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1937,7 +1962,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent,
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullIfNotPresent,
 			},
 		},
@@ -1950,7 +1974,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullAlways, // TODO: does this make sense?
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -1968,7 +1991,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent,
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullIfNotPresent,
 			},
 		},
@@ -1986,7 +2008,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullAlways, // TODO: does this make sense?
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -2004,7 +2025,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent,
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullIfNotPresent,
 			},
 		},
@@ -2022,7 +2042,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent,
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -2042,7 +2061,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullNever,
 				"agent":       corev1.PullIfNotPresent, // because it was just pulled
-				"checkout":    corev1.PullIfNotPresent, // because it was just pulled
 				"copy-agent":  corev1.PullAlways,       // empty defaults
 			},
 		},
@@ -2055,7 +2073,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullNever,
 				"agent":       corev1.PullNever,
-				"checkout":    corev1.PullNever,
 				"copy-agent":  corev1.PullNever,
 			},
 		},
@@ -2068,7 +2085,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullAlways, // TODO: does this make sense?
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -2086,7 +2102,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullNever,
 				"agent":       corev1.PullNever,
-				"checkout":    corev1.PullNever,
 				"copy-agent":  corev1.PullNever,
 			},
 		},
@@ -2104,7 +2119,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullAlways, // TODO: does this make sense?
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -2122,7 +2136,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullNever,
 				"agent":       corev1.PullNever,
-				"checkout":    corev1.PullNever,
 				"copy-agent":  corev1.PullNever,
 			},
 		},
@@ -2140,7 +2153,6 @@ func TestImagePullPolicies(t *testing.T) {
 			wantContainers: map[string]corev1.PullPolicy{
 				"container-0": corev1.PullIfNotPresent,
 				"agent":       corev1.PullIfNotPresent,
-				"checkout":    corev1.PullIfNotPresent,
 				"copy-agent":  corev1.PullAlways,
 			},
 		},
@@ -2333,7 +2345,6 @@ func TestAdditionalHooksOptions(t *testing.T) {
 			// Check container mounts.
 			containers := []corev1.Container{
 				agent,
-				findContainer(t, podSpec.Containers, "checkout"),
 				findContainer(t, podSpec.Containers, "container-0"),
 			}
 			for _, ctr := range containers {
