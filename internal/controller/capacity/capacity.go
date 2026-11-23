@@ -6,6 +6,7 @@ package capacity
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -25,13 +26,23 @@ import (
 // before its pod appears. A Job's pod normally appears within seconds.
 const DefaultAdmissionTTL = 2 * time.Minute
 
+// DefaultSyncTimeout bounds the wait for the first list of pods and nodes.
+// Without cluster-wide access the informers never sync, so Register fails
+// instead of leaving the controller waiting with no sign but RBAC errors.
+const DefaultSyncTimeout = 2 * time.Minute
+
 // recheckInterval wakes waiting workers even without informer events, so an
 // expired admission frees its capacity.
 const recheckInterval = 10 * time.Second
 
-// Gate decides whether one more job pod fits on a node. It counts pods from
-// every namespace and controller, pods not yet bound to a node, and jobs this
-// controller admitted whose pods the informer has not reported yet.
+// Gate decides whether one more job pod fits on a node. It counts bound pods
+// from every namespace and controller, Buildkite job pods waiting for one of
+// its nodes, and jobs this controller admitted whose pods the informer has not
+// reported yet.
+//
+// Pod informer handlers keep running totals of requests per node, so a
+// decision costs the number of nodes and unbound pods, not every pod in the
+// cluster.
 //
 // Controllers decide independently, so two can admit into the same free space
 // within the moment before either pod appears. The losing pod stays Pending
@@ -42,13 +53,24 @@ type Gate struct {
 	memory       resource.Quantity
 	nodeSelector labels.Selector
 	admissionTTL time.Duration
+	syncTimeout  time.Duration
 	now          func() time.Time
 
 	nodes corelisters.NodeLister
-	pods  corelisters.PodLister
 
-	mu       sync.Mutex
+	mu sync.Mutex
+	// requested holds the requests of non-terminal pods bound to each node.
+	requested map[string]usage
+	// unbound holds the non-terminal Buildkite job pods with no node yet.
+	unbound map[string]*corev1.Pod
+	// observed counts the pods seen for each job UUID, terminal ones included.
+	observed map[string]int
 	admitted map[string]time.Time
+}
+
+type usage struct {
+	cpu    resource.Quantity
+	memory resource.Quantity
 }
 
 // New builds a Gate from cfg. Call Register before TryAdmit.
@@ -67,21 +89,27 @@ func New(logger *slog.Logger, cfg *config.CapacityGateConfig) (*Gate, error) {
 		memory:       memory,
 		nodeSelector: labels.SelectorFromSet(cfg.NodeSelector),
 		admissionTTL: DefaultAdmissionTTL,
+		syncTimeout:  DefaultSyncTimeout,
 		now:          time.Now,
+		requested:    make(map[string]usage),
+		unbound:      make(map[string]*corev1.Pod),
+		observed:     make(map[string]int),
 		admitted:     make(map[string]time.Time),
 	}, nil
 }
 
+// ErrSyncTimeout is returned by Register when pods and nodes could not be
+// listed within the sync timeout, most often for lack of RBAC.
+var ErrSyncTimeout = errors.New("capacity-gate needs cluster-wide get/list/watch on pods and nodes")
+
 // Register watches nodes and pods cluster-wide through factory, which must
 // have no namespace or label scope. onChange runs when capacity may have been
 // freed: a pod finished or was deleted, a node changed, or the recheck
-// interval passed. It must not call back into the Gate synchronously while
-// holding locks the Gate's callers hold.
+// interval passed. The Gate holds no lock while calling it.
 func (g *Gate) Register(ctx context.Context, factory informers.SharedInformerFactory, onChange func()) error {
 	nodeInformer := factory.Core().V1().Nodes()
 	podInformer := factory.Core().V1().Pods()
 	g.nodes = nodeInformer.Lister()
-	g.pods = podInformer.Lister()
 
 	nodeReg, err := nodeInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc:    func(any) { onChange() },
@@ -92,20 +120,43 @@ func (g *Gate) Register(ctx context.Context, factory informers.SharedInformerFac
 		return err
 	}
 	podReg, err := podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj any) {
+			if pod, ok := obj.(*corev1.Pod); ok {
+				g.updatePod(nil, pod)
+			}
+		},
 		UpdateFunc: func(prev, curr any) {
-			if !terminal(prev) && terminal(curr) {
+			prevPod, _ := prev.(*corev1.Pod)
+			currPod, ok := curr.(*corev1.Pod)
+			if !ok {
+				return
+			}
+			if g.updatePod(prevPod, currPod) {
 				onChange()
 			}
 		},
-		DeleteFunc: func(any) { onChange() },
+		DeleteFunc: func(obj any) {
+			if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+				obj = tombstone.Obj
+			}
+			if pod, ok := obj.(*corev1.Pod); ok {
+				g.updatePod(pod, nil)
+				onChange()
+			}
+		},
 	})
 	if err != nil {
 		return err
 	}
 
 	go factory.Start(ctx.Done())
-	if !cache.WaitForCacheSync(ctx.Done(), nodeReg.HasSynced, podReg.HasSynced) {
-		return fmt.Errorf("failed to sync capacity gate informers")
+	syncCtx, cancel := context.WithTimeout(ctx, g.syncTimeout)
+	defer cancel()
+	if !cache.WaitForCacheSync(syncCtx.Done(), nodeReg.HasSynced, podReg.HasSynced) {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return fmt.Errorf("%w: pods and nodes not listed within %s", ErrSyncTimeout, g.syncTimeout)
 	}
 
 	go func() {
@@ -123,25 +174,102 @@ func (g *Gate) Register(ctx context.Context, factory informers.SharedInformerFac
 	return nil
 }
 
+// updatePod moves a pod's requests from its previous state to its current
+// one. Either may be nil, for an add or a delete. It reports whether the pod
+// gave capacity back: it finished, left its node, shrank, or stopped waiting
+// for a node without getting one.
+func (g *Gate) updatePod(prev, curr *corev1.Pod) (freed bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	_, wasUnbound := g.unbound[podKey(prev)]
+	delete(g.unbound, podKey(prev))
+	g.observe(prev, -1)
+	g.observe(curr, 1)
+	if pendingJobPod(curr) {
+		g.unbound[podKey(curr)] = curr
+	}
+
+	prevNode, prevUsage, wasBound := boundRequests(prev)
+	currNode, currUsage, isBound := boundRequests(curr)
+	if wasBound {
+		g.addRequests(prevNode, prevUsage, -1)
+	}
+	if isBound {
+		g.addRequests(currNode, currUsage, 1)
+	}
+	if wasBound {
+		return !isBound || currNode != prevNode ||
+			prevUsage.cpu.Cmp(currUsage.cpu) > 0 || prevUsage.memory.Cmp(currUsage.memory) > 0
+	}
+	return wasUnbound && !isBound && !pendingJobPod(curr)
+}
+
+// observe counts pod, terminal or not, toward its job UUID. g.mu must be held.
+func (g *Gate) observe(pod *corev1.Pod, delta int) {
+	if pod == nil {
+		return
+	}
+	id := pod.Labels[config.UUIDLabel]
+	if id == "" {
+		return
+	}
+	if g.observed[id] += delta; g.observed[id] <= 0 {
+		delete(g.observed, id)
+	}
+}
+
+// addRequests adds (sign 1) or removes (sign -1) u from node's total. g.mu must be held.
+func (g *Gate) addRequests(node string, u usage, sign int) {
+	total := g.requested[node]
+	if sign > 0 {
+		total.cpu.Add(u.cpu)
+		total.memory.Add(u.memory)
+	} else {
+		total.cpu.Sub(u.cpu)
+		total.memory.Sub(u.memory)
+	}
+	if total.cpu.IsZero() && total.memory.IsZero() {
+		delete(g.requested, node)
+		return
+	}
+	g.requested[node] = total
+}
+
+// boundRequests returns the node a non-terminal pod is bound to and its requests.
+func boundRequests(pod *corev1.Pod) (string, usage, bool) {
+	if pod == nil || terminal(pod) || pod.Spec.NodeName == "" {
+		return "", usage{}, false
+	}
+	cpu, memory := podRequests(pod)
+	return pod.Spec.NodeName, usage{cpu: cpu, memory: memory}, true
+}
+
+// pendingJobPod reports whether pod is a non-terminal Buildkite job pod with no node yet.
+func pendingJobPod(pod *corev1.Pod) bool {
+	return pod != nil && !terminal(pod) && pod.Spec.NodeName == "" && pod.Labels[config.UUIDLabel] != ""
+}
+
+func podKey(pod *corev1.Pod) string {
+	if pod == nil {
+		return ""
+	}
+	return pod.Namespace + "/" + pod.Name
+}
+
 // TryAdmit reports whether a pod for jobID fits now, and if so counts it
 // against capacity until its pod appears, Release is called, or the
 // admission expires.
 func (g *Gate) TryAdmit(jobID string) bool {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-
 	nodes, err := g.nodes.List(g.nodeSelector)
 	if err != nil {
 		g.logger.Warn("capacity gate could not list nodes, declining job", "error", err)
 		return false
 	}
-	pods, err := g.pods.List(labels.Everything())
-	if err != nil {
-		g.logger.Warn("capacity gate could not list pods, declining job", "error", err)
-		return false
-	}
 
-	snap := g.snapshot(nodes, pods)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	snap := g.snapshot(nodes)
 	admit := snap.fits(g.cpu, g.memory)
 	if admit {
 		g.admitted[jobID] = g.now()
@@ -170,8 +298,10 @@ func (g *Gate) Release(jobID string) {
 }
 
 type nodeFree struct {
-	cpu    resource.Quantity
-	memory resource.Quantity
+	labels      labels.Set
+	allocatable usage
+	cpu         resource.Quantity
+	memory      resource.Quantity
 }
 
 type snapshot struct {
@@ -181,45 +311,40 @@ type snapshot struct {
 }
 
 // snapshot computes free capacity per eligible node, and the requests of
-// pods and admissions not yet bound to any node. g.mu must be held.
-func (g *Gate) snapshot(nodes []*corev1.Node, pods []*corev1.Pod) snapshot {
-	eligible := make(map[string]int, len(nodes))
+// unbound job pods and admissions that will land on one. g.mu must be held.
+func (g *Gate) snapshot(nodes []*corev1.Node) snapshot {
 	var snap snapshot
 	for _, node := range nodes {
 		if !schedulable(node) {
 			continue
 		}
-		eligible[node.Name] = len(snap.free)
-		snap.free = append(snap.free, nodeFree{
-			cpu:    node.Status.Allocatable.Cpu().DeepCopy(),
-			memory: node.Status.Allocatable.Memory().DeepCopy(),
-		})
+		n := nodeFree{
+			labels: labels.Set(node.Labels),
+			allocatable: usage{
+				cpu:    node.Status.Allocatable.Cpu().DeepCopy(),
+				memory: node.Status.Allocatable.Memory().DeepCopy(),
+			},
+		}
+		n.cpu = n.allocatable.cpu.DeepCopy()
+		n.memory = n.allocatable.memory.DeepCopy()
+		if u, ok := g.requested[node.Name]; ok {
+			n.cpu.Sub(u.cpu)
+			n.memory.Sub(u.memory)
+		}
+		snap.free = append(snap.free, n)
 	}
 
-	withPod := make(map[string]struct{})
-	for _, pod := range pods {
-		if id := pod.Labels[config.UUIDLabel]; id != "" {
-			withPod[id] = struct{}{}
-		}
-		if terminal(pod) {
-			continue
-		}
+	for _, pod := range g.unbound {
 		cpu, memory := podRequests(pod)
-		if pod.Spec.NodeName == "" {
+		if snap.couldHost(pod, cpu, memory) {
 			snap.pendingCPU.Add(cpu)
 			snap.pendingMemory.Add(memory)
-			continue
-		}
-		if i, ok := eligible[pod.Spec.NodeName]; ok {
-			snap.free[i].cpu.Sub(cpu)
-			snap.free[i].memory.Sub(memory)
 		}
 	}
 
 	now := g.now()
 	for id, at := range g.admitted {
-		_, observed := withPod[id]
-		if observed || now.Sub(at) > g.admissionTTL {
+		if g.observed[id] > 0 || now.Sub(at) > g.admissionTTL {
 			delete(g.admitted, id)
 			continue
 		}
@@ -229,8 +354,23 @@ func (g *Gate) snapshot(nodes []*corev1.Node, pods []*corev1.Pod) snapshot {
 	return snap
 }
 
+// couldHost reports whether an unbound pod can ever land on an eligible
+// node: its node selector matches one, and its requests fit that node's
+// allocatable. Any other unbound pod competes for nodes the gate doesn't
+// count, or can never be scheduled, so counting it would hold capacity
+// forever. Required node affinity and taints are not evaluated.
+func (s snapshot) couldHost(pod *corev1.Pod, cpu, memory resource.Quantity) bool {
+	selector := labels.SelectorFromSet(pod.Spec.NodeSelector)
+	for _, n := range s.free {
+		if selector.Matches(n.labels) && n.allocatable.cpu.Cmp(cpu) >= 0 && n.allocatable.memory.Cmp(memory) >= 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // fits requires one node with room for the pod, and room across all nodes
-// once every unbound pod and admission is placed.
+// once every pending job pod and admission is placed.
 func (s snapshot) fits(cpu, memory resource.Quantity) bool {
 	oneNode := false
 	totalCPU, totalMemory := resource.Quantity{}, resource.Quantity{}
@@ -273,11 +413,7 @@ func schedulable(node *corev1.Node) bool {
 	return false
 }
 
-func terminal(obj any) bool {
-	pod, ok := obj.(*corev1.Pod)
-	if !ok {
-		return false
-	}
+func terminal(pod *corev1.Pod) bool {
 	return pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed
 }
 

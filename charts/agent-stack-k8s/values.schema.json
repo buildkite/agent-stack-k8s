@@ -382,7 +382,7 @@
         },
         "capacity-gate": {
           "type": "object",
-          "title": "Admit a job only while a ready node has room for its pod, counting every pod in the cluster. Declined jobs stay unreserved for other stacks. The chart grants the controller cluster-wide read access to pods and nodes when this is set.",
+          "title": "Admit a job only while a ready node has room for its pod, counting every pod bound to those nodes and Buildkite job pods waiting for one. Declined jobs stay unreserved for other stacks. The chart grants the controller cluster-wide read access to pods and nodes when this is set; without it the controller exits after 2 minutes.",
           "additionalProperties": false,
           "required": ["cpu", "memory"],
           "properties": {
