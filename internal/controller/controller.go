@@ -13,6 +13,7 @@ import (
 
 	"github.com/buildkite/agent-stack-k8s/v2/api"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/agenttags"
+	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/capacity"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/config"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/deduper"
 	"github.com/buildkite/agent-stack-k8s/v2/internal/controller/jatissuer"
@@ -265,6 +266,22 @@ func Run(ctx context.Context, logger *slog.Logger, k8sClient kubernetes.Interfac
 	if err := limiter.RegisterInformer(ctx, informerFactory); err != nil {
 		logger.Error("failed to register limiter informer", "error", err)
 		return
+	}
+
+	if cfg.CapacityGate != nil {
+		gate, err := capacity.New(logger.With("component", "capacity-gate"), cfg.CapacityGate)
+		if err != nil {
+			logger.Error("failed to create capacity gate", "error", err)
+			return
+		}
+		// Capacity is shared with pods outside this controller's namespace and
+		// labels, so the gate watches the whole cluster.
+		clusterFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+		if err := gate.Register(ctx, clusterFactory, limiter.Recheck); err != nil {
+			logger.Error("failed to register capacity gate informers", "error", err)
+			return
+		}
+		limiter.SetAdmitter(gate)
 	}
 
 	if cfg.EnableCompletionWatcher {

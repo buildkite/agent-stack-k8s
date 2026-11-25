@@ -626,6 +626,21 @@ tags:
 		}
 	})
 
+	t.Run("capacity-gate settable via config file", func(t *testing.T) {
+		cleanTestEnv(t)
+		configFile := createTempConfigFile(t, "capacity-gate:\n  cpu: 3500m\n  memory: 8Gi\n  node-selector:\n    pool: ci\n")
+
+		cfg, err := buildConfig(t, []string{}, configFile)
+		if err != nil {
+			t.Fatalf("buildConfig(t, []string{}, %q) error = %v, want nil", configFile, err)
+		}
+
+		want := &config.CapacityGateConfig{CPU: "3500m", Memory: "8Gi", NodeSelector: map[string]string{"pool": "ci"}}
+		if diff := cmp.Diff(cfg.CapacityGate, want); diff != "" {
+			t.Errorf("cfg.CapacityGate diff (-got +want):\n%s", diff)
+		}
+	})
+
 	t.Run("reservation-expiry-seconds settable via CLI flag", func(t *testing.T) {
 		cleanTestEnv(t)
 
